@@ -44,9 +44,6 @@ const plans = [
       '200 chunks per month',
       'GPT-5 nano AI insights',
       'Priority processing',
-      'Advanced export capabilities',
-      'Email support',
-      'API access'
     ],
     limitations: [],
     recommended: true,
@@ -61,11 +58,6 @@ const plans = [
       '500 chunks per month',
       'GPT-5 nano AI insights',
       'Priority processing',
-      'Advanced export capabilities',
-      'Priority email support',
-      'API access',
-      'Bulk processing',
-      'Custom integrations'
     ],
     limitations: [],
     recommended: false,

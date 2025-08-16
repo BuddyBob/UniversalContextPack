@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard } from 'lucide-react';
+import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
@@ -512,7 +512,7 @@ export default function ProcessPage() {
         autoHide={false}
       />
 
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="max-w-8xl mx-auto p-6">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-12 text-center">
@@ -524,43 +524,35 @@ export default function ProcessPage() {
             </p>
           </div>
 
-        {/* What You'll Get Section */}
+        {/* What You'll Get Section - Simplified */}
         {!user && (
           <div className="content-card">
-            <h3 className="text-lg font-semibold mb-3">What you'll get with UCP:</h3>
-            <div className="grid md:grid-cols-3 gap-4 text-sm">
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-accent-primary rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <FileText className="h-3 w-3 text-text-primary" />
+            <h3 className="text-lg font-semibold mb-4 text-center">Transform your chat exports into AI-ready context packs</h3>
+            <div className="grid md:grid-cols-4 gap-6 text-sm">
+              <div className="text-center">
+                <div className="w-8 h-8 bg-accent-primary rounded-full flex items-center justify-center mx-auto mb-2">
+                  <FileText className="h-4 w-4 text-text-primary" />
                 </div>
-                <div>
-                  <p className="font-medium text-text-primary">Smart Extraction</p>
-                  <p className="text-text-secondary">AI extracts key conversations and context from your chat exports</p>
-                </div>
+                <p className="font-medium text-text-primary">Smart Extraction</p>
               </div>
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-accent-primary rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <BarChart3 className="h-3 w-3 text-text-primary" />
+              <div className="text-center">
+                <div className="w-8 h-8 bg-accent-primary rounded-full flex items-center justify-center mx-auto mb-2">
+                  <BarChart3 className="h-4 w-4 text-text-primary" />
                 </div>
-                <div>
-                  <p className="font-medium text-text-primary">Smart Chunking</p>
-                  <p className="text-text-secondary">Intelligent text splitting optimized for AI context windows</p>
-                </div>
+                <p className="font-medium text-text-primary">Smart Chunking</p>
               </div>
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-accent-primary rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Play className="h-3 w-3 text-text-primary" />
+              <div className="text-center">
+                <div className="w-8 h-8 bg-accent-primary rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Brain className="h-4 w-4 text-text-primary" />
                 </div>
-                <div>
-                  <p className="font-medium text-text-primary">Ready-to-Use Packs</p>
-                  <p className="text-text-secondary">Get downloadable context packs for ChatGPT, Claude, or any AI</p>
-                </div>
+                <p className="font-medium text-text-primary">AI Analysis</p>
               </div>
-            </div>
-            <div className="mt-4 p-3 bg-accent-primary rounded border border-border-primary">
-              <p className="text-sm text-text-secondary">
-                <span className="font-medium">Sign in required:</span> To protect your data and provide personalized processing, you'll need to sign in with Google when uploading files.
-              </p>
+              <div className="text-center">
+                <div className="w-8 h-8 bg-accent-primary rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Play className="h-4 w-4 text-text-primary" />
+                </div>
+                <p className="font-medium text-text-primary">Ready-to-Use Packs</p>
+              </div>
             </div>
           </div>
         )}
@@ -702,26 +694,45 @@ export default function ProcessPage() {
             {/* Upload Section */}
             {currentStep === 'upload' && (
               <div className="upload-card">
-                <div className="upload-icon">
-                  <Upload className="h-8 w-8" />
-                </div>
-                <h2 className="upload-title">Upload Document</h2>
-                <p className="upload-description">JSON, TXT, CSV, ZIP, and HTML formats supported</p>
-                
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json,.txt,.csv,.zip,.html"
-                  onChange={handleFileSelect}
-                  className="upload-input"
-                />
-                
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="upload-button"
-                >
-                  Choose File
-                </button>
+                {!user ? (
+                  <>
+                    <div className="upload-icon">
+                      <Upload className="h-8 w-8" />
+                    </div>
+                    <h2 className="upload-title">Start Processing</h2>
+                    <p className="upload-description">Sign in to upload your files</p>
+                    
+                    <button
+                      onClick={() => setShowAuthModal(true)}
+                      className="upload-button"
+                    >
+                      Sign In
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="upload-icon">
+                      <Upload className="h-8 w-8" />
+                    </div>
+                    <h2 className="upload-title">Upload Document</h2>
+                    <p className="upload-description">JSON, TXT, CSV, ZIP, and HTML formats supported</p>
+                    
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json,.txt,.csv,.zip,.html"
+                      onChange={handleFileSelect}
+                      className="upload-input"
+                    />
+                    
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="upload-button"
+                    >
+                      Choose File
+                    </button>
+                  </>
+                )}
               </div>
             )}
 

@@ -27,6 +27,10 @@ export default function PacksPage() {
   useEffect(() => {
     if (user && session) {
       loadPacks()
+    } else {
+      // If user is not authenticated, stop loading immediately
+      setLoading(false)
+      setPacks([])
     }
   }, [user, session])
 
@@ -205,13 +209,8 @@ export default function PacksPage() {
                   </div>
                   <h3 className="font-medium text-gray-900 mb-2">Your Context Packs</h3>
                   <p className="text-gray-600 text-sm mb-4">
-                    After processing chat exports, your Universal Context Packs will appear here. 
-                    Each pack contains extracted conversations, intelligent chunks, and AI analysis 
-                    ready for use in any AI assistant.
+                    Process chat exports to see your packs here
                   </p>
-                  <div className="text-xs text-gray-500 mb-4">
-                    Sign in required to view your personal packs
-                  </div>
                   <a 
                     href="/process" 
                     className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 text-sm font-medium transition-colors inline-block rounded"
@@ -350,22 +349,12 @@ export default function PacksPage() {
                       <Brain className="w-8 h-8 text-blue-600" />
                     </div>
                     <h3 className="text-lg font-medium text-gray-900 mb-4">Universal Context Packs</h3>
-                    <div className="text-left max-w-md mx-auto space-y-4 text-sm text-gray-600">
-                      <div className="flex items-start space-x-3">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p><strong>Smart Processing:</strong> AI extracts meaningful conversations from your chat exports</p>
-                      </div>
-                      <div className="flex items-start space-x-3">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p><strong>Intelligent Chunking:</strong> Breaks conversations into context-aware segments</p>
-                      </div>
-                      <div className="flex items-start space-x-3">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p><strong>Ready to Use:</strong> Download organized packs for ChatGPT, Claude, or any AI</p>
-                      </div>
-                      <div className="flex items-start space-x-3">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                        <p><strong>Cost Tracking:</strong> See token usage and processing costs</p>
+                    <div className="text-center max-w-sm mx-auto space-y-3 text-sm text-gray-600">
+                      <p>Transform chat exports into AI-ready context packs</p>
+                      <div className="flex justify-center space-x-6 text-xs text-gray-500">
+                        <span>✓ Smart Processing</span>
+                        <span>✓ Intelligent Chunking</span>
+                        <span>✓ Ready to Use</span>
                       </div>
                     </div>
                   </>
