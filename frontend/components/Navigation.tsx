@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation'
 import { Settings, User, LogOut, Key, X, Eye, EyeOff, Sun, Moon } from 'lucide-react'
 
 export default function Navigation() {
-  const { user, userProfile, signOut, loading, session } = useAuth()
+  const { user, userProfile, signOut, loading, session, makeAuthenticatedRequest } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
@@ -38,13 +38,9 @@ export default function Navigation() {
   // Check if user has an API key when profile loads
   useEffect(() => {
     const checkApiKey = async () => {
-      if (user && session) {
+      if (user) {
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`, {
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-          })
+          const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`)
           
           if (response.ok) {
             const data = await response.json()
@@ -57,7 +53,7 @@ export default function Navigation() {
     }
     
     checkApiKey()
-  }, [user, session])
+  }, [user, makeAuthenticatedRequest])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -74,15 +70,14 @@ export default function Navigation() {
   }, [])
 
   const handleSaveApiKey = async () => {
-    if (!apiKey.trim() || !session) return
+    if (!apiKey.trim() || !user) return
     
     setIsLoading(true)
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile/openai-key`, {
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile/openai-key`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ api_key: apiKey.trim() }),
       })
@@ -105,15 +100,12 @@ export default function Navigation() {
   }
 
   const handleRemoveApiKey = async () => {
-    if (!session) return
+    if (!user) return
     
     setIsLoading(true)
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile/openai-key`, {
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile/openai-key`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
       })
       
       if (response.ok) {

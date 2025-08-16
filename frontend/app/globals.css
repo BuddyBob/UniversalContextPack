@@ -57,14 +57,14 @@
   --bg-muted: #f6f8fa;          /* Muted sections */
   
   /* === ACCENT COLORS === */
-  --accent-primary: rgba(96, 42, 221, 0.82);    /* Professional blue */
+  --accent-primary: rgba(83, 44, 176, 0.961);    /* Professional blue */
   --accent-primary-hover: rgba(104, 57, 214, 0.837);;  /* Blue hover */
-  --accent-primary-light: rgb(115, 59, 246);  /* Light blue */
+  --accent-primary-light: rgb(76, 37, 167);  /* Light blue */
   --accent-primary-dark: #1d4ed8;   /* Dark blue */
   
   /* === TEXT COLORS === */
   --text-primary: #1f2328;      /* Sharp dark text */
-  --text-secondary: #656d76;    /* Professional gray */
+  --text-secondary: #413c43;    /* Professional gray */
   --text-muted: #848d97;        /* Muted professional */
   --text-disabled: #a8b2bb;     /* Disabled state */
   
@@ -339,6 +339,9 @@
     height: 4rem !important;
     color: var(--accent-primary) !important;
     margin: 0 auto 1.5rem auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   .upload-title {
@@ -347,6 +350,7 @@
     color: var(--text-primary) !important;
     margin-bottom: 8px !important;
     letter-spacing: -0.01em !important;
+    text-align: center !important;
   }
 
   .upload-description {
@@ -354,6 +358,7 @@
     color: var(--text-secondary) !important;
     font-weight: 400 !important;
     margin-bottom: 32px !important;
+    text-align: center !important;
   }
 
   .upload-input {

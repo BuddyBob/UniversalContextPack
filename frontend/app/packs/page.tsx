@@ -19,7 +19,7 @@ interface UCPPack {
 }
 
 export default function PacksPage() {
-  const { user, session } = useAuth()
+  const { user, session, makeAuthenticatedRequest } = useAuth()
   const [packs, setPacks] = useState<UCPPack[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPack, setSelectedPack] = useState<UCPPack | null>(null)
@@ -31,7 +31,7 @@ export default function PacksPage() {
   }, [user, session])
 
   const loadPacks = async () => {
-    if (!user || !session?.access_token) {
+    if (!user) {
       setPacks([])
       setLoading(false)
       return
@@ -40,13 +40,7 @@ export default function PacksPage() {
     try {
       setLoading(true)
       
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${session.access_token}`
-      };
-
-      const response = await fetch(`${BACKEND_URL}/api/packs`, {
-        headers,
-      })
+      const response = await makeAuthenticatedRequest(`${BACKEND_URL}/api/packs`)
       
       if (!response.ok) {
         throw new Error(`Failed to fetch packs: ${response.status} ${response.statusText}`)
@@ -81,13 +75,7 @@ export default function PacksPage() {
       console.error('Failed to load packs from server:', e)
       // Fallback to /api/jobs endpoint
       try {
-        const headers: Record<string, string> = {
-          'Authorization': `Bearer ${session.access_token}`
-        };
-
-        const response = await fetch(`${BACKEND_URL}/api/jobs`, {
-          headers,
-        })
+        const response = await makeAuthenticatedRequest(`${BACKEND_URL}/api/jobs`)
         
         if (response.ok) {
           const jobs = await response.json()

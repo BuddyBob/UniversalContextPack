@@ -11,6 +11,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   loading: boolean
+  makeAuthenticatedRequest: (url: string, options?: RequestInit) => Promise<Response>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -36,6 +37,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email)
+      
       setSession(session)
       setUser(session?.user ?? null)
       
@@ -47,7 +50,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    // Set up token refresh check
+    const tokenRefreshInterval = setInterval(async () => {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        console.error('Error checking session:', error)
+        return
+      }
+      
+      if (session) {
+        // Check if token is close to expiring (within 5 minutes)
+        const expiresAt = session.expires_at ? session.expires_at * 1000 : 0
+        const now = Date.now()
+        const fiveMinutes = 5 * 60 * 1000
+        
+        if (expiresAt - now < fiveMinutes) {
+          console.log('Token expiring soon, refreshing...')
+          const { error: refreshError } = await supabase.auth.refreshSession()
+          if (refreshError) {
+            console.error('Token refresh failed:', refreshError)
+            // Force sign out if refresh fails
+            await signOut()
+          }
+        }
+      }
+    }, 60000) // Check every minute
+
+    return () => {
+      subscription.unsubscribe()
+      clearInterval(tokenRefreshInterval)
+    }
   }, [])
 
   const fetchUserProfile = async (userId: string) => {
@@ -65,6 +98,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (response.ok) {
             const data = await response.json()
             setUserProfile(data.profile)
+            return
+          } else if (response.status === 401) {
+            // Token might be expired, trigger refresh
+            console.log('Profile fetch got 401, signing out...')
+            await signOut()
             return
           }
         } catch (error) {
@@ -120,6 +158,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}): Promise<Response> => {
+    // Get fresh session to ensure token is valid
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    if (error || !session) {
+      console.error('No valid session available:', error)
+      await signOut()
+      throw new Error('Authentication required')
+    }
+
+    // Check if token is expired or expiring soon
+    const expiresAt = session.expires_at ? session.expires_at * 1000 : 0
+    const now = Date.now()
+    
+    if (expiresAt <= now) {
+      console.log('Token expired, attempting refresh...')
+      const { error: refreshError } = await supabase.auth.refreshSession()
+      if (refreshError) {
+        console.error('Token refresh failed:', refreshError)
+        await signOut()
+        throw new Error('Authentication expired')
+      }
+      
+      // Get the refreshed session
+      const { data: { session: refreshedSession } } = await supabase.auth.getSession()
+      if (!refreshedSession) {
+        await signOut()
+        throw new Error('Authentication refresh failed')
+      }
+      
+      // Use the refreshed session
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${refreshedSession.access_token}`,
+      }
+    } else {
+      // Use current session
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${session.access_token}`,
+      }
+    }
+
+    try {
+      const response = await fetch(url, options)
+      
+      // If we get a 401, the token might be invalid - try refresh once
+      if (response.status === 401) {
+        console.log('Received 401, attempting token refresh...')
+        const { error: refreshError } = await supabase.auth.refreshSession()
+        
+        if (refreshError) {
+          console.error('Token refresh failed on 401:', refreshError)
+          await signOut()
+          throw new Error('Authentication expired')
+        }
+        
+        // Retry the request with refreshed token
+        const { data: { session: newSession } } = await supabase.auth.getSession()
+        if (newSession) {
+          options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${newSession.access_token}`,
+          }
+          
+          return await fetch(url, options)
+        } else {
+          await signOut()
+          throw new Error('Authentication refresh failed')
+        }
+      }
+      
+      return response
+    } catch (error) {
+      console.error('Request failed:', error)
+      throw error
+    }
+  }
+
   const value = {
     user,
     session,
@@ -127,6 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithGoogle,
     signOut,
     loading,
+    makeAuthenticatedRequest,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
