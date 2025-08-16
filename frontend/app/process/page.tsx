@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Upload, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
+import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
+import PaymentSidebar from '@/components/PaymentSidebar';
 
 export default function ProcessPage() {
   const { user, session } = useAuth();
@@ -26,8 +28,23 @@ export default function ProcessPage() {
   const [sessionId] = useState(() => Date.now().toString()); // Unique session ID
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
+  const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, chunks_used: number, chunks_allowed: number, plan?: string} | null>(null);
+  const [userHasApiKey, setUserHasApiKey] = useState<boolean>(false); // Cache API key status
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // Payment notifications
+  const { 
+    notification, 
+    hideNotification, 
+    showLimitWarning, 
+    showNotification 
+  } = usePaymentNotifications();
+
+  const handleUpgrade = () => {
+    // Navigate to profile page with upgrade intent
+    router.push('/profile?tab=billing&action=upgrade');
+  };
 
   // Load session from localStorage on mount
   useEffect(() => {
@@ -60,6 +77,14 @@ export default function ProcessPage() {
       }
     }
   }, []);
+
+  // Check API key and payment limits when user logs in
+  useEffect(() => {
+    if (user && session) {
+      checkApiKey();
+      checkPaymentLimits();
+    }
+  }, [user, session]);
 
   // Save session to localStorage whenever state changes
   useEffect(() => {
@@ -111,13 +136,23 @@ export default function ProcessPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId]);
 
+  // Check payment limits when user authenticates
+  useEffect(() => {
+    if (user && session?.access_token) {
+      checkPaymentLimits().then(setPaymentLimits);
+    }
+  }, [user, session?.access_token]);
+
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
   };
 
-  const hasApiKey = async () => {
-    if (!session?.access_token) return false;
+  const checkApiKey = async () => {
+    if (!session?.access_token) {
+      setUserHasApiKey(false);
+      return false;
+    }
     
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`, {
@@ -128,13 +163,46 @@ export default function ProcessPage() {
       
       if (response.ok) {
         const data = await response.json();
-        return data.profile?.has_openai_key || false;
+        const hasKey = data.profile?.has_openai_key || false;
+        setUserHasApiKey(hasKey);
+        return hasKey;
       }
     } catch (error) {
       console.error('Error checking API key:', error);
     }
     
+    setUserHasApiKey(false);
     return false;
+  };
+
+  // Cached version for UI - uses state instead of API calls
+  const hasApiKey = () => userHasApiKey;
+
+  const checkPaymentLimits = async () => {
+    if (!session?.access_token) return { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
+    
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/payment/status`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const canProcess = data.chunks_used < data.chunks_allowed || data.plan !== 'free';
+        return {
+          canProcess,
+          chunks_used: data.chunks_used,
+          chunks_allowed: data.chunks_allowed,
+          plan: data.plan
+        };
+      }
+    } catch (error) {
+      console.error('Error checking payment limits:', error);
+    }
+    
+    return { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
   };
 
   const startPollingAnalysisStatus = (jobId: string) => {
@@ -158,6 +226,35 @@ export default function ProcessPage() {
           setCurrentStep('analyzed');
           addLog('Analysis completed successfully!');
           addLog('Pack available in your collection');
+        } else if (data.status === 'partial') {
+          // Partial completion due to payment limits
+          clearInterval(interval);
+          setPollingInterval(null);
+          setIsProcessing(false);
+          setCurrentStep('analyzed');
+          addLog(`Analysis completed with ${data.processed_chunks}/${data.total_chunks} chunks`);
+          addLog('Free tier limit reached. Upgrade to Pro for complete analysis.');
+          
+          // Show payment limit notification
+          if (data.upgrade_required) {
+            showLimitWarning(data.processed_chunks, data.chunks_to_process || 2);
+          }
+        } else if (data.status === 'limit_reached') {
+          // Hit payment limit before processing
+          clearInterval(interval);
+          setPollingInterval(null);
+          setIsProcessing(false);
+          addLog('Free tier limit reached. Please upgrade to Pro plan to continue.');
+          
+          // Show limit reached notification
+          showNotification(
+            'limit_reached',
+            'Free tier limit reached! Upgrade to Pro plan to analyze all chunks.',
+            { 
+              chunksUsed: data.chunks_used || 2, 
+              chunksAllowed: data.chunks_allowed || 2 
+            }
+          );
         } else if (data.status === 'failed') {
           clearInterval(interval);
           setPollingInterval(null);
@@ -284,10 +381,24 @@ export default function ProcessPage() {
   const handleAnalyze = async () => {
     if (!chunkData || selectedChunks.size === 0 || !currentJobId) return;
 
-    // Check if user has API key saved in profile
-    const userHasApiKey = await hasApiKey();
+    // Check if user has API key saved in profile (use cached version)
     if (!userHasApiKey) {
       addLog('Error: OpenAI API key not found. Please add your API key in the profile menu.');
+      return;
+    }
+
+    // Check payment limits before starting analysis
+    const currentLimits = await checkPaymentLimits();
+    if (!currentLimits.canProcess) {
+      addLog(`Error: Free tier limit reached (${currentLimits.chunks_used}/${currentLimits.chunks_allowed}). Please upgrade to Pro plan to continue.`);
+      showNotification(
+        'limit_reached',
+        'Free tier limit reached! Upgrade to Pro plan to analyze chunks.',
+        { 
+          chunksUsed: currentLimits.chunks_used, 
+          chunksAllowed: currentLimits.chunks_allowed 
+        }
+      );
       return;
     }
 
@@ -424,16 +535,29 @@ export default function ProcessPage() {
 
   return (
     <div className="min-h-screen bg-primary">
-      <div className="max-w-4xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-12 text-center">
-          <h1 style={{fontSize: '32px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.01em'}}>
-            Universal Context Processor
-          </h1>
-          <p style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '400'}}>
-            Extract, chunk, and analyze your conversation data with professional AI tools
-          </p>
-        </div>
+      {/* Payment Notification */}
+      <PaymentNotification
+        show={notification.show}
+        type={notification.type}
+        message={notification.message}
+        chunksUsed={notification.chunksUsed}
+        chunksAllowed={notification.chunksAllowed}
+        onClose={hideNotification}
+        onUpgrade={handleUpgrade}
+        autoHide={false}
+      />
+
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="mb-12 text-center">
+            <h1 style={{fontSize: '32px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.01em'}}>
+              Universal Context Processor
+            </h1>
+            <p style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '400'}}>
+              Extract, chunk, and analyze your conversation data with professional AI tools
+            </p>
+          </div>
 
         {/* What You'll Get Section */}
         {!user && (
@@ -760,15 +884,23 @@ export default function ProcessPage() {
                           handleAnalyze();
                         }
                       }}
-                      disabled={isProcessing || !hasApiKey()}
+                      disabled={isProcessing || !userHasApiKey || (paymentLimits ? !paymentLimits.canProcess : true)}
                       className={`btn-primary-improved ${
-                        !hasApiKey() ? 'opacity-50 cursor-not-allowed' : ''
+                        (!userHasApiKey || (paymentLimits && !paymentLimits.canProcess)) ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
-                      title={!hasApiKey() ? 'Please add your OpenAI API key in the profile menu' : ''}
+                      title={
+                        !userHasApiKey 
+                          ? 'Please add your OpenAI API key in the profile menu' 
+                          : (paymentLimits && !paymentLimits.canProcess)
+                          ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
+                          : ''
+                      }
                     >
                       <Play className="h-4 w-4" />
-                      {!hasApiKey() 
+                      {!userHasApiKey 
                         ? 'API Key Required' 
+                        : (paymentLimits && !paymentLimits.canProcess)
+                        ? `Limit Reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed})`
                         : selectedChunks.size > 0
                         ? `Analyze Selected (${selectedChunks.size})`
                         : `Analyze All Chunks (${availableChunks.length})`
@@ -940,10 +1072,20 @@ export default function ProcessPage() {
                       handleAnalyze();
                     }
                   }}
-                  disabled={selectedChunks.size === 0}
+                  disabled={selectedChunks.size === 0 || !userHasApiKey || (paymentLimits ? !paymentLimits.canProcess : true)}
                   className="btn-primary-improved disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    !userHasApiKey 
+                      ? 'Please add your OpenAI API key in the profile menu' 
+                      : (paymentLimits && !paymentLimits.canProcess)
+                      ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
+                      : ''
+                  }
                 >
-                  Analyze Selected ({selectedChunks.size})
+                  {(paymentLimits && !paymentLimits.canProcess)
+                    ? `Limit Reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed})`
+                    : `Analyze Selected (${selectedChunks.size})`
+                  }
                 </button>
               </div>
             </div>
@@ -986,6 +1128,7 @@ export default function ProcessPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
       
       {/* Auth Modal */}
@@ -995,6 +1138,11 @@ export default function ProcessPage() {
           onClose={() => setShowAuthModal(false)}
         />
       )}
+
+      {/* Payment Sidebar */}
+      <PaymentSidebar 
+        onUpgrade={handleUpgrade}
+      />
     </div>
   );
 }

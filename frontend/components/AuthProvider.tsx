@@ -42,10 +42,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       
-      if (session?.user) {
-        fetchUserProfile(session.user.id)
-      } else {
-        setUserProfile(null)
+      // Only fetch profile on meaningful auth events, not token refreshes
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+        if (session?.user) {
+          fetchUserProfile(session.user.id)
+        } else {
+          setUserProfile(null)
+        }
       }
       setLoading(false)
     })
@@ -73,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Force sign out if refresh fails
             await signOut()
           }
+          // Note: Don't fetch profile here - let onAuthStateChange handle it
         }
       }
     }, 60000) // Check every minute

@@ -38,9 +38,14 @@ export default function Navigation() {
   // Check if user has an API key when profile loads
   useEffect(() => {
     const checkApiKey = async () => {
-      if (user) {
+      if (user && session?.access_token) {
         try {
-          const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`)
+          const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`, {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json'
+            }
+          })
           
           if (response.ok) {
             const data = await response.json()
@@ -52,8 +57,11 @@ export default function Navigation() {
       }
     }
     
-    checkApiKey()
-  }, [user, makeAuthenticatedRequest])
+    // Only check API key once when user first loads - avoid session token changes
+    if (user && !loading) {
+      checkApiKey()
+    }
+  }, [user, loading]) // Removed session?.access_token to prevent spam
 
   // Close dropdown when clicking outside
   useEffect(() => {

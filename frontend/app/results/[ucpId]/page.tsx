@@ -338,15 +338,39 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         <div className="bg-white border border-gray-200 p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-6">Individual Chunk Results</h3>
           
-          <div className="grid gap-4">
-            {Array.from({ length: result.totalChunks }, (_, i) => i + 1).map(chunkIndex => (
-              <ChunkCard 
-                key={chunkIndex}
-                chunkIndex={chunkIndex}
-                onDownload={() => downloadChunk(chunkIndex)}
-              />
-            ))}
-          </div>
+          {result.completedChunks > 0 ? (
+            <div className="grid gap-4">
+              {Array.from({ length: result.completedChunks }, (_, i) => i + 1).map(chunkIndex => (
+                <ChunkCard 
+                  key={chunkIndex}
+                  chunkIndex={chunkIndex}
+                  onDownload={() => downloadChunk(chunkIndex)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Brain className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>No chunks were analyzed</p>
+            </div>
+          )}
+
+          {result.totalChunks > result.completedChunks && (
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start space-x-3">
+                <Brain className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-blue-800 font-medium">
+                    Limited Analysis
+                  </p>
+                  <p className="text-blue-700 text-sm">
+                    Only {result.completedChunks} out of {result.totalChunks} chunks were analyzed due to plan limits. 
+                    <span className="font-medium"> Upgrade to Pro</span> to analyze all chunks.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
       </div>
