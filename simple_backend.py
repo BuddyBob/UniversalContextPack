@@ -38,9 +38,16 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Get this from Supabase
 
 # R2 configuration
 R2_ENDPOINT = os.getenv("R2_ENDPOINT")
-R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY_ID")
-R2_SECRET_KEY = os.getenv("R2_SECRET_ACCESS_KEY") 
+R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY")
+R2_SECRET_KEY = os.getenv("R2_SECRET_KEY") 
 R2_BUCKET = os.getenv("R2_BUCKET_NAME")
+
+# Debug R2 configuration
+print(f"R2 Configuration:")
+print(f"  Endpoint: {R2_ENDPOINT}")
+print(f"  Bucket: {R2_BUCKET}")
+print(f"  Access Key length: {len(R2_ACCESS_KEY) if R2_ACCESS_KEY else 'None'}")
+print(f"  Secret Key length: {len(R2_SECRET_KEY) if R2_SECRET_KEY else 'None'}")
 
 # Initialize Supabase client
 if SUPABASE_URL and SUPABASE_SERVICE_KEY:
@@ -73,6 +80,65 @@ class AuthenticatedUser:
         self.user_id = user_id
         self.email = email
         self.r2_directory = r2_directory
+
+async def get_user_payment_status(user_id: str) -> dict:
+    """Get user's payment status and chunk limits"""
+    if not supabase:
+        # Legacy mode - allow unlimited for now
+        return {"plan": "legacy", "chunks_used": 0, "chunks_allowed": 999, "can_process": True}
+    
+    try:
+        # Get user profile with payment info
+        result = supabase.table("user_profiles").select("*").eq("id", user_id).single().execute()
+        user_profile = result.data
+        
+        chunks_used = user_profile.get("chunks_analyzed", 0)
+        plan = user_profile.get("payment_plan", "free")
+        
+        if plan == "free":
+            chunks_allowed = 2
+            can_process = chunks_used < chunks_allowed
+        elif plan == "pro":
+            chunks_allowed = 999  # Unlimited for current export
+            can_process = True
+        elif plan == "business":
+            chunks_allowed = 999  # Unlimited
+            can_process = True
+        else:
+            chunks_allowed = 2  # Default to free
+            can_process = chunks_used < chunks_allowed
+        
+        return {
+            "plan": plan,
+            "chunks_used": chunks_used,
+            "chunks_allowed": chunks_allowed,
+            "can_process": can_process,
+            "user_id": user_id
+        }
+        
+    except Exception as e:
+        print(f"Error getting payment status: {e}")
+        # Default to free plan
+        return {"plan": "free", "chunks_used": 0, "chunks_allowed": 2, "can_process": True}
+
+async def update_user_chunks_used(user_id: str, chunks_processed: int):
+    """Update the number of chunks processed for a user"""
+    if not supabase:
+        return
+    
+    try:
+        # Get current count
+        result = supabase.table("user_profiles").select("chunks_analyzed").eq("id", user_id).single().execute()
+        current_chunks = result.data.get("chunks_analyzed", 0) if result.data else 0
+        
+        # Update with new total
+        new_total = current_chunks + chunks_processed
+        supabase.table("user_profiles").update({"chunks_analyzed": new_total}).eq("id", user_id).execute()
+        
+        print(f"Updated user {user_id} chunks: {current_chunks} + {chunks_processed} = {new_total}")
+        
+    except Exception as e:
+        print(f"Error updating chunks used: {e}")
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
     """Validate JWT token and return authenticated user"""
@@ -1166,11 +1232,85 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
         print(f" Error chunking text: {e}")
         raise HTTPException(status_code=500, detail=f"Chunking failed: {str(e)}")
 
+@app.get("/api/payment/status")
+async def get_payment_status(user: AuthenticatedUser = Depends(get_current_user)):
+    """Get user's current payment status and chunk limits"""
+    try:
+        payment_status = await get_user_payment_status(user.user_id)
+        return payment_status
+    except Exception as e:
+        print(f"Error getting payment status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get payment status: {str(e)}")
+
+@app.post("/api/payment/upgrade")
+async def upgrade_plan(plan: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Upgrade user's plan (will integrate with Stripe later)"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Payment system not available")
+        
+        valid_plans = ["pro", "business"]
+        if plan not in valid_plans:
+            raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {valid_plans}")
+        
+        # Update user's plan in database
+        update_data = {"payment_plan": plan}
+        if plan == "pro":
+            # Pro plan resets chunks for current export
+            update_data["chunks_analyzed"] = 0
+        
+        result = supabase.table("user_profiles").update(update_data).eq("id", user.user_id).execute()
+        
+        return {
+            "status": "upgraded",
+            "plan": plan,
+            "user_id": user.user_id,
+            "message": f"Successfully upgraded to {plan} plan"
+        }
+        
+    except Exception as e:
+        print(f"Error upgrading plan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upgrade plan: {str(e)}")
+
 @app.post("/api/analyze/{job_id}")
 async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: AuthenticatedUser = Depends(get_current_user)):
-    """Step 3: Analyze chunks with AI."""
+    """Step 3: Analyze chunks with AI - with payment limits."""
     try:
         print(f"Starting AI analysis for job {job_id} for user {user.user_id}")
+        
+        # Check payment status and limits FIRST
+        payment_status = await get_user_payment_status(user.user_id)
+        print(f"Payment status for user {user.user_id}: {payment_status}")
+        
+        # Get chunk metadata to see how many chunks we have
+        chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+        if not chunk_metadata_content:
+            raise HTTPException(status_code=404, detail="Chunk metadata not found")
+        
+        chunk_metadata = json.loads(chunk_metadata_content)
+        total_chunks = chunk_metadata["total_chunks"]
+        
+        # Determine how many chunks to process based on payment plan
+        if payment_status["plan"] == "free":
+            # Free users get 2 chunks max, and it's account-wide
+            chunks_remaining = max(0, payment_status["chunks_allowed"] - payment_status["chunks_used"])
+            chunks_to_process = min(chunks_remaining, total_chunks, 2)
+            
+            if chunks_to_process <= 0:
+                return {
+                    "job_id": job_id,
+                    "status": "limit_reached",
+                    "message": "Free tier limit reached. Upgrade to Pro plan to analyze all chunks.",
+                    "chunks_used": payment_status["chunks_used"],
+                    "chunks_allowed": payment_status["chunks_allowed"],
+                    "total_chunks": total_chunks,
+                    "upgrade_required": True
+                }
+        else:
+            # Pro/Business users get unlimited chunks
+            chunks_to_process = total_chunks
+        
+        print(f"Processing {chunks_to_process}/{total_chunks} chunks for {payment_status['plan']} user")
         
         # Get user's OpenAI API key from their profile (prefer this over request)
         user_api_key = await get_user_openai_key(user.user_id)
@@ -1186,14 +1326,6 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         
         # Get OpenAI client with user's API key
         openai_client = get_openai_client(api_key_to_use)
-        
-        # Get chunk metadata from user directory
-        chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
-        if not chunk_metadata_content:
-            raise HTTPException(status_code=404, detail="Chunk metadata not found")
-        
-        chunk_metadata = json.loads(chunk_metadata_content)
-        total_chunks = chunk_metadata["total_chunks"]
         
         print(f"Found {total_chunks} chunks to analyze")
         
@@ -1218,15 +1350,16 @@ Conversation data:
         total_cost = 0.0
         failed_chunks = []
         
-        for i in range(total_chunks):
+        # Process only the allowed number of chunks
+        for i in range(chunks_to_process):
             try:
                 chunk_key = f"{user.r2_directory}/{job_id}/chunk_{i+1:03d}.txt"
-                print(f" Processing chunk {i+1}/{total_chunks} - downloading {chunk_key}")
+                print(f" Processing chunk {i+1}/{chunks_to_process} - downloading {chunk_key}")
                 
                 chunk_content = download_from_r2(chunk_key)
                 
                 if not chunk_content:
-                    print(f" Failed to download chunk {i+1}")
+                    print(f"❌ Failed to download chunk {i+1}")
                     failed_chunks.append(i+1)
                     continue
                 
@@ -1244,46 +1377,66 @@ Conversation data:
                 input_tokens = count_tokens(chunk_content)
                 output_tokens = ai_response.usage.completion_tokens
                 
+                # Calculate cost for this chunk
+                input_cost = (input_tokens / 1_000_000) * 0.050
+                output_cost = (output_tokens / 1_000_000) * 0.400
+                chunk_cost = input_cost + output_cost
+                
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+                total_cost += chunk_cost
+                
                 result = {
                     "chunk_index": i + 1,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
+                    "cost": chunk_cost,
                     "content": ai_response.choices[0].message.content,
                     "processed_at": datetime.utcnow().isoformat()
                 }
                 
-                # Calculate costs
-                input_cost = (input_tokens / 1_000_000) * 0.050
-                output_cost = (output_tokens / 1_000_000) * 0.400
-                
-                total_input_tokens += input_tokens
-                total_output_tokens += output_tokens
-                total_cost += input_cost + output_cost
-                
                 results.append(result)
-                
-                print(f" Chunk {i+1} analyzed successfully (cost: ${input_cost + output_cost:.3f})")
-                
-                # Save individual result to R2
                 upload_to_r2(f"{user.r2_directory}/{job_id}/result_{i+1:03d}.json", json.dumps(result, indent=2))
                 
+                print(f"✅ Chunk {i+1} analyzed successfully (${chunk_cost:.4f})")
+                
             except Exception as chunk_error:
-                print(f" Error processing chunk {i+1}: {chunk_error}")
+                print(f"❌ Error processing chunk {i+1}: {chunk_error}")
                 failed_chunks.append(i+1)
                 continue
         
         if not results:
             raise HTTPException(status_code=500, detail=f"Failed to process any chunks. Failed chunks: {failed_chunks}")
         
-        print(f"📊 Analysis complete: {len(results)}/{total_chunks} chunks processed successfully")
+        # Update user's chunks used count
+        await update_user_chunks_used(user.user_id, len(results))
+        
+        print(f"📊 Analysis complete: {len(results)}/{chunks_to_process} chunks processed successfully")
         if failed_chunks:
             print(f" Failed chunks: {failed_chunks}")
         
-        # Create complete UCP
+        # Create complete UCP from processed chunks only
         aggregated_content = "\n\n" + "="*100 + "\n\n".join([
             f"# CHUNK {r['chunk_index']} ANALYSIS\n\n{r['content']}"
             for r in results if r.get('content')
         ])
+        
+        # Add note about upgrade if not all chunks were processed
+        if chunks_to_process < total_chunks:
+            upgrade_note = f"""
+
+{"="*100}
+# UPGRADE TO ANALYZE REMAINING CHUNKS
+
+You have {total_chunks - chunks_to_process} more chunks that can be analyzed with a Pro plan upgrade.
+
+Processed: {chunks_to_process}/{total_chunks} chunks
+Remaining: {total_chunks - chunks_to_process} chunks
+
+Upgrade to Pro plan ($4.99) to unlock your complete Universal Context Pack!
+{"="*100}
+"""
+            aggregated_content += upgrade_note
         
         upload_to_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt", aggregated_content)
         
@@ -1292,6 +1445,9 @@ Conversation data:
             "job_id": job_id,
             "total_chunks": total_chunks,
             "processed_chunks": len(results),
+            "chunks_to_process": chunks_to_process,
+            "payment_plan": payment_status["plan"],
+            "upgrade_required": chunks_to_process < total_chunks,
             "failed_chunks": failed_chunks,
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
@@ -1311,7 +1467,9 @@ Conversation data:
                 metadata={
                     "analysis_completed": True,
                     "total_chunks": total_chunks,
-                    "total_cost": total_cost
+                    "processed_chunks": len(results),
+                    "total_cost": total_cost,
+                    "payment_plan": payment_status["plan"]
                 }
             )
             print(f"Job {job_id} marked as completed in database")
@@ -1326,52 +1484,58 @@ Conversation data:
             extraction_stats = {
                 "total_chunks": total_chunks,
                 "processed_chunks": len(results),
-                "failed_chunks": failed_chunks
+                "failed_chunks": failed_chunks,
+                "payment_plan": payment_status["plan"]
             }
             
+            chunk_stats = {"chunks_to_process": chunks_to_process}
             analysis_stats = {
                 "total_input_tokens": total_input_tokens,
                 "total_output_tokens": total_output_tokens,
-                "total_cost": total_cost,
-                "completed_at": summary["completed_at"]
+                "total_cost": total_cost
             }
             
-            pack_record = await create_pack_in_db(
-                user=user,
-                job_id=job_id,
-                pack_name=pack_name,
-                r2_pack_path=r2_pack_path,
-                extraction_stats=extraction_stats,
-                analysis_stats=analysis_stats
+            await create_pack_in_db(
+                user, 
+                job_id, 
+                pack_name, 
+                r2_pack_path, 
+                extraction_stats, 
+                chunk_stats, 
+                analysis_stats,
+                len(aggregated_content)
             )
-            
-            if pack_record:
-                print(f"Pack saved to database: {pack_record}")
-            else:
-                print("Warning: Failed to save pack to database")
+            print(f"Pack created in database for job {job_id}")
                 
         except Exception as e:
-            print(f"Error saving pack to database: {e}")
-            # Let's add more detailed error information
-            import traceback
-            print(f"Full error traceback: {traceback.format_exc()}")
+            print(f"Error creating pack in database: {e}")
         
-        print(f"Processing complete! Total cost: ${total_cost:.3f}")
-        print(f"Results stored in R2 bucket: {R2_BUCKET}")
-        print(f"Successfully processed: {len(results)}/{total_chunks} chunks")
-        
-        return {
+        result_data = {
             "job_id": job_id,
-            "status": "completed",
+            "status": "completed" if chunks_to_process == total_chunks else "partial",
             "total_chunks": total_chunks,
             "processed_chunks": len(results),
+            "chunks_to_process": chunks_to_process,
             "failed_chunks": failed_chunks,
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
-            "total_cost": total_cost
+            "total_cost": total_cost,
+            "payment_plan": payment_status["plan"],
+            "upgrade_required": chunks_to_process < total_chunks
         }
         
+        if chunks_to_process < total_chunks:
+            result_data["upgrade_message"] = f"Upgrade to Pro plan to analyze remaining {total_chunks - chunks_to_process} chunks"
+        
+        print(f"Processing complete! Total cost: ${total_cost:.3f}")
+        print(f"Results stored in R2 bucket: {R2_BUCKET}")
+        print(f"Successfully processed: {len(results)}/{chunks_to_process} chunks")
+        
+        return result_data
+                
     except Exception as e:
+        print(f" Error analyzing chunks: {e}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
         print(f" Error analyzing chunks: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 

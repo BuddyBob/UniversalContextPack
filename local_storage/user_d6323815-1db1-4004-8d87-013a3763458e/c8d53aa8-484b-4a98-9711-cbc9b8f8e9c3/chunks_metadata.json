@@ -1,0 +1,18 @@
+{
+  "job_id": "c8d53aa8-484b-4a98-9711-cbc9b8f8e9c3",
+  "total_chunks": 2,
+  "chunks": [
+    {
+      "chunk_number": 1,
+      "token_count": 151425,
+      "preview": "1. 26619. [PDF] Searle - Can Computers Think.pdf - That Marcus Family\n\n2. 26620. Of course our brains are digital computers, since they imple- ment any number of computer programs. And of course our b..."
+    },
+    {
+      "chunk_number": 2,
+      "token_count": 6584,
+      "preview": "2658. 28922. how much for a used bike - Versatile, light, powerful carbon mtn. bike. I am a road biker and later acquired a gravel bike, so did not ride the Fuji much. As you see from the amount of we..."
+    }
+  ],
+  "chunked_at": "2025-08-16T06:50:40.238870",
+  "max_tokens_per_chunk": 150000
+}

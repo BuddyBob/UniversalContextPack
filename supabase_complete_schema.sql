@@ -1,11 +1,15 @@
--- UCP v6 Production Database Schema
--- Clean schema with proper user isolation and authentication
+-- ============================================================================
+-- UCP v6 COMPLETE DATABASE SCHEMA
+-- ============================================================================
+-- This is the complete, production-ready schema with payment functionality
+-- Run this script in Supabase SQL Editor to recreate the entire database
+-- ============================================================================
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================================
--- USER PROFILES TABLE
+-- USER PROFILES TABLE (with payment functionality)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
@@ -14,6 +18,15 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   avatar_url TEXT,
   openai_api_key TEXT, -- User's OpenAI API key (encrypted)
   r2_user_directory TEXT NOT NULL, -- Unique R2 directory for this user
+  
+  -- Payment and usage tracking
+  payment_plan TEXT DEFAULT 'free' CHECK (payment_plan IN ('free', 'pro', 'business')),
+  chunks_analyzed INTEGER DEFAULT 0, -- Total chunks analyzed by this user
+  subscription_id TEXT, -- Stripe subscription ID (for future use)
+  subscription_status TEXT, -- active, canceled, past_due, etc.
+  plan_start_date TIMESTAMP WITH TIME ZONE,
+  plan_end_date TIMESTAMP WITH TIME ZONE,
+  
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -152,13 +165,15 @@ CREATE POLICY "Users can insert own job progress" ON public.job_progress
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.user_profiles (id, email, full_name, avatar_url, r2_user_directory)
+  INSERT INTO public.user_profiles (id, email, full_name, avatar_url, r2_user_directory, payment_plan, chunks_analyzed)
   VALUES (
     NEW.id,
     COALESCE(NEW.email, NEW.raw_user_meta_data->>'email', ''),
     NEW.raw_user_meta_data->>'full_name',
     NEW.raw_user_meta_data->>'avatar_url',
-    'user_' || NEW.id::text
+    'user_' || NEW.id::text,
+    'free', -- All new users start with free plan
+    0 -- Start with 0 chunks analyzed
   )
   ON CONFLICT (id) DO NOTHING; -- Prevent duplicates
   RETURN NEW;
@@ -192,11 +207,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to update chunks_analyzed when a job completes
+CREATE OR REPLACE FUNCTION public.handle_chunk_usage_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Update user's chunks_analyzed when job is completed with processed chunks
+  IF NEW.status = 'analyzed' AND NEW.processed_chunks > 0 AND 
+     (OLD.status IS NULL OR OLD.status != 'analyzed') THEN
+    
+    UPDATE public.user_profiles 
+    SET chunks_analyzed = chunks_analyzed + NEW.processed_chunks,
+        updated_at = NOW()
+    WHERE id = NEW.user_id;
+    
+    RAISE NOTICE 'Updated user % chunk count by %', NEW.user_id, NEW.processed_chunks;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Drop existing triggers
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP TRIGGER IF EXISTS set_user_profiles_updated_at ON public.user_profiles;
 DROP TRIGGER IF EXISTS set_jobs_updated_at ON public.jobs;
 DROP TRIGGER IF EXISTS handle_job_completion ON public.jobs;
+DROP TRIGGER IF EXISTS handle_chunk_usage_update ON public.jobs;
 
 -- Create triggers
 CREATE TRIGGER on_auth_user_created
@@ -214,6 +250,10 @@ CREATE TRIGGER set_jobs_updated_at
 CREATE TRIGGER handle_job_completion
   BEFORE UPDATE ON public.jobs
   FOR EACH ROW EXECUTE FUNCTION public.handle_job_completion();
+
+CREATE TRIGGER handle_chunk_usage_update
+  AFTER UPDATE ON public.jobs
+  FOR EACH ROW EXECUTE FUNCTION public.handle_chunk_usage_update();
 
 -- ============================================================================
 -- INDEXES FOR PERFORMANCE
@@ -236,6 +276,84 @@ CREATE INDEX IF NOT EXISTS idx_job_progress_step ON public.job_progress(job_id, 
 
 -- User profiles indexes
 CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON public.user_profiles(email);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_payment_plan ON public.user_profiles(payment_plan);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_chunks_analyzed ON public.user_profiles(chunks_analyzed);
+
+-- ============================================================================
+-- PAYMENT HELPER FUNCTIONS
+-- ============================================================================
+
+-- Function to get user payment status
+CREATE OR REPLACE FUNCTION public.get_user_payment_status(user_uuid UUID)
+RETURNS JSONB AS $$
+DECLARE
+  user_profile RECORD;
+  chunks_allowed INTEGER;
+  can_process BOOLEAN;
+BEGIN
+  -- Get user profile
+  SELECT * INTO user_profile 
+  FROM public.user_profiles 
+  WHERE id = user_uuid;
+  
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'plan', 'free',
+      'chunks_used', 0,
+      'chunks_allowed', 2,
+      'can_process', true,
+      'subscription_status', null
+    );
+  END IF;
+  
+  -- Determine chunks allowed based on plan
+  CASE user_profile.payment_plan
+    WHEN 'free' THEN chunks_allowed := 2;
+    WHEN 'pro' THEN chunks_allowed := 999999; -- Unlimited
+    WHEN 'business' THEN chunks_allowed := 999999; -- Unlimited
+    ELSE chunks_allowed := 2; -- Default to free
+  END CASE;
+  
+  -- Determine if user can process more chunks
+  can_process := (user_profile.payment_plan != 'free') OR 
+                 (user_profile.chunks_analyzed < chunks_allowed);
+  
+  RETURN jsonb_build_object(
+    'plan', user_profile.payment_plan,
+    'chunks_used', user_profile.chunks_analyzed,
+    'chunks_allowed', chunks_allowed,
+    'can_process', can_process,
+    'subscription_status', user_profile.subscription_status,
+    'plan_start_date', user_profile.plan_start_date,
+    'plan_end_date', user_profile.plan_end_date
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to update user payment plan
+CREATE OR REPLACE FUNCTION public.update_user_payment_plan(
+  user_uuid UUID,
+  new_plan TEXT,
+  subscription_id_param TEXT DEFAULT NULL,
+  subscription_status_param TEXT DEFAULT NULL
+)
+RETURNS BOOLEAN AS $$
+BEGIN
+  UPDATE public.user_profiles 
+  SET 
+    payment_plan = new_plan,
+    subscription_id = COALESCE(subscription_id_param, subscription_id),
+    subscription_status = COALESCE(subscription_status_param, subscription_status),
+    plan_start_date = CASE 
+      WHEN new_plan != 'free' AND plan_start_date IS NULL THEN NOW()
+      ELSE plan_start_date 
+    END,
+    updated_at = NOW()
+  WHERE id = user_uuid;
+  
+  RETURN FOUND;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================================
 -- HELPER FUNCTIONS
@@ -345,21 +463,53 @@ SELECT
   END as processing_duration_seconds
 FROM public.jobs j;
 
+-- View for user payment summary
+CREATE OR REPLACE VIEW public.user_payment_summary AS
+SELECT 
+  up.id,
+  up.email,
+  up.payment_plan,
+  up.chunks_analyzed,
+  CASE 
+    WHEN up.payment_plan = 'free' THEN 2
+    ELSE 999999 
+  END as chunks_allowed,
+  CASE 
+    WHEN up.payment_plan = 'free' THEN (2 - up.chunks_analyzed)
+    ELSE 999999 
+  END as chunks_remaining,
+  up.subscription_status,
+  up.plan_start_date,
+  up.plan_end_date,
+  COUNT(j.id) as total_jobs,
+  COUNT(CASE WHEN j.status = 'analyzed' THEN 1 END) as completed_jobs,
+  COALESCE(SUM(j.total_cost), 0) as total_spent
+FROM public.user_profiles up
+LEFT JOIN public.jobs j ON j.user_id = up.id
+GROUP BY up.id, up.email, up.payment_plan, up.chunks_analyzed, up.subscription_status, up.plan_start_date, up.plan_end_date;
+
 -- Grant access to authenticated users
 GRANT SELECT ON public.job_stats TO authenticated;
+GRANT SELECT ON public.user_payment_summary TO authenticated;
 
 -- ============================================================================
--- VALIDATION
+-- VALIDATION AND COMMENTS
 -- ============================================================================
 
 -- Add table comments for documentation
-COMMENT ON TABLE public.user_profiles IS 'User profile data extending Supabase auth.users with UCP-specific fields';
+COMMENT ON TABLE public.user_profiles IS 'User profile data extending Supabase auth.users with UCP-specific fields and payment tracking';
 COMMENT ON TABLE public.jobs IS 'Processing jobs with user isolation and comprehensive status tracking';
 COMMENT ON TABLE public.packs IS 'Completed UCP analysis packs with download information';
 COMMENT ON TABLE public.job_progress IS 'Real-time progress tracking for jobs';
 
 COMMENT ON COLUMN public.jobs.status IS 'Job status: created -> extracting -> extracted -> chunking -> chunked -> analyzing -> analyzed|failed';
 COMMENT ON COLUMN public.jobs.r2_path IS 'Base path in R2 storage: user_{user_id}/{job_id}/';
+
+-- Payment-specific comments
+COMMENT ON COLUMN public.user_profiles.payment_plan IS 'User subscription plan: free (2 chunks), pro (unlimited), business (unlimited)';
+COMMENT ON COLUMN public.user_profiles.chunks_analyzed IS 'Total number of chunks analyzed by this user (for free tier limits)';
+COMMENT ON COLUMN public.user_profiles.subscription_id IS 'Stripe subscription ID for paid plans';
+COMMENT ON COLUMN public.user_profiles.subscription_status IS 'Stripe subscription status: active, canceled, past_due, etc.';
 
 -- ============================================================================
 -- DATA MIGRATION HELPER
@@ -369,16 +519,59 @@ COMMENT ON COLUMN public.jobs.r2_path IS 'Base path in R2 storage: user_{user_id
 -- This should be called after schema recreation to restore existing packs
 COMMENT ON SCHEMA public IS 'After running this schema, call the /api/manual-migrate endpoint to restore existing pack data from R2 storage';
 
--- Final success message
+-- ============================================================================
+-- GRANTS AND PERMISSIONS
+-- ============================================================================
+
+-- Grant necessary permissions to authenticated users
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT ALL ON public.user_profiles TO authenticated;
+GRANT ALL ON public.jobs TO authenticated;
+GRANT ALL ON public.packs TO authenticated;
+GRANT ALL ON public.job_progress TO authenticated;
+
+-- Grant execute permissions on functions
+GRANT EXECUTE ON FUNCTION public.get_user_payment_status(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_user_payment_plan(UUID, TEXT, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_user_r2_directory(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_job(TEXT, TEXT, BIGINT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_job_status(TEXT, TEXT, INTEGER, TEXT) TO authenticated;
+
+-- ============================================================================
+-- FINAL SUCCESS MESSAGE
+-- ============================================================================
+
 DO $$
 BEGIN
-  RAISE NOTICE 'UCP v6 Schema deployment completed successfully!';
-  RAISE NOTICE 'Tables: user_profiles, jobs, packs, job_progress';
-  RAISE NOTICE 'RLS enabled with proper user isolation';
-  RAISE NOTICE 'Authentication triggers configured';
-  RAISE NOTICE 'Ready for production use';
+  RAISE NOTICE '============================================================================';
+  RAISE NOTICE 'UCP v6 COMPLETE SCHEMA DEPLOYMENT SUCCESSFUL!';
+  RAISE NOTICE '============================================================================';
+  RAISE NOTICE 'Tables Created:';
+  RAISE NOTICE '  ✓ user_profiles (with payment tracking)';
+  RAISE NOTICE '  ✓ jobs (processing workflow)';
+  RAISE NOTICE '  ✓ packs (completed analysis packs)';
+  RAISE NOTICE '  ✓ job_progress (real-time updates)';
   RAISE NOTICE '';
-  RAISE NOTICE 'IMPORTANT: After schema recreation, run the migration endpoint:';
-  RAISE NOTICE 'curl http://localhost:8000/api/manual-migrate';
-  RAISE NOTICE 'This will restore your existing pack data from R2 storage.';
+  RAISE NOTICE 'Features Enabled:';
+  RAISE NOTICE '  ✓ Row Level Security (RLS) with user isolation';
+  RAISE NOTICE '  ✓ Authentication triggers for auto-profile creation';
+  RAISE NOTICE '  ✓ Payment plan tracking (free/pro/business)';
+  RAISE NOTICE '  ✓ Chunk usage limits enforcement';
+  RAISE NOTICE '  ✓ Automatic chunk counting on job completion';
+  RAISE NOTICE '  ✓ Subscription management ready';
+  RAISE NOTICE '';
+  RAISE NOTICE 'Payment Plans:';
+  RAISE NOTICE '  • Free: 2 chunks total';
+  RAISE NOTICE '  • Pro: Unlimited chunks';
+  RAISE NOTICE '  • Business: Unlimited chunks';
+  RAISE NOTICE '';
+  RAISE NOTICE 'Next Steps:';
+  RAISE NOTICE '  1. Verify all tables exist in Supabase dashboard';
+  RAISE NOTICE '  2. Test user signup creates profile automatically';
+  RAISE NOTICE '  3. Run migration endpoint to restore existing data:';
+  RAISE NOTICE '     curl http://localhost:8000/api/manual-migrate';
+  RAISE NOTICE '  4. Test payment limit enforcement in frontend';
+  RAISE NOTICE '';
+  RAISE NOTICE 'Database ready for production use! 🚀';
+  RAISE NOTICE '============================================================================';
 END $$;
