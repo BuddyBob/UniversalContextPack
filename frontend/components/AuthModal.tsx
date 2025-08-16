@@ -25,13 +25,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setError(null)
       await signInWithGoogle()
       
-      // Check if user already has API key stored
-      const storedApiKey = localStorage.getItem('openai_api_key')
-      if (!storedApiKey) {
-        setStep('apikey')
-      } else {
-        onClose()
-      }
+      // Since the backend now handles OpenAI API keys, we don't need user to provide their own
+      onClose()
     } catch (error: any) {
       setError(error.message || 'Failed to sign in with Google')
       setLoading(false)

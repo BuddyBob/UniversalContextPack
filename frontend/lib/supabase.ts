@@ -49,7 +49,6 @@ export interface UserProfile {
   full_name?: string
   avatar_url?: string
   r2_user_directory: string
-  has_openai_key?: boolean  // Added for API key status
   created_at: string
   updated_at: string
 }

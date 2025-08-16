@@ -19,11 +19,25 @@ from openai import OpenAI
 import boto3
 from botocore.config import Config
 import jwt
+import hashlib
+import hmac
+import unicodedata
+import re
+import requests
+import traceback
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables with override to refresh from file
+load_dotenv(override=True)
+
+def reload_env_vars():
+    """Reload environment variables from .env file"""
+    load_dotenv(override=True)
+    global OPENAI_API_KEY
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    print(f"🔄 RELOADED OpenAI API Key: {OPENAI_API_KEY[:20]}...{OPENAI_API_KEY[-10:] if OPENAI_API_KEY else 'None'}")
+    return OPENAI_API_KEY
 
 # Disable SSL warnings and verification globally
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -72,7 +86,7 @@ security = HTTPBearer()
 
 # Request models
 class AnalyzeRequest(BaseModel):
-    openai_api_key: Optional[str] = None
+    pass  # No longer need API key field
 
 # User model for authentication
 class AuthenticatedUser:
@@ -88,66 +102,46 @@ async def get_user_payment_status(user_id: str) -> dict:
         return {"plan": "legacy", "chunks_used": 0, "chunks_allowed": 999, "can_process": True}
     
     try:
-        # Get user profile with payment info
-        result = supabase.table("user_profiles").select("*").eq("id", user_id).single().execute()
-        user_profile = result.data
-        
-        chunks_used = user_profile.get("chunks_analyzed", 0)
-        plan = user_profile.get("payment_plan", "free")
-        
-        if plan == "free":
-            chunks_allowed = 2
-            can_process = chunks_used < chunks_allowed
-        elif plan == "pro":
-            chunks_allowed = 999  # Unlimited for current export
-            can_process = True
-        elif plan == "business":
-            chunks_allowed = 999  # Unlimited
-            can_process = True
+        # Get user payment status using database function
+        result = supabase.rpc("get_user_payment_status", {"user_uuid": user_id}).execute()
+        if result.data:
+            return result.data
         else:
-            chunks_allowed = 2  # Default to free
-            can_process = chunks_used < chunks_allowed
-        
-        return {
-            "plan": plan,
-            "chunks_used": chunks_used,
-            "chunks_allowed": chunks_allowed,
-            "can_process": can_process,
-            "user_id": user_id
-        }
+            # Fallback to manual calculation
+            profile_result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": user_id}).execute()
+            if not profile_result.data:
+                # Create profile if it doesn't exist
+                create_result = supabase.rpc("create_user_profile_for_backend", {
+                    "user_uuid": user_id,
+                    "user_email": "unknown@example.com",  # We don't have email here
+                    "r2_dir": f"user_{user_id}"
+                }).execute()
+                
+            return {"plan": "free", "chunks_used": 0, "chunks_allowed": 5, "can_process": True}
         
     except Exception as e:
         print(f"Error getting payment status: {e}")
         # Default to free plan
-        return {"plan": "free", "chunks_used": 0, "chunks_allowed": 2, "can_process": True}
+        return {"plan": "free", "chunks_used": 0, "chunks_allowed": 5, "can_process": True}
 
 async def update_user_chunks_used(user_id: str, chunks_processed: int):
-    """Update the number of chunks processed for a user"""
-    if not supabase:
-        return
-    
-    try:
-        # Get current count
-        result = supabase.table("user_profiles").select("chunks_analyzed").eq("id", user_id).single().execute()
-        current_chunks = result.data.get("chunks_analyzed", 0) if result.data else 0
-        
-        # Update with new total
-        new_total = current_chunks + chunks_processed
-        supabase.table("user_profiles").update({"chunks_analyzed": new_total}).eq("id", user_id).execute()
-        
-        print(f"Updated user {user_id} chunks: {current_chunks} + {chunks_processed} = {new_total}")
-        
-    except Exception as e:
-        print(f"Error updating chunks used: {e}")
+    """Update chunks - now handled automatically by database trigger when job status = 'analyzed'"""
+    # This function is now obsolete - the database trigger handles chunk updates
+    # when a job is marked as 'analyzed' with processed_chunks set
+    print(f"📊 Chunk update will be handled automatically by database trigger: +{chunks_processed}")
+    pass
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
     """Validate JWT token and return authenticated user"""
     try:
         # Extract token
         token = credentials.credentials
+        print(f"🔐 AUTH DEBUG: Received token length: {len(token) if token else 'None'}")
+        print(f"🔐 AUTH DEBUG: Token starts with: {token[:50] if token else 'None'}...")
         
         # For development, let's be more lenient with JWT validation
         if SUPABASE_JWT_SECRET:
+            print(f"🔐 AUTH DEBUG: JWT Secret available, length: {len(SUPABASE_JWT_SECRET)}")
             try:
                 # First try with full verification
                 payload = jwt.decode(
@@ -157,67 +151,81 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                     audience="authenticated",
                     options={"verify_aud": True}
                 )
-                print(f"JWT decoded successfully with full verification")
+                print(f"🔐 AUTH DEBUG: JWT decoded successfully with full verification")
             except jwt.InvalidAudienceError:
                 # Try without audience verification
-                print(f"Audience verification failed, trying without audience check")
+                print(f"🔐 AUTH DEBUG: Audience verification failed, trying without audience check")
                 payload = jwt.decode(
                     token, 
                     SUPABASE_JWT_SECRET, 
                     algorithms=["HS256"],
                     options={"verify_aud": False}
                 )
-                print(f"JWT decoded successfully without audience verification")
+                print(f"🔐 AUTH DEBUG: JWT decoded successfully without audience verification")
             except Exception as e:
-                print(f"JWT verification failed: {e}")
+                print(f"🔐 AUTH DEBUG: JWT verification failed: {e}")
+                print(f"🔐 AUTH DEBUG: Exception type: {type(e).__name__}")
                 # For debugging, let's try without verification
                 payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-                print(f"JWT decoded without verification (development mode)")
+                print(f"🔐 AUTH DEBUG: JWT decoded without verification (development mode)")
         else:
+            print(f"🔐 AUTH DEBUG: No JWT Secret available, decoding without verification")
             # Development: decode without verification (UNSAFE for production)
             payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-            print(f"JWT decoded without verification (no secret)")
+            print(f"🔐 AUTH DEBUG: JWT decoded without verification (no secret)")
         
         user_id = payload.get("sub")
         email = payload.get("email")
         
-        print(f"Extracted user data: user_id={user_id}, email={email}")
+        print(f"🔐 AUTH DEBUG: Extracted user data: user_id={user_id}, email={email}")
         
-        if not user_id or not email:
-            raise HTTPException(status_code=401, detail="Invalid token: missing user data")
-            raise HTTPException(status_code=401, detail="Invalid token: missing user data")
+        if not user_id:
+            print(f"🔐 AUTH DEBUG: Missing user ID in token payload: {payload}")
+            raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
+        
+        # Email is optional, use user_id as fallback
+        if not email:
+            email = f"user_{user_id}@example.com"
+            print(f"🔐 AUTH DEBUG: Using fallback email: {email}")
         
         # Get or create user profile in Supabase
         if supabase:
             try:
-                # Get user profile
-                result = supabase.table("user_profiles").select("*").eq("id", user_id).single().execute()
-                user_profile = result.data
-                r2_directory = user_profile["r2_user_directory"]
+                # Try to get user profile using backend function
+                result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": user_id}).execute()
+                if result.data:
+                    user_profile = result.data
+                    r2_directory = user_profile["r2_user_directory"]
+                else:
+                    # Profile doesn't exist, create it
+                    r2_directory = f"user_{user_id}"
+                    result = supabase.rpc("create_user_profile_for_backend", {
+                        "user_uuid": user_id,
+                        "user_email": email,
+                        "r2_dir": r2_directory
+                    }).execute()
+                    user_profile = result.data
             except Exception as e:
-                # User profile might not exist, create it
-                try:
-                    r2_directory = f"user_{user_id}"
-                    user_profile = {
-                        "id": user_id,
-                        "email": email,
-                        "r2_user_directory": r2_directory
-                    }
-                    supabase.table("user_profiles").insert(user_profile).execute()
-                except Exception as create_error:
-                    print(f"Error creating user profile: {create_error}")
-                    r2_directory = f"user_{user_id}"
+                print(f"Error creating user profile: {e}")
+                r2_directory = f"user_{user_id}"
         else:
             # Legacy mode: use user_id as directory
             r2_directory = f"user_{user_id}"
         
         return AuthenticatedUser(user_id, email, r2_directory)
         
-    except jwt.ExpiredSignatureError:
+    except jwt.ExpiredSignatureError as e:
+        print(f"🔐 AUTH DEBUG: Token expired: {e}")
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
+        print(f"🔐 AUTH DEBUG: Invalid token error: {e}")
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        print(f"🔐 AUTH DEBUG: Unexpected authentication error: {e}")
+        print(f"🔐 AUTH DEBUG: Exception type: {type(e).__name__}")
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
 # Optional authentication for backwards compatibility
@@ -234,7 +242,7 @@ async def get_current_user_optional(authorization: Optional[str] = Header(None))
 
 # Database helper functions
 async def create_job_in_db(user: AuthenticatedUser, job_id: str, file_name: str = None, file_size: int = None, status: str = "pending"):
-    """Create a job record in Supabase - Updated to match actual schema"""
+    """Create a job record in Supabase - Updated to use backend function"""
     print(f"🔄 CREATING JOB IN DATABASE:")
     print(f"   User ID: {user.user_id}")
     print(f"   Job ID: {job_id}")
@@ -246,19 +254,17 @@ async def create_job_in_db(user: AuthenticatedUser, job_id: str, file_name: str 
         return None
     
     try:
-        job_data = {
-            "user_id": user.user_id,
-            "job_id": job_id,
-            "status": status,
-            "file_name": file_name or "unknown",
-            "file_size": file_size or 0,
-            "r2_path": f"{user.r2_directory}/{job_id}",
-        }
+        # Use backend function to create job (bypasses RLS)
+        result = supabase.rpc("create_job_for_backend", {
+            "user_uuid": user.user_id,
+            "target_job_id": job_id,
+            "file_name_param": file_name or "unknown",
+            "r2_path_param": f"{user.r2_directory}/{job_id}",
+            "file_size_param": file_size or 0,
+            "status_param": status
+        }).execute()
         
-        print(f"📝 INSERTING JOB DATA: {job_data}")
-        result = supabase.table("jobs").insert(job_data).execute()
-        
-        if result.data:
+        if result.data and len(result.data) > 0:
             print(f"✅ JOB CREATED SUCCESSFULLY: {result.data[0]}")
             return result.data[0]
         else:
@@ -281,22 +287,44 @@ async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: 
     if not supabase:
         print("❌ SUPABASE CLIENT NOT AVAILABLE")
         return None
-    
+
     try:
-        update_data = {"status": status}
-        if progress is not None:
-            update_data["progress"] = progress
-        if error_message:
-            update_data["error_message"] = error_message
+        # First, let's check if the job exists using our backend function
+        print(f"🔍 CHECKING IF JOB EXISTS FIRST...")
+        job_check_result = supabase.rpc("check_job_exists_for_backend", {
+            "user_uuid": user.user_id,
+            "target_job_id": job_id
+        }).execute()
+        
+        if not job_check_result.data or not job_check_result.data[0]["job_exists"]:
+            print(f"❌ JOB NOT FOUND IN DATABASE!")
+            print(f"   Searching for user_id: {user.user_id}, job_id: {job_id}")
+            print(f"   Job check result: {job_check_result.data}")
+            return None
+        else:
+            current_status = job_check_result.data[0]["current_status"]
+            print(f"✅ JOB FOUND with current status: {current_status}")
+        
+        # Extract processed_chunks from metadata for the enhanced function
+        processed_chunks = None
+        if metadata and status == "analyzed":
+            processed_chunks = metadata.get("processed_chunks", 0)
+            print(f"   Processed chunks: {processed_chunks}")
+        
         if metadata:
-            update_data["metadata"] = metadata
-        if status in ["completed", "failed"]:
-            update_data["completed_at"] = datetime.utcnow().isoformat()
+            print(f"   Metadata provided but not stored (no metadata column): {metadata}")
         
-        print(f"📝 UPDATING JOB DATA: {update_data}")
-        result = supabase.table("jobs").update(update_data).eq("job_id", job_id).eq("user_id", user.user_id).execute()
+        # Use enhanced backend function to update job status (with processed_chunks)
+        result = supabase.rpc("update_job_status_for_backend", {
+            "user_uuid": user.user_id,
+            "target_job_id": job_id,
+            "status_param": status,
+            "progress_param": progress,
+            "error_message_param": error_message,
+            "processed_chunks_param": processed_chunks
+        }).execute()
         
-        if result.data:
+        if result.data and len(result.data) > 0:
             print(f"✅ JOB STATUS UPDATED SUCCESSFULLY: {result.data[0]}")
             return result.data[0]
         else:
@@ -322,36 +350,35 @@ async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str
         return None
     
     try:
-        # First check if the job exists
+        # First check if the job exists using backend function
         print(f"🔍 CHECKING IF JOB EXISTS...")
-        job_check = supabase.table("jobs").select("*").eq("job_id", job_id).eq("user_id", user.user_id).execute()
+        job_check_result = supabase.rpc("check_job_exists_for_backend", {
+            "user_uuid": user.user_id,
+            "target_job_id": job_id
+        }).execute()
         
-        if not job_check.data:
+        if not job_check_result.data or not job_check_result.data[0]["job_exists"]:
             print(f"❌ JOB NOT FOUND: job_id={job_id}, user_id={user.user_id}")
             print(f"   Cannot create pack without corresponding job")
-            
-            # Let's also check if any jobs exist for this user
-            all_jobs = supabase.table("jobs").select("job_id").eq("user_id", user.user_id).execute()
-            print(f"   Available jobs for user: {[job['job_id'] for job in all_jobs.data] if all_jobs.data else 'None'}")
             return None
         else:
-            print(f"✅ JOB FOUND: {job_check.data[0]['status']}")
+            job_status = job_check_result.data[0]["current_status"]
+            print(f"✅ JOB FOUND: {job_status}")
         
-        pack_data = {
-            "user_id": user.user_id,
-            "job_id": job_id,
-            "pack_name": pack_name,
-            "r2_pack_path": r2_pack_path,
-            "extraction_stats": extraction_stats,
-            "chunk_stats": chunk_stats,
-            "analysis_stats": analysis_stats,
-            "file_size": file_size
-        }
+        # Create pack using backend function
+        print(f"📝 CREATING PACK...")
+        result = supabase.rpc("create_pack_for_backend", {
+            "user_uuid": user.user_id,
+            "target_job_id": job_id,
+            "pack_name_param": pack_name,
+            "r2_pack_path_param": r2_pack_path,
+            "extraction_stats_param": extraction_stats,
+            "chunk_stats_param": chunk_stats,
+            "analysis_stats_param": analysis_stats,
+            "file_size_param": file_size
+        }).execute()
         
-        print(f"📝 INSERTING PACK DATA: {pack_data}")
-        result = supabase.table("packs").insert(pack_data).execute()
-        
-        if result.data:
+        if result.data and len(result.data) > 0:
             print(f"✅ PACK CREATED SUCCESSFULLY: {result.data[0]}")
             return result.data[0]
         else:
@@ -385,25 +412,22 @@ encoder = tiktoken.get_encoding("cl100k_base")
 
 def get_openai_client(api_key: str = None) -> OpenAI:
     """
-    Get OpenAI client with user's API key or fallback to default
+    Get OpenAI client - always uses server's API key now
     """
-    if api_key and api_key.strip():
-        try:
-            # Create client with user's API key
-            return OpenAI(api_key=api_key.strip())
-        except Exception as e:
-            print(f"Error creating OpenAI client with user key: {e}")
-            # Fallback to default
-            if default_openai_client:
-                return default_openai_client
-            else:
-                raise HTTPException(status_code=400, detail="Invalid OpenAI API key and no default key available")
+    # Always reload the current API key from environment
+    current_api_key = os.getenv("OPENAI_API_KEY")
     
-    # Use default client
-    if default_openai_client:
-        return default_openai_client
-    else:
-        raise HTTPException(status_code=400, detail="No OpenAI API key provided")
+    if not current_api_key:
+        print("❌ No OpenAI API key found in environment variables")
+        raise HTTPException(status_code=500, detail="Server OpenAI API key not configured")
+    
+    print(f"🔑 Using server API key ending in: ...{current_api_key[-4:] if len(current_api_key) > 4 else 'short'}")
+    
+    try:
+        return OpenAI(api_key=current_api_key)
+    except Exception as e:
+        print(f"❌ Error creating OpenAI client: {e}")
+        raise HTTPException(status_code=500, detail="Failed to initialize OpenAI client")
 
 # R2 client configuration - let's try with requests directly to avoid boto3 SSL issues
 import requests
@@ -596,12 +620,37 @@ def download_from_r2(key: str) -> str:
 def list_r2_objects(prefix: str = "") -> List[str]:
     """List objects in R2 bucket with optional prefix."""
     try:
-        response = r2_client.list_objects_v2(Bucket=R2_BUCKET, Prefix=prefix)
-        if 'Contents' in response:
-            return [obj['Key'] for obj in response['Contents']]
+        if r2_client:
+            response = r2_client.list_objects_v2(Bucket=R2_BUCKET, Prefix=prefix)
+            if 'Contents' in response:
+                return [obj['Key'] for obj in response['Contents']]
+        
+        # Fallback to local storage
+        local_prefix = f"local_storage/{prefix}"
+        if os.path.exists(local_prefix):
+            files = []
+            for root, dirs, filenames in os.walk(local_prefix):
+                for filename in filenames:
+                    # Convert back to R2 path format
+                    rel_path = os.path.relpath(os.path.join(root, filename), "local_storage")
+                    files.append(rel_path.replace("\\", "/"))  # Normalize path separators
+            return files
+        
         return []
     except Exception as e:
         print(f"Error listing R2 objects: {e}")
+        # Try local storage as final fallback
+        try:
+            local_prefix = f"local_storage/{prefix}"
+            if os.path.exists(local_prefix):
+                files = []
+                for root, dirs, filenames in os.walk(local_prefix):
+                    for filename in filenames:
+                        rel_path = os.path.relpath(os.path.join(root, filename), "local_storage")
+                        files.append(rel_path.replace("\\", "/"))
+                return files
+        except Exception as local_e:
+            print(f"Error with local storage fallback: {local_e}")
         return []
 
 def count_tokens(text: str) -> int:
@@ -840,6 +889,22 @@ async def delete_job(job_id: str):
 @app.get("/")
 async def health_check():
     return {"status": "healthy", "service": "Simple UCP Backend with R2 - 3 Steps"}
+
+@app.post("/api/reload-env")
+async def reload_environment():
+    """Reload environment variables from .env file"""
+    try:
+        old_key = OPENAI_API_KEY
+        new_key = reload_env_vars()
+        return {
+            "status": "reloaded",
+            "old_key_ending": f"...{old_key[-4:]}" if old_key and len(old_key) > 4 else "None",
+            "new_key_ending": f"...{new_key[-4:]}" if new_key and len(new_key) > 4 else "None",
+            "changed": old_key != new_key
+        }
+    except Exception as e:
+        print(f"Error reloading environment: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reload environment: {str(e)}")
 
 @app.post("/api/extract")
 async def extract_text(file: UploadFile = File(...), current_user: AuthenticatedUser = Depends(get_current_user)):
@@ -1249,15 +1314,15 @@ async def upgrade_plan(plan: str, user: AuthenticatedUser = Depends(get_current_
         if not supabase:
             raise HTTPException(status_code=500, detail="Payment system not available")
         
-        valid_plans = ["pro", "business"]
+        valid_plans = ["pro_basic", "pro_plus", "pro", "business"]  # Include legacy plans
         if plan not in valid_plans:
             raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {valid_plans}")
         
         # Update user's plan in database
         update_data = {"payment_plan": plan}
-        if plan == "pro":
-            # Pro plan resets chunks for current export
-            update_data["chunks_analyzed"] = 0
+        
+        # Reset chunks for any plan upgrade
+        update_data["chunks_analyzed"] = 0
         
         result = supabase.table("user_profiles").update(update_data).eq("id", user.user_id).execute()
         
@@ -1292,9 +1357,9 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         
         # Determine how many chunks to process based on payment plan
         if payment_status["plan"] == "free":
-            # Free users get 2 chunks max, and it's account-wide
+            # Free users get 5 chunks max, and it's account-wide
             chunks_remaining = max(0, payment_status["chunks_allowed"] - payment_status["chunks_used"])
-            chunks_to_process = min(chunks_remaining, total_chunks, 2)
+            chunks_to_process = min(chunks_remaining, total_chunks, 5)
             
             if chunks_to_process <= 0:
                 return {
@@ -1312,20 +1377,10 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         
         print(f"Processing {chunks_to_process}/{total_chunks} chunks for {payment_status['plan']} user")
         
-        # Get user's OpenAI API key from their profile (prefer this over request)
-        user_api_key = await get_user_openai_key(user.user_id)
-        api_key_to_use = user_api_key or request.openai_api_key
+        print(f"🔑 Getting OpenAI client with server API key...")
         
-        if not api_key_to_use:
-            raise HTTPException(
-                status_code=400, 
-                detail="No OpenAI API key found. Please save your API key in your profile settings."
-            )
-        
-        print(f"Using {'profile' if user_api_key else 'request'} API key for analysis")
-        
-        # Get OpenAI client with user's API key
-        openai_client = get_openai_client(api_key_to_use)
+        # Get OpenAI client (will automatically use current server API key)
+        openai_client = get_openai_client()
         
         print(f"Found {total_chunks} chunks to analyze")
         
@@ -1457,12 +1512,12 @@ Upgrade to Pro plan ($4.99) to unlock your complete Universal Context Pack!
         
         upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", json.dumps(summary, indent=2))
         
-        # Update job status to completed
+        # Update job status to analyzed (triggers chunk count update)
         try:
             await update_job_status_in_db(
                 user, 
                 job_id, 
-                "completed", 
+                "analyzed", 
                 progress=100,
                 metadata={
                     "analysis_completed": True,
@@ -1658,23 +1713,23 @@ async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
             # Fallback to R2-based jobs if Supabase is not available
             return await list_jobs(user)
         
-        # Fetch packs from Supabase
-        result = supabase.table("packs").select("*").eq("user_id", user.user_id).order("created_at", desc=True).execute()
+        # Fetch packs from Supabase using backend function
+        result = supabase.rpc("get_user_packs_for_backend", {"user_uuid": user.user_id}).execute()
         
         packs = []
         for pack in result.data:
             pack_data = {
-                "job_id": pack["job_id"],
-                "pack_name": pack["pack_name"],
+                "job_id": pack["pack_job_id"],
+                "pack_name": pack["pack_name_out"],
                 "status": "completed",
-                "created_at": pack["created_at"],
+                "created_at": pack["pack_created_at"],
                 "stats": {
-                    "total_chunks": pack.get("extraction_stats", {}).get("total_chunks", 0),
-                    "processed_chunks": pack.get("extraction_stats", {}).get("processed_chunks", 0),
-                    "failed_chunks": pack.get("extraction_stats", {}).get("failed_chunks", 0),
-                    "total_input_tokens": pack.get("analysis_stats", {}).get("total_input_tokens", 0),
-                    "total_output_tokens": pack.get("analysis_stats", {}).get("total_output_tokens", 0),
-                    "total_cost": pack.get("analysis_stats", {}).get("total_cost", 0)
+                    "total_chunks": pack.get("pack_extraction_stats", {}).get("total_chunks", 0),
+                    "processed_chunks": pack.get("pack_extraction_stats", {}).get("processed_chunks", 0),
+                    "failed_chunks": pack.get("pack_extraction_stats", {}).get("failed_chunks", 0),
+                    "total_input_tokens": pack.get("pack_analysis_stats", {}).get("total_input_tokens", 0),
+                    "total_output_tokens": pack.get("pack_analysis_stats", {}).get("total_output_tokens", 0),
+                    "total_cost": pack.get("pack_analysis_stats", {}).get("total_cost", 0)
                 }
             }
             packs.append(pack_data)
@@ -1848,8 +1903,8 @@ async def manual_migrate():
             "pack_name": f"UCP Pack {job_id[:8]}",
             "r2_pack_path": f"user_{user_id}/{job_id}/",
             "extraction_stats": {
-                "total_chunks": 2,  # We can see 2 chunk files in the screenshot
-                "processed_chunks": 2,
+                "total_chunks": 5,  # Updated to match new free plan limit
+                "processed_chunks": 5,
                 "failed_chunks": 0
             },
             "analysis_stats": {
@@ -2136,95 +2191,17 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not available")
         
-        result = supabase.table("user_profiles").select("*").eq("id", current_user.user_id).single().execute()
+        result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": current_user.user_id}).execute()
         
         if result.data:
-            # Don't return the OpenAI API key in the response for security
-            profile_data = {**result.data}
-            if "openai_api_key" in profile_data:
-                profile_data["has_openai_key"] = bool(profile_data["openai_api_key"])
-                del profile_data["openai_api_key"]
-            
-            return {"profile": profile_data}
+            # Return profile data (no need to filter API key since it's not stored anymore)
+            return {"profile": result.data}
         else:
             raise HTTPException(status_code=404, detail="User profile not found")
             
     except Exception as e:
         print(f"Error getting user profile: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get profile: {str(e)}")
-
-@app.post("/api/profile/openai-key")
-async def save_openai_key(
-    request: dict,
-    current_user: AuthenticatedUser = Depends(get_current_user)
-):
-    """Save or update the user's OpenAI API key"""
-    try:
-        api_key = request.get("api_key", "").strip()
-        
-        if not api_key:
-            raise HTTPException(status_code=400, detail="API key is required")
-        
-        print(f"Saving OpenAI API key for user: {current_user.user_id}")
-        
-        if not supabase:
-            raise HTTPException(status_code=500, detail="Database not available")
-        
-        # Update the user's profile with the new API key
-        result = supabase.table("user_profiles").update({
-            "openai_api_key": api_key,
-            "updated_at": "NOW()"
-        }).eq("id", current_user.user_id).execute()
-        
-        if result.data:
-            return {"message": "OpenAI API key saved successfully"}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to save API key")
-            
-    except Exception as e:
-        print(f"Error saving OpenAI API key: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save API key: {str(e)}")
-
-@app.delete("/api/profile/openai-key")
-async def remove_openai_key(current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Remove the user's OpenAI API key"""
-    try:
-        print(f"Removing OpenAI API key for user: {current_user.user_id}")
-        
-        if not supabase:
-            raise HTTPException(status_code=500, detail="Database not available")
-        
-        # Remove the API key from the user's profile
-        result = supabase.table("user_profiles").update({
-            "openai_api_key": None,
-            "updated_at": "NOW()"
-        }).eq("id", current_user.user_id).execute()
-        
-        if result.data:
-            return {"message": "OpenAI API key removed successfully"}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to remove API key")
-            
-    except Exception as e:
-        print(f"Error removing OpenAI API key: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to remove API key: {str(e)}")
-
-async def get_user_openai_key(user_id: str) -> Optional[str]:
-    """Get the user's OpenAI API key from their profile"""
-    try:
-        if not supabase:
-            return None
-            
-        result = supabase.table("user_profiles").select("openai_api_key").eq("id", user_id).single().execute()
-        
-        if result.data and result.data.get("openai_api_key"):
-            return result.data["openai_api_key"].strip()
-        
-        return None
-        
-    except Exception as e:
-        print(f"Error getting user OpenAI API key: {e}")
-        return None
 
 if __name__ == "__main__":
     print(" Starting Simple UCP Backend with R2 Storage - 3 Step Process...")

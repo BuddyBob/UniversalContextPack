@@ -15,7 +15,7 @@
   --bg-muted: #1e1e1e;          /* Muted sections */
   
   /* === ACCENT COLORS === */
-  --accent-primary: rgba(109, 64, 215, 0.65);    /* Professional blue */
+  --accent-primary: rgba(102, 57, 208, 0.65);    /* Professional blue */
   --accent-primary-hover: rgba(99, 51, 210, 0.733);;  /* Blue hover */
   --accent-primary-light: rgba(115, 59, 246, 0.457);  /* Light blue */
   --accent-primary-dark: #1d4ed8;   /* Dark blue */
@@ -57,7 +57,7 @@
   --bg-muted: #f6f8fa;          /* Muted sections */
   
   /* === ACCENT COLORS === */
-  --accent-primary: rgba(83, 44, 176, 0.961);    /* Professional blue */
+  --accent-primary: rgba(79, 41, 167, 0.832);    /* Professional blue */
   --accent-primary-hover: rgba(104, 57, 214, 0.837);;  /* Blue hover */
   --accent-primary-light: rgb(76, 37, 167);  /* Light blue */
   --accent-primary-dark: #1d4ed8;   /* Dark blue */

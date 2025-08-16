@@ -45,18 +45,44 @@ export default function HomePage() {
         
         {/* Floating particles */}
         <div className="absolute inset-0">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-1 h-1 bg-white/20 rounded-full"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 5}s`,
-                animation: 'float 6s ease-in-out infinite'
-              }}
-            />
-          ))}
+          {[...Array(20)].map((_, i) => {
+            // Use predetermined positions to avoid hydration mismatch
+            const positions = [
+              { left: 10, top: 20, delay: 0 },
+              { left: 85, top: 15, delay: 1.2 },
+              { left: 25, top: 80, delay: 2.4 },
+              { left: 70, top: 60, delay: 0.8 },
+              { left: 50, top: 30, delay: 3.6 },
+              { left: 15, top: 70, delay: 1.8 },
+              { left: 90, top: 45, delay: 4.2 },
+              { left: 35, top: 85, delay: 0.6 },
+              { left: 75, top: 25, delay: 2.8 },
+              { left: 55, top: 75, delay: 3.2 },
+              { left: 20, top: 40, delay: 1.5 },
+              { left: 80, top: 70, delay: 4.0 },
+              { left: 45, top: 10, delay: 2.2 },
+              { left: 65, top: 55, delay: 0.4 },
+              { left: 30, top: 65, delay: 3.8 },
+              { left: 85, top: 35, delay: 1.0 },
+              { left: 40, top: 90, delay: 2.6 },
+              { left: 75, top: 20, delay: 4.4 },
+              { left: 60, top: 50, delay: 1.4 },
+              { left: 25, top: 35, delay: 3.0 }
+            ];
+            const pos = positions[i] || { left: 50, top: 50, delay: 0 };
+            
+            return (
+              <div
+                key={i}
+                className="absolute w-1 h-1 bg-white/20 rounded-full"
+                style={{
+                  left: `${pos.left}%`,
+                  top: `${pos.top}%`,
+                  animation: `float 6s ease-in-out infinite ${pos.delay}s`
+                }}
+              />
+            );
+          })}
         </div>
       </div>
 
@@ -74,10 +100,10 @@ export default function HomePage() {
                 Your AI
                 <br />
                 <span className="text-white font-medium">
-                  remembers
+                  Memory
                 </span>
                 <br />
-                <span className="text-gray-400 text-5xl">everywhere</span>
+                <span className="text-gray-400 text-5xl">Everywhere</span>
               </h1>
             </div>
             
@@ -141,7 +167,7 @@ export default function HomePage() {
             </div>
 
             {/* Screenshot Display */}
-            <div className="relative max-w-4xl mx-auto">
+            <div className="relative max-w-2xl mx-auto">
               <div className="bg-gray-800/30 backdrop-blur-xl rounded-2xl overflow-hidden border border-gray-600">
                 <div className="flex gap-2 p-4 border-b border-gray-700">
                   <div className="w-3 h-3 bg-red-500/60 rounded-full"></div>
@@ -239,7 +265,7 @@ export default function HomePage() {
 
               {/* Solution Side */}
               <div className="space-y-8">
-                <div className="text-green-400 text-sm font-mono mb-4">Solution Found</div>
+                <div className="text-green-400 text-sm font-mono mb-4">Solution</div>
                 <h3 className="text-4xl font-light text-white mb-6 leading-tight">
                   One file carries 
                   <br />
@@ -311,7 +337,7 @@ export default function HomePage() {
             {/* Problem Stats */}
             <div className="grid md:grid-cols-3 gap-8 mb-16">
               <div className="text-center p-6 bg-black/50 rounded-xl border border-gray-600">
-                <div className="text-3xl font-bold text-white mb-2">100-20MB</div>
+                <div className="text-3xl font-bold text-white mb-2">100-200MB</div>
                 <div className="text-gray-300">Typical export size</div>
                 <div className="text-sm text-gray-400 mt-2">Too large to paste anywhere</div>
               </div>

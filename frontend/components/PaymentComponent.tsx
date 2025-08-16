@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from './AuthProvider'
 
@@ -27,6 +28,7 @@ export default function PaymentComponent({
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
   const supabase = createClientComponentClient()
   const { user, session, loading: authLoading } = useAuth()
 
@@ -81,22 +83,12 @@ export default function PaymentComponent({
   }
 
   const handleUpgrade = async () => {
-    try {
-      // Get current user and session from AuthProvider
-      if (!user || !session?.access_token) {
-        throw new Error('User not authenticated')
-      }
-
-      // For now, just show an alert. Stripe integration will replace this.
-      alert('Stripe integration coming soon! Pro plan will unlock unlimited chunk analysis for $4.99/month.')
-      
-      // Call optional upgrade callback
-      if (onUpgrade) {
-        onUpgrade()
-      }
-    } catch (err) {
-      console.error('Upgrade error:', err)
-      alert('Error initiating upgrade. Please try again.')
+    // Navigate to the professional pricing page
+    router.push('/pricing')
+    
+    // Call optional upgrade callback
+    if (onUpgrade) {
+      onUpgrade()
     }
   }
 

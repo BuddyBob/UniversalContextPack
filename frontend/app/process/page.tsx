@@ -2,11 +2,19 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink } from 'lucide-react';
+import { Upload, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
-import PaymentSidebar from '@/components/PaymentSidebar';
+
+interface PaymentStatus {
+  plan: string
+  chunks_used: number
+  chunks_allowed: number
+  subscription_status?: string
+  plan_start_date?: string
+  plan_end_date?: string
+}
 
 export default function ProcessPage() {
   const { user, session } = useAuth();
@@ -29,7 +37,6 @@ export default function ProcessPage() {
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, chunks_used: number, chunks_allowed: number, plan?: string} | null>(null);
-  const [userHasApiKey, setUserHasApiKey] = useState<boolean>(false); // Cache API key status
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -40,11 +47,6 @@ export default function ProcessPage() {
     showLimitWarning, 
     showNotification 
   } = usePaymentNotifications();
-
-  const handleUpgrade = () => {
-    // Navigate to profile page with upgrade intent
-    router.push('/profile?tab=billing&action=upgrade');
-  };
 
   // Load session from localStorage on mount
   useEffect(() => {
@@ -78,10 +80,9 @@ export default function ProcessPage() {
     }
   }, []);
 
-  // Check API key and payment limits when user logs in
+  // Check payment limits when user logs in
   useEffect(() => {
     if (user && session) {
-      checkApiKey();
       checkPaymentLimits();
     }
   }, [user, session]);
@@ -147,36 +148,6 @@ export default function ProcessPage() {
     const timestamp = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
   };
-
-  const checkApiKey = async () => {
-    if (!session?.access_token) {
-      setUserHasApiKey(false);
-      return false;
-    }
-    
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const hasKey = data.profile?.has_openai_key || false;
-        setUserHasApiKey(hasKey);
-        return hasKey;
-      }
-    } catch (error) {
-      console.error('Error checking API key:', error);
-    }
-    
-    setUserHasApiKey(false);
-    return false;
-  };
-
-  // Cached version for UI - uses state instead of API calls
-  const hasApiKey = () => userHasApiKey;
 
   const checkPaymentLimits = async () => {
     if (!session?.access_token) return { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
@@ -269,7 +240,7 @@ export default function ProcessPage() {
       } catch (error) {
         addLog(`Error checking status: ${error}`);
       }
-    }, 2000);
+    }, 5000); // Poll every 5 seconds instead of 2
     
     setPollingInterval(interval);
   };
@@ -380,12 +351,6 @@ export default function ProcessPage() {
 
   const handleAnalyze = async () => {
     if (!chunkData || selectedChunks.size === 0 || !currentJobId) return;
-
-    // Check if user has API key saved in profile (use cached version)
-    if (!userHasApiKey) {
-      addLog('Error: OpenAI API key not found. Please add your API key in the profile menu.');
-      return;
-    }
 
     // Check payment limits before starting analysis
     const currentLimits = await checkPaymentLimits();
@@ -543,7 +508,7 @@ export default function ProcessPage() {
         chunksUsed={notification.chunksUsed}
         chunksAllowed={notification.chunksAllowed}
         onClose={hideNotification}
-        onUpgrade={handleUpgrade}
+        onUpgrade={() => router.push('/pricing')}
         autoHide={false}
       />
 
@@ -884,22 +849,18 @@ export default function ProcessPage() {
                           handleAnalyze();
                         }
                       }}
-                      disabled={isProcessing || !userHasApiKey || (paymentLimits ? !paymentLimits.canProcess : true)}
+                      disabled={isProcessing || (paymentLimits ? !paymentLimits.canProcess : true)}
                       className={`btn-primary-improved ${
-                        (!userHasApiKey || (paymentLimits && !paymentLimits.canProcess)) ? 'opacity-50 cursor-not-allowed' : ''
+                        (paymentLimits && !paymentLimits.canProcess) ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       title={
-                        !userHasApiKey 
-                          ? 'Please add your OpenAI API key in the profile menu' 
-                          : (paymentLimits && !paymentLimits.canProcess)
-                          ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
-                          : ''
+                        (paymentLimits && !paymentLimits.canProcess)
+                        ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
+                        : ''
                       }
                     >
                       <Play className="h-4 w-4" />
-                      {!userHasApiKey 
-                        ? 'API Key Required' 
-                        : (paymentLimits && !paymentLimits.canProcess)
+                      {(paymentLimits && !paymentLimits.canProcess)
                         ? `Limit Reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed})`
                         : selectedChunks.size > 0
                         ? `Analyze Selected (${selectedChunks.size})`
@@ -1072,14 +1033,12 @@ export default function ProcessPage() {
                       handleAnalyze();
                     }
                   }}
-                  disabled={selectedChunks.size === 0 || !userHasApiKey || (paymentLimits ? !paymentLimits.canProcess : true)}
+                  disabled={selectedChunks.size === 0 || (paymentLimits ? !paymentLimits.canProcess : true)}
                   className="btn-primary-improved disabled:opacity-50 disabled:cursor-not-allowed"
                   title={
-                    !userHasApiKey 
-                      ? 'Please add your OpenAI API key in the profile menu' 
-                      : (paymentLimits && !paymentLimits.canProcess)
-                      ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
-                      : ''
+                    (paymentLimits && !paymentLimits.canProcess)
+                    ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
+                    : ''
                   }
                 >
                   {(paymentLimits && !paymentLimits.canProcess)
@@ -1139,10 +1098,29 @@ export default function ProcessPage() {
         />
       )}
 
-      {/* Payment Sidebar */}
-      <PaymentSidebar 
-        onUpgrade={handleUpgrade}
-      />
+      {/* Floating Payment Button with Chunk Usage */}
+      <button
+        onClick={() => router.push('/pricing')}
+        className="fixed top-24 right-6 z-40 flex items-center gap-2 px-4 py-2 rounded-business shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
+        style={{ 
+          backgroundColor: 'var(--bg-card)', 
+          border: '1px solid var(--border-primary)',
+          color: 'var(--text-primary)'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.05)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)'
+        }}
+      >
+        <CreditCard className="w-4 h-4" />
+        <span className="text-sm font-medium">
+          {paymentLimits ? 
+            `${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed === 999999 ? '∞' : paymentLimits.chunks_allowed} chunks used` 
+            : 'Loading...'}
+        </span>
+      </button>
     </div>
   );
 }

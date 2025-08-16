@@ -270,7 +270,7 @@ export default function PacksPage() {
           <div className="lg:col-span-3">
             {selectedPack ? (
               <div className="space-y-6">
-                <div className="bg-white border border-gray-200 p-6">
+                <div className="bg-white p-6">
                   <div className="flex justify-between items-start mb-6">
                     <div>
                       <h3 className="text-lg font-medium text-gray-900">Pack Details</h3>
@@ -295,7 +295,7 @@ export default function PacksPage() {
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-gray-50 border border-gray-200 p-4 text-center">
+                    <div className="bg-gray-50 p-4 text-center">
                       <div className="flex items-center justify-center mb-2">
                         <FileText className="h-5 w-5 text-gray-600" />
                       </div>
@@ -304,7 +304,7 @@ export default function PacksPage() {
                       </div>
                       <div className="text-sm text-gray-600">Chunks</div>
                     </div>
-                    <div className="bg-gray-50 border border-gray-200 p-4 text-center">
+                    <div className="bg-gray-50  p-4 text-center">
                       <div className="flex items-center justify-center mb-2">
                         <BarChart3 className="h-5 w-5 text-gray-600" />
                       </div>
@@ -313,7 +313,7 @@ export default function PacksPage() {
                       </div>
                       <div className="text-sm text-gray-600">Input Tokens</div>
                     </div>
-                    <div className="bg-gray-50 border border-gray-200 p-4 text-center">
+                    <div className="bg-gray-50  p-4 text-center">
                       <div className="flex items-center justify-center mb-2">
                         <Brain className="h-5 w-5 text-gray-600" />
                       </div>
@@ -322,7 +322,7 @@ export default function PacksPage() {
                       </div>
                       <div className="text-sm text-gray-600">Output Tokens</div>
                     </div>
-                    <div className="bg-gray-50 border border-gray-200 p-4 text-center">
+                    <div className="bg-gray-50 p-4 text-center">
                       <div className="flex items-center justify-center mb-2">
                         <DollarSign className="h-5 w-5 text-gray-600" />
                       </div>

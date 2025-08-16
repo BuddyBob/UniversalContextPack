@@ -16,11 +16,10 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   email TEXT NOT NULL,
   full_name TEXT,
   avatar_url TEXT,
-  openai_api_key TEXT, -- User's OpenAI API key (encrypted)
   r2_user_directory TEXT NOT NULL, -- Unique R2 directory for this user
   
   -- Payment and usage tracking
-  payment_plan TEXT DEFAULT 'free' CHECK (payment_plan IN ('free', 'pro', 'business')),
+  payment_plan TEXT DEFAULT 'free' CHECK (payment_plan IN ('free', 'pro_basic', 'pro_plus', 'pro', 'business')),
   chunks_analyzed INTEGER DEFAULT 0, -- Total chunks analyzed by this user
   subscription_id TEXT, -- Stripe subscription ID (for future use)
   subscription_status TEXT, -- active, canceled, past_due, etc.
@@ -280,6 +279,50 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_payment_plan ON public.user_profile
 CREATE INDEX IF NOT EXISTS idx_user_profiles_chunks_analyzed ON public.user_profiles(chunks_analyzed);
 
 -- ============================================================================
+-- BACKEND SERVICE FUNCTIONS (SECURITY DEFINER to bypass RLS)
+-- ============================================================================
+
+-- Function for backend to get user profile (bypasses RLS)
+CREATE OR REPLACE FUNCTION public.get_user_profile_for_backend(user_uuid UUID)
+RETURNS JSONB AS $$
+DECLARE
+  user_profile RECORD;
+BEGIN
+  SELECT * INTO user_profile 
+  FROM public.user_profiles 
+  WHERE id = user_uuid;
+  
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+  
+  RETURN row_to_json(user_profile)::jsonb;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function for backend to create user profile (bypasses RLS)
+CREATE OR REPLACE FUNCTION public.create_user_profile_for_backend(
+  user_uuid UUID,
+  user_email TEXT,
+  r2_dir TEXT
+)
+RETURNS JSONB AS $$
+DECLARE
+  user_profile RECORD;
+BEGIN
+  INSERT INTO public.user_profiles (id, email, r2_user_directory, payment_plan, chunks_analyzed)
+  VALUES (user_uuid, user_email, r2_dir, 'free', 0)
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    r2_user_directory = EXCLUDED.r2_user_directory,
+    updated_at = NOW()
+  RETURNING * INTO user_profile;
+  
+  RETURN row_to_json(user_profile)::jsonb;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================================
 -- PAYMENT HELPER FUNCTIONS
 -- ============================================================================
 
@@ -300,7 +343,7 @@ BEGIN
     RETURN jsonb_build_object(
       'plan', 'free',
       'chunks_used', 0,
-      'chunks_allowed', 2,
+      'chunks_allowed', 5,
       'can_process', true,
       'subscription_status', null
     );
@@ -308,10 +351,12 @@ BEGIN
   
   -- Determine chunks allowed based on plan
   CASE user_profile.payment_plan
-    WHEN 'free' THEN chunks_allowed := 2;
-    WHEN 'pro' THEN chunks_allowed := 999999; -- Unlimited
-    WHEN 'business' THEN chunks_allowed := 999999; -- Unlimited
-    ELSE chunks_allowed := 2; -- Default to free
+    WHEN 'free' THEN chunks_allowed := 5;
+    WHEN 'pro_basic' THEN chunks_allowed := 200;
+    WHEN 'pro_plus' THEN chunks_allowed := 500;
+    WHEN 'pro' THEN chunks_allowed := 200; -- Legacy pro -> pro_basic
+    WHEN 'business' THEN chunks_allowed := 500; -- Legacy business -> pro_plus
+    ELSE chunks_allowed := 5; -- Default to free
   END CASE;
   
   -- Determine if user can process more chunks
@@ -471,12 +516,20 @@ SELECT
   up.payment_plan,
   up.chunks_analyzed,
   CASE 
-    WHEN up.payment_plan = 'free' THEN 2
-    ELSE 999999 
+    WHEN up.payment_plan = 'free' THEN 5
+    WHEN up.payment_plan = 'pro_basic' THEN 200
+    WHEN up.payment_plan = 'pro_plus' THEN 500
+    WHEN up.payment_plan = 'pro' THEN 200  -- Legacy
+    WHEN up.payment_plan = 'business' THEN 500  -- Legacy
+    ELSE 5  -- Default to free
   END as chunks_allowed,
   CASE 
-    WHEN up.payment_plan = 'free' THEN (2 - up.chunks_analyzed)
-    ELSE 999999 
+    WHEN up.payment_plan = 'free' THEN (5 - up.chunks_analyzed)
+    WHEN up.payment_plan = 'pro_basic' THEN (200 - up.chunks_analyzed)
+    WHEN up.payment_plan = 'pro_plus' THEN (500 - up.chunks_analyzed)
+    WHEN up.payment_plan = 'pro' THEN (200 - up.chunks_analyzed)  -- Legacy
+    WHEN up.payment_plan = 'business' THEN (500 - up.chunks_analyzed)  -- Legacy
+    ELSE (5 - up.chunks_analyzed)  -- Default to free
   END as chunks_remaining,
   up.subscription_status,
   up.plan_start_date,
@@ -506,7 +559,7 @@ COMMENT ON COLUMN public.jobs.status IS 'Job status: created -> extracting -> ex
 COMMENT ON COLUMN public.jobs.r2_path IS 'Base path in R2 storage: user_{user_id}/{job_id}/';
 
 -- Payment-specific comments
-COMMENT ON COLUMN public.user_profiles.payment_plan IS 'User subscription plan: free (2 chunks), pro (unlimited), business (unlimited)';
+COMMENT ON COLUMN public.user_profiles.payment_plan IS 'User subscription plan: free (5 chunks), pro_basic (200 chunks/$4.99), pro_plus (500 chunks/$9.99)';
 COMMENT ON COLUMN public.user_profiles.chunks_analyzed IS 'Total number of chunks analyzed by this user (for free tier limits)';
 COMMENT ON COLUMN public.user_profiles.subscription_id IS 'Stripe subscription ID for paid plans';
 COMMENT ON COLUMN public.user_profiles.subscription_status IS 'Stripe subscription status: active, canceled, past_due, etc.';
@@ -536,6 +589,261 @@ GRANT EXECUTE ON FUNCTION public.update_user_payment_plan(UUID, TEXT, TEXT, TEXT
 GRANT EXECUTE ON FUNCTION public.get_user_r2_directory(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.create_job(TEXT, TEXT, BIGINT, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_job_status(TEXT, TEXT, INTEGER, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_user_profile_for_backend(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_user_profile_for_backend(UUID, TEXT, TEXT) TO authenticated;
+
+-- ============================================================================
+-- BACKEND SECURITY DEFINER FUNCTIONS
+-- ============================================================================
+-- These functions allow the backend to bypass RLS and safely access tables
+
+-- Function to get user packs for backend
+DROP FUNCTION IF EXISTS public.get_user_packs_for_backend(UUID);
+CREATE OR REPLACE FUNCTION public.get_user_packs_for_backend(user_uuid UUID)
+RETURNS TABLE (
+  pack_id UUID,
+  pack_job_id TEXT,
+  pack_name_out TEXT,
+  pack_r2_path TEXT,
+  pack_extraction_stats JSONB,
+  pack_chunk_stats JSONB,
+  pack_analysis_stats JSONB,
+  pack_file_size BIGINT,
+  pack_created_at TIMESTAMPTZ
+)
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id as pack_id,
+    p.job_id as pack_job_id,
+    p.pack_name as pack_name_out,
+    p.r2_pack_path as pack_r2_path,
+    p.extraction_stats as pack_extraction_stats,
+    p.chunk_stats as pack_chunk_stats,
+    p.analysis_stats as pack_analysis_stats,
+    p.file_size as pack_file_size,
+    p.created_at as pack_created_at
+  FROM public.packs p
+  WHERE p.user_id = user_uuid;
+END;
+$$;
+
+-- Function to check if job exists for backend
+DROP FUNCTION IF EXISTS public.check_job_exists_for_backend(UUID, TEXT);
+CREATE OR REPLACE FUNCTION public.check_job_exists_for_backend(user_uuid UUID, target_job_id TEXT)
+RETURNS TABLE (
+  job_exists BOOLEAN,
+  current_status TEXT
+)
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    (COUNT(*) > 0) as job_exists,
+    COALESCE(MAX(j.status), 'not_found') as current_status
+  FROM public.jobs j
+  WHERE j.user_id = user_uuid AND j.job_id = target_job_id;
+END;
+$$;
+
+-- Function to update job status for backend (without metadata column)
+DROP FUNCTION IF EXISTS public.update_job_status_for_backend(UUID, TEXT, TEXT, INTEGER, TEXT);
+DROP FUNCTION IF EXISTS public.update_job_status_for_backend(UUID, TEXT, TEXT, INTEGER, TEXT, INTEGER);
+CREATE OR REPLACE FUNCTION public.update_job_status_for_backend(
+  user_uuid UUID,
+  target_job_id TEXT,
+  status_param TEXT,
+  progress_param INTEGER DEFAULT NULL,
+  error_message_param TEXT DEFAULT NULL,
+  processed_chunks_param INTEGER DEFAULT NULL
+)
+RETURNS TABLE (
+  rec_id UUID,
+  rec_job_id TEXT,
+  rec_status TEXT,
+  rec_progress INTEGER,
+  rec_updated_at TIMESTAMP WITH TIME ZONE
+)
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  -- Update the job
+  UPDATE public.jobs 
+  SET 
+    status = status_param,
+    progress = COALESCE(progress_param, progress),
+    error_message = COALESCE(error_message_param, error_message),
+    processed_chunks = COALESCE(processed_chunks_param, processed_chunks),
+    completed_at = CASE WHEN status_param IN ('completed', 'failed', 'analyzed') THEN NOW() ELSE completed_at END,
+    updated_at = NOW()
+  WHERE user_id = user_uuid AND job_id = target_job_id;
+
+  -- Return the updated job with different column names to avoid ambiguity
+  RETURN QUERY
+  SELECT 
+    j.id as rec_id,
+    j.job_id as rec_job_id,
+    j.status as rec_status,
+    j.progress as rec_progress,
+    j.updated_at as rec_updated_at
+  FROM public.jobs j
+  WHERE j.user_id = user_uuid AND j.job_id = target_job_id;
+END;
+$$;
+
+-- Function to create pack for backend
+DROP FUNCTION IF EXISTS public.create_pack_for_backend(UUID, TEXT, TEXT, TEXT, JSONB, JSONB, JSONB, BIGINT);
+CREATE OR REPLACE FUNCTION public.create_pack_for_backend(
+  user_uuid UUID,
+  target_job_id TEXT,
+  pack_name_param TEXT,
+  r2_pack_path_param TEXT,
+  extraction_stats_param JSONB DEFAULT NULL,
+  chunk_stats_param JSONB DEFAULT NULL,
+  analysis_stats_param JSONB DEFAULT NULL,
+  file_size_param BIGINT DEFAULT NULL
+)
+RETURNS TABLE (
+  pack_id UUID,
+  pack_user_id UUID,
+  pack_job_id TEXT,
+  pack_name_out TEXT,
+  pack_r2_path TEXT,
+  pack_extraction_stats JSONB,
+  pack_chunk_stats JSONB,
+  pack_analysis_stats JSONB,
+  pack_file_size BIGINT,
+  pack_created_at TIMESTAMP WITH TIME ZONE
+)
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  new_pack_id UUID;
+BEGIN
+  -- Insert the pack
+  INSERT INTO public.packs (
+    user_id,
+    job_id,
+    pack_name,
+    r2_pack_path,
+    extraction_stats,
+    chunk_stats,
+    analysis_stats,
+    file_size
+  ) VALUES (
+    user_uuid,
+    target_job_id,
+    pack_name_param,
+    r2_pack_path_param,
+    extraction_stats_param,
+    chunk_stats_param,
+    analysis_stats_param,
+    file_size_param
+  ) RETURNING packs.id INTO new_pack_id;
+
+  -- Return the created pack
+  RETURN QUERY
+  SELECT 
+    p.id as pack_id,
+    p.user_id as pack_user_id,
+    p.job_id as pack_job_id,
+    p.pack_name as pack_name_out,
+    p.r2_pack_path as pack_r2_path,
+    p.extraction_stats as pack_extraction_stats,
+    p.chunk_stats as pack_chunk_stats,
+    p.analysis_stats as pack_analysis_stats,
+    p.file_size as pack_file_size,
+    p.created_at as pack_created_at
+  FROM public.packs p
+  WHERE p.id = new_pack_id;
+END;
+$$;
+
+-- Grant execute permissions for backend functions
+GRANT EXECUTE ON FUNCTION public.get_user_packs_for_backend(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.check_job_exists_for_backend(UUID, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_job_status_for_backend(UUID, TEXT, TEXT, INTEGER, TEXT, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_pack_for_backend(UUID, TEXT, TEXT, TEXT, JSONB, JSONB, JSONB, BIGINT) TO authenticated;
+
+-- Function to create job for backend
+DROP FUNCTION IF EXISTS public.create_job_for_backend(UUID, TEXT, TEXT, TEXT, BIGINT, TEXT);
+CREATE OR REPLACE FUNCTION public.create_job_for_backend(
+  user_uuid UUID,
+  target_job_id TEXT,
+  file_name_param TEXT,
+  r2_path_param TEXT,
+  file_size_param BIGINT DEFAULT NULL,
+  status_param TEXT DEFAULT 'pending'
+)
+RETURNS TABLE (
+  job_id_out UUID,
+  job_id_text_out TEXT,
+  job_user_id_out UUID,
+  job_status_out TEXT,
+  job_file_name_out TEXT,
+  job_r2_path_out TEXT,
+  job_file_size_out BIGINT,
+  job_created_at_out TIMESTAMPTZ
+)
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  new_job_uuid UUID;
+BEGIN
+  -- Generate UUID for the new job
+  new_job_uuid := gen_random_uuid();
+  
+  -- Insert the new job
+  INSERT INTO public.jobs (
+    id,
+    user_id,
+    job_id,
+    status,
+    file_name,
+    file_size,
+    r2_path,
+    created_at
+  ) VALUES (
+    new_job_uuid,
+    user_uuid,
+    target_job_id,
+    status_param,
+    file_name_param,
+    file_size_param,
+    r2_path_param,
+    NOW()
+  );
+  
+  -- Return the created job details
+  RETURN QUERY
+  SELECT 
+    j.id as job_id_out,
+    j.job_id as job_id_text_out,
+    j.user_id as job_user_id_out,
+    j.status as job_status_out,
+    j.file_name as job_file_name_out,
+    j.r2_path as job_r2_path_out,
+    j.file_size as job_file_size_out,
+    j.created_at as job_created_at_out
+  FROM public.jobs j
+  WHERE j.id = new_job_uuid;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.create_job_for_backend(UUID, TEXT, TEXT, TEXT, BIGINT, TEXT) TO authenticated;
 
 -- ============================================================================
 -- FINAL SUCCESS MESSAGE
@@ -559,19 +867,27 @@ BEGIN
   RAISE NOTICE '  ✓ Chunk usage limits enforcement';
   RAISE NOTICE '  ✓ Automatic chunk counting on job completion';
   RAISE NOTICE '  ✓ Subscription management ready';
+  RAISE NOTICE '  ✓ Backend security definer functions for RLS bypass';
   RAISE NOTICE '';
   RAISE NOTICE 'Payment Plans:';
-  RAISE NOTICE '  • Free: 2 chunks total';
-  RAISE NOTICE '  • Pro: Unlimited chunks';
-  RAISE NOTICE '  • Business: Unlimited chunks';
+  RAISE NOTICE '  • Free: 5 chunks total';
+  RAISE NOTICE '  • Pro Basic: 200 chunks ($4.99/month)';
+  RAISE NOTICE '  • Pro Plus: 500 chunks ($9.99/month)';
+  RAISE NOTICE '';
+  RAISE NOTICE 'Backend Functions Available:';
+  RAISE NOTICE '  • get_user_packs_for_backend() - Fetch user packs bypassing RLS';
+  RAISE NOTICE '  • check_job_exists_for_backend() - Verify job existence';
+  RAISE NOTICE '  • update_job_status_for_backend() - Update job progress';
+  RAISE NOTICE '  • create_pack_for_backend() - Create new packs safely';
   RAISE NOTICE '';
   RAISE NOTICE 'Next Steps:';
   RAISE NOTICE '  1. Verify all tables exist in Supabase dashboard';
   RAISE NOTICE '  2. Test user signup creates profile automatically';
-  RAISE NOTICE '  3. Run migration endpoint to restore existing data:';
-  RAISE NOTICE '     curl http://localhost:8000/api/manual-migrate';
+  RAISE NOTICE '  3. Test backend functions with proper authentication';
   RAISE NOTICE '  4. Test payment limit enforcement in frontend';
   RAISE NOTICE '';
   RAISE NOTICE 'Database ready for production use! 🚀';
   RAISE NOTICE '============================================================================';
 END $$;
+
+
