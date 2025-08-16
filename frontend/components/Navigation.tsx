@@ -5,7 +5,7 @@ import { useAuth } from './AuthProvider'
 import AuthModal from './AuthModal'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Settings, User, LogOut, Key, X, Eye, EyeOff } from 'lucide-react'
+import { Settings, User, LogOut, Key, X, Eye, EyeOff, Sun, Moon } from 'lucide-react'
 
 export default function Navigation() {
   const { user, userProfile, signOut, loading, session } = useAuth()
@@ -16,8 +16,24 @@ export default function Navigation() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [theme, setTheme] = useState('dark')
   const dropdownRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
+
+  // Theme toggle function
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(newTheme)
+    document.documentElement.setAttribute('data-theme', newTheme === 'light' ? 'light' : '')
+    localStorage.setItem('theme', newTheme)
+  }
+
+  // Initialize theme on mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'dark'
+    setTheme(savedTheme)
+    document.documentElement.setAttribute('data-theme', savedTheme === 'light' ? 'light' : '')
+  }, [])
 
   // Check if user has an API key when profile loads
   useEffect(() => {
@@ -165,8 +181,25 @@ export default function Navigation() {
               </Link>
             </nav>
 
-            {/* User Menu */}
-            <div className="nav-user-section">
+            {/* Right Side Navigation */}
+            <div className="nav-right-section">
+              {/* Theme Toggle */}
+              <div className="nav-theme-toggle">
+                <button
+                  onClick={toggleTheme}
+                  className="nav-theme-btn"
+                  title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+                >
+                  {theme === 'dark' ? (
+                    <Sun className="h-5 w-5" />
+                  ) : (
+                    <Moon className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
+
+              {/* User Menu */}
+              <div className="nav-user-section">
               {user ? (
                 <div className="relative" ref={dropdownRef}>
                   <div 
@@ -219,6 +252,7 @@ export default function Navigation() {
                   Sign In
                 </button>
               )}
+            </div>
             </div>
           </div>
         </div>

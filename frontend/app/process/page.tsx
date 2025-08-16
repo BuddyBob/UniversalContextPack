@@ -426,9 +426,13 @@ export default function ProcessPage() {
     <div className="min-h-screen bg-primary">
       <div className="max-w-4xl mx-auto p-6">
         {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="heading-primary">Universal Context Processor</h1>
-          <p className="text-description">Extract, chunk, and analyze your conversation data with professional AI tools</p>
+        <div className="mb-12 text-center">
+          <h1 style={{fontSize: '32px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.01em'}}>
+            Universal Context Processor
+          </h1>
+          <p style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '400'}}>
+            Extract, chunk, and analyze your conversation data with professional AI tools
+          </p>
         </div>
 
         {/* What You'll Get Section */}
@@ -478,12 +482,14 @@ export default function ProcessPage() {
             {/* Progress Timeline */}
             <div className="content-card">
               <div className="flex items-center justify-between mb-8">
-                <h2 className="heading-secondary">Progress</h2>
+                <h2 style={{fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.01em'}}>
+                  Progress
+                </h2>
                 {currentStep !== 'upload' && (
                   <button
                     onClick={resetProcess}
                     className="btn-secondary-improved"
-                    style={{width: 'auto', padding: '0.5rem 1rem'}}
+                    style={{width: 'auto', padding: '8px 16px', fontSize: '14px'}}
                   >
                     Reset
                   </button>
@@ -637,7 +643,9 @@ export default function ProcessPage() {
                   <div className="step-icon step-complete">
                     <CheckCircle className="h-4 w-4" />
                   </div>
-                  <h2 className="text-xl">File Selected</h2>
+                  <h2 style={{fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.01em'}}>
+                    File Selected
+                  </h2>
                 </div>
                 
                 <div className="flex items-center space-x-4 mb-6">
@@ -668,7 +676,9 @@ export default function ProcessPage() {
                   <div className="step-icon step-complete">
                     <FileText className="h-4 w-4" />
                   </div>
-                  <h2 className="text-xl">Extraction Complete</h2>
+                  <h2 style={{fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.01em'}}>
+                    Extraction Complete
+                  </h2>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">

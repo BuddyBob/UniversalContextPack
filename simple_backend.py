@@ -1885,6 +1885,9 @@ async def list_jobs(user: AuthenticatedUser = Depends(get_current_user)):
                 print(f"Error processing summary {summary_key}: {e}")
                 continue
         
+        # Sort jobs by created_at date, most recent first
+        jobs.sort(key=lambda x: x["created_at"], reverse=True)
+        
         return jobs
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list jobs: {str(e)}")

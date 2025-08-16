@@ -73,6 +73,9 @@ export default function PacksPage() {
         savedAt: pack.created_at
       }))
       
+      // Sort by completedAt date, most recent first
+      transformedPacks.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+      
       setPacks(transformedPacks)
     } catch (e) {
       console.error('Failed to load packs from server:', e)
@@ -101,6 +104,9 @@ export default function PacksPage() {
               completedAt: job.created_at,
               savedAt: job.created_at
             }))
+            
+            // Sort by completedAt date, most recent first
+            transformedPacks.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
             
             setPacks(transformedPacks)
             return
@@ -243,7 +249,7 @@ export default function PacksPage() {
                   <div
                     key={pack.ucpId}
                     onClick={() => setSelectedPack(pack)}
-                    className={`bg-white border p-4 cursor-pointer transition-all ${
+                    className={`bg-white  p-4 cursor-pointer transition-all ${
                       selectedPack && (selectedPack.ucpId || selectedPack.id) === (pack.ucpId || pack.id) 
                         ? 'border-gray-400 shadow-sm' 
                         : 'border-gray-200 hover:border-gray-300'
@@ -349,7 +355,7 @@ export default function PacksPage() {
                 </div>
               </div>
             ) : (
-              <div className="bg-white border border-gray-200 p-12 text-center">
+              <div className="bg-white p-12 text-center">
                 {!user ? (
                   <>
                     <div className="w-16 h-16 bg-blue-100 flex items-center justify-center mx-auto mb-6 rounded-full">
