@@ -125,146 +125,237 @@ export default function PricingPage() {
       <div className="max-w-4xl mx-auto px-4 py-12">
         
         {/* Header */}
-        <div className="text-center mb-16">
-          
-          <h1 className="text-3xl font-semibold text-text-primary mb-2">
-            Purchase Chunk Analysis Credits
+        <div className="text-center mb-12">
+          <h1 className="text-3xl font-semibold text-white mb-4">
+            Analysis Credits
           </h1>
-          <p className="text-lg text-text-secondary mb-4 max-w-2xl mx-auto">
-            1 credit ⇒ 1 chunk <strong>(150k tokens)</strong>
+          <p className="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
+            Professional conversation analysis powered by advanced AI. Pay only for what you use.
           </p>
-          <div className="inline-flex items-center bg-green-50 text-green-700 px-3 py-1.5 rounded-md text-sm">
-            <Sparkles className="h-3 w-3 mr-1.5" />
-            5 free credits included
+          <div className="inline-flex items-center bg-gray-800 border border-gray-600 rounded-lg px-4 py-2">
+            <Sparkles className="h-4 w-4 text-gray-400 mr-2" />
+            <span className="text-gray-300 text-sm">5 free credits included with every account</span>
           </div>
         </div>
 
         {/* Current Balance */}
         {paymentStatus && (
-          <div className="text-center mb-6">
-            <div className="inline-flex items-center bg-gray-800 border border-gray-600 rounded-lg px-5 py-3">
-              <CreditCard className="h-4 w-4 text-accent-primary mr-2" />
-              <span className="text-text-secondary mr-2 text-sm">Current Balance:</span>
-              <span className="text-xl font-medium text-text-primary">
-                {paymentStatus.credits_balance || 0} credits
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center bg-gray-800 border border-gray-600 rounded-lg px-6 py-3">
+              <CreditCard className="h-4 w-4 text-gray-400 mr-3" />
+              <span className="text-gray-300 mr-2">Available Credits:</span>
+              <span className="text-2xl font-bold text-white">
+                {paymentStatus.credits_balance || 0}
               </span>
             </div>
           </div>
         )}
 
-        {/* Credit Calculator */}
-        <div className="max-w-xl mx-auto mb-16">
-          <div className="bg-gray-800 border border-gray-600 rounded-lg p-6">
-            
-            {showPaymentForm ? (
-              <div className="space-y-6">
-                <div className="text-center">
-                  <h3 className="text-xl font-medium text-text-primary mb-2">
-                    Complete Your Purchase
-                  </h3>
-                  <p className="text-text-secondary">
-                    {customCredits} credits for ${calculatePrice(customCredits)}
-                  </p>
+        {/* Business Credit Calculator */}
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-gray-800 border border-gray-600 rounded-xl overflow-hidden">
+            {/* Header Section */}
+            <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-8 py-6 border-b border-gray-600">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Purchase Credits</h3>
+                  <p className="text-gray-300 text-sm mt-1">1 credit = 1 conversation chunk (~150k tokens)</p>
                 </div>
-                
-                <StripePaymentForm
-                  credits={customCredits}
-                  amount={calculatePrice(customCredits)}
-                  session={session}
-                  onSuccess={handlePaymentSuccess}
-                  onError={handlePaymentError}
-                />
-                
-                <button
-                  onClick={() => setShowPaymentForm(false)}
-                  className="w-full text-text-secondary hover:text-text-primary transition-colors"
-                >
-                  ← Back to credit selection
-                </button>
-              </div>
-            ) : (
-            <div className="space-y-6">
-              {/* Credit Amount Display */}
-              <div className="text-center">
-                <div className="text-4xl font-medium text-accent-primary mb-1">
-                  {customCredits}
-                </div>
-                <div className="text-sm text-text-secondary">
-                  conversation chunks to analyze
+                <div className="text-right">
+                  <div className="text-4xl font-bold text-white">{customCredits}</div>
+                  <div className="text-gray-300 text-sm">analysis credits</div>
                 </div>
               </div>
-
-              {/* Credit Slider */}
-              <div>
-                <input
-                  type="range"
-                  min="1"
-                  max="500"
-                  value={customCredits}
-                  onChange={(e) => setCustomCredits(Number(e.target.value))}
-                  className="w-full h-2 bg-bg-secondary rounded-lg appearance-none cursor-pointer slider"
-                  style={{
-                    background: `linear-gradient(to right, rgb(102, 57, 208) 0%, rgb(102, 57, 208) ${(customCredits / 500) * 100}%, rgb(75, 85, 99) ${(customCredits / 500) * 100}%, rgb(75, 85, 99) 100%)`
-                  }}
-                />
-                <div className="flex justify-between text-xs text-text-muted mt-1">
-                  <span>1</span>
-                  <span>500</span>
-                </div>
-              </div>
-
-              {/* Quick Select Buttons */}
-              <div className="grid grid-cols-6 gap-2">
-                {[10, 25, 50, 100, 200, 350].map((amount) => (
-                  <button
-                    key={amount}
-                    onClick={() => setCustomCredits(amount)}
-                    className={`py-1.5 px-2 rounded text-xs font-medium transition-colors ${
-                      customCredits === amount
-                        ? 'bg-accent-primary text-white'
-                        : 'bg-gray-700 text-text-primary hover:bg-gray-600'
-                    }`}
-                  >
-                    {amount}
-                  </button>
-                ))}
-              </div>
-
-              {/* Price Display */}
-              <div className="bg-bg-secondary rounded-lg p-4 text-center">
-                <div className="text-2xl font-medium text-text-primary mb-1">
-                  ${calculatePrice(customCredits)}
-                </div>
-                <div className="text-sm text-text-secondary mb-2">
-                  ${getPricePerCredit(customCredits)} per credit
-                </div>
-                {getDiscountPercent(customCredits) > 0 && (
-                  <div className="inline-flex items-center bg-green-50 text-green-700 px-2 py-1 rounded text-xs">
-                    <Zap className="h-3 w-3 mr-1" />
-                    {getDiscountPercent(customCredits)}% volume discount
-                  </div>
-                )}
-              </div>
-
-              {/* Purchase Button */}
-              <button
-                onClick={handlePurchase}
-                disabled={processingPurchase}
-                className="w-full bg-purple-700 text-white py-3 rounded-lg font-medium hover:bg-purple-800 transition-colors disabled:opacity-50"
-              >
-                {processingPurchase 
-                  ? 'Processing...' 
-                  : `Purchase ${customCredits} Credits - $${calculatePrice(customCredits)}`
-                }
-              </button>
             </div>
-            )}
+
+            {/* Credit Selection Interface */}
+            <div className="p-8">
+              {showPaymentForm ? (
+                <div className="space-y-6">
+                  <div className="text-center">
+                    <h3 className="text-xl font-medium text-white mb-2">
+                      Complete Your Purchase
+                    </h3>
+                    <p className="text-gray-400">
+                      {customCredits} credits for ${calculatePrice(customCredits)}
+                    </p>
+                  </div>
+                  
+                  <StripePaymentForm
+                    credits={customCredits}
+                    amount={calculatePrice(customCredits)}
+                    session={session}
+                    onSuccess={handlePaymentSuccess}
+                    onError={handlePaymentError}
+                  />
+                  
+                  <button
+                    onClick={() => setShowPaymentForm(false)}
+                    className="w-full text-gray-400 hover:text-white transition-colors"
+                  >
+                    ← Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Credit Amount Input */}
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        Credit Amount
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="500"
+                        value={customCredits}
+                        onChange={(e) => setCustomCredits(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+                        className="w-full bg-gray-700 border border-gray-500 rounded-lg px-4 py-3 text-white text-lg font-medium focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-400/20"
+                        placeholder="Enter amount"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        Total Cost
+                      </label>
+                      <div className="bg-gray-700 border border-gray-500 rounded-lg px-4 py-3 h-12 flex items-center">
+                        <span className="text-2xl font-bold text-white">${calculatePrice(customCredits)}</span>
+                        <span className="text-gray-400 ml-2 text-sm">USD</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Professional Slider */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-4">
+                      Adjust Credit Amount
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="range"
+                        min="1"
+                        max="500"
+                        value={customCredits}
+                        onChange={(e) => setCustomCredits(Number(e.target.value))}
+                        className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                        style={{
+                          background: `linear-gradient(to right, #ffffff 0%, #ffffff ${(customCredits / 500) * 100}%, #374151 ${(customCredits / 500) * 100}%, #374151 100%)`
+                        }}
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 mt-3">
+                        <span>1 credit</span>
+                        <span className="text-gray-400">${getPricePerCredit(customCredits)} per credit</span>
+                        <span>500 credits</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Business Tier Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-4">
+                      Popular Business Tiers
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {[
+                        { amount: 25, label: 'Starter', desc: 'Small projects' },
+                        { amount: 100, label: 'Professional', desc: 'Regular use', popular: true },
+                        { amount: 250, label: 'Business', desc: 'Team projects' },
+                        { amount: 500, label: 'Enterprise', desc: 'Large scale' }
+                      ].map(({ amount, label, desc, popular }) => (
+                        <button
+                          key={amount}
+                          onClick={() => setCustomCredits(amount)}
+                          className={`relative p-4 rounded-lg border transition-all text-left ${
+                            customCredits === amount
+                              ? 'border-white bg-gray-700 shadow-lg'
+                              : 'border-gray-600 bg-gray-800 hover:border-gray-500 hover:bg-gray-750'
+                          }`}
+                        >
+                          {popular && (
+                            <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                              <span className="bg-white text-gray-900 text-xs px-2 py-1 rounded-full font-medium">
+                                Popular
+                              </span>
+                            </div>
+                          )}
+                          <div className="font-semibold text-white">{amount}</div>
+                          <div className="text-xs text-gray-400 mb-1">{label}</div>
+                          <div className="text-xs text-gray-500">{desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pricing Details */}
+                  <div className="bg-gray-900 border border-gray-600 rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <div className="text-lg text-gray-300">Subtotal</div>
+                        <div className="text-xs text-gray-500">{customCredits} credits × ${getPricePerCredit(customCredits)}</div>
+                      </div>
+                      <div className="text-xl font-semibold text-white">${calculatePrice(customCredits)}</div>
+                    </div>
+                    
+                    {getDiscountPercent(customCredits) > 0 && (
+                      <div className="flex items-center justify-between mb-4 text-green-400">
+                        <div className="flex items-center">
+                          <Zap className="h-4 w-4 mr-2" />
+                          <span className="text-sm">Volume Discount ({getDiscountPercent(customCredits)}% off)</span>
+                        </div>
+                        <div className="font-medium">-${(customCredits * 0.10 - calculatePrice(customCredits)).toFixed(2)}</div>
+                      </div>
+                    )}
+                    
+                    <div className="border-t border-gray-600 pt-4 flex items-center justify-between">
+                      <div className="text-lg font-semibold text-white">Total</div>
+                      <div className="text-2xl font-bold text-white">${calculatePrice(customCredits)} USD</div>
+                    </div>
+                  </div>
+
+                  {/* Purchase Button */}
+                  <button
+                    onClick={handlePurchase}
+                    disabled={processingPurchase}
+                    className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-600 text-gray-900 disabled:text-gray-400 py-4 rounded-lg font-semibold text-lg transition-colors flex items-center justify-center"
+                  >
+                    {processingPurchase ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-5 w-5 mr-2" />
+                        Purchase {customCredits} Credits - ${calculatePrice(customCredits)}
+                      </>
+                    )}
+                  </button>
+
+                  {/* Security & Trust Indicators */}
+                  <div className="flex items-center justify-center space-x-6 text-xs text-gray-500">
+                    <div className="flex items-center">
+                      <Shield className="h-3 w-3 mr-1" />
+                      Secure Payment
+                    </div>
+                    <div className="flex items-center">
+                      <CreditCard className="h-3 w-3 mr-1" />
+                      Powered by Stripe
+                    </div>
+                    <div className="flex items-center">
+                      <Star className="h-3 w-3 mr-1" />
+                      Credits Never Expire
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Benefits Section */}
         <div className="text-center">
-          <h3 className="text-xl font-medium text-text-primary mb-6">
+          <h3 className="text-xl font-medium text-text-primary mb-6 mt-12">
             How Credits Work
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
@@ -306,29 +397,43 @@ export default function PricingPage() {
         )}
       </div>
 
-      {/* Custom Slider Styles */}
+      {/* Professional Slider Styles */}
       <style jsx>{`
         .slider::-webkit-slider-thumb {
           appearance: none;
-          height: 20px;
-          width: 20px;
+          height: 24px;
+          width: 24px;
           border-radius: 50%;
-          background: rgb(102, 57, 208);
+          background: #ffffff;
           cursor: pointer;
-          border: 2px solid white;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+          border: 3px solid #1f2937;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+          transition: all 0.2s ease;
+        }
+        
+        .slider::-webkit-slider-thumb:hover {
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+          transform: scale(1.1);
         }
         
         .slider::-moz-range-thumb {
-          height: 20px;
-          width: 20px;
+          height: 24px;
+          width: 24px;
           border-radius: 50%;
-          background: rgb(102, 57, 208);
+          background: #ffffff;
           cursor: pointer;
-          border: 2px solid white;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+          border: 3px solid #1f2937;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .slider:focus {
+          outline: none;
+        }
+
+        .slider:focus::-webkit-slider-thumb {
+          box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
         }
       `}</style>
     </div>
   )
-}
+};

@@ -191,6 +191,10 @@ CREATE POLICY "Users can read own credit transactions" ON public.credit_transact
 CREATE POLICY "Users can insert own credit transactions" ON public.credit_transactions
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+-- Service role can manage all credit transactions (for manual credit additions, webhooks, etc.)
+CREATE POLICY "Service role can manage credit transactions" ON public.credit_transactions
+  FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
 -- ============================================================================
 -- FUNCTIONS AND TRIGGERS
 -- ============================================================================
@@ -646,6 +650,14 @@ GRANT ALL ON public.packs TO authenticated;
 GRANT ALL ON public.job_progress TO authenticated;
 GRANT ALL ON public.credit_transactions TO authenticated;
 
+-- Grant necessary permissions to service role (for backend operations)
+GRANT USAGE ON SCHEMA public TO service_role;
+GRANT ALL ON public.user_profiles TO service_role;
+GRANT ALL ON public.jobs TO service_role;
+GRANT ALL ON public.packs TO service_role;
+GRANT ALL ON public.job_progress TO service_role;
+GRANT ALL ON public.credit_transactions TO service_role;
+
 -- Grant execute permissions on functions
 GRANT EXECUTE ON FUNCTION public.get_user_payment_status(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.update_user_payment_plan(UUID, TEXT, TEXT, TEXT) TO authenticated;
@@ -654,6 +666,15 @@ GRANT EXECUTE ON FUNCTION public.create_job(TEXT, TEXT, BIGINT, TEXT) TO authent
 GRANT EXECUTE ON FUNCTION public.update_job_status(TEXT, TEXT, INTEGER, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_user_profile_for_backend(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.create_user_profile_for_backend(UUID, TEXT, TEXT) TO authenticated;
+
+-- Grant execute permissions on functions to service role (for backend operations)
+GRANT EXECUTE ON FUNCTION public.get_user_payment_status(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.update_user_payment_plan(UUID, TEXT, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_user_r2_directory(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.create_job(TEXT, TEXT, BIGINT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.update_job_status(TEXT, TEXT, INTEGER, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_user_profile_for_backend(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.create_user_profile_for_backend(UUID, TEXT, TEXT) TO service_role;
 
 -- Function to add credits to user account (for Stripe payments)
 -- Version 1: By UUID
@@ -782,6 +803,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Grant execute permissions for both versions
 GRANT EXECUTE ON FUNCTION public.add_credits_to_user(UUID, INTEGER, TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.add_credits_to_user(TEXT, INTEGER, TEXT) TO authenticated;
+
+-- Grant execute permissions to service role for credit functions
+GRANT EXECUTE ON FUNCTION public.add_credits_to_user(UUID, INTEGER, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.add_credits_to_user(TEXT, INTEGER, TEXT) TO service_role;
 
 -- ============================================================================
 -- BACKEND SECURITY DEFINER FUNCTIONS
