@@ -1,0 +1,8 @@
+# Add these Stripe environment variables to your .env files
+
+# Backend .env (simple_backend.py)
+STRIPE_SECRET_KEY=sk_test_51RxB9sCvXTZzYTq7tdkzYdrKGRJyuBKMGW7GflbbxWldh0l5ylBQ6iqSkZyf9eglOy5T6W5hRbMjLY0RewqikO9D00Rid7Xs1Y
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+
+# Frontend .env.local
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_51RxB9sCvXTZzYTq7VZUZZIoD9DMQElc9KqW5pziGgTMPsQZx2NgtEq5q6bOnc7ORVDeK098JvH5sXxNUg0SoXZpG00ihlTmvoI

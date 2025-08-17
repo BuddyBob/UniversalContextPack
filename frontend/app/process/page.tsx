@@ -9,8 +9,7 @@ import PaymentNotification, { usePaymentNotifications } from '@/components/Payme
 
 interface PaymentStatus {
   plan: string
-  chunks_used: number
-  chunks_allowed: number
+  credits_balance: number
   subscription_status?: string
   plan_start_date?: string
   plan_end_date?: string
@@ -37,7 +36,7 @@ export default function ProcessPage() {
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [lastProgressTimestamp, setLastProgressTimestamp] = useState<number>(0);
-  const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, chunks_used: number, chunks_allowed: number, plan?: string} | null>(null);
+  const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, credits_balance: number, plan?: string} | null>(null);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -171,18 +170,18 @@ export default function ProcessPage() {
   };
 
   const checkPaymentLimits = async () => {
-    if (!session?.access_token) return { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
+    if (!session?.access_token) return { canProcess: false, credits_balance: 0 };
     
     // Debounce: Don't check if we checked within the last 10 seconds, unless we don't have limits yet
     const now = Date.now()
     if (now - lastPaymentCheck < 10000 && paymentLimits) {
       console.log('Skipping payment status check - too recent')
-      return paymentLimits || { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
+      return paymentLimits || { canProcess: false, credits_balance: 0 };
     }
     
     try {
       setLastPaymentCheck(now)
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/payment/status`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/user/profile`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
         },
@@ -190,21 +189,20 @@ export default function ProcessPage() {
       
       if (response.ok) {
         const data = await response.json();
-        const canProcess = data.chunks_used < data.chunks_allowed || data.plan !== 'free';
+        const canProcess = data.credits_balance > 0;
         const result = {
           canProcess,
-          chunks_used: data.chunks_used,
-          chunks_allowed: data.chunks_allowed,
-          plan: data.plan
+          credits_balance: data.credits_balance || 0,
+          plan: 'credits'
         };
-        console.log('Payment limits loaded:', result); // Debug log
+        console.log('Credit limits loaded:', result); // Debug log
         return result;
       }
     } catch (error) {
-      console.error('Error checking payment limits:', error);
+      console.error('Error checking credit balance:', error);
     }
     
-    return { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
+    return { canProcess: false, credits_balance: 0 };
   };
 
   // Server-Sent Events helper function
@@ -327,15 +325,11 @@ export default function ProcessPage() {
           clearInterval(statusInterval);
           setPollingInterval(null);
           setIsProcessing(false);
-          addLog('❌ Free tier limit reached. Please upgrade to Pro plan to continue.');
+          addLog('❌ Insufficient credits. Please purchase more credits to continue.');
           
           showNotification(
             'limit_reached',
-            'Free tier limit reached! Upgrade to Pro plan to analyze all chunks.',
-            { 
-              chunksUsed: data.chunks_used || 2, 
-              chunksAllowed: data.chunks_allowed || 2 
-            }
+            'Insufficient credits! Purchase more credits to analyze all chunks.'
           );
         } else if (data.status === 'failed') {
           clearInterval(statusInterval);
@@ -481,14 +475,10 @@ export default function ProcessPage() {
     const currentLimits = await checkPaymentLimits();
     setPaymentLimits(currentLimits); // Update the state as well
     if (!currentLimits.canProcess) {
-      addLog(`Error: Free tier limit reached (${currentLimits.chunks_used}/${currentLimits.chunks_allowed}). Please upgrade to Pro plan to continue.`);
+      addLog(`Error: Insufficient credits (${currentLimits.credits_balance} available). Please purchase more credits to continue.`);
       showNotification(
         'limit_reached',
-        'Free tier limit reached! Upgrade to Pro plan to analyze chunks.',
-        { 
-          chunksUsed: currentLimits.chunks_used, 
-          chunksAllowed: currentLimits.chunks_allowed 
-        }
+        'Insufficient credits! Purchase more credits to analyze chunks.'
       );
       setIsProcessing(false); // Reset on error
       return;
@@ -632,64 +622,86 @@ export default function ProcessPage() {
         show={notification.show}
         type={notification.type}
         message={notification.message}
-        chunksUsed={notification.chunksUsed}
-        chunksAllowed={notification.chunksAllowed}
         onClose={hideNotification}
         onUpgrade={() => router.push('/pricing')}
         autoHide={false}
       />
 
       <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-text-primary mb-2">
-            Universal Context Processor
-          </h1>
-          <p className="text-text-secondary">
-            Extract, chunk, and analyze your conversation data with professional AI tools
-          </p>
-        </div>
 
         {/* Welcome Section for Non-Authenticated Users */}
         {!user && (
           <div className="mb-8">
-            <div className="bg-bg-card border border-border-primary rounded-lg p-8 text-center">
-              <h2 className="text-xl font-semibold text-text-primary mb-4">
-                Transform your chat exports into AI-ready context packs
-              </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <FileText className="h-5 w-5 text-accent-primary" />
-                  </div>
-                  <p className="text-sm font-medium text-text-primary">Smart Extraction</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <BarChart3 className="h-5 w-5 text-accent-primary" />
-                  </div>
-                  <p className="text-sm font-medium text-text-primary">Smart Chunking</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <Brain className="h-5 w-5 text-accent-primary" />
-                  </div>
-                  <p className="text-sm font-medium text-text-primary">AI Analysis</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <Play className="h-5 w-5 text-accent-primary" />
-                  </div>
-                  <p className="text-sm font-medium text-text-primary">Ready-to-Use Packs</p>
-                </div>
+            {/* Hero Section */}
+            <div className="text-center py-16 px-8">
+              <h1 className="text-5xl font-semibold text-white mb-6 tracking-tight">
+                Universal Context Processor
+              </h1>
+              <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+                Transform conversation data into structured intelligence. 
+                Professional-grade processing for AI applications.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="bg-blue-600 text-white px-8 py-3 rounded-md font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  Get started
+                </button>
+                <button
+                  onClick={() => router.push('/pricing')}
+                  className="border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 px-8 py-3 rounded-md font-medium transition-colors dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:border-gray-500"
+                >
+                  View pricing
+                </button>
               </div>
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors"
-              >
-                Get Started
-              </button>
             </div>
+
+            {/* Process Steps */}
+            <div className="grid md:grid-cols-4 gap-8 mb-16">
+              <div className="text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-sm font-medium text-gray-300">1</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">Upload</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Upload conversation exports from any platform
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-sm font-medium text-gray-300">2</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">Extract</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Intelligent extraction preserves context and structure
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-sm font-medium text-gray-300">3</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">Process</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  Optimal chunking for AI model consumption
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-sm font-medium text-gray-300">4</span>
+                </div>
+                <h3 className="text-lg font-medium text-white mb-2">Analyze</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">
+                  AI-powered insights and pattern recognition
+                </p>
+              </div>
+            </div>
+
+           
           </div>
         )}
 
@@ -697,7 +709,7 @@ export default function ProcessPage() {
         {user && (
           <div className="space-y-6">
             {/* Progress Steps */}
-            <div className="bg-bg-card border border-border-primary rounded-lg p-6">
+            <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold text-text-primary">Progress</h2>
                 {currentStep !== 'upload' && (
@@ -800,7 +812,7 @@ export default function ProcessPage() {
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
-              <div className="bg-bg-card border border-border-primary rounded-lg p-8 text-center">
+              <div className="bg-gray-700 border border-gray-600 rounded-lg p-8 text-center">
                 <div className="w-16 h-16 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <Upload className="h-8 w-8 text-accent-primary" />
                 </div>
@@ -817,7 +829,7 @@ export default function ProcessPage() {
                 
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors"
+                  className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors"
                 >
                   Choose File
                 </button>
@@ -826,7 +838,7 @@ export default function ProcessPage() {
 
             {/* File Selected */}
             {file && currentStep === 'uploaded' && (
-              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
+              <div className="bg-gray-800 border border-gray-600 rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-4">
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <CheckCircle className="h-5 w-5 text-green-600" />
@@ -834,7 +846,7 @@ export default function ProcessPage() {
                   <h3 className="text-lg font-semibold text-text-primary">File Selected</h3>
                 </div>
                 
-                <div className="flex items-center space-x-4 mb-6 p-4 bg-bg-secondary rounded-lg">
+                <div className="flex items-center space-x-4 mb-6 p-4 bg-gray-700 rounded-lg">
                   <FileText className="h-8 w-8 text-accent-primary" />
                   <div>
                     <p className="font-medium text-text-primary">{file.name}</p>
@@ -847,7 +859,7 @@ export default function ProcessPage() {
                 <button
                   onClick={handleExtract}
                   disabled={isProcessing}
-                  className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
+                  className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
                 >
                   <FileText className="h-4 w-4" />
                   <span>Extract Content</span>
@@ -857,7 +869,7 @@ export default function ProcessPage() {
 
             {/* Extraction Complete */}
             {extractionData && currentStep === 'extracted' && (
-              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
+              <div className="bg-gray-800 border border-gray-600 rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <FileText className="h-5 w-5 text-green-600" />
@@ -878,7 +890,7 @@ export default function ProcessPage() {
                 </div>
 
                 {costEstimate && (
-                  <div className="p-4 bg-bg-secondary rounded-lg mb-6">
+                  <div className="p-4 bg-gray-700 rounded-lg mb-6">
                     <div className="text-sm font-medium text-text-primary mb-2">Estimated Cost</div>
                     <div className="text-lg font-bold text-text-primary">
                       ${costEstimate.estimated_total_cost.toFixed(4)}
@@ -892,7 +904,7 @@ export default function ProcessPage() {
                 <button
                   onClick={handleChunk}
                   disabled={isProcessing}
-                  className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
+                  className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
                 >
                   <BarChart3 className="h-4 w-4" />
                   <span>Create Chunks</span>
@@ -902,7 +914,7 @@ export default function ProcessPage() {
 
             {/* Chunk Actions */}
             {['chunked', 'analyzing', 'analyzed'].includes(currentStep) && chunkData && (
-              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
+              <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <BarChart3 className="h-5 w-5 text-green-600" />
@@ -1035,64 +1047,68 @@ export default function ProcessPage() {
 
         {/* Chunk Selection Modal */}
         {showChunkModal && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h3 className="modal-title">Select Chunks to Analyze</h3>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-gray-800 border border-gray-600 rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b border-gray-600">
+                <h3 className="text-lg font-semibold text-text-primary">Select Chunks to Analyze</h3>
                 <button
                   onClick={() => setShowChunkModal(false)}
-                  className="modal-close"
+                  className="text-text-muted hover:text-text-primary"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="chunk-selection-header">
-                <div className="chunk-selection-info">
-                  {selectedChunks.size} of {availableChunks.length} chunks selected
-                </div>
-                <div className="chunk-selection-actions">
-                  <button
-                    onClick={() => setSelectedChunks(new Set())}
-                    className="px-3 py-1 text-sm border border-border-secondary rounded text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
-                  >
-                    Clear All
-                  </button>
-                  <button
-                    onClick={handleSelectAll}
-                    className="px-3 py-1 text-sm bg-bg-secondary border border-border-primary text-text-primary rounded hover:bg-bg-tertiary hover:border-border-accent transition-colors"
-                  >
-                    {selectedChunks.size === availableChunks.length ? 'Deselect All' : 'Select All'}
-                  </button>
+              <div className="p-6 border-b border-gray-600">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-text-secondary">
+                    {selectedChunks.size} of {availableChunks.length} chunks selected
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setSelectedChunks(new Set())}
+                      className="px-3 py-1 text-sm border border-border-secondary rounded text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
+                    >
+                      Clear All
+                    </button>
+                    <button
+                      onClick={handleSelectAll}
+                      className="px-3 py-1 text-sm bg-gray-700 border border-gray-600 text-text-primary rounded hover:bg-gray-600 hover:border-border-accent transition-colors"
+                    >
+                      {selectedChunks.size === availableChunks.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div className="chunk-list">
+              <div className="flex-1 overflow-y-auto p-6 space-y-3">
                 {availableChunks.map((chunk, index) => (
                   <div
                     key={index}
-                    className={`chunk-item ${
-                      selectedChunks.has(index) ? 'chunk-item-selected' : ''
+                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                      selectedChunks.has(index) 
+                        ? 'border-accent-primary bg-accent-primary/10' 
+                        : 'border-gray-500 hover:border-border-accent bg-gray-900'
                     }`}
                     onClick={() => handleChunkToggle(index)}
                   >
-                    <div className="chunk-item-content">
-                      <div className="chunk-item-info">
-                        <div className="chunk-item-title">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-text-primary mb-1">
                           Chunk {index + 1}
                         </div>
-                        <div className="chunk-item-tokens">
+                        <div className="text-sm text-text-secondary mb-2">
                           {chunk.token_count || 0} tokens
                         </div>
-                        <div className="chunk-item-preview">
+                        <div className="text-sm text-text-secondary line-clamp-2">
                           {chunk.preview || 'No content available'}
                         </div>
                       </div>
-                      <div className={`chunk-item-checkbox ${
-                        selectedChunks.has(index) ? 'chunk-item-checkbox-selected' : ''
+                      <div className={`ml-4 w-5 h-5 rounded border-2 flex items-center justify-center ${
+                        selectedChunks.has(index) ? 'border-accent-primary bg-accent-primary' : 'border-gray-500'
                       }`}>
                         {selectedChunks.has(index) && (
-                          <CheckCircle className="h-3 w-3 text-text-primary" />
+                          <CheckCircle className="h-3 w-3 text-white" />
                         )}
                       </div>
                     </div>
@@ -1100,7 +1116,7 @@ export default function ProcessPage() {
                 ))}
               </div>
 
-              <div className="modal-footer">
+              <div className="flex justify-end space-x-3 p-6 border-t border-gray-600">
                 <button
                   onClick={() => setShowChunkModal(false)}
                   className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
@@ -1115,15 +1131,15 @@ export default function ProcessPage() {
                     }
                   }}
                   disabled={selectedChunks.size === 0 || Boolean(paymentLimits && !paymentLimits.canProcess)}
-                  className="px-4 py-2 bg-bg-secondary border border-border-primary text-text-primary rounded-lg hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-gray-700 border border-gray-600 text-text-primary rounded-lg hover:bg-gray-600 hover:border-border-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title={
                     (paymentLimits && !paymentLimits.canProcess)
-                    ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
+                    ? `Insufficient credits (${paymentLimits.credits_balance} available). Purchase more credits to continue.`
                     : ''
                   }
                 >
                   {(paymentLimits && !paymentLimits.canProcess)
-                    ? `Limit Reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed})`
+                    ? `Insufficient Credits (${paymentLimits.credits_balance})`
                     : `Analyze Selected (${selectedChunks.size})`
                   }
                 </button>
@@ -1172,7 +1188,7 @@ export default function ProcessPage() {
         {/* Chunk Selection Modal */}
         {showChunkModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-bg-card border border-border-primary rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+            <div className=" bg-black/90 border border-border-primary rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
               <div className="flex items-center justify-between p-6 border-b border-border-primary">
                 <h3 className="text-lg font-semibold text-text-primary">Select Chunks to Analyze</h3>
                 <button
@@ -1325,7 +1341,7 @@ export default function ProcessPage() {
         <CreditCard className="w-4 h-4" />
         <span className="text-sm font-medium">
           {paymentLimits ? 
-            `${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed === 999999 ? '∞' : paymentLimits.chunks_allowed} chunks used` 
+            `${paymentLimits.credits_balance} credits available` 
             : 'Loading...'}
         </span>
       </button>

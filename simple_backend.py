@@ -27,6 +27,10 @@ import requests
 import traceback
 from supabase import create_client, Client
 from dotenv import load_dotenv
+import stripe
+from collections import defaultdict
+from datetime import timedelta
+import stripe
 
 # Load environment variables with override to refresh from file
 load_dotenv(override=True)
@@ -39,16 +43,16 @@ def reload_env_vars():
 
     return OPENAI_API_KEY
 
-# Disable SSL warnings and verification globally
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-os.environ['PYTHONHTTPSVERIFY'] = '0'
-ssl._create_default_https_context = ssl._create_unverified_context
-
 # Configuration from environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")  # Get this from Supabase Project Settings -> API
+
+# Stripe configuration
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+stripe.api_key = STRIPE_SECRET_KEY
 
 # R2 configuration
 R2_ENDPOINT = os.getenv("R2_ENDPOINT")
@@ -67,17 +71,42 @@ else:
 
 app = FastAPI(title="Simple UCP Backend", version="1.0.0")
 
-# CORS middleware
+# CORS middleware - Configure allowed origins from environment
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=[origin.strip() for origin in allowed_origins],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
 # Authentication
 security = HTTPBearer()
+
+# Rate limiting storage (in production, use Redis)
+payment_attempts = defaultdict(list)
+analysis_attempts = defaultdict(list)
+
+def check_rate_limit(user_id: str, limit_type: str = "payment", max_attempts: int = 5, window_hours: int = 1):
+    """Check if user has exceeded rate limit"""
+    now = datetime.utcnow()
+    window_start = now - timedelta(hours=window_hours)
+    
+    # Choose the right storage
+    attempts_storage = payment_attempts if limit_type == "payment" else analysis_attempts
+    
+    # Clean old attempts
+    user_attempts = [attempt for attempt in attempts_storage[user_id] if attempt > window_start]
+    attempts_storage[user_id] = user_attempts
+    
+    # Check if limit exceeded
+    if len(user_attempts) >= max_attempts:
+        return False, len(user_attempts)
+    
+    # Add current attempt
+    attempts_storage[user_id].append(now)
+    return True, len(user_attempts) + 1
 
 # Request models
 class AnalyzeRequest(BaseModel):
@@ -85,6 +114,12 @@ class AnalyzeRequest(BaseModel):
 
 class CreditPurchaseRequest(BaseModel):
     credits: int
+    amount: float
+    package_id: str = None
+
+class StripePaymentIntentRequest(BaseModel):
+    credits: int
+    amount: float
     amount: float
     package_id: str = None
 
@@ -233,31 +268,27 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         # Extract token
         token = credentials.credentials
         
-        # For development, let's be more lenient with JWT validation
-        if SUPABASE_JWT_SECRET:
-            try:
-                # First try with full verification
-                payload = jwt.decode(
-                    token, 
-                    SUPABASE_JWT_SECRET, 
-                    algorithms=["HS256"],
-                    audience="authenticated",
-                    options={"verify_aud": True}
-                )
-            except jwt.InvalidAudienceError:
-                # Try without audience verification
-                payload = jwt.decode(
-                    token, 
-                    SUPABASE_JWT_SECRET, 
-                    algorithms=["HS256"],
-                    options={"verify_aud": False}
-                )
-            except Exception as e:
-                # For debugging, let's try without verification
-                payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-        else:
-            # Development: decode without verification (UNSAFE for production)
-            payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+        # Production: Always verify JWT signatures
+        if not SUPABASE_JWT_SECRET:
+            raise HTTPException(status_code=500, detail="JWT secret not configured")
+        
+        try:
+            # First try with full verification
+            payload = jwt.decode(
+                token, 
+                SUPABASE_JWT_SECRET, 
+                algorithms=["HS256"],
+                audience="authenticated",
+                options={"verify_aud": True, "verify_signature": True}
+            )
+        except jwt.InvalidAudienceError:
+            # Try without audience verification but keep signature verification
+            payload = jwt.decode(
+                token, 
+                SUPABASE_JWT_SECRET, 
+                algorithms=["HS256"],
+                options={"verify_aud": False, "verify_signature": True}
+            )
         
         user_id = payload.get("sub")
         email = payload.get("email")
@@ -1318,6 +1349,47 @@ async def get_payment_status(user: AuthenticatedUser = Depends(get_current_user)
         print(f"Error getting payment status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get payment status: {str(e)}")
 
+@app.get("/api/payment/history")
+async def get_payment_history(user: AuthenticatedUser = Depends(get_current_user)):
+    """Get user's payment and credit transaction history"""
+    try:
+        if not supabase:
+            return {"transactions": [], "summary": {}}
+        
+        # Get all transactions for the user
+        transactions = supabase.table("credit_transactions").select("*").eq("user_id", user.user_id).order("created_at", desc=True).limit(100).execute()
+        
+        if not transactions.data:
+            return {
+                "transactions": [],
+                "summary": {
+                    "total_purchased": 0,
+                    "total_used": 0,
+                    "total_refunded": 0,
+                    "total_transactions": 0
+                }
+            }
+        
+        # Calculate summary statistics
+        total_purchased = sum(t["credits"] for t in transactions.data if t["transaction_type"] == "purchase" and t["credits"] > 0)
+        total_used = abs(sum(t["credits"] for t in transactions.data if t["transaction_type"] == "usage" and t["credits"] < 0))
+        total_refunded = sum(t["credits"] for t in transactions.data if t["transaction_type"] == "refund" and t["credits"] > 0)
+        
+        return {
+            "transactions": transactions.data,
+            "summary": {
+                "total_purchased": total_purchased,
+                "total_used": total_used,
+                "total_refunded": total_refunded,
+                "total_transactions": len(transactions.data),
+                "net_credits": total_purchased + total_refunded - total_used
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error getting payment history: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get payment history: {str(e)}")
+
 @app.post("/api/payment/purchase-credits")
 async def purchase_credits(request: CreditPurchaseRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """Purchase credits for pay-per-chunk analysis"""
@@ -1331,38 +1403,30 @@ async def purchase_credits(request: CreditPurchaseRequest, user: AuthenticatedUs
         if request.amount <= 0:
             raise HTTPException(status_code=400, detail="Amount must be greater than 0")
         
-        # Get current user profile
+        # Get current user profile to validate
         result = supabase.table("user_profiles").select("*").eq("id", user.user_id).execute()
         if not result.data:
             raise HTTPException(status_code=404, detail="User profile not found")
         
-        current_profile = result.data[0]
-        current_credits = current_profile.get("credits_balance", 0)
-        
-        # Add purchased credits to current balance
-        new_credits_balance = current_credits + request.credits
-        
-        # Update user's credit balance
-        update_result = supabase.table("user_profiles").update({
-            "credits_balance": new_credits_balance,
-            "payment_plan": "credits"  # Switch to credit-based plan
-        }).eq("id", user.user_id).execute()
-        
-        # Log the purchase transaction
-        transaction_result = supabase.table("credit_transactions").insert({
-            "user_id": user.user_id,
-            "transaction_type": "purchase",
-            "credits": request.credits,
-            "amount": request.amount,
-            "package_id": request.package_id,
-            "created_at": "now()"
+        # Use the database function to add credits (handles both transaction and balance update)
+        credit_result = supabase.rpc("add_credits_to_user", {
+            "user_uuid": user.user_id,
+            "credits_to_add": request.credits,
+            "transaction_description": f"Credit purchase - ${request.amount} for {request.credits} credits"
         }).execute()
+        
+        if credit_result.data and credit_result.data != -1:
+            new_balance = credit_result.data
+            print(f"✅ Successfully added {request.credits} credits. New balance: {new_balance}")
+        else:
+            print(f"❌ Failed to add credits: {credit_result}")
+            raise HTTPException(status_code=500, detail="Failed to add credits to account")
         
         return {
             "status": "success",
             "credits_purchased": request.credits,
             "amount_paid": request.amount,
-            "new_balance": new_credits_balance,
+            "new_balance": new_balance,
             "package_id": request.package_id,
             "message": f"Successfully purchased {request.credits} credits"
         }
@@ -1370,6 +1434,72 @@ async def purchase_credits(request: CreditPurchaseRequest, user: AuthenticatedUs
     except Exception as e:
         print(f"Error purchasing credits: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to purchase credits: {str(e)}")
+
+@app.get("/api/user/profile")
+async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
+    """Get user's profile including credit balance"""
+    try:
+        if not supabase:
+            # Legacy mode - return default values
+            return {
+                "credits_balance": 5,
+                "can_process": True,
+                "email": user.email if hasattr(user, 'email') else "unknown@example.com",
+                "payment_plan": "legacy"
+            }
+        
+        # Get user profile using database function
+        result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": user.user_id}).execute()
+        
+        if result.data:
+            profile = result.data
+            return {
+                "credits_balance": profile.get("credits_balance", 0),
+                "can_process": profile.get("credits_balance", 0) > 0,
+                "email": profile.get("email", "unknown@example.com"),
+                "payment_plan": profile.get("payment_plan", "credits"),
+                "chunks_analyzed": profile.get("chunks_analyzed", 0),
+                "created_at": profile.get("created_at"),
+                "updated_at": profile.get("updated_at")
+            }
+        else:
+            # Create profile if it doesn't exist
+            create_result = supabase.rpc("create_user_profile_for_backend", {
+                "user_uuid": user.user_id,
+                "user_email": getattr(user, 'email', "unknown@example.com"),
+                "r2_dir": f"user_{user.user_id}"
+            }).execute()
+            
+            if create_result.data:
+                profile = create_result.data
+                return {
+                    "credits_balance": profile.get("credits_balance", 5),
+                    "can_process": True,
+                    "email": profile.get("email", "unknown@example.com"),
+                    "payment_plan": profile.get("payment_plan", "credits"),
+                    "chunks_analyzed": profile.get("chunks_analyzed", 0),
+                    "created_at": profile.get("created_at"),
+                    "updated_at": profile.get("updated_at")
+                }
+            else:
+                # Fallback default
+                return {
+                    "credits_balance": 5,
+                    "can_process": True,
+                    "email": getattr(user, 'email', "unknown@example.com"),
+                    "payment_plan": "credits"
+                }
+        
+    except Exception as e:
+        print(f"Error getting user profile: {e}")
+        # Return safe defaults on error
+        return {
+            "credits_balance": 0,
+            "can_process": False,
+            "email": getattr(user, 'email', "unknown@example.com"),
+            "payment_plan": "credits",
+            "error": str(e)
+        }
 
 @app.post("/api/analyze/{job_id}")
 async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: AuthenticatedUser = Depends(get_current_user)):
@@ -1485,7 +1615,29 @@ Conversation data:
                 continue
         
         if not results:
-            raise HTTPException(status_code=500, detail=f"Failed to process any chunks. Failed chunks: {failed_chunks}")
+            # Rollback credits for completely failed job
+            try:
+                refund_result = supabase.rpc("add_credits_to_user", {
+                    "user_uuid": user.user_id,
+                    "credits_to_add": chunks_to_process,
+                    "transaction_description": f"Credit refund for failed job {job_id} - {chunks_to_process} credits refunded"
+                }).execute()
+                print(f"✅ Refunded {chunks_to_process} credits for completely failed job {job_id}")
+                
+                # Also log as separate refund transaction for audit trail
+                supabase.table("credit_transactions").insert({
+                    "user_id": user.user_id,
+                    "transaction_type": "refund",
+                    "credits": chunks_to_process,
+                    "job_id": job_id,
+                    "description": f"Job failure refund - {chunks_to_process} credits (Job ID: {job_id})"
+                }).execute()
+                
+                raise HTTPException(status_code=500, detail=f"All chunks failed to process. {chunks_to_process} credits have been refunded to your account.")
+                
+            except Exception as refund_error:
+                print(f"❌ Critical: Failed to refund credits for failed job: {refund_error}")
+                raise HTTPException(status_code=500, detail=f"Job failed AND credit refund failed. Please contact support with job ID: {job_id}")
         
         # Update user's chunks used count
         await update_user_chunks_used(user.user_id, len(results))
@@ -1895,10 +2047,17 @@ async def test_auth(request: Request):
         
         token = auth_header[7:]  # Remove "Bearer " prefix
         
-        # Try to decode the token to see what's in it
+        # Try to decode the token properly with verification
         try:
-            # First decode without verification to see the payload
-            payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+            if not SUPABASE_JWT_SECRET:
+                return {"error": "JWT secret not configured"}
+            
+            payload = jwt.decode(
+                token, 
+                SUPABASE_JWT_SECRET, 
+                algorithms=["HS256"],
+                options={"verify_signature": True}
+            )
             
             return {
                 "token_received": True,
@@ -2273,6 +2432,274 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
     except Exception as e:
         print(f"Error getting user profile: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get profile: {str(e)}")
+
+# ================================
+# STRIPE PAYMENT ENDPOINTS
+# ================================
+
+@app.post("/api/create-payment-intent")
+async def create_payment_intent(
+    request: StripePaymentIntentRequest,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Create a Stripe PaymentIntent for credit purchase"""
+    print(f"🚀 Payment intent request: {request.credits} credits for ${request.amount}")
+    print(f"👤 User: {user.user_id}")
+    
+    try:
+        # Rate limiting: max 5 payment intents per hour per user
+        can_proceed, attempt_count = check_rate_limit(user.user_id, "payment", max_attempts=5, window_hours=1)
+        
+        if not can_proceed:
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Too many payment attempts. You can create up to 5 payment intents per hour. Try again later."
+            )
+        
+        print(f"📊 Payment attempt {attempt_count}/5 for user {user.user_id}")
+        
+        # Validate the amount matches our pricing
+        expected_amount = calculate_credit_price(request.credits)
+        print(f"💰 Expected amount: ${expected_amount}, Received: ${request.amount}")
+        
+        if abs(request.amount - expected_amount) > 0.01:  # Allow for small rounding differences
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Amount mismatch. Expected ${expected_amount}, got ${request.amount}"
+            )
+        
+        print(f"✅ Amount validation passed")
+        
+        # Create payment intent with Stripe
+        print(f"📡 Creating Stripe payment intent...")
+        intent = stripe.PaymentIntent.create(
+            amount=int(request.amount * 100),  # Stripe uses cents
+            currency='usd',
+            metadata={
+                'user_id': user.user_id,
+                'credits': request.credits,
+                'email': user.email
+            },
+            description=f"Purchase {request.credits} credits for Universal Context Pack"
+        )
+        
+        print(f"✅ Stripe payment intent created: {intent.id}")
+        
+        return {
+            "client_secret": intent.client_secret,
+            "payment_intent_id": intent.id
+        }
+        
+    except stripe.error.StripeError as e:
+        print(f"❌ Stripe error: {e}")
+        raise HTTPException(status_code=400, detail=f"Stripe error: {str(e)}")
+    except Exception as e:
+        print(f"❌ Error creating payment intent: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create payment intent")
+
+class PaymentValidationRequest(BaseModel):
+    credits: int
+    amount: float
+
+@app.post("/api/payment/validate-amount")
+async def validate_payment_amount(request: PaymentValidationRequest):
+    """Validate payment amount matches expected price"""
+    try:
+        if request.credits <= 0:
+            raise HTTPException(status_code=400, detail="Credits must be greater than 0")
+        
+        if request.amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+        
+        expected_amount = calculate_credit_price(request.credits)
+        
+        # Allow 1 cent difference for rounding
+        if abs(request.amount - expected_amount) > 0.01:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Payment amount mismatch. Expected: ${expected_amount}, Received: ${request.amount}"
+            )
+        
+        return {
+            "valid": True, 
+            "expected_amount": expected_amount,
+            "client_amount": request.amount,
+            "credits": request.credits
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Validation failed: {str(e)}")
+
+class ManualCreditRequest(BaseModel):
+    credits: int
+    amount: float
+    paymentIntentId: str
+
+@app.post("/api/add-credits-manual")
+async def add_credits_manual(
+    request: ManualCreditRequest,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Manually add credits after successful payment (fallback for webhook issues)"""
+    try:
+        print(f"🔄 Manual credit addition for user {user.email}")
+        print(f"Credits: {request.credits}, Amount: ${request.amount}")
+        
+        # Add credits to user account
+        await add_credits_to_user(
+            user.user_id, 
+            request.credits, 
+            request.amount, 
+            request.paymentIntentId
+        )
+        
+        print(f"✅ Manually added {request.credits} credits to user {user.email}")
+        
+        return {
+            "success": True,
+            "message": f"Added {request.credits} credits to your account"
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in manual credit addition: {e}")
+        raise HTTPException(status_code=500, detail="Failed to add credits manually")
+
+@app.post("/api/stripe-webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhooks for successful payments"""
+    print("🎯 WEBHOOK CALLED! Received Stripe webhook request")
+    webhook_id = str(uuid.uuid4())[:8]  # Short ID for tracking this webhook
+    print(f"🆔 Webhook ID: {webhook_id}")
+    
+    try:
+        # Get the raw body and signature
+        payload = await request.body()
+        sig_header = request.headers.get('stripe-signature')
+        
+        print(f"📋 [{webhook_id}] Webhook payload length: {len(payload)} bytes")
+        print(f"📋 [{webhook_id}] Signature header present: {'✅' if sig_header else '❌'}")
+        
+        # Log webhook attempt to database for audit trail
+        if supabase:
+            try:
+                supabase.table("webhook_logs").insert({
+                    "webhook_id": webhook_id,
+                    "event_type": "stripe_webhook",
+                    "payload_size": len(payload),
+                    "signature_present": bool(sig_header),
+                    "status": "processing",
+                    "created_at": datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as log_error:
+                print(f"⚠️ [{webhook_id}] Failed to log webhook: {log_error}")
+        
+        if not STRIPE_WEBHOOK_SECRET:
+            print(f"❌ [{webhook_id}] Webhook secret not configured")
+            raise HTTPException(status_code=500, detail="Webhook secret not configured")
+        
+        # Verify webhook signature
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, STRIPE_WEBHOOK_SECRET
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="Invalid payload")
+        except stripe.error.SignatureVerificationError as e:
+            raise HTTPException(status_code=400, detail="Invalid signature")
+        
+        # Handle different Stripe events
+        if event['type'] == 'payment_intent.succeeded':
+            payment_intent = event['data']['object']
+            
+            # Extract metadata
+            user_id = payment_intent['metadata'].get('user_id')
+            credits = int(payment_intent['metadata'].get('credits', 0))
+            amount = payment_intent['amount'] / 100  # Convert cents to dollars
+            
+            if user_id and credits > 0:
+                # Add credits to user account
+                await add_credits_to_user(user_id, credits, amount, payment_intent['id'])
+                print(f"✅ Added {credits} credits to user {user_id}")
+                
+        elif event['type'] == 'payment_intent.payment_failed':
+            payment_intent = event['data']['object']
+            print(f"❌ Payment failed: {payment_intent['id']} - {payment_intent.get('last_payment_error', {}).get('message', 'Unknown error')}")
+            # TODO: Log failed payment for investigation
+            
+        elif event['type'] == 'charge.dispute.created':
+            dispute = event['data']['object']
+            charge_id = dispute['charge']
+            print(f"⚠️ Dispute created for charge: {charge_id}")
+            # TODO: Handle dispute - maybe freeze credits pending investigation
+            
+        elif event['type'] == 'payment_intent.requires_action':
+            payment_intent = event['data']['object']
+            print(f"🔐 Payment requires action: {payment_intent['id']}")
+            # This is normal for 3D Secure, just log it
+            
+        else:
+            print(f"📝 Unhandled webhook event: {event['type']}")
+            
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+def calculate_credit_price(credits: int) -> float:
+    """Calculate price for credits with volume discounts"""
+    base_price = 0.10  # $0.10 per credit
+    
+    if credits >= 250:
+        # 20% off for 250+ credits
+        return round(credits * base_price * 0.8, 2)
+    elif credits >= 100:
+        # 10% off for 100+ credits  
+        return round(credits * base_price * 0.9, 2)
+    elif credits >= 50:
+        # 5% off for 50+ credits
+        return round(credits * base_price * 0.95, 2)
+    else:
+        return round(credits * base_price, 2)
+
+async def add_credits_to_user(user_id: str, credits: int, amount: float, stripe_payment_id: str):
+    """Add credits to user account after successful payment"""
+    try:
+        if not supabase:
+            print("Warning: Supabase not available")
+            return
+        
+        print(f"🔄 Adding {credits} credits to user {user_id}")
+        print(f"💰 Amount: ${amount}, Stripe ID: {stripe_payment_id}")
+        
+        # Check if this payment was already processed (duplicate protection)
+        existing_payment = supabase.table("credit_transactions").select("id").eq("stripe_payment_id", stripe_payment_id).execute()
+        
+        if existing_payment.data:
+            print(f"⚠️ Payment {stripe_payment_id} already processed, skipping duplicate")
+            return
+        
+        # Use the database function to add credits (handles both transaction and balance update)
+        result = supabase.rpc("add_credits_to_user", {
+            "user_uuid": user_id,
+            "credits_to_add": credits,
+            "transaction_description": f"Stripe payment - ${amount} for {credits} credits (Payment ID: {stripe_payment_id})"
+        }).execute()
+        
+        print(f"📊 Supabase RPC result: {result}")
+        
+        if result.data and result.data != -1:
+            print(f"✅ Successfully added {credits} credits to user {user_id}. New balance: {result.data}")
+        else:
+            print(f"❌ Failed to add credits to user {user_id}. Error: {result}")
+            
+    except Exception as e:
+        print(f"❌ Error adding credits to user {user_id}: {e}")
+        # Try to log more details about the error
+        if hasattr(e, '__dict__'):
+            print(f"❌ Error details: {e.__dict__}")
 
 if __name__ == "__main__":
     print(" Starting Simple UCP Backend with R2 Storage - 3 Step Process...")

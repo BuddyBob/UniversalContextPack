@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/components/AuthProvider'
 import { CreditCard, ArrowLeft, Calculator, Sparkles, Zap, Shield, Star } from 'lucide-react'
+import StripePaymentForm from '@/components/StripePaymentForm'
 
 interface PaymentStatus {
   plan: string
@@ -22,6 +23,7 @@ export default function PricingPage() {
   const [processingPurchase, setProcessingPurchase] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [customCredits, setCustomCredits] = useState(25)
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
   const router = useRouter()
   const supabase = createClientComponentClient()
   const { user, session, loading: authLoading } = useAuth()
@@ -78,42 +80,29 @@ export default function PricingPage() {
     }
   }
 
-  const handlePurchase = async () => {
+  const handlePurchase = () => {
     if (!user) {
       router.push('/auth')
       return
     }
-
-    setProcessingPurchase(true)
+    setShowPaymentForm(true)
     setError(null)
+  }
 
-    try {
-      const price = calculatePrice(customCredits)
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/payment/purchase-credits`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          credits: customCredits,
-          amount: price,
-          package_id: `custom_${customCredits}`
-        }),
-      })
+  const handlePaymentSuccess = async () => {
+    setShowPaymentForm(false)
+    setProcessingPurchase(false)
+    await fetchPaymentStatus()
+    
+    // Show success message and redirect
+    setTimeout(() => {
+      router.push('/process?upgraded=true')
+    }, 2000)
+  }
 
-      if (response.ok) {
-        await fetchPaymentStatus()
-        router.push('/process?upgraded=true')
-      } else {
-        const errorData = await response.json()
-        setError(errorData.detail || 'Purchase failed')
-      }
-    } catch (error) {
-      setError('Network error occurred')
-    } finally {
-      setProcessingPurchase(false)
-    }
+  const handlePaymentError = (error: string) => {
+    setError(error)
+    setProcessingPurchase(false)
   }
 
   if (authLoading || loading) {
@@ -153,7 +142,7 @@ export default function PricingPage() {
         {/* Current Balance */}
         {paymentStatus && (
           <div className="text-center mb-6">
-            <div className="inline-flex items-center bg-bg-card border border-border-primary rounded-lg px-5 py-3">
+            <div className="inline-flex items-center bg-gray-800 border border-gray-600 rounded-lg px-5 py-3">
               <CreditCard className="h-4 w-4 text-accent-primary mr-2" />
               <span className="text-text-secondary mr-2 text-sm">Current Balance:</span>
               <span className="text-xl font-medium text-text-primary">
@@ -165,8 +154,35 @@ export default function PricingPage() {
 
         {/* Credit Calculator */}
         <div className="max-w-xl mx-auto mb-16">
-          <div className="bg-bg-card border border-border-primary rounded-lg p-6">
+          <div className="bg-gray-800 border border-gray-600 rounded-lg p-6">
             
+            {showPaymentForm ? (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <h3 className="text-xl font-medium text-text-primary mb-2">
+                    Complete Your Purchase
+                  </h3>
+                  <p className="text-text-secondary">
+                    {customCredits} credits for ${calculatePrice(customCredits)}
+                  </p>
+                </div>
+                
+                <StripePaymentForm
+                  credits={customCredits}
+                  amount={calculatePrice(customCredits)}
+                  session={session}
+                  onSuccess={handlePaymentSuccess}
+                  onError={handlePaymentError}
+                />
+                
+                <button
+                  onClick={() => setShowPaymentForm(false)}
+                  className="w-full text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  ← Back to credit selection
+                </button>
+              </div>
+            ) : (
             <div className="space-y-6">
               {/* Credit Amount Display */}
               <div className="text-center">
@@ -206,7 +222,7 @@ export default function PricingPage() {
                     className={`py-1.5 px-2 rounded text-xs font-medium transition-colors ${
                       customCredits === amount
                         ? 'bg-accent-primary text-white'
-                        : 'bg-bg-secondary text-text-primary hover:bg-bg-tertiary'
+                        : 'bg-gray-700 text-text-primary hover:bg-gray-600'
                     }`}
                   >
                     {amount}
@@ -242,6 +258,7 @@ export default function PricingPage() {
                 }
               </button>
             </div>
+            )}
           </div>
         </div>
 
