@@ -36,9 +36,11 @@ export default function ProcessPage() {
   const [sessionId] = useState(() => Date.now().toString()); // Unique session ID
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
+  const [lastProgressTimestamp, setLastProgressTimestamp] = useState<number>(0);
   const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, chunks_used: number, chunks_allowed: number, plan?: string} | null>(null);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const router = useRouter();
 
   // Payment notifications
@@ -81,30 +83,53 @@ export default function ProcessPage() {
     }
   }, []);
 
-  // Check payment limits when user logs in
+  // Check payment limits when user logs in (reduce frequency)
   useEffect(() => {
     if (user && session) {
-      checkPaymentLimits();
+      // Only check once per session, not on every change
+      const lastCheck = localStorage.getItem('last_payment_check');
+      const now = Date.now();
+      if (!lastCheck || now - parseInt(lastCheck) > 300000) { // 5 minutes
+        console.log('Checking payment limits...'); // Debug log
+        checkPaymentLimits().then((limits) => {
+          console.log('Setting payment limits:', limits); // Debug log
+          setPaymentLimits(limits);
+        }); // Fix: Actually set the payment limits
+        localStorage.setItem('last_payment_check', now.toString());
+      } else {
+        // If we're using cached data, still try to get limits for initial load
+        if (!paymentLimits) {
+          console.log('Initial payment limits check...'); // Debug log
+          checkPaymentLimits().then((limits) => {
+            console.log('Setting initial payment limits:', limits); // Debug log
+            setPaymentLimits(limits);
+          });
+        }
+      }
     }
-  }, [user, session]);
+  }, [user?.id]); // Only depend on user ID, not session object
 
-  // Save session to localStorage whenever state changes
+  // Save session to localStorage less frequently for better performance
   useEffect(() => {
-    const session = {
-      currentStep,
-      extractionData,
-      costEstimate,
-      chunkData,
-      availableChunks,
-      selectedChunks: Array.from(selectedChunks),
-      progress,
-      logs,
-      currentJobId,
-      analysisStartTime,
-      sessionId
-    };
-    localStorage.setItem('ucp_process_session', JSON.stringify(session));
-  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId]);
+    const timeoutId = setTimeout(() => {
+      const session = {
+        currentStep,
+        extractionData,
+        costEstimate,
+        chunkData,
+        availableChunks,
+        selectedChunks: Array.from(selectedChunks),
+        progress,
+        logs: logs.slice(-50), // Only keep last 50 logs to reduce storage size
+        currentJobId,
+        analysisStartTime,
+        sessionId
+      };
+      localStorage.setItem('ucp_process_session', JSON.stringify(session));
+    }, 1000); // Debounce by 1 second to reduce frequency
+
+    return () => clearTimeout(timeoutId);
+  }, [currentStep, currentJobId, progress]); // Only save on important changes
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -138,12 +163,7 @@ export default function ProcessPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId]);
 
-  // Check payment limits when user authenticates
-  useEffect(() => {
-    if (user && session?.access_token) {
-      checkPaymentLimits().then(setPaymentLimits);
-    }
-  }, [user, session?.access_token]);
+  // Check payment limits when user authenticates - removed duplicate check
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -153,9 +173,9 @@ export default function ProcessPage() {
   const checkPaymentLimits = async () => {
     if (!session?.access_token) return { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
     
-    // Debounce: Don't check if we checked within the last 10 seconds
+    // Debounce: Don't check if we checked within the last 10 seconds, unless we don't have limits yet
     const now = Date.now()
-    if (now - lastPaymentCheck < 10000) {
+    if (now - lastPaymentCheck < 10000 && paymentLimits) {
       console.log('Skipping payment status check - too recent')
       return paymentLimits || { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
     }
@@ -171,12 +191,14 @@ export default function ProcessPage() {
       if (response.ok) {
         const data = await response.json();
         const canProcess = data.chunks_used < data.chunks_allowed || data.plan !== 'free';
-        return {
+        const result = {
           canProcess,
           chunks_used: data.chunks_used,
           chunks_allowed: data.chunks_allowed,
           plan: data.plan
         };
+        console.log('Payment limits loaded:', result); // Debug log
+        return result;
       }
     } catch (error) {
       console.error('Error checking payment limits:', error);
@@ -185,85 +207,128 @@ export default function ProcessPage() {
     return { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
   };
 
+  // Server-Sent Events helper function
+  const startSSEWithAuth = async (url: string, headers: Record<string, string>) => {
+    try {
+      // Use fetch to establish the SSE connection
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          ...headers
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`SSE connection failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No reader available for SSE stream');
+      }
+
+      // Read the stream
+      const processStream = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              break;
+            }
+
+            // Convert bytes to text
+            const chunk = new TextDecoder().decode(value);
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6)); // Remove 'data: ' prefix
+                  
+                  if (data.type === 'complete') {
+                    return;
+                  } else if (data.type === 'error') {
+                    addLog(`Error: ${data.message}`);
+                    return;
+                  } else {
+                    // Regular progress update
+                    const timestamp = new Date().toLocaleTimeString();
+                    let message = data.message;
+                    
+                    // Format message with chunk info if available
+                    if (data.current_chunk && data.total_chunks) {
+                      message = `Chunk ${data.current_chunk}/${data.total_chunks}: ${data.message}`;
+                    }
+                    
+                    // Add to logs (avoid duplicates)
+                    setLogs(prev => {
+                      const messageExists = prev.some(log => log.includes(data.message));
+                      if (!messageExists) {
+                        return [...prev, `[${timestamp}] ${message}`];
+                      }
+                      return prev;
+                    });
+                    
+                    // Update progress percentage
+                    if (data.progress !== undefined) {
+                      setProgress(data.progress);
+                    }
+                  }
+                } catch (parseError) {
+                  // Silently ignore parse errors
+                }
+              }
+            }
+          }
+        } catch (streamError) {
+          addLog('Real-time connection lost');
+        }
+      };
+
+      // Start processing the stream
+      processStream();
+
+    } catch (error) {
+      // Silently fall back to status polling
+    }
+  };
+
   const startPollingAnalysisStatus = (jobId: string) => {
-    const interval = setInterval(async () => {
+    // Set up the status polling with reduced frequency for better performance
+    const statusInterval = setInterval(async () => {
       try {
         const headers: Record<string, string> = {};
-        
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`;
         }
 
-        // Poll both status and logs
-        const [statusResponse, logsResponse] = await Promise.all([
-          fetch(`http://localhost:8000/api/status/${jobId}`, { headers }),
-          fetch(`http://localhost:8000/api/logs/${jobId}`, { headers })
-        ]);
-        
+        const statusResponse = await fetch(`http://localhost:8000/api/status/${jobId}`, { headers });
         const data = await statusResponse.json();
         
-        // Update logs if available
-        if (logsResponse.ok) {
-          const logsData = await logsResponse.json();
-          if (logsData.logs) {
-            // Split logs into lines and add new ones
-            const newLogLines = logsData.logs.trim().split('\n').filter((line: string) => line.trim());
-            
-            // Keep track of already shown messages to avoid duplicates
-            const currentMessages = new Set(logs.map(log => log.toLowerCase().trim()));
-            
-            // Add only new log lines that aren't already in the UI
-            newLogLines.forEach((logLine: string) => {
-              if (logLine.trim()) {
-                // Extract timestamp and message
-                const timestampMatch = logLine.match(/^\[(\d{2}:\d{2}:\d{2})\] (.+)$/);
-                if (timestampMatch) {
-                  const [, timestamp, message] = timestampMatch;
-                  // Check if this exact message is already shown
-                  if (!currentMessages.has(message.toLowerCase().trim())) {
-                    addLog(message);
-                    currentMessages.add(message.toLowerCase().trim());
-                  }
-                } else {
-                  // Handle lines without timestamp format
-                  if (!currentMessages.has(logLine.toLowerCase().trim())) {
-                    addLog(logLine.trim());
-                    currentMessages.add(logLine.toLowerCase().trim());
-                  }
-                }
-              }
-            });
-          }
-        }
-        
         if (data.status === 'completed') {
-          clearInterval(interval);
+          clearInterval(statusInterval);
           setPollingInterval(null);
           setIsProcessing(false);
           setCurrentStep('analyzed');
-          addLog('Analysis completed successfully!');
-          addLog('Pack available in your collection');
         } else if (data.status === 'partial') {
-          // Partial completion due to payment limits
-          clearInterval(interval);
+          clearInterval(statusInterval);
           setPollingInterval(null);
           setIsProcessing(false);
           setCurrentStep('analyzed');
-          addLog(`Analysis completed with ${data.processed_chunks}/${data.total_chunks} chunks`);
+          addLog(`✅ Analysis completed with ${data.processed_chunks}/${data.total_chunks} chunks`);
           addLog('Free tier limit reached. Upgrade to Pro for complete analysis.');
           
-          // Show payment limit notification
           if (data.upgrade_required) {
             showLimitWarning(data.processed_chunks, data.chunks_to_process || 2);
           }
         } else if (data.status === 'limit_reached') {
-          // Hit payment limit before processing
-          clearInterval(interval);
+          clearInterval(statusInterval);
           setPollingInterval(null);
           setIsProcessing(false);
-          addLog('Free tier limit reached. Please upgrade to Pro plan to continue.');
+          addLog('❌ Free tier limit reached. Please upgrade to Pro plan to continue.');
           
-          // Show limit reached notification
           showNotification(
             'limit_reached',
             'Free tier limit reached! Upgrade to Pro plan to analyze all chunks.',
@@ -273,22 +338,33 @@ export default function ProcessPage() {
             }
           );
         } else if (data.status === 'failed') {
-          clearInterval(interval);
+          clearInterval(statusInterval);
           setPollingInterval(null);
           setIsProcessing(false);
-          addLog(`Analysis failed: ${data.error || 'Unknown error'}`);
-        } else {
-          // Only add status update if it's not already covered by backend logs
-          if (data.progress) {
-            setProgress(data.progress);
-          }
+          addLog(`❌ Analysis failed: ${data.error || 'Unknown error'}`);
         }
       } catch (error) {
-        addLog(`Error checking status: ${error}`);
+        // Silently handle polling errors
       }
-    }, 5000); // Poll every 5 seconds to reduce server load
+    }, 10000); // Increased to 10 seconds for better performance
     
-    setPollingInterval(interval);
+    setPollingInterval(statusInterval);
+    
+    // Set up Server-Sent Events for real-time progress
+    try {
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
+      const url = `http://localhost:8000/api/progress-stream/${jobId}`;
+      
+      // Start SSE with authentication
+      startSSEWithAuth(url, headers);
+      
+    } catch (error) {
+      // Silently fall back to status polling only
+    }
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -387,7 +463,7 @@ export default function ProcessPage() {
       setChunkData(data);
       setAvailableChunks(data.chunks);
       setCurrentStep('chunked');
-      // Remove hardcoded message - backend provides real-time logs
+      addLog(`Chunking complete! Created ${data.total_chunks} chunks ready for analysis`);
     } catch (error) {
       addLog(`Chunking failed: ${error}`);
     } finally {
@@ -396,10 +472,14 @@ export default function ProcessPage() {
   };
 
   const handleAnalyze = async () => {
-    if (!chunkData || selectedChunks.size === 0 || !currentJobId) return;
+    if (!chunkData || selectedChunks.size === 0 || !currentJobId) {
+      setIsProcessing(false); // Reset if invalid state
+      return;
+    }
 
     // Check payment limits before starting analysis
     const currentLimits = await checkPaymentLimits();
+    setPaymentLimits(currentLimits); // Update the state as well
     if (!currentLimits.canProcess) {
       addLog(`Error: Free tier limit reached (${currentLimits.chunks_used}/${currentLimits.chunks_allowed}). Please upgrade to Pro plan to continue.`);
       showNotification(
@@ -410,14 +490,15 @@ export default function ProcessPage() {
           chunksAllowed: currentLimits.chunks_allowed 
         }
       );
+      setIsProcessing(false); // Reset on error
       return;
     }
 
     const chunksToAnalyze = Array.from(selectedChunks);
-    setIsProcessing(true);
     setCurrentStep('analyzing');
     setAnalysisStartTime(Date.now());
-    // Remove hardcoded message - backend will provide real-time logs
+    setLastProgressTimestamp(Date.now() / 1000); // Reset progress timestamp
+    addLog(`Starting analysis of ${chunksToAnalyze.length} chunks...`);
 
     try {
       const headers: Record<string, string> = {
@@ -450,7 +531,7 @@ export default function ProcessPage() {
       startPollingAnalysisStatus(data.job_id);
     } catch (error) {
       addLog(`Analysis failed to start: ${error}`);
-      setIsProcessing(false);
+      setIsProcessing(false); // Reset on error
     }
   };
 
@@ -631,8 +712,6 @@ export default function ProcessPage() {
               
               {/* Timeline Progress Indicator */}
               <div className="relative mb-8">
-                {/* Debug indicator - remove after testing */}
-                <div className="text-xs text-text-muted mb-2">Current Step: {currentStep}</div>
                 
                 {/* Step icons and labels with connecting lines */}
                 <div className="flex items-center justify-between relative">
@@ -791,10 +870,10 @@ export default function ProcessPage() {
                 <div className="p-4 bg-accent-primary/5 border border-accent-primary/20 rounded-lg mb-6">
                   <div className="flex items-center space-x-2 mb-2">
                     <CheckCircle className="h-4 w-4 text-accent-primary" />
-                    <div className="text-sm font-medium text-text-primary">Successfully extracted your context data</div>
+                    <div className="text-sm font-medium text-text-primary">Successfully extracted your context</div>
                   </div>
                   <div className="text-xs text-text-secondary">
-                    Your chat export has been processed and is ready for intelligent chunking
+                    Your chat export is ready for chunking
                   </div>
                 </div>
 
@@ -843,15 +922,19 @@ export default function ProcessPage() {
                   {currentStep === 'chunked' && (
                     <button
                       onClick={() => {
+                        if (isProcessing) return; // Prevent double-clicks
+                        
                         if (selectedChunks.size === 0) {
                           const allChunkIds = new Set(availableChunks.map((_, index) => index));
                           setSelectedChunks(allChunkIds);
+                          setIsProcessing(true); // Set immediately
                           setTimeout(() => handleAnalyze(), 100);
                         } else {
+                          setIsProcessing(true); // Set immediately
                           handleAnalyze();
                         }
                       }}
-                      disabled={isProcessing || (paymentLimits ? !paymentLimits.canProcess : true)}
+                      disabled={isProcessing || Boolean(paymentLimits && !paymentLimits.canProcess)}
                       className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-2 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
                     >
                       <Play className="h-4 w-4" />
@@ -1031,7 +1114,7 @@ export default function ProcessPage() {
                       handleAnalyze();
                     }
                   }}
-                  disabled={selectedChunks.size === 0 || (paymentLimits ? !paymentLimits.canProcess : true)}
+                  disabled={selectedChunks.size === 0 || Boolean(paymentLimits && !paymentLimits.canProcess)}
                   className="px-4 py-2 bg-bg-secondary border border-border-primary text-text-primary rounded-lg hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title={
                     (paymentLimits && !paymentLimits.canProcess)
@@ -1173,7 +1256,7 @@ export default function ProcessPage() {
                       handleAnalyze();
                     }
                   }}
-                  disabled={selectedChunks.size === 0 || (paymentLimits ? !paymentLimits.canProcess : true)}
+                  disabled={selectedChunks.size === 0 || Boolean(paymentLimits && !paymentLimits.canProcess)}
                   className="px-4 py-2 bg-bg-secondary border border-border-primary text-text-primary rounded-lg hover:bg-bg-tertiary hover:border-border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {(paymentLimits && !paymentLimits.canProcess)

@@ -36,7 +36,7 @@ def reload_env_vars():
     load_dotenv(override=True)
     global OPENAI_API_KEY
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    print(f"🔄 RELOADED OpenAI API Key: {OPENAI_API_KEY[:20]}...{OPENAI_API_KEY[-10:] if OPENAI_API_KEY else 'None'}")
+
     return OPENAI_API_KEY
 
 # Disable SSL warnings and verification globally
@@ -56,12 +56,7 @@ R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY")
 R2_SECRET_KEY = os.getenv("R2_SECRET_KEY") 
 R2_BUCKET = os.getenv("R2_BUCKET_NAME")
 
-# Debug R2 configuration
-print(f"R2 Configuration:")
-print(f"  Endpoint: {R2_ENDPOINT}")
-print(f"  Bucket: {R2_BUCKET}")
-print(f"  Access Key length: {len(R2_ACCESS_KEY) if R2_ACCESS_KEY else 'None'}")
-print(f"  Secret Key length: {len(R2_SECRET_KEY) if R2_SECRET_KEY else 'None'}")
+
 
 # Initialize Supabase client
 if SUPABASE_URL and SUPABASE_SERVICE_KEY:
@@ -96,33 +91,100 @@ class AuthenticatedUser:
         self.r2_directory = r2_directory
 
 # Job logging helper
-def log_to_job(user_r2_directory: str, job_id: str, message: str):
-    """Log a message to the job's process log file"""
-    try:
-        timestamp = datetime.utcnow().strftime("%H:%M:%S")
-        log_message = f"[{timestamp}] {message}\n"
-        
-        # Always print to console immediately for debugging
-        print(f"[{job_id}] {message}")
-        
-        # Upload to R2 synchronously to ensure it gets saved
-        try:
-            # Get existing log content (silently handle 404 for new jobs)
-            existing_log = download_from_r2(f"{user_r2_directory}/{job_id}/process.log", silent_404=True) or ""
-            
-            # Append new message
-            updated_log = existing_log + log_message
-            
-            # Upload updated log
-            upload_to_r2(f"{user_r2_directory}/{job_id}/process.log", updated_log)
-        except Exception as upload_error:
-            print(f"Error uploading log for job {job_id}: {upload_error}")
-        
-    except Exception as e:
-        print(f"Error logging to job {job_id}: {e}")
+# In-memory progress tracking for real-time updates
+job_progress = {}
+job_progress_history = {}  # Track all progress messages
+active_streams = {}  # Track active progress streams
 
-# Remove the async function since we're back to sync
-# async def upload_log_async(user_r2_directory: str, job_id: str, log_message: str):
+# Real-time streaming generator
+async def progress_stream_generator(job_id: str):
+    """Generate progress updates in real-time for a specific job"""
+
+    
+    # Initialize if not exists
+    if job_id not in job_progress_history:
+        job_progress_history[job_id] = []
+    
+    last_sent_count = 0
+    
+    while True:
+        try:
+            # Check if we have new progress updates
+            current_history = job_progress_history.get(job_id, [])
+            
+            # Send any new progress updates immediately
+            if len(current_history) > last_sent_count:
+                for i in range(last_sent_count, len(current_history)):
+                    progress_data = current_history[i]
+                    yield f"data: {json.dumps(progress_data)}\n\n"
+
+                
+                last_sent_count = len(current_history)
+            
+            # Check if job is complete
+            job_status = job_progress.get(job_id, {})
+            if job_status.get('status') == 'completed' or job_status.get('status') == 'error':
+
+                yield f"data: {json.dumps({'type': 'complete', 'status': job_status.get('status')})}\n\n"
+                break
+            
+            # Very short delay for responsiveness
+            await asyncio.sleep(0.05)
+            
+        except Exception as e:
+
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            break
+
+def update_job_progress(job_id: str, step: str, progress: int, message: str, current_chunk: int = None, total_chunks: int = None):
+    """Update job progress with real-time information"""
+    timestamp = datetime.utcnow().isoformat()
+    
+    progress_entry = {
+        "step": step,
+        "progress": progress,
+        "message": message,
+        "current_chunk": current_chunk,
+        "total_chunks": total_chunks,
+        "timestamp": timestamp,
+        "last_updated": datetime.utcnow().timestamp()
+    }
+    
+    job_progress[job_id] = progress_entry
+    
+    # Also add to history for real-time streaming
+    if job_id not in job_progress_history:
+        job_progress_history[job_id] = []
+    
+    job_progress_history[job_id].append(progress_entry)
+    
+    # Keep only last 50 progress entries to prevent memory bloat
+    if len(job_progress_history[job_id]) > 50:
+        job_progress_history[job_id] = job_progress_history[job_id][-50:]
+    
+
+
+def get_job_progress(job_id: str):
+    """Get current job progress"""
+    return job_progress.get(job_id, {
+        "step": "unknown",
+        "progress": 0,
+        "message": "No progress available",
+        "current_chunk": None,
+        "total_chunks": None,
+        "timestamp": datetime.utcnow().isoformat(),
+        "last_updated": datetime.utcnow().timestamp()
+    })
+
+def get_job_progress_history(job_id: str, since_timestamp: float = 0):
+    """Get job progress history since a specific timestamp"""
+    if job_id not in job_progress_history:
+        return []
+    
+    return [
+        entry for entry in job_progress_history[job_id]
+        if entry["last_updated"] > since_timestamp
+    ]
 
 async def get_user_payment_status(user_id: str) -> dict:
     """Get user's payment status and chunk limits"""
@@ -157,7 +219,7 @@ async def update_user_chunks_used(user_id: str, chunks_processed: int):
     """Update chunks - now handled automatically by database trigger when job status = 'analyzed'"""
     # This function is now obsolete - the database trigger handles chunk updates
     # when a job is marked as 'analyzed' with processed_chunks set
-    print(f"📊 Chunk update will be handled automatically by database trigger: +{chunks_processed}")
+
     pass
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
@@ -254,14 +316,9 @@ async def get_current_user_optional(authorization: Optional[str] = Header(None))
 # Database helper functions
 async def create_job_in_db(user: AuthenticatedUser, job_id: str, file_name: str = None, file_size: int = None, status: str = "pending"):
     """Create a job record in Supabase - Updated to use backend function"""
-    print(f"🔄 CREATING JOB IN DATABASE:")
-    print(f"   User ID: {user.user_id}")
-    print(f"   Job ID: {job_id}")
-    print(f"   File Name: {file_name}")
-    print(f"   Status: {status}")
+
     
     if not supabase:
-        print("❌ SUPABASE CLIENT NOT AVAILABLE")
         return None
     
     try:
@@ -276,54 +333,36 @@ async def create_job_in_db(user: AuthenticatedUser, job_id: str, file_name: str 
         }).execute()
         
         if result.data and len(result.data) > 0:
-            print(f"✅ JOB CREATED SUCCESSFULLY: {result.data[0]}")
             return result.data[0]
         else:
-            print(f"❌ JOB CREATION FAILED: No data returned")
+            return None
             return None
             
     except Exception as e:
-        print(f"❌ ERROR CREATING JOB IN DATABASE: {e}")
-        print(f"   Exception type: {type(e).__name__}")
         return None
 
 async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: str, progress: int = None, error_message: str = None, metadata: dict = None):
     """Update job status in Supabase"""
-    print(f"🔄 UPDATING JOB STATUS:")
-    print(f"   User ID: {user.user_id}")
-    print(f"   Job ID: {job_id}")
-    print(f"   New Status: {status}")
-    print(f"   Progress: {progress}")
     
     if not supabase:
-        print("❌ SUPABASE CLIENT NOT AVAILABLE")
         return None
 
     try:
         # First, let's check if the job exists using our backend function
-        print(f"🔍 CHECKING IF JOB EXISTS FIRST...")
         job_check_result = supabase.rpc("check_job_exists_for_backend", {
             "user_uuid": user.user_id,
             "target_job_id": job_id
         }).execute()
         
         if not job_check_result.data or not job_check_result.data[0]["job_exists"]:
-            print(f"❌ JOB NOT FOUND IN DATABASE!")
-            print(f"   Searching for user_id: {user.user_id}, job_id: {job_id}")
-            print(f"   Job check result: {job_check_result.data}")
             return None
         else:
             current_status = job_check_result.data[0]["current_status"]
-            print(f"✅ JOB FOUND with current status: {current_status}")
         
         # Extract processed_chunks from metadata for the enhanced function
         processed_chunks = None
         if metadata and status == "analyzed":
             processed_chunks = metadata.get("processed_chunks", 0)
-            print(f"   Processed chunks: {processed_chunks}")
-        
-        if metadata:
-            print(f"   Metadata provided but not stored (no metadata column): {metadata}")
         
         # Use enhanced backend function to update job status (with processed_chunks)
         result = supabase.rpc("update_job_status_for_backend", {
@@ -336,48 +375,32 @@ async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: 
         }).execute()
         
         if result.data and len(result.data) > 0:
-            print(f"✅ JOB STATUS UPDATED SUCCESSFULLY: {result.data[0]}")
             return result.data[0]
         else:
-            print(f"❌ JOB STATUS UPDATE FAILED: No data returned or job not found")
-            print(f"   Looking for job_id: {job_id}, user_id: {user.user_id}")
             return None
             
     except Exception as e:
-        print(f"❌ ERROR UPDATING JOB STATUS: {e}")
-        print(f"   Exception type: {type(e).__name__}")
         return None
 
 async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str, r2_pack_path: str, extraction_stats: dict = None, chunk_stats: dict = None, analysis_stats: dict = None, file_size: int = None):
     """Create a pack record in Supabase"""
-    print(f"🔄 CREATING PACK IN DATABASE:")
-    print(f"   User ID: {user.user_id}")
-    print(f"   Job ID: {job_id}")
-    print(f"   Pack Name: {pack_name}")
-    print(f"   R2 Path: {r2_pack_path}")
     
     if not supabase:
-        print("❌ SUPABASE CLIENT NOT AVAILABLE")
         return None
     
     try:
         # First check if the job exists using backend function
-        print(f"🔍 CHECKING IF JOB EXISTS...")
         job_check_result = supabase.rpc("check_job_exists_for_backend", {
             "user_uuid": user.user_id,
             "target_job_id": job_id
         }).execute()
         
         if not job_check_result.data or not job_check_result.data[0]["job_exists"]:
-            print(f"❌ JOB NOT FOUND: job_id={job_id}, user_id={user.user_id}")
-            print(f"   Cannot create pack without corresponding job")
             return None
         else:
             job_status = job_check_result.data[0]["current_status"]
-            print(f"✅ JOB FOUND: {job_status}")
         
         # Create pack using backend function
-        print(f"📝 CREATING PACK...")
         result = supabase.rpc("create_pack_for_backend", {
             "user_uuid": user.user_id,
             "target_job_id": job_id,
@@ -390,17 +413,11 @@ async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str
         }).execute()
         
         if result.data and len(result.data) > 0:
-            print(f"✅ PACK CREATED SUCCESSFULLY: {result.data[0]}")
             return result.data[0]
         else:
-            print(f"❌ PACK CREATION FAILED: No data returned")
             return None
             
     except Exception as e:
-        print(f"❌ ERROR CREATING PACK IN DATABASE: {e}")
-        print(f"   Exception type: {type(e).__name__}")
-        if hasattr(e, 'details'):
-            print(f"   Details: {e.details}")
         return None
         
         if result.data:
@@ -526,7 +543,7 @@ def upload_to_r2_direct(key: str, content: str):
             response = requests.put(url, data=clean_content.encode('utf-8'), headers=headers, verify=False, timeout=30)
         
         if response.status_code in [200, 201]:
-            print(f"Successfully uploaded to R2: {key}")
+
             return True
         else:
             print(f"R2 upload failed: {response.status_code} - {response.text}")
@@ -535,29 +552,24 @@ def upload_to_r2_direct(key: str, content: str):
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.write(content)
-            print(f"Saved to local storage as fallback: {local_path}")
             return True
         
     except Exception as e:
-        print(f"Direct upload failed: {type(e).__name__}: {str(e)}")
         # Fallback to local storage
         try:
             local_path = f"local_storage/{key}"
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
                 f.write(content)
-            print(f"Saved to local storage as fallback: {local_path}")
             return True
         except Exception as fallback_error:
-            print(f"Fallback to local storage also failed: {fallback_error}")
             return False
 
 # Disable boto3 for now and use direct upload
 r2_client = None
 
 # Using local storage for now until R2 SSL issue is resolved
-print("Using local storage for file operations...")
-print("Local storage directory: local_storage/")
+
 
 def upload_to_r2(key: str, content: str):
     """Upload content to R2 bucket."""
@@ -566,10 +578,10 @@ def upload_to_r2(key: str, content: str):
     success = upload_to_r2_direct(key, content)
     
     if success:
-        print(f"Successfully uploaded: {key}")
+
         return True
     else:
-        print(f"Upload failed for: {key}")
+
         return False
 
 def download_from_r2(key: str, silent_404: bool = False) -> str:
@@ -578,7 +590,7 @@ def download_from_r2(key: str, silent_404: bool = False) -> str:
         # Try R2 first
         url = f"{R2_ENDPOINT}/{R2_BUCKET}/{key}"
         
-        print(f"Attempting R2 download: {url}")
+
         
         # Prepare headers for GET request
         headers = {
@@ -835,23 +847,15 @@ import asyncio
 from typing import AsyncGenerator
 
 # Global progress tracking
-progress_tracker = {}
+# Removed unused progress_tracker - using job_progress for better performance
 
-def update_progress(job_id: str, step: str, progress: float, message: str):
-    """Update progress for a job"""
-    progress_tracker[job_id] = {
-        "step": step,
-        "progress": progress,
-        "message": message,
-        "timestamp": datetime.utcnow().isoformat()
-    }
+# Removed old update_progress function - using update_job_progress only for better performance
 
 @app.get("/api/progress/{job_id}/{operation}")
 async def get_progress(job_id: str, operation: str):
-    """Get current progress for a job operation"""
-    progress = progress_tracker.get(job_id)
-    if progress and progress.get("step") == operation:
-        return progress
+    """Get current progress for a job operation - using job_progress instead"""
+    if job_id in job_progress:
+        return job_progress[job_id]
     else:
         return {"job_id": job_id, "step": operation, "progress": 0, "message": "No progress data"}
 
@@ -862,7 +866,7 @@ async def get_progress_stream(job_id: str):
         last_progress = None
         timeout_count = 0
         while timeout_count < 60:  # 30 seconds timeout
-            current_progress = progress_tracker.get(job_id)
+            current_progress = job_progress.get(job_id)
             if current_progress and current_progress != last_progress:
                 yield f"data: {json.dumps(current_progress)}\n\n"
                 last_progress = current_progress
@@ -934,7 +938,7 @@ async def extract_text(file: UploadFile = File(...), current_user: Authenticated
         await file.seek(0)
         
         # Initialize progress
-        update_progress(job_id, "extract", 0, "Starting text extraction...")
+        update_job_progress(job_id, "extracting", 0, "Starting text extraction...")
         
         # Read file content
         content = await file.read()
@@ -970,7 +974,7 @@ async def process_extraction_background(job_id: str, file_content: str, filename
             # Try parsing as JSON first
             json_data = json.loads(file_content)
             print("Processing JSON data structure...")
-            update_progress(job_id, "extract", 20, "Processing JSON data structure...")
+            update_job_progress(job_id, "extracting", 20, "Processing JSON data structure...")
             
             def progress_callback(message):
                 print(f"Progress callback called: {message}")
@@ -991,34 +995,34 @@ async def process_extraction_background(job_id: str, file_content: str, filename
                             # Scale from 20% to 80% (extraction phase)
                             scaled_progress = 20 + (percent * 0.6)
                             print(f"Updating progress: {scaled_progress}% - {message}")
-                            update_progress(job_id, "extract", scaled_progress, message)
+                            update_job_progress(job_id, "extracting", scaled_progress, message)
                             progress_callback.last_percent = percent
                     except Exception as e:
                         print(f"Progress parsing error: {e}")
                         # Fallback for any parsing errors
-                        update_progress(job_id, "extract", 50, message)
+                        update_job_progress(job_id, "extracting", 50, message)
                 else:
                     print(f"Non-item progress message: {message}")
-                    update_progress(job_id, "extract", 50, message)
+                    update_job_progress(job_id, "extracting", 50, message)
             
             extracted_texts = extract_text_from_structure(json_data, progress_callback=progress_callback)
         except json.JSONDecodeError:
             # Fallback to text processing using enhanced function
             print("Processing as text content...")
-            update_progress(job_id, "extract", 30, "Processing as text content...")
+            update_job_progress(job_id, "extracting", 30, "Processing as text content...")
             extracted_texts = extract_from_text_content(file_content)
 
         if not extracted_texts:
-            update_progress(job_id, "extract", 0, "Error: No meaningful text found in file")
+            update_job_progress(job_id, "extracting", 0, "Error: No meaningful text found in file")
             return
 
         print(f"Extracted {len(extracted_texts)} meaningful text entries")
-        update_progress(job_id, "extract", 80, f"Extracted {len(extracted_texts)} meaningful text entries")
+        update_job_progress(job_id, "extracting", 80, f"Extracted {len(extracted_texts)} meaningful text entries")
 
         # Save extracted text to R2
         print("Saving extracted text to storage...")
         print(f"First few texts: {[text[:50] + '...' if len(text) > 50 else text for text in extracted_texts[:3]]}")
-        update_progress(job_id, "extract", 85, "Saving extracted text to storage...")
+        update_job_progress(job_id, "extracting", 85, "Saving extracted text to storage...")
         
         # Limit the content size to prevent memory issues - increased limits for comprehensive extraction
         max_texts = 100000  # Increased from 50,000
@@ -1040,16 +1044,16 @@ async def process_extraction_background(job_id: str, file_content: str, filename
         print(f"Created content of {len(extracted_content)} characters from {len(extracted_content_parts)} texts")
         
         print("=== CALLING UPLOAD FUNCTION ===")
-        update_progress(job_id, "extract", 90, "Uploading to R2 storage...")
+        update_job_progress(job_id, "extracting", 90, "Uploading to R2 storage...")
         upload_success = upload_to_r2(f"{user.r2_directory}/{job_id}/extracted.txt", extracted_content)
         
         if not upload_success:
             print("Upload failed, setting error status")
-            update_progress(job_id, "extract", 0, "Error: Failed to save extracted text to storage")
+            update_job_progress(job_id, "extracting", 0, "Error: Failed to save extracted text to storage")
             return
         
         print("Upload successful, proceeding...")
-        update_progress(job_id, "extract", 100, "Text extraction completed successfully")
+        update_job_progress(job_id, "extracted", 100, "Text extraction completed successfully")
         
         # Create job summary for better organization
         job_summary = {
@@ -1065,7 +1069,7 @@ async def process_extraction_background(job_id: str, file_content: str, filename
         
     except Exception as e:
         print(f"Error in background extraction for job {job_id}: {e}")
-        update_progress(job_id, "extract", 0, f"Error: {str(e)}")
+        update_job_progress(job_id, "extracting", 0, f"Error: {str(e)}")
 
 # Legacy endpoint response format - add a status endpoint to get final results
 @app.get("/api/results/{job_id}")
@@ -1174,35 +1178,34 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
     """Step 2: Create chunks from extracted text."""
     try:
         print(f"Starting chunking for job {job_id} for user {user.user_id}")
-        update_progress(job_id, "chunk", 0, "Starting chunking process...")
+        # Remove redundant update_progress calls - use only update_job_progress
+        update_job_progress(job_id, "chunking", 0, "Creating semantic chunks...")
         
         # Download extracted text from R2 using user directory
-        update_progress(job_id, "chunk", 10, "Downloading extracted text...")
         extracted_content = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt")
         if not extracted_content:
             raise HTTPException(status_code=404, detail="Extracted text not found")
-
-        update_progress(job_id, "chunk", 20, "Analyzing text structure...")
         
         # Chunk the text with reduced token limit to stay under OpenAI rate limits
         max_tokens = 150000  # Reduced from 200,000 to 150,000 to stay well under 200k limit
         chunks = []
         
         # Split by conversation entries
-        update_progress(job_id, "chunk", 30, "Splitting text into conversations...")
         conversations = extracted_content.split('\n\n')
         
         current_chunk = []
         current_tokens = 0
         total_conversations = len(conversations)
         
-        update_progress(job_id, "chunk", 40, f"Processing {total_conversations} conversations...")
+        # Update progress less frequently for better performance
+        update_job_progress(job_id, "chunking", 20, f"Processing {total_conversations} conversations...")
         
+        # Update progress only every 500 conversations or at end (reduce frequency)
         for i, conv in enumerate(conversations):
-            # Update progress every 100 conversations or at end
-            if i % 100 == 0 or i == total_conversations - 1:
-                progress_percent = 40 + (i / total_conversations * 50)  # 40% to 90%
-                update_progress(job_id, "chunk", progress_percent, f"Processing conversation {i+1}/{total_conversations}")
+            # Update progress less frequently for performance
+            if i % 500 == 0 or i == total_conversations - 1:
+                progress_percent = 20 + (i / total_conversations * 60)  # 20% to 80%
+                update_job_progress(job_id, "chunking", progress_percent, f"Processing conversation {i+1}/{total_conversations}")
             
             conv = conv.strip()
             if not conv:
@@ -1248,16 +1251,15 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
         if current_chunk:
             chunks.append('\n\n'.join(current_chunk))
         
-        print(f" Created {len(chunks)} chunks")
-        update_progress(job_id, "chunk", 90, f"Created {len(chunks)} chunks, saving to storage...")
+        update_job_progress(job_id, "chunking", 80, f"Created {len(chunks)} chunks, saving to storage...")
         
-        # Save chunks to R2
+        # Save chunks to R2 - reduce progress update frequency
         chunk_info = []
         for i, chunk in enumerate(chunks):
-            # Update progress for chunk uploads
-            if i % 5 == 0 or i == len(chunks) - 1:  # Every 5 chunks or last chunk
-                progress_percent = 90 + ((i + 1) / len(chunks) * 8)  # 90% to 98%
-                update_progress(job_id, "chunk", progress_percent, f"Uploading chunk {i+1}/{len(chunks)}")
+            # Update progress only every 10 chunks or last chunk for better performance
+            if i % 10 == 0 or i == len(chunks) - 1:
+                progress_percent = 80 + ((i + 1) / len(chunks) * 15)  # 80% to 95%
+                update_job_progress(job_id, "chunking", progress_percent, f"Uploading chunk {i+1}/{len(chunks)}")
             
             upload_to_r2(f"{user.r2_directory}/{job_id}/chunk_{i+1:03d}.txt", chunk)
             chunk_info.append({
@@ -1266,7 +1268,7 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
                 "preview": chunk[:200] + "..." if len(chunk) > 200 else chunk
             })
         
-        update_progress(job_id, "chunk", 99, "Saving chunk metadata...")
+        update_job_progress(job_id, "chunking", 95, "Saving chunk metadata...")
         
         # Save chunk metadata
         chunk_metadata = {
@@ -1278,7 +1280,7 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
         }
         upload_to_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", json.dumps(chunk_metadata, indent=2))
         
-        # Update job summary
+        # Update job summary - combine into single operation for efficiency
         job_summary = {
             "job_id": job_id,
             "created_at": datetime.utcnow().isoformat(),
@@ -1288,7 +1290,7 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
         }
         upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
         
-        update_progress(job_id, "chunk", 100, f"Chunking completed! Created {len(chunks)} chunks")
+        update_job_progress(job_id, "chunked", 100, f"Chunking complete! Created {len(chunks)} chunks ready for analysis", total_chunks=len(chunks))
         
         return {
             "job_id": job_id,
@@ -1412,11 +1414,15 @@ Conversation data:
                 chunk_content = download_from_r2(chunk_key)
                 
                 if not chunk_content:
-                    print(f"❌ Failed to download chunk {i+1}")
                     failed_chunks.append(i+1)
                     continue
                 
-                log_to_job(user.r2_directory, job_id, f"Sending chunk {i+1} to AI for analysis...")
+                # Update progress less frequently for better performance (every 5 chunks or important milestones)
+                if i % 5 == 0 or i == chunks_to_process - 1:
+                    update_job_progress(job_id, "analyzing", 
+                                      int((i / chunks_to_process) * 100), 
+                                      f"Analyzing chunk {i+1}/{chunks_to_process}...", 
+                                      current_chunk=i+1, total_chunks=chunks_to_process)
                 
                 # Process with OpenAI
                 ai_response = openai_client.chat.completions.create(
@@ -1426,7 +1432,7 @@ Conversation data:
                     timeout=120  # 2 minute timeout per chunk
                 )
                 
-                log_to_job(user.r2_directory, job_id, f"Chunk {i+1} analysis complete")
+                # Remove redundant mid-chunk progress update for performance
                 
                 input_tokens = count_tokens(chunk_content)
                 output_tokens = ai_response.usage.completion_tokens
@@ -1452,10 +1458,7 @@ Conversation data:
                 results.append(result)
                 upload_to_r2(f"{user.r2_directory}/{job_id}/result_{i+1:03d}.json", json.dumps(result, indent=2))
                 
-                print(f"✅ Chunk {i+1} analyzed successfully (${chunk_cost:.4f})")
-                
             except Exception as chunk_error:
-                print(f"❌ Error processing chunk {i+1}: {chunk_error}")
                 failed_chunks.append(i+1)
                 continue
         
@@ -1465,8 +1468,8 @@ Conversation data:
         # Update user's chunks used count
         await update_user_chunks_used(user.user_id, len(results))
         
-        print(f"📊 Analysis complete: {len(results)}/{chunks_to_process} chunks processed successfully")
-        log_to_job(user.r2_directory, job_id, "All chunks analyzed - Universal Context Pack complete!")
+
+        update_job_progress(job_id, "completed", 100, f"All chunks analyzed - Universal Context Pack complete! Processed {len(results)}/{chunks_to_process} chunks")
         if failed_chunks:
             print(f" Failed chunks: {failed_chunks}")
         
@@ -1599,8 +1602,11 @@ Upgrade to Pro plan ($4.99) to unlock your complete Universal Context Pack!
 
 @app.get("/api/status/{job_id}")
 async def get_status(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Get job status and progress."""
+    """Get job status and progress with real-time updates."""
     try:
+        # Get real-time progress first
+        progress_info = get_job_progress(job_id)
+        
         # Check if extracted
         extracted_exists = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt") is not None
         
@@ -1619,23 +1625,26 @@ async def get_status(job_id: str, user: AuthenticatedUser = Depends(get_current_
                 "extracted": True,
                 "chunked": True,
                 "analyzed": True,
+                "progress": progress_info,
                 **summary_data
             }
         elif chunks_exist:
             chunk_data = json.loads(chunks_metadata)
             return {
-                "status": "chunked",
+                "status": progress_info.get("step", "chunked"),
                 "extracted": True,
                 "chunked": True,
                 "analyzed": False,
+                "progress": progress_info,
                 **chunk_data
             }
         elif extracted_exists:
             return {
-                "status": "extracted",
+                "status": progress_info.get("step", "extracted"),
                 "extracted": True,
                 "chunked": False,
-                "analyzed": False
+                "analyzed": False,
+                "progress": progress_info
             }
         else:
             return {
@@ -1660,6 +1669,31 @@ async def get_job_logs(job_id: str, user: AuthenticatedUser = Depends(get_curren
         
         return {"logs": log_content}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/progress-stream/{job_id}")
+async def get_job_progress_stream(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Real-time Server-Sent Events stream for job progress."""
+    try:
+        print(f"🚀 Creating SSE stream for job: {job_id}")
+        
+        # Set proper SSE headers
+        headers = {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control"
+        }
+        
+        return StreamingResponse(
+            progress_stream_generator(job_id),
+            media_type="text/event-stream",
+            headers=headers
+        )
+        
+    except Exception as e:
+
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/download/{job_id}/complete")
@@ -1777,7 +1811,7 @@ async def test_create_pack(job_id: str, user: AuthenticatedUser = Depends(get_cu
     
     try:
         # First, let's create the job if it doesn't exist
-        print(f"🔄 CREATING MISSING JOB RECORD...")
+
         job_record = await create_job_in_db(
             user=user,
             job_id=job_id,
@@ -1787,10 +1821,9 @@ async def test_create_pack(job_id: str, user: AuthenticatedUser = Depends(get_cu
         )
         
         if job_record:
-            print(f"✅ Job created or already exists")
+            pass
         
         # Now try to create the pack
-        print(f"🔄 ATTEMPTING TO CREATE PACK...")
         pack_record = await create_pack_in_db(
             user=user,
             job_id=job_id,
@@ -1808,7 +1841,7 @@ async def test_create_pack(job_id: str, user: AuthenticatedUser = Depends(get_cu
         }
         
     except Exception as e:
-        print(f"❌ TEST FAILED: {e}")
+
         return {"error": str(e)}
 
 @app.get("/api/debug-jobs")
