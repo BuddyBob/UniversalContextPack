@@ -95,6 +95,35 @@ class AuthenticatedUser:
         self.email = email
         self.r2_directory = r2_directory
 
+# Job logging helper
+def log_to_job(user_r2_directory: str, job_id: str, message: str):
+    """Log a message to the job's process log file"""
+    try:
+        timestamp = datetime.utcnow().strftime("%H:%M:%S")
+        log_message = f"[{timestamp}] {message}\n"
+        
+        # Always print to console immediately for debugging
+        print(f"[{job_id}] {message}")
+        
+        # Upload to R2 synchronously to ensure it gets saved
+        try:
+            # Get existing log content (silently handle 404 for new jobs)
+            existing_log = download_from_r2(f"{user_r2_directory}/{job_id}/process.log", silent_404=True) or ""
+            
+            # Append new message
+            updated_log = existing_log + log_message
+            
+            # Upload updated log
+            upload_to_r2(f"{user_r2_directory}/{job_id}/process.log", updated_log)
+        except Exception as upload_error:
+            print(f"Error uploading log for job {job_id}: {upload_error}")
+        
+    except Exception as e:
+        print(f"Error logging to job {job_id}: {e}")
+
+# Remove the async function since we're back to sync
+# async def upload_log_async(user_r2_directory: str, job_id: str, log_message: str):
+
 async def get_user_payment_status(user_id: str) -> dict:
     """Get user's payment status and chunk limits"""
     if not supabase:
@@ -136,12 +165,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     try:
         # Extract token
         token = credentials.credentials
-        print(f"🔐 AUTH DEBUG: Received token length: {len(token) if token else 'None'}")
-        print(f"🔐 AUTH DEBUG: Token starts with: {token[:50] if token else 'None'}...")
         
         # For development, let's be more lenient with JWT validation
         if SUPABASE_JWT_SECRET:
-            print(f"🔐 AUTH DEBUG: JWT Secret available, length: {len(SUPABASE_JWT_SECRET)}")
             try:
                 # First try with full verification
                 payload = jwt.decode(
@@ -151,42 +177,31 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
                     audience="authenticated",
                     options={"verify_aud": True}
                 )
-                print(f"🔐 AUTH DEBUG: JWT decoded successfully with full verification")
             except jwt.InvalidAudienceError:
                 # Try without audience verification
-                print(f"🔐 AUTH DEBUG: Audience verification failed, trying without audience check")
                 payload = jwt.decode(
                     token, 
                     SUPABASE_JWT_SECRET, 
                     algorithms=["HS256"],
                     options={"verify_aud": False}
                 )
-                print(f"🔐 AUTH DEBUG: JWT decoded successfully without audience verification")
             except Exception as e:
-                print(f"🔐 AUTH DEBUG: JWT verification failed: {e}")
-                print(f"🔐 AUTH DEBUG: Exception type: {type(e).__name__}")
                 # For debugging, let's try without verification
                 payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-                print(f"🔐 AUTH DEBUG: JWT decoded without verification (development mode)")
         else:
-            print(f"🔐 AUTH DEBUG: No JWT Secret available, decoding without verification")
             # Development: decode without verification (UNSAFE for production)
             payload = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-            print(f"🔐 AUTH DEBUG: JWT decoded without verification (no secret)")
         
         user_id = payload.get("sub")
         email = payload.get("email")
         
-        print(f"🔐 AUTH DEBUG: Extracted user data: user_id={user_id}, email={email}")
         
         if not user_id:
-            print(f"🔐 AUTH DEBUG: Missing user ID in token payload: {payload}")
             raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
         
         # Email is optional, use user_id as fallback
         if not email:
             email = f"user_{user_id}@example.com"
-            print(f"🔐 AUTH DEBUG: Using fallback email: {email}")
         
         # Get or create user profile in Supabase
         if supabase:
@@ -215,17 +230,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return AuthenticatedUser(user_id, email, r2_directory)
         
     except jwt.ExpiredSignatureError as e:
-        print(f"🔐 AUTH DEBUG: Token expired: {e}")
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError as e:
-        print(f"🔐 AUTH DEBUG: Invalid token error: {e}")
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        print(f"🔐 AUTH DEBUG: Unexpected authentication error: {e}")
-        print(f"🔐 AUTH DEBUG: Exception type: {type(e).__name__}")
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
 # Optional authentication for backwards compatibility
@@ -421,7 +432,6 @@ def get_openai_client(api_key: str = None) -> OpenAI:
         print("❌ No OpenAI API key found in environment variables")
         raise HTTPException(status_code=500, detail="Server OpenAI API key not configured")
     
-    print(f"🔑 Using server API key ending in: ...{current_api_key[-4:] if len(current_api_key) > 4 else 'short'}")
     
     try:
         return OpenAI(api_key=current_api_key)
@@ -486,9 +496,6 @@ def sign_aws_request(method, url, headers, payload, access_key, secret_key, regi
 def upload_to_r2_direct(key: str, content: str):
     """Upload directly to R2 using requests with proper S3 auth"""
     try:
-        print(f"=== DIRECT UPLOAD TO R2 ===")
-        print(f"Key: {key}")
-        print(f"Content size: {len(content)} characters")
         
         # Construct the URL
         url = f"{R2_ENDPOINT}/{R2_BUCKET}/{key}"
@@ -554,24 +561,18 @@ print("Local storage directory: local_storage/")
 
 def upload_to_r2(key: str, content: str):
     """Upload content to R2 bucket."""
-    print(f"=== UPLOAD DEBUG START ===")
-    print(f"Function called with key: {key}")
-    print(f"Content type: {type(content)}")
-    print(f"Content size: {len(content)} characters")
     
     # Use direct upload method to avoid boto3 SSL recursion
     success = upload_to_r2_direct(key, content)
     
     if success:
         print(f"Successfully uploaded: {key}")
-        print(f"=== UPLOAD DEBUG END SUCCESS ===")
         return True
     else:
         print(f"Upload failed for: {key}")
-        print(f"=== UPLOAD DEBUG END ERROR ===")
         return False
 
-def download_from_r2(key: str) -> str:
+def download_from_r2(key: str, silent_404: bool = False) -> str:
     """Download content from R2 bucket."""
     try:
         # Try R2 first
@@ -591,13 +592,16 @@ def download_from_r2(key: str) -> str:
         response = requests.get(url, headers=headers, verify=False, timeout=30)
         
         print(f"R2 response status: {response.status_code}")
-        
         if response.status_code == 200:
             print(f"Successfully downloaded from R2: {key} ({len(response.text)} chars)")
             return response.text
+        elif response.status_code == 404 and silent_404:
+            # Silently return None for expected 404s (like new process.log files)
+            return None
         else:
-            print(f"R2 download failed ({response.status_code}): {response.text}")
-            print(f"R2 download failed ({response.status_code}), trying local storage...")
+            if not silent_404:
+                print(f"R2 download failed ({response.status_code}): {response.text}")
+                print(f"R2 download failed ({response.status_code}), trying local storage...")
             # Fall back to local storage
             local_path = f"local_storage/{key}"
             with open(local_path, 'r', encoding='utf-8') as f:
@@ -606,7 +610,8 @@ def download_from_r2(key: str) -> str:
             return content
             
     except Exception as e:
-        print(f"Error downloading from R2, trying local storage: {e}")
+        if not silent_404:
+            print(f"Error downloading from R2, trying local storage: {e}")
         try:
             local_path = f"local_storage/{key}"
             with open(local_path, 'r', encoding='utf-8') as f:
@@ -614,7 +619,8 @@ def download_from_r2(key: str) -> str:
             print(f"Successfully downloaded from local storage: {key} ({len(content)} chars)")
             return content
         except Exception as local_error:
-            print(f"Error downloading from local storage: {local_error}")
+            if not silent_404:
+                print(f"Error downloading from local storage: {local_error}")
             return None
 
 def list_r2_objects(prefix: str = "") -> List[str]:
@@ -956,7 +962,6 @@ async def extract_text(file: UploadFile = File(...), current_user: Authenticated
 async def process_extraction_background(job_id: str, file_content: str, filename: str, user: AuthenticatedUser):
     """Background task for processing text extraction with progress updates."""
     try:
-        print(f"Background extraction started for job {job_id} (user: {user.email})")
         await update_job_status_in_db(user, job_id, "processing", 10, metadata={"step": "parsing_content"})
         
         extracted_texts = []
@@ -1057,7 +1062,6 @@ async def process_extraction_background(job_id: str, file_content: str, filename
         }
         upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
         
-        print(f"Background extraction completed successfully for job {job_id}")
         
     except Exception as e:
         print(f"Error in background extraction for job {job_id}: {e}")
@@ -1341,11 +1345,9 @@ async def upgrade_plan(plan: str, user: AuthenticatedUser = Depends(get_current_
 async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """Step 3: Analyze chunks with AI - with payment limits."""
     try:
-        print(f"Starting AI analysis for job {job_id} for user {user.user_id}")
         
         # Check payment status and limits FIRST
         payment_status = await get_user_payment_status(user.user_id)
-        print(f"Payment status for user {user.user_id}: {payment_status}")
         
         # Get chunk metadata to see how many chunks we have
         chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
@@ -1375,14 +1377,11 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
             # Pro/Business users get unlimited chunks
             chunks_to_process = total_chunks
         
-        print(f"Processing {chunks_to_process}/{total_chunks} chunks for {payment_status['plan']} user")
         
-        print(f"🔑 Getting OpenAI client with server API key...")
         
         # Get OpenAI client (will automatically use current server API key)
         openai_client = get_openai_client()
         
-        print(f"Found {total_chunks} chunks to analyze")
         
         ucp_prompt = """Analyze this conversation data and extract ALL unique facts to build a Universal Context Pack (UCP). Provide extremely detailed analysis in these categories:
 
@@ -1409,7 +1408,6 @@ Conversation data:
         for i in range(chunks_to_process):
             try:
                 chunk_key = f"{user.r2_directory}/{job_id}/chunk_{i+1:03d}.txt"
-                print(f" Processing chunk {i+1}/{chunks_to_process} - downloading {chunk_key}")
                 
                 chunk_content = download_from_r2(chunk_key)
                 
@@ -1418,8 +1416,7 @@ Conversation data:
                     failed_chunks.append(i+1)
                     continue
                 
-                print(f" Downloaded chunk {i+1} ({len(chunk_content)} chars)")
-                print(f" Sending chunk {i+1} to AI for analysis...")
+                log_to_job(user.r2_directory, job_id, f"Sending chunk {i+1} to AI for analysis...")
                 
                 # Process with OpenAI
                 ai_response = openai_client.chat.completions.create(
@@ -1428,6 +1425,8 @@ Conversation data:
                     max_completion_tokens=15000,
                     timeout=120  # 2 minute timeout per chunk
                 )
+                
+                log_to_job(user.r2_directory, job_id, f"Chunk {i+1} analysis complete")
                 
                 input_tokens = count_tokens(chunk_content)
                 output_tokens = ai_response.usage.completion_tokens
@@ -1467,8 +1466,10 @@ Conversation data:
         await update_user_chunks_used(user.user_id, len(results))
         
         print(f"📊 Analysis complete: {len(results)}/{chunks_to_process} chunks processed successfully")
+        log_to_job(user.r2_directory, job_id, "All chunks analyzed - Universal Context Pack complete!")
         if failed_chunks:
             print(f" Failed chunks: {failed_chunks}")
+        
         
         # Create complete UCP from processed chunks only
         aggregated_content = "\n\n" + "="*100 + "\n\n".join([
@@ -1494,6 +1495,7 @@ Upgrade to Pro plan ($4.99) to unlock your complete Universal Context Pack!
             aggregated_content += upgrade_note
         
         upload_to_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt", aggregated_content)
+
         
         # Save summary to R2
         summary = {
@@ -1511,6 +1513,7 @@ Upgrade to Pro plan ($4.99) to unlock your complete Universal Context Pack!
         }
         
         upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", json.dumps(summary, indent=2))
+        
         
         # Update job status to analyzed (triggers chunk count update)
         try:
@@ -1644,6 +1647,20 @@ async def get_status(job_id: str, user: AuthenticatedUser = Depends(get_current_
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
+
+@app.get("/api/logs/{job_id}")
+async def get_job_logs(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Get processing logs for a job."""
+    try:
+        process_log_path = f"{user.r2_directory}/{job_id}/process.log"
+        log_content = download_from_r2(process_log_path, silent_404=True)
+        
+        if not log_content:
+            return {"logs": ""}
+        
+        return {"logs": log_content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/download/{job_id}/complete")
 async def download_complete_ucp(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -2186,7 +2203,6 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
 async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current_user)):
     """Get the current user's profile information"""
     try:
-        print(f"Getting profile for user: {current_user.user_id}")
         
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not available")

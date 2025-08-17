@@ -27,10 +27,11 @@
   --text-disabled: #6b7280;     /* Disabled state */
   
   /* === BORDER COLORS === */
-  --border-primary: #464646;    /* Dark borders */
-  --border-secondary: #4b5563;  /* Subtle separation */
+  --border-primary: #323232;    /* Very subtle dark borders */
+  --border-secondary: #3a3a3a;  /* Subtle separation */
   --border-accent: var(--accent-primary);          /* Accent borders */
-  --border-muted: #1f2937;      /* Minimal borders */
+  --border-muted: #2a2a2a;      /* Minimal borders */
+  --border-card: #2e2e2e;       /* Soft card borders */
   
   /* === STATUS COLORS === */
   --status-success: #10b981;    /* Green */
@@ -69,10 +70,11 @@
   --text-disabled: #a8b2bb;     /* Disabled state */
   
   /* === BORDER COLORS === */
-  --border-primary: #f3f2f2;    /* Clean borders */
-  --border-secondary: #eaeef2;  /* Subtle separation */
+  --border-primary: #e1e5e9;    /* Clean subtle borders */
+  --border-secondary: #d1d9e0;  /* Subtle separation */
   --border-accent: var(--accent-primary);          /* Accent borders */
-  --border-muted: #f6f8fa;      /* Minimal borders */
+  --border-muted: #f1f3f4;      /* Minimal borders */
+  --border-card: #e8ecf0;       /* Soft card borders */
   
   /* === STATUS COLORS === */
   --status-success: #1a7f37;    /* Professional green */
@@ -87,7 +89,36 @@
   --shadow-professional: 0 8px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
-/* ===== PROFESSIONAL DESIGN SYSTEM ===== */
+/* ===== FORCE BORDER COLORS ===== */
+@layer utilities {
+  .border-border-primary {
+    border-color: var(--border-primary) !important;
+  }
+  
+  .border-border-secondary {
+    border-color: var(--border-secondary) !important;
+  }
+  
+  .border-border-accent {
+    border-color: var(--border-accent) !important;
+  }
+  
+  .border-border-muted {
+    border-color: var(--border-muted) !important;
+  }
+  
+  .border-b-border-primary {
+    border-bottom-color: var(--border-primary) !important;
+  }
+  
+  .border-t-border-primary {
+    border-top-color: var(--border-primary) !important;
+  }
+  
+  .hover\:border-border-accent:hover {
+    border-color: var(--border-accent) !important;
+  }
+}
 @layer utilities {
   /* Professional Shadows */
   .shadow-professional { box-shadow: var(--shadow-professional) !important; }

@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [lastProfileFetch, setLastProfileFetch] = useState<number>(0)
 
   useEffect(() => {
     // Get initial session
@@ -88,7 +89,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const fetchUserProfile = async (userId: string) => {
+    // Debounce: Don't fetch if we fetched within the last 5 seconds
+    const now = Date.now()
+    if (now - lastProfileFetch < 5000) {
+      console.log('Skipping profile fetch - too recent')
+      return
+    }
+    
     try {
+      setLastProfileFetch(now)
       // Try to get the user profile via our backend API which handles authentication properly
       const session = await supabase.auth.getSession()
       if (session.data.session?.access_token) {

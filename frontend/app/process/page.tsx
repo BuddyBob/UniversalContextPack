@@ -37,6 +37,7 @@ export default function ProcessPage() {
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, chunks_used: number, chunks_allowed: number, plan?: string} | null>(null);
+  const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -152,7 +153,15 @@ export default function ProcessPage() {
   const checkPaymentLimits = async () => {
     if (!session?.access_token) return { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
     
+    // Debounce: Don't check if we checked within the last 10 seconds
+    const now = Date.now()
+    if (now - lastPaymentCheck < 10000) {
+      console.log('Skipping payment status check - too recent')
+      return paymentLimits || { canProcess: false, chunks_used: 0, chunks_allowed: 2 };
+    }
+    
     try {
+      setLastPaymentCheck(now)
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/payment/status`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -185,10 +194,47 @@ export default function ProcessPage() {
           headers['Authorization'] = `Bearer ${session.access_token}`;
         }
 
-        const response = await fetch(`http://localhost:8000/api/status/${jobId}`, {
-          headers,
-        });
-        const data = await response.json();
+        // Poll both status and logs
+        const [statusResponse, logsResponse] = await Promise.all([
+          fetch(`http://localhost:8000/api/status/${jobId}`, { headers }),
+          fetch(`http://localhost:8000/api/logs/${jobId}`, { headers })
+        ]);
+        
+        const data = await statusResponse.json();
+        
+        // Update logs if available
+        if (logsResponse.ok) {
+          const logsData = await logsResponse.json();
+          if (logsData.logs) {
+            // Split logs into lines and add new ones
+            const newLogLines = logsData.logs.trim().split('\n').filter((line: string) => line.trim());
+            
+            // Keep track of already shown messages to avoid duplicates
+            const currentMessages = new Set(logs.map(log => log.toLowerCase().trim()));
+            
+            // Add only new log lines that aren't already in the UI
+            newLogLines.forEach((logLine: string) => {
+              if (logLine.trim()) {
+                // Extract timestamp and message
+                const timestampMatch = logLine.match(/^\[(\d{2}:\d{2}:\d{2})\] (.+)$/);
+                if (timestampMatch) {
+                  const [, timestamp, message] = timestampMatch;
+                  // Check if this exact message is already shown
+                  if (!currentMessages.has(message.toLowerCase().trim())) {
+                    addLog(message);
+                    currentMessages.add(message.toLowerCase().trim());
+                  }
+                } else {
+                  // Handle lines without timestamp format
+                  if (!currentMessages.has(logLine.toLowerCase().trim())) {
+                    addLog(logLine.trim());
+                    currentMessages.add(logLine.toLowerCase().trim());
+                  }
+                }
+              }
+            });
+          }
+        }
         
         if (data.status === 'completed') {
           clearInterval(interval);
@@ -232,7 +278,7 @@ export default function ProcessPage() {
           setIsProcessing(false);
           addLog(`Analysis failed: ${data.error || 'Unknown error'}`);
         } else {
-          addLog(`Analysis status: ${data.status}`);
+          // Only add status update if it's not already covered by backend logs
           if (data.progress) {
             setProgress(data.progress);
           }
@@ -240,7 +286,7 @@ export default function ProcessPage() {
       } catch (error) {
         addLog(`Error checking status: ${error}`);
       }
-    }, 5000); // Poll every 5 seconds instead of 2
+    }, 5000); // Poll every 5 seconds to reduce server load
     
     setPollingInterval(interval);
   };
@@ -341,7 +387,7 @@ export default function ProcessPage() {
       setChunkData(data);
       setAvailableChunks(data.chunks);
       setCurrentStep('chunked');
-      addLog(`Chunking complete: ${data.chunks.length} chunks created`);
+      // Remove hardcoded message - backend provides real-time logs
     } catch (error) {
       addLog(`Chunking failed: ${error}`);
     } finally {
@@ -371,7 +417,7 @@ export default function ProcessPage() {
     setIsProcessing(true);
     setCurrentStep('analyzing');
     setAnalysisStartTime(Date.now());
-    addLog(`Starting analysis of ${chunksToAnalyze.length} chunks...`);
+    // Remove hardcoded message - backend will provide real-time logs
 
     try {
       const headers: Record<string, string> = {
@@ -512,247 +558,208 @@ export default function ProcessPage() {
         autoHide={false}
       />
 
-      <div className="max-w-8xl mx-auto p-6">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="mb-12 text-center">
-            <h1 style={{fontSize: '32px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '8px', letterSpacing: '-0.01em'}}>
-              Universal Context Processor
-            </h1>
-            <p style={{fontSize: '16px', color: 'var(--text-secondary)', fontWeight: '400'}}>
-              Extract, chunk, and analyze your conversation data with professional AI tools
-            </p>
-          </div>
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-text-primary mb-2">
+            Universal Context Processor
+          </h1>
+          <p className="text-text-secondary">
+            Extract, chunk, and analyze your conversation data with professional AI tools
+          </p>
+        </div>
 
-        {/* What You'll Get Section - Simplified */}
+        {/* Welcome Section for Non-Authenticated Users */}
         {!user && (
-          <div className="content-card">
-            <h3 className="text-lg font-semibold mb-4 text-center">Transform your chat exports into AI-ready context packs</h3>
-            <div className="grid md:grid-cols-4 gap-6 text-sm">
-              <div className="text-center">
-                <div className="w-8 h-8 bg-accent-primary rounded-full flex items-center justify-center mx-auto mb-2">
-                  <FileText className="h-4 w-4 text-text-primary" />
+          <div className="mb-8">
+            <div className="bg-bg-card border border-border-primary rounded-lg p-8 text-center">
+              <h2 className="text-xl font-semibold text-text-primary mb-4">
+                Transform your chat exports into AI-ready context packs
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <FileText className="h-5 w-5 text-accent-primary" />
+                  </div>
+                  <p className="text-sm font-medium text-text-primary">Smart Extraction</p>
                 </div>
-                <p className="font-medium text-text-primary">Smart Extraction</p>
-              </div>
-              <div className="text-center">
-                <div className="w-8 h-8 bg-accent-primary rounded-full flex items-center justify-center mx-auto mb-2">
-                  <BarChart3 className="h-4 w-4 text-text-primary" />
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <BarChart3 className="h-5 w-5 text-accent-primary" />
+                  </div>
+                  <p className="text-sm font-medium text-text-primary">Smart Chunking</p>
                 </div>
-                <p className="font-medium text-text-primary">Smart Chunking</p>
-              </div>
-              <div className="text-center">
-                <div className="w-8 h-8 bg-accent-primary rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Brain className="h-4 w-4 text-text-primary" />
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <Brain className="h-5 w-5 text-accent-primary" />
+                  </div>
+                  <p className="text-sm font-medium text-text-primary">AI Analysis</p>
                 </div>
-                <p className="font-medium text-text-primary">AI Analysis</p>
-              </div>
-              <div className="text-center">
-                <div className="w-8 h-8 bg-accent-primary rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Play className="h-4 w-4 text-text-primary" />
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <Play className="h-5 w-5 text-accent-primary" />
+                  </div>
+                  <p className="text-sm font-medium text-text-primary">Ready-to-Use Packs</p>
                 </div>
-                <p className="font-medium text-text-primary">Ready-to-Use Packs</p>
               </div>
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors"
+              >
+                Get Started
+              </button>
             </div>
           </div>
         )}
 
-        {/* Main Content - Only show when user is logged in */}
+        {/* Main Content for Authenticated Users */}
         {user && (
-          <div>
-            {/* Progress Timeline */}
-            <div className="content-card">
-              <div className="flex items-center justify-between mb-8">
-                <h2 style={{fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.01em'}}>
-                  Progress
-                </h2>
+          <div className="space-y-6">
+            {/* Progress Steps */}
+            <div className="bg-bg-card border border-border-primary rounded-lg p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-semibold text-text-primary">Progress</h2>
                 {currentStep !== 'upload' && (
                   <button
                     onClick={resetProcess}
-                    className="btn-secondary-improved"
-                    style={{width: 'auto', padding: '8px 16px', fontSize: '14px'}}
+                    className="text-sm text-text-secondary hover:text-text-primary px-3 py-1 border border-border-secondary rounded hover:border-border-accent hover:bg-bg-tertiary transition-colors"
                   >
                     Reset
                   </button>
                 )}
               </div>
               
-              {/* Timeline Container */}
-              <div className="relative">
-                {/* Background Timeline Line */}
-                <div className="absolute top-8 left-0 right-0 h-0.5 bg-border-primary"></div>
+              {/* Timeline Progress Indicator */}
+              <div className="relative mb-8">
+                {/* Debug indicator - remove after testing */}
+                <div className="text-xs text-text-muted mb-2">Current Step: {currentStep}</div>
                 
-                {/* Progress Line */}
-                <div 
-                  className="absolute top-8 left-0 h-0.5 bg-purple-300 transition-all duration-1000 ease-out"
-                  style={{
-                    width: (() => {
-                      const steps = ['upload', 'uploaded', 'extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'];
-                      const currentIndex = steps.findIndex(step => 
-                        step === currentStep || 
-                        (currentStep === 'extracting' && step === 'uploaded') ||
-                        (currentStep === 'chunking' && step === 'extracted') ||
-                        (currentStep === 'analyzing' && step === 'chunked')
-                      );
-                      const progressSteps = ['upload', 'extracted', 'chunked', 'analyzed'];
-                      const progressIndex = progressSteps.findIndex(step => 
-                        step === currentStep ||
-                        (['uploaded', 'extracting'].includes(currentStep) && step === 'upload') ||
-                        (['chunking'].includes(currentStep) && step === 'extracted') ||
-                        (['analyzing'].includes(currentStep) && step === 'chunked')
-                      );
-                      return `${Math.max(0, (progressIndex / (progressSteps.length - 1)) * 100)}%`;
-                    })()
-                  }}
-                ></div>
-                
-                {/* Timeline Steps */}
-                <div className="flex justify-between relative">
-                  {/* Upload Step */}
-                  <div className="flex flex-col items-center">
-                    <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                      ['uploaded', 'extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)
-                        ? 'bg-purple-100 border-purple-300 text-purple-700 shadow-sm' 
-                        : currentStep === 'upload'
-                        ? 'bg-purple-100 border-purple-400 text-purple-700 shadow-md ring-2 ring-purple-200'
-                        : 'bg-bg-secondary border-border-primary text-text-muted'
-                    }`}>
-                      <Upload className="h-6 w-6" />
-                    </div>
-                    <span className={`mt-3 text-sm font-normal transition-colors ${
-                      ['upload', 'uploaded', 'extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)
-                        ? 'text-text-primary' 
-                        : 'text-text-muted'
-                    }`}>
-                      Upload
-                    </span>
-                  </div>
+                {/* Step icons and labels with connecting lines */}
+                <div className="flex items-center justify-between relative">
+                  {[
+                    { key: 'upload', icon: Upload, label: 'Upload' },
+                    { key: 'extract', icon: FileText, label: 'Extract' },
+                    { key: 'chunk', icon: BarChart3, label: 'Chunk' },
+                    { key: 'analyze', icon: Play, label: 'Analyze' }
+                  ].map((step, index) => {
+                    const Icon = step.icon;
+                    const isActive = 
+                      (step.key === 'upload' && ['upload', 'uploaded', 'extracting'].includes(currentStep)) ||
+                      (step.key === 'extract' && ['extracting', 'extracted', 'chunking'].includes(currentStep)) ||
+                      (step.key === 'chunk' && ['chunking', 'chunked', 'analyzing'].includes(currentStep)) ||
+                      (step.key === 'analyze' && ['analyzing', 'analyzed'].includes(currentStep));
+                    
+                    const isCompleted = 
+                      (step.key === 'upload' && ['extracted', 'chunked', 'analyzed'].includes(currentStep)) ||
+                      (step.key === 'extract' && ['chunked', 'analyzed'].includes(currentStep)) ||
+                      (step.key === 'chunk' && ['analyzed'].includes(currentStep));
 
-                  {/* Extract Step */}
-                  <div className="flex flex-col items-center">
-                    <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                      ['extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)
-                        ? 'bg-purple-100 border-purple-300 text-purple-700 shadow-sm' 
-                        : currentStep === 'extracting'
-                        ? 'bg-purple-100 border-purple-400 text-purple-700 shadow-md ring-2 ring-purple-200'
-                        : 'bg-bg-secondary border-border-primary text-text-muted'
-                    }`}>
-                      <FileText className="h-6 w-6" />
-                    </div>
-                    <span className={`mt-3 text-sm font-normal transition-colors ${
-                      ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)
-                        ? 'text-text-primary' 
-                        : 'text-text-muted'
-                    }`}>
-                      Extract
-                    </span>
-                  </div>
+                    // Show connecting line to next step if current step is completed
+                    const showCompletedLine = 
+                      (step.key === 'upload' && ['extracted', 'chunked', 'analyzed'].includes(currentStep)) ||
+                      (step.key === 'extract' && ['chunked', 'analyzed'].includes(currentStep)) ||
+                      (step.key === 'chunk' && ['analyzed'].includes(currentStep));
 
-                  {/* Chunk Step */}
-                  <div className="flex flex-col items-center">
-                    <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                      ['chunked', 'analyzing', 'analyzed'].includes(currentStep)
-                        ? 'bg-purple-100 border-purple-300 text-purple-700 shadow-sm' 
-                        : currentStep === 'chunking'
-                        ? 'bg-purple-100 border-purple-400 text-purple-700 shadow-md ring-2 ring-purple-200'
-                        : 'bg-bg-secondary border-border-primary text-text-muted'
-                    }`}>
-                      <BarChart3 className="h-6 w-6" />
-                    </div>
-                    <span className={`mt-3 text-sm font-normal transition-colors ${
-                      ['chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)
-                        ? 'text-text-primary' 
-                        : 'text-text-muted'
-                    }`}>
-                      Chunk
-                    </span>
-                  </div>
+                    const showActiveLine = 
+                      (step.key === 'upload' && ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
+                      (step.key === 'extract' && ['chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
+                      (step.key === 'chunk' && ['analyzing', 'analyzed'].includes(currentStep));
 
-                  {/* Analyze Step */}
-                  <div className="flex flex-col items-center">
-                    <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${
-                      currentStep === 'analyzed'
-                        ? 'bg-purple-100 border-purple-300 text-purple-700 shadow-sm' 
-                        : currentStep === 'analyzing'
-                        ? 'bg-purple-100 border-purple-400 text-purple-700 shadow-md ring-2 ring-purple-200'
-                        : 'bg-bg-secondary border-border-primary text-text-muted'
-                    }`}>
-                      <Play className="h-6 w-6" />
-                    </div>
-                    <span className={`mt-3 text-sm font-normal transition-colors ${
-                      ['analyzing', 'analyzed'].includes(currentStep)
-                        ? 'text-text-primary' 
-                        : 'text-text-muted'
-                    }`}>
-                      Analyze
-                    </span>
-                  </div>
+                    return (
+                      <div key={step.key} className="flex flex-col items-center relative z-10 flex-1">
+                        {/* Connecting line to next step */}
+                        {index < 3 && (
+                          <div 
+                            className="absolute top-5 left-1/2 w-full h-1 transition-all duration-500"
+                            style={{
+                              backgroundColor: showCompletedLine 
+                                ? 'rgba(102, 57, 208, 1)' 
+                                : showActiveLine 
+                                ? 'rgba(102, 57, 208, 0.5)'
+                                : 'var(--border-secondary)',
+                              zIndex: 1
+                            }}
+                          />
+                        )}
+                        
+                        <div 
+                          className="w-10 h-10 rounded-lg border flex items-center justify-center transition-all duration-300 relative z-20"
+                          style={{
+                            backgroundColor: isCompleted 
+                              ? 'rgba(102, 57, 208, 1)'
+                              : isActive 
+                              ? 'rgba(102, 57, 208, 0.2)'
+                              : 'var(--bg-secondary)',
+                            borderColor: isCompleted || isActive 
+                              ? 'rgba(102, 57, 208, 1)'
+                              : 'var(--border-primary)',
+                            color: isCompleted 
+                              ? 'white'
+                              : isActive 
+                              ? 'rgba(102, 57, 208, 1)'
+                              : 'var(--text-muted)',
+                            transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                            boxShadow: isCompleted ? '0 4px 12px rgba(102, 57, 208, 0.3)' : 'none'
+                          }}
+                        >
+                          {isCompleted ? <CheckCircle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                        </div>
+                        <span 
+                          className="mt-3 text-sm font-medium transition-colors"
+                          style={{
+                            color: isActive || isCompleted ? 'var(--text-primary)' : 'var(--text-muted)'
+                          }}
+                        >
+                          {step.label}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
-              <div className="upload-card">
-                {!user ? (
-                  <>
-                    <div className="upload-icon">
-                      <Upload className="h-8 w-8" />
-                    </div>
-                    <h2 className="upload-title">Start Processing</h2>
-                    <p className="upload-description">Sign in to upload your files</p>
-                    
-                    <button
-                      onClick={() => setShowAuthModal(true)}
-                      className="upload-button"
-                    >
-                      Sign In
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="upload-icon">
-                      <Upload className="h-8 w-8" />
-                    </div>
-                    <h2 className="upload-title">Upload Document</h2>
-                    <p className="upload-description">JSON, TXT, CSV, ZIP, and HTML formats supported</p>
-                    
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".json,.txt,.csv,.zip,.html"
-                      onChange={handleFileSelect}
-                      className="upload-input"
-                    />
-                    
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="upload-button"
-                    >
-                      Choose File
-                    </button>
-                  </>
-                )}
+              <div className="bg-bg-card border border-border-primary rounded-lg p-8 text-center">
+                <div className="w-16 h-16 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <Upload className="h-8 w-8 text-accent-primary" />
+                </div>
+                <h3 className="text-lg font-semibold text-text-primary mb-2">Upload Document</h3>
+                <p className="text-text-secondary mb-6">JSON, TXT, CSV, ZIP, and HTML formats supported</p>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,.txt,.csv,.zip,.html"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors"
+                >
+                  Choose File
+                </button>
               </div>
             )}
 
             {/* File Selected */}
             {file && currentStep === 'uploaded' && (
-              <div className="content-card">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="step-icon step-complete">
-                    <CheckCircle className="h-4 w-4" />
+              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
                   </div>
-                  <h2 style={{fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.01em'}}>
-                    File Selected
-                  </h2>
+                  <h3 className="text-lg font-semibold text-text-primary">File Selected</h3>
                 </div>
                 
-                <div className="flex items-center space-x-4 mb-6">
-                  <FileText className="h-8 w-8 text-primary" />
+                <div className="flex items-center space-x-4 mb-6 p-4 bg-bg-secondary rounded-lg">
+                  <FileText className="h-8 w-8 text-accent-primary" />
                   <div>
-                    <p className="text-primary font-medium">{file.name}</p>
-                    <p className="text-secondary text-sm">
+                    <p className="font-medium text-text-primary">{file.name}</p>
+                    <p className="text-sm text-text-secondary">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                   </div>
@@ -761,122 +768,101 @@ export default function ProcessPage() {
                 <button
                   onClick={handleExtract}
                   disabled={isProcessing}
-                  className="btn-primary-improved"
+                  className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
                 >
                   <FileText className="h-4 w-4" />
-                  Extract Content
+                  <span>Extract Content</span>
                 </button>
               </div>
             )}
 
             {/* Extraction Complete */}
             {extractionData && currentStep === 'extracted' && (
-              <div className="content-card">
+              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
-                  <div className="step-icon step-complete">
-                    <FileText className="h-4 w-4" />
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-green-600" />
                   </div>
-                  <h2 style={{fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', letterSpacing: '-0.01em'}}>
-                    Extraction Complete
-                  </h2>
+                  <h3 className="text-lg font-semibold text-text-primary">Extraction Complete</h3>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="stat-card">
-                    <div className="stat-number">{extractionData.conversation_count}</div>
-                    <div className="stat-label">Conversations</div>
+      
+
+                <div className="p-4 bg-accent-primary/5 border border-accent-primary/20 rounded-lg mb-6">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <CheckCircle className="h-4 w-4 text-accent-primary" />
+                    <div className="text-sm font-medium text-text-primary">Successfully extracted your context data</div>
                   </div>
-                  <div className="stat-card">
-                    <div className="stat-number">{extractionData.message_count}</div>
-                    <div className="stat-label">Messages</div>
+                  <div className="text-xs text-text-secondary">
+                    Your chat export has been processed and is ready for intelligent chunking
                   </div>
                 </div>
 
                 {costEstimate && (
-                  <div className="cost-estimate">
-                    <div className="cost-title">Estimated Costs</div>
-                    <div className="cost-details">
-                      <div className="cost-item">
-                        <span>Input:</span>
-                        <span>${costEstimate.estimated_input_cost.toFixed(4)}</span>
-                      </div>
-                      <div className="cost-item">
-                        <span>Output:</span>
-                        <span>${costEstimate.estimated_output_cost.toFixed(4)}</span>
-                      </div>
-                      <div className="cost-item cost-total">
-                        <span>Total:</span>
-                        <span>${costEstimate.estimated_total_cost.toFixed(4)}</span>
-                      </div>
+                  <div className="p-4 bg-bg-secondary rounded-lg mb-6">
+                    <div className="text-sm font-medium text-text-primary mb-2">Estimated Cost</div>
+                    <div className="text-lg font-bold text-text-primary">
+                      ${costEstimate.estimated_total_cost.toFixed(4)}
                     </div>
-                    <div className="cost-note">
-                      Estimate includes {costEstimate.estimated_output_tokens.toLocaleString()} output tokens at $0.400/1M tokens
+                    <div className="text-xs text-text-secondary">
+                      {costEstimate.estimated_output_tokens.toLocaleString()} output tokens estimated
                     </div>
                   </div>
                 )}
 
-                <div className="mt-6">
-                  <button
-                    onClick={handleChunk}
-                    disabled={isProcessing}
-                    className="btn-primary-improved"
-                  >
-                    <BarChart3 className="h-4 w-4" />
-                    Create Chunks
-                  </button>
-                </div>
+                <button
+                  onClick={handleChunk}
+                  disabled={isProcessing}
+                  className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Create Chunks</span>
+                </button>
               </div>
             )}
 
             {/* Chunk Actions */}
             {['chunked', 'analyzing', 'analyzed'].includes(currentStep) && chunkData && (
-              <div className="content-card">
+              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
-                  <div className="step-icon step-complete">
-                    <BarChart3 className="h-4 w-4" />
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <BarChart3 className="h-5 w-5 text-green-600" />
                   </div>
-                  <h2 className="text-xl">Chunking Complete</h2>
+                  <h3 className="text-lg font-semibold text-text-primary">Chunking Complete</h3>
                 </div>
 
-                <div className="flex space-x-4">
+                <div className="flex space-x-3">
                   <button
                     onClick={() => setShowChunkModal(true)}
-                    className="btn-secondary-improved"
+                    className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors flex items-center space-x-2"
                   >
                     <BarChart3 className="h-4 w-4" />
-                    Select Chunks
+                    <span>Select Chunks</span>
                   </button>
 
                   {currentStep === 'chunked' && (
                     <button
                       onClick={() => {
                         if (selectedChunks.size === 0) {
-                          // If no chunks selected, select all chunks automatically
                           const allChunkIds = new Set(availableChunks.map((_, index) => index));
                           setSelectedChunks(allChunkIds);
-                          // Then analyze
                           setTimeout(() => handleAnalyze(), 100);
                         } else {
                           handleAnalyze();
                         }
                       }}
                       disabled={isProcessing || (paymentLimits ? !paymentLimits.canProcess : true)}
-                      className={`btn-primary-improved ${
-                        (paymentLimits && !paymentLimits.canProcess) ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                      title={
-                        (paymentLimits && !paymentLimits.canProcess)
-                        ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
-                        : ''
-                      }
+                      className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-2 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
                     >
                       <Play className="h-4 w-4" />
-                      {(paymentLimits && !paymentLimits.canProcess)
-                        ? `Limit Reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed})`
-                        : selectedChunks.size > 0
-                        ? `Analyze Selected (${selectedChunks.size})`
-                        : `Analyze All Chunks (${availableChunks.length})`
-                      }
+                      <span>
+                        {(paymentLimits && !paymentLimits.canProcess)
+                          ? 'AI Analysis Limit Reached'
+                          : selectedChunks.size > 0
+                          ? `Analyze Selected (${selectedChunks.size})`
+                          : `Analyze All (${availableChunks.length})`
+                        }
+                      </span>
                     </button>
                   )}
                 </div>
@@ -885,26 +871,27 @@ export default function ProcessPage() {
 
             {/* Analysis Progress */}
             {currentStep === 'analyzing' && (
-              <div className="content-card">
+              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-4">
-                  <div className="step-icon">
-                    <Terminal className="h-4 w-4" />
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Terminal className="h-5 w-5 text-blue-600" />
                   </div>
-                  <h2 className="text-xl">Analysis in Progress</h2>
+                  <h3 className="text-lg font-semibold text-text-primary">Analysis in Progress</h3>
                 </div>
+                
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Progress</span>
-                    <span className="text-gray-900">{progress}%</span>
+                    <span className="text-text-secondary">Progress</span>
+                    <span className="text-text-primary font-medium">{progress}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-bg-secondary rounded-full h-2">
                     <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      className="bg-accent-primary h-2 rounded-full transition-all duration-300"
                       style={{ width: `${progress}%` }}
                     ></div>
                   </div>
                   {analysisStartTime && (
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-text-secondary">
                       Elapsed: {Math.round((Date.now() - analysisStartTime) / 1000)}s
                     </div>
                   )}
@@ -914,28 +901,28 @@ export default function ProcessPage() {
 
             {/* Analysis Complete */}
             {currentStep === 'analyzed' && (
-              <div className="content-card">
+              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
-                  <div className="step-icon step-complete">
-                    <CheckCircle className="h-4 w-4" />
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
                   </div>
-                  <h2 className="text-xl">Analysis Complete</h2>
+                  <h3 className="text-lg font-semibold text-text-primary">Analysis Complete</h3>
                 </div>
 
-                <div className="flex space-x-4">
+                <div className="flex space-x-3">
                   <button
                     onClick={viewResults}
-                    className="btn-primary-improved"
+                    className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors flex items-center space-x-2"
                   >
                     <ExternalLink className="h-4 w-4" />
-                    View Results
+                    <span>View Results</span>
                   </button>
                   <button
                     onClick={() => setShowDownloadModal(true)}
-                    className="btn-secondary-improved"
+                    className="px-6 py-3 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors flex items-center space-x-2"
                   >
                     <Download className="h-4 w-4" />
-                    Download Pack
+                    <span>Download Pack</span>
                   </button>
                 </div>
               </div>
@@ -943,17 +930,17 @@ export default function ProcessPage() {
 
             {/* Process Logs */}
             {logs.length > 0 && (
-              <div className="content-card">
+              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-4">
-                  <div className="step-icon">
-                    <Terminal className="h-4 w-4" />
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <Terminal className="h-5 w-5 text-gray-600" />
                   </div>
-                  <h2 className="text-lg">Process Log</h2>
+                  <h3 className="text-lg font-semibold text-text-primary">Process Log</h3>
                 </div>
                 
-                <div className="log-container">
+                <div className="bg-bg-secondary rounded-lg p-4 max-h-48 overflow-y-auto">
                   {logs.map((log, index) => (
-                    <div key={index} className="log-entry">
+                    <div key={index} className="text-sm text-text-secondary font-mono mb-1">
                       {log}
                     </div>
                   ))}
@@ -984,13 +971,13 @@ export default function ProcessPage() {
                 <div className="chunk-selection-actions">
                   <button
                     onClick={() => setSelectedChunks(new Set())}
-                    className="btn-secondary-improved"
+                    className="px-3 py-1 text-sm border border-border-secondary rounded text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
                   >
                     Clear All
                   </button>
                   <button
                     onClick={handleSelectAll}
-                    className="btn-primary-improved"
+                    className="px-3 py-1 text-sm bg-bg-secondary border border-border-primary text-text-primary rounded hover:bg-bg-tertiary hover:border-border-accent transition-colors"
                   >
                     {selectedChunks.size === availableChunks.length ? 'Deselect All' : 'Select All'}
                   </button>
@@ -1033,7 +1020,7 @@ export default function ProcessPage() {
               <div className="modal-footer">
                 <button
                   onClick={() => setShowChunkModal(false)}
-                  className="btn-secondary-improved"
+                  className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
                 >
                   Cancel
                 </button>
@@ -1045,7 +1032,7 @@ export default function ProcessPage() {
                     }
                   }}
                   disabled={selectedChunks.size === 0 || (paymentLimits ? !paymentLimits.canProcess : true)}
-                  className="btn-primary-improved disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-bg-secondary border border-border-primary text-text-primary rounded-lg hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   title={
                     (paymentLimits && !paymentLimits.canProcess)
                     ? `Free tier limit reached (${paymentLimits.chunks_used}/${paymentLimits.chunks_allowed}). Upgrade to Pro to continue.`
@@ -1083,22 +1070,160 @@ export default function ProcessPage() {
               <div className="flex space-x-3">
                 <button
                   onClick={() => setShowDownloadModal(false)}
-                  className="btn-secondary-improved"
+                  className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={downloadPack}
-                  className="btn-primary-improved"
+                  className="px-4 py-2 bg-bg-secondary border border-border-primary text-text-primary rounded-lg hover:bg-bg-tertiary hover:border-border-accent transition-colors flex items-center space-x-2"
                 >
                   <Download className="h-4 w-4" />
-                  Download
+                  <span>Download</span>
                 </button>
               </div>
             </div>
           </div>
         )}
-        </div>
+        
+        {/* Chunk Selection Modal */}
+        {showChunkModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-bg-card border border-border-primary rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between p-6 border-b border-border-primary">
+                <h3 className="text-lg font-semibold text-text-primary">Select Chunks to Analyze</h3>
+                <button
+                  onClick={() => setShowChunkModal(false)}
+                  className="text-text-muted hover:text-text-primary"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 border-b border-border-primary">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-text-secondary">
+                    {selectedChunks.size} of {availableChunks.length} chunks selected
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setSelectedChunks(new Set())}
+                      className="px-3 py-1 text-sm border border-border-secondary rounded text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
+                    >
+                      Clear All
+                    </button>
+                    <button
+                      onClick={handleSelectAll}
+                      className="px-3 py-1 text-sm bg-bg-secondary border border-border-primary text-text-primary rounded hover:bg-bg-tertiary hover:border-border-accent transition-colors"
+                    >
+                      {selectedChunks.size === availableChunks.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                {availableChunks.map((chunk, index) => (
+                  <div
+                    key={index}
+                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                      selectedChunks.has(index) 
+                        ? 'border-accent-primary bg-accent-primary/5' 
+                        : 'border-border-primary hover:border-border-accent'
+                    }`}
+                    onClick={() => handleChunkToggle(index)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-text-primary mb-1">
+                          Chunk {index + 1}
+                        </div>
+                        <div className="text-sm text-text-secondary mb-2">
+                          {chunk.token_count || 0} tokens
+                        </div>
+                        <div className="text-sm text-text-muted line-clamp-2">
+                          {chunk.preview || 'No content available'}
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ml-3 ${
+                        selectedChunks.has(index) 
+                          ? 'border-accent-primary bg-accent-primary text-white' 
+                          : 'border-border-primary'
+                      }`}>
+                        {selectedChunks.has(index) && (
+                          <CheckCircle className="h-3 w-3" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end space-x-3 p-6 border-t border-border-primary">
+                <button
+                  onClick={() => setShowChunkModal(false)}
+                  className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowChunkModal(false);
+                    if (selectedChunks.size > 0) {
+                      handleAnalyze();
+                    }
+                  }}
+                  disabled={selectedChunks.size === 0 || (paymentLimits ? !paymentLimits.canProcess : true)}
+                  className="px-4 py-2 bg-bg-secondary border border-border-primary text-text-primary rounded-lg hover:bg-bg-tertiary hover:border-border-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {(paymentLimits && !paymentLimits.canProcess)
+                    ? 'Limit Reached'
+                    : `Analyze Selected (${selectedChunks.size})`
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Download Modal */}
+        {showDownloadModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-bg-card border border-border-primary rounded-lg max-w-md w-full mx-4">
+              <div className="flex items-center justify-between p-6 border-b border-border-primary">
+                <h3 className="text-lg font-semibold text-text-primary">Download Pack</h3>
+                <button
+                  onClick={() => setShowDownloadModal(false)}
+                  className="text-text-muted hover:text-text-primary"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <p className="text-text-secondary mb-6">
+                  Your analysis pack is ready for download. This includes the original data, chunks, and AI analysis results.
+                </p>
+                
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowDownloadModal(false)}
+                    className="px-4 py-2 border border-border-primary rounded-lg text-text-primary hover:border-border-accent transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={downloadPack}
+                    className="px-4 py-2 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/90 transition-colors flex items-center space-x-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Download</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Auth Modal */}
@@ -1109,21 +1234,10 @@ export default function ProcessPage() {
         />
       )}
 
-      {/* Floating Payment Button with Chunk Usage */}
+      {/* Floating Payment Button */}
       <button
         onClick={() => router.push('/pricing')}
-        className="fixed top-24 right-6 z-40 flex items-center gap-2 px-4 py-2 rounded-business shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer"
-        style={{ 
-          backgroundColor: 'var(--bg-card)', 
-          border: '1px solid var(--border-primary)',
-          color: 'var(--text-primary)'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.05)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)'
-        }}
+        className="fixed top-24 right-6 z-40 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer bg-bg-card border border-border-primary text-text-primary hover:border-border-accent"
       >
         <CreditCard className="w-4 h-4" />
         <span className="text-sm font-medium">
