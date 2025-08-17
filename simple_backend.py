@@ -83,6 +83,11 @@ security = HTTPBearer()
 class AnalyzeRequest(BaseModel):
     pass  # No longer need API key field
 
+class CreditPurchaseRequest(BaseModel):
+    credits: int
+    amount: float
+    package_id: str = None
+
 # User model for authentication
 class AuthenticatedUser:
     def __init__(self, user_id: str, email: str, r2_directory: str):
@@ -1313,35 +1318,58 @@ async def get_payment_status(user: AuthenticatedUser = Depends(get_current_user)
         print(f"Error getting payment status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get payment status: {str(e)}")
 
-@app.post("/api/payment/upgrade")
-async def upgrade_plan(plan: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Upgrade user's plan (will integrate with Stripe later)"""
+@app.post("/api/payment/purchase-credits")
+async def purchase_credits(request: CreditPurchaseRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    """Purchase credits for pay-per-chunk analysis"""
     try:
         if not supabase:
             raise HTTPException(status_code=500, detail="Payment system not available")
         
-        valid_plans = ["pro_basic", "pro_plus", "pro", "business"]  # Include legacy plans
-        if plan not in valid_plans:
-            raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {valid_plans}")
+        if request.credits <= 0:
+            raise HTTPException(status_code=400, detail="Credits must be greater than 0")
         
-        # Update user's plan in database
-        update_data = {"payment_plan": plan}
+        if request.amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be greater than 0")
         
-        # Reset chunks for any plan upgrade
-        update_data["chunks_analyzed"] = 0
+        # Get current user profile
+        result = supabase.table("user_profiles").select("*").eq("id", user.user_id).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="User profile not found")
         
-        result = supabase.table("user_profiles").update(update_data).eq("id", user.user_id).execute()
+        current_profile = result.data[0]
+        current_credits = current_profile.get("credits_balance", 0)
+        
+        # Add purchased credits to current balance
+        new_credits_balance = current_credits + request.credits
+        
+        # Update user's credit balance
+        update_result = supabase.table("user_profiles").update({
+            "credits_balance": new_credits_balance,
+            "payment_plan": "credits"  # Switch to credit-based plan
+        }).eq("id", user.user_id).execute()
+        
+        # Log the purchase transaction
+        transaction_result = supabase.table("credit_transactions").insert({
+            "user_id": user.user_id,
+            "transaction_type": "purchase",
+            "credits": request.credits,
+            "amount": request.amount,
+            "package_id": request.package_id,
+            "created_at": "now()"
+        }).execute()
         
         return {
-            "status": "upgraded",
-            "plan": plan,
-            "user_id": user.user_id,
-            "message": f"Successfully upgraded to {plan} plan"
+            "status": "success",
+            "credits_purchased": request.credits,
+            "amount_paid": request.amount,
+            "new_balance": new_credits_balance,
+            "package_id": request.package_id,
+            "message": f"Successfully purchased {request.credits} credits"
         }
         
     except Exception as e:
-        print(f"Error upgrading plan: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to upgrade plan: {str(e)}")
+        print(f"Error purchasing credits: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to purchase credits: {str(e)}")
 
 @app.post("/api/analyze/{job_id}")
 async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: AuthenticatedUser = Depends(get_current_user)):
@@ -1359,25 +1387,19 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         chunk_metadata = json.loads(chunk_metadata_content)
         total_chunks = chunk_metadata["total_chunks"]
         
-        # Determine how many chunks to process based on payment plan
-        if payment_status["plan"] == "free":
-            # Free users get 5 chunks max, and it's account-wide
-            chunks_remaining = max(0, payment_status["chunks_allowed"] - payment_status["chunks_used"])
-            chunks_to_process = min(chunks_remaining, total_chunks, 5)
-            
-            if chunks_to_process <= 0:
-                return {
-                    "job_id": job_id,
-                    "status": "limit_reached",
-                    "message": "Free tier limit reached. Upgrade to Pro plan to analyze all chunks.",
-                    "chunks_used": payment_status["chunks_used"],
-                    "chunks_allowed": payment_status["chunks_allowed"],
-                    "total_chunks": total_chunks,
-                    "upgrade_required": True
-                }
-        else:
-            # Pro/Business users get unlimited chunks
-            chunks_to_process = total_chunks
+        # Credit-based system only: check available credits
+        available_credits = payment_status.get("credits_balance", 0)
+        chunks_to_process = min(available_credits, total_chunks)
+        
+        if chunks_to_process <= 0:
+            return {
+                "job_id": job_id,
+                "status": "limit_reached", 
+                "message": "No credits available. Purchase credits to analyze chunks.",
+                "credits_balance": available_credits,
+                "total_chunks": total_chunks,
+                "upgrade_required": True
+            }
         
         
         
