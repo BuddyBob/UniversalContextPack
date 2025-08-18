@@ -12,7 +12,13 @@ import ssl
 import urllib3
 import asyncio
 from datetime import datetime
+import time
+import warnings
 from typing import List, Dict, Any, Optional
+
+# Suppress SSL warnings for R2 storage
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from pathlib import Path
 import tiktoken
 from openai import OpenAI
@@ -110,7 +116,7 @@ def check_rate_limit(user_id: str, limit_type: str = "payment", max_attempts: in
 
 # Request models
 class AnalyzeRequest(BaseModel):
-    pass  # No longer need API key field
+    selected_chunks: List[int] = None  # List of chunk numbers selected by user
 
 class CreditPurchaseRequest(BaseModel):
     credits: int
@@ -422,9 +428,12 @@ async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str
     """Create a pack record in Supabase"""
     
     if not supabase:
+        print(f"❌ Supabase client not available for pack creation")
         return None
     
     try:
+        print(f"🔄 Creating pack in database for job {job_id}...")
+        
         # First check if the job exists using backend function
         job_check_result = supabase.rpc("check_job_exists_for_backend", {
             "user_uuid": user.user_id,
@@ -432,11 +441,14 @@ async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str
         }).execute()
         
         if not job_check_result.data or not job_check_result.data[0]["job_exists"]:
+            print(f"❌ Job {job_id} does not exist in database - cannot create pack")
             return None
         else:
             job_status = job_check_result.data[0]["current_status"]
+            print(f"✅ Job {job_id} exists with status: {job_status}")
         
         # Create pack using backend function
+        print(f"🔄 Calling create_pack_for_backend with pack_name: {pack_name}")
         result = supabase.rpc("create_pack_for_backend", {
             "user_uuid": user.user_id,
             "target_job_id": job_id,
@@ -449,22 +461,21 @@ async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str
         }).execute()
         
         if result.data and len(result.data) > 0:
-            return result.data[0]
+            pack_data = result.data[0]
+            print(f"✅ Pack successfully created in database:")
+            print(f"   Pack ID: {pack_data.get('pack_id')}")
+            print(f"   Pack Name: {pack_data.get('pack_name_out')}")
+            print(f"   Job ID: {pack_data.get('pack_job_id')}")
+            return pack_data
         else:
+            print(f"❌ Pack creation returned no data: {result}")
             return None
             
     except Exception as e:
+        print(f"❌ Error creating pack in database: {e}")
+        import traceback
+        print(f"   Traceback: {traceback.format_exc()}")
         return None
-        
-        if result.data:
-            print(f"Successfully created pack in database: {result.data[0]}")
-            return result.data[0]
-        else:
-            print(f"Pack insertion returned no data: {result}")
-            return None
-            
-    except Exception as e:
-        print(f"Error creating pack in database: {e}")
         import traceback
         print(f"Full error traceback: {traceback.format_exc()}")
         return None
@@ -650,25 +661,30 @@ def download_from_r2(key: str, silent_404: bool = False) -> str:
             if not silent_404:
                 print(f"R2 download failed ({response.status_code}): {response.text}")
                 print(f"R2 download failed ({response.status_code}), trying local storage...")
-            # Fall back to local storage
-            local_path = f"local_storage/{key}"
-            with open(local_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            print(f"Successfully downloaded from local storage: {key} ({len(content)} chars)")
-            return content
+                # Fall back to local storage only if not silent
+                local_path = f"local_storage/{key}"
+                with open(local_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                print(f"Successfully downloaded from local storage: {key} ({len(content)} chars)")
+                return content
+            else:
+                # Silent mode - don't fall back to local storage
+                return None
             
     except Exception as e:
         if not silent_404:
             print(f"Error downloading from R2, trying local storage: {e}")
-        try:
-            local_path = f"local_storage/{key}"
-            with open(local_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            print(f"Successfully downloaded from local storage: {key} ({len(content)} chars)")
-            return content
-        except Exception as local_error:
-            if not silent_404:
+            try:
+                local_path = f"local_storage/{key}"
+                with open(local_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                print(f"Successfully downloaded from local storage: {key} ({len(content)} chars)")
+                return content
+            except Exception as local_error:
                 print(f"Error downloading from local storage: {local_error}")
+                return None
+        else:
+            # Silent mode - don't fall back to local storage
             return None
 
 def list_r2_objects(prefix: str = "") -> List[str]:
@@ -1000,11 +1016,17 @@ async def extract_text(file: UploadFile = File(...), current_user: Authenticated
         raise HTTPException(status_code=500, detail=f"Failed to start extraction: {str(e)}")
 
 async def process_extraction_background(job_id: str, file_content: str, filename: str, user: AuthenticatedUser):
-    """Background task for processing text extraction with progress updates."""
+    """Background task for processing text extraction with progress updates and timing."""
+    extraction_start_time = time.time()
+    extracted_texts = []
+    conversations_count = 0
+    messages_count = 0
+    
     try:
         await update_job_status_in_db(user, job_id, "processing", 10, metadata={"step": "parsing_content"})
         
-        extracted_texts = []
+        file_size_bytes = len(file_content.encode('utf-8'))
+        print(f"Starting extraction timing for {filename} ({file_size_bytes} bytes)")
         
         try:
             # Try parsing as JSON first
@@ -1042,17 +1064,64 @@ async def process_extraction_background(job_id: str, file_content: str, filename
                     update_job_progress(job_id, "extracting", 50, message)
             
             extracted_texts = extract_text_from_structure(json_data, progress_callback=progress_callback)
+            
+            # Count conversations and messages if this is WhatsApp/Telegram data
+            if isinstance(json_data, dict):
+                if 'messages' in json_data:
+                    messages_count = len(json_data.get('messages', []))
+                    conversations_count = 1
+                elif 'chats' in json_data:
+                    conversations_count = len(json_data.get('chats', []))
+                    for chat in json_data.get('chats', []):
+                        if isinstance(chat, dict) and 'messages' in chat:
+                            messages_count += len(chat.get('messages', []))
+            elif isinstance(json_data, list):
+                # Handle array of conversations
+                conversations_count = len(json_data)
+                for item in json_data:
+                    if isinstance(item, dict) and 'messages' in item:
+                        messages_count += len(item.get('messages', []))
+                        
         except json.JSONDecodeError:
             # Fallback to text processing using enhanced function
             print("Processing as text content...")
             update_job_progress(job_id, "extracting", 30, "Processing as text content...")
             extracted_texts = extract_from_text_content(file_content)
+            # For text files, estimate conversations and messages
+            conversations_count = len(extracted_texts) // 10  # Rough estimate
+            messages_count = len(extracted_texts)
 
+        # Calculate extraction timing
+        extraction_end_time = time.time()
+        extraction_duration = extraction_end_time - extraction_start_time
+        
         if not extracted_texts:
             update_job_progress(job_id, "extracting", 0, "Error: No meaningful text found in file")
             return
 
-        print(f"Extracted {len(extracted_texts)} meaningful text entries")
+        print(f"Extracted {len(extracted_texts)} meaningful text entries in {extraction_duration:.2f} seconds")
+        
+        # Create and log extraction timing
+        extraction_metrics = calculate_extraction_metrics(
+            file_size_bytes, extraction_duration, conversations_count, messages_count
+        )
+        
+        extraction_timing = ExtractionTiming(
+            file_name=filename,
+            file_size_bytes=file_size_bytes,
+            file_size_mb=extraction_metrics['file_size_mb'],
+            extraction_start_time=extraction_start_time,
+            extraction_end_time=extraction_end_time,
+            extraction_duration_seconds=extraction_duration,
+            conversations_extracted=conversations_count,
+            messages_extracted=messages_count,
+            extraction_rate_mb_per_second=extraction_metrics['extraction_rate_mb_per_second'],
+            extraction_rate_conversations_per_second=extraction_metrics['extraction_rate_conversations_per_second'],
+            timestamp=datetime.now().isoformat()
+        )
+        
+        performance_timer.log_extraction_timing(extraction_timing)
+        
         update_job_progress(job_id, "extracting", 80, f"Extracted {len(extracted_texts)} meaningful text entries")
 
         # Save extracted text to R2
@@ -1091,14 +1160,21 @@ async def process_extraction_background(job_id: str, file_content: str, filename
         print("Upload successful, proceeding...")
         update_job_progress(job_id, "extracted", 100, "Text extraction completed successfully")
         
-        # Create job summary for better organization
+        # Create job summary for better organization - include timing data
         job_summary = {
             "job_id": job_id,
             "created_at": datetime.utcnow().isoformat(),
             "status": "extracted",
             "extracted_count": len(extracted_texts),
             "content_size": len(extracted_content),
-            "preview": extracted_texts[:3] if len(extracted_texts) > 3 else extracted_texts
+            "preview": extracted_texts[:3] if len(extracted_texts) > 3 else extracted_texts,
+            "extraction_timing": {
+                "duration_seconds": extraction_duration,
+                "file_size_mb": extraction_metrics['file_size_mb'],
+                "extraction_rate_mb_per_second": extraction_metrics['extraction_rate_mb_per_second'],
+                "conversations_extracted": conversations_count,
+                "messages_extracted": messages_count
+            }
         }
         upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
         
@@ -1113,14 +1189,14 @@ async def get_extraction_results(job_id: str, user: AuthenticatedUser = Depends(
     """Get final extraction results after background processing completes."""
     try:
         # Check if extracted
-        extracted_exists = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt") is not None
+        extracted_exists = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt", silent_404=True) is not None
         
         # Check if chunked
-        chunks_metadata = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+        chunks_metadata = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", silent_404=True)
         chunks_exist = chunks_metadata is not None
         
         # Check if completed (analysis done)
-        summary = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json")
+        summary = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json", silent_404=True)
         completed = summary is not None
         
         if completed:
@@ -1209,6 +1285,144 @@ async def estimate_processing_cost(job_id: str, user: AuthenticatedUser = Depend
         print(f"Error estimating cost for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to estimate cost: {str(e)}")
 
+@app.post("/api/estimate-time")
+async def estimate_processing_time(
+    file: UploadFile = File(...),
+    chunks_to_analyze: Optional[int] = None,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Estimate processing time for a file upload based on file size and historical data."""
+    try:
+        # Read file size without processing the entire file
+        content = await file.read()
+        file_size_bytes = len(content)
+        
+        # Get comprehensive time estimates
+        estimates = get_time_estimates(file_size_bytes, chunks_to_analyze)
+        
+        return {
+            "file_name": file.filename,
+            "file_size_bytes": file_size_bytes,
+            "file_size_mb": estimates["file_info"]["size_mb"],
+            "estimated_total_chunks": estimates["file_info"]["estimated_total_chunks"],
+            "chunks_to_analyze": estimates["file_info"]["chunks_to_analyze"],
+            "time_estimates": {
+                "extraction": {
+                    "seconds": round(estimates["extraction"]["seconds"], 1),
+                    "formatted": estimates["extraction"]["formatted"],
+                    "description": "Time to extract and process text from file"
+                },
+                "analysis": {
+                    "seconds": round(estimates["analysis"]["seconds"], 1),
+                    "formatted": estimates["analysis"]["formatted"],
+                    "description": f"Time to analyze {estimates['file_info']['chunks_to_analyze']} chunks with AI"
+                },
+                "total": {
+                    "seconds": round(estimates["total"]["seconds"], 1),
+                    "formatted": estimates["total"]["formatted"],
+                    "description": "Total estimated processing time"
+                }
+            },
+            "note": "Estimates based on historical performance data. Actual times may vary depending on file complexity and server load."
+        }
+        
+    except Exception as e:
+        print(f"Error estimating processing time: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to estimate time: {str(e)}")
+
+@app.get("/api/estimate-time/{job_id}")
+async def estimate_job_processing_time(
+    job_id: str, 
+    chunks_to_analyze: Optional[int] = None,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Estimate remaining processing time for an existing job."""
+    try:
+        # Get chunks metadata to determine file size and chunk count
+        chunks_metadata = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+        if not chunks_metadata:
+            raise HTTPException(status_code=404, detail="Job chunks metadata not found")
+            
+        metadata = json.loads(chunks_metadata)
+        total_chunks_available = metadata.get("total_chunks", 0)
+        
+        # If no specific chunk count provided, estimate for all chunks
+        if chunks_to_analyze is None:
+            chunks_to_analyze = total_chunks_available
+            
+        # Get analysis time estimate (extraction already done)
+        from time_estimator import time_estimator
+        analysis_estimates = time_estimator.estimate_analysis_time(chunks_to_analyze)
+        
+        return {
+            "job_id": job_id,
+            "total_chunks_available": total_chunks_available,
+            "chunks_to_analyze": chunks_to_analyze,
+            "time_estimates": {
+                "analysis": {
+                    "seconds": round(analysis_estimates["seconds"], 1),
+                    "formatted": analysis_estimates["formatted"],
+                    "description": f"Time to analyze {chunks_to_analyze} chunks with AI"
+                }
+            },
+            "note": "Extraction already completed. Estimate is for analysis phase only."
+        }
+        
+    except Exception as e:
+        print(f"Error estimating job processing time: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to estimate time: {str(e)}")
+
+@app.post("/api/estimate-chunking-time")
+async def estimate_chunking_time(
+    request_data: dict,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Estimate chunking time based on extracted text length."""
+    try:
+        text_length = request_data.get("text_length", 0)
+        job_id = request_data.get("job_id")
+        
+        if text_length <= 0:
+            raise HTTPException(status_code=400, detail="Valid text_length required")
+            
+        from time_estimator import time_estimator
+        chunking_estimates = time_estimator.estimate_chunking_time(text_length)
+        
+        return {
+            "job_id": job_id,
+            "text_length": text_length,
+            "chunking_time": {
+                "seconds": round(chunking_estimates["seconds"], 1),
+                "formatted": chunking_estimates["formatted"],
+                "description": f"Time to chunk {chunking_estimates['text_size_mb']:.1f}MB of text"
+            },
+            "estimated_chunks": chunking_estimates["estimated_chunks"],
+            "note": "Estimate based on text processing speed. Actual chunking may vary."
+        }
+        
+    except Exception as e:
+        print(f"Error estimating chunking time: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to estimate chunking time: {str(e)}")
+
+@app.get("/api/job-summary/{job_id}")
+async def get_job_summary(
+    job_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Get job summary with extraction details including text length."""
+    try:
+        # Get job summary from R2
+        job_summary_data = download_from_r2(f"{user.r2_directory}/{job_id}/job_summary.json")
+        if not job_summary_data:
+            raise HTTPException(status_code=404, detail="Job summary not found")
+            
+        summary = json.loads(job_summary_data)
+        return summary
+        
+    except Exception as e:
+        print(f"Error getting job summary: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get job summary: {str(e)}")
+
 @app.post("/api/chunk/{job_id}")
 async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
     """Step 2: Create chunks from extracted text."""
@@ -1239,6 +1453,7 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
         # Update progress only every 500 conversations or at end (reduce frequency)
         for i, conv in enumerate(conversations):
             # Update progress less frequently for performance
+            print(f"Chunking conversation {i+1}/{total_conversations}...")
             if i % 500 == 0 or i == total_conversations - 1:
                 progress_percent = 20 + (i / total_conversations * 60)  # 20% to 80%
                 update_job_progress(job_id, "chunking", progress_percent, f"Processing conversation {i+1}/{total_conversations}")
@@ -1328,11 +1543,24 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
         
         update_job_progress(job_id, "chunked", 100, f"Chunking complete! Created {len(chunks)} chunks ready for analysis", total_chunks=len(chunks))
         
+        # Add time estimates for different chunk selections
+        time_estimates = {}
+        common_selections = [1, 3, 5, 10, len(chunks)]  # Common chunk selections
+        for chunk_count in common_selections:
+            if chunk_count <= len(chunks):
+                estimates = time_estimator.estimate_analysis_time(chunk_count)
+                time_estimates[f"{chunk_count}_chunks"] = {
+                    "chunks": chunk_count,
+                    "seconds": round(estimates["seconds"], 1),
+                    "formatted": estimates["formatted"]
+                }
+        
         return {
             "job_id": job_id,
             "status": "chunked",
             "total_chunks": len(chunks),
-            "chunks": chunk_info
+            "chunks": chunk_info,
+            "time_estimates": time_estimates
         }
         
     except Exception as e:
@@ -1503,7 +1731,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
 
 @app.post("/api/analyze/{job_id}")
 async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: AuthenticatedUser = Depends(get_current_user)):
-    """Step 3: Analyze chunks with AI - with payment limits."""
+    """Step 3: Analyze chunks with AI - with payment limits and timing."""
     try:
         
         # Check payment status and limits FIRST
@@ -1511,6 +1739,7 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         
         # Get chunk metadata to see how many chunks we have
         chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+        print(chunk_metadata_content)
         if not chunk_metadata_content:
             raise HTTPException(status_code=404, detail="Chunk metadata not found")
         
@@ -1519,7 +1748,29 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         
         # Credit-based system only: check available credits
         available_credits = payment_status.get("credits_balance", 0)
-        chunks_to_process = min(available_credits, total_chunks)
+        
+        # Get user's selection from the request
+        selected_chunks = request.selected_chunks if request.selected_chunks else []
+        
+        # Determine chunks to process based on user selection and credits
+        if selected_chunks:
+            # User selected specific chunks (convert from 0-based to 1-based indexing)
+            selected_chunks_1_based = [chunk + 1 for chunk in selected_chunks]
+            requested_chunks = len(selected_chunks_1_based)
+            chunks_to_process = min(available_credits, requested_chunks)
+            actual_chunks_to_process = selected_chunks_1_based[:chunks_to_process]
+        else:
+            # No selection - process as many as credits allow
+            chunks_to_process = min(available_credits, total_chunks)
+            actual_chunks_to_process = list(range(1, chunks_to_process + 1))
+        
+        print(f"🔍 ANALYSIS DEBUG:")
+        print(f"   Available credits: {available_credits}")
+        print(f"   Total chunks found: {total_chunks}")
+        print(f"   User selected chunks (0-based): {selected_chunks}")
+        print(f"   Chunks to process: {chunks_to_process}")
+        print(f"   Actual chunks to process (1-based): {actual_chunks_to_process}")
+        print(f"   Job ID: {job_id}")
         
         if chunks_to_process <= 0:
             return {
@@ -1531,11 +1782,37 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
                 "upgrade_required": True
             }
         
+        # Start background analysis with timing
+        asyncio.create_task(process_analysis_background(job_id, chunks_to_process, total_chunks, user, payment_status, actual_chunks_to_process))
         
+        return {
+            "job_id": job_id,
+            "status": "processing",
+            "message": "Analysis started. Use the job_id to poll for progress.",
+            "chunks_to_process": chunks_to_process,
+            "selected_chunks": actual_chunks_to_process,
+            "total_chunks": total_chunks
+        }
         
+    except Exception as e:
+        print(f"Error starting analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")
+
+async def process_analysis_background(job_id: str, chunks_to_process: int, total_chunks: int, user: AuthenticatedUser, payment_status: dict, selected_chunk_numbers: List[int]):
+    """Background task for processing chunk analysis with comprehensive timing."""
+    analysis_start_time = time.time()
+    chunk_timings = []
+    
+    print(f"🚀 STARTING BACKGROUND ANALYSIS:")
+    print(f"   Job ID: {job_id}")
+    print(f"   Chunks to process: {chunks_to_process}")
+    print(f"   Selected chunk numbers: {selected_chunk_numbers}")
+    print(f"   Total chunks available: {total_chunks}")
+    print(f"   User: {user.email}")
+    
+    try:
         # Get OpenAI client (will automatically use current server API key)
         openai_client = get_openai_client()
-        
         
         ucp_prompt = """Analyze this conversation data and extract ALL unique facts to build a Universal Context Pack (UCP). Provide extremely detailed analysis in these categories:
 
@@ -1558,33 +1835,45 @@ Conversation data:
         total_cost = 0.0
         failed_chunks = []
         
-        # Process only the allowed number of chunks
-        for i in range(chunks_to_process):
+        # Process only the selected chunks
+        print(f"📊 PROCESSING SELECTED CHUNKS: {selected_chunk_numbers}")
+        for i, chunk_number in enumerate(selected_chunk_numbers):
+            chunk_start_time = time.time()
+            
+            print(f"   📝 Processing chunk {chunk_number} ({i+1}/{chunks_to_process})")
+            
             try:
-                chunk_key = f"{user.r2_directory}/{job_id}/chunk_{i+1:03d}.txt"
+                chunk_key = f"{user.r2_directory}/{job_id}/chunk_{chunk_number:03d}.txt"
+                print(f"   📁 Downloading: {chunk_key}")
                 
                 chunk_content = download_from_r2(chunk_key)
                 
                 if not chunk_content:
-                    failed_chunks.append(i+1)
+                    print(f"   ❌ Failed to download chunk {chunk_number}")
+                    failed_chunks.append(chunk_number)
                     continue
+                
+                print(f"   ✅ Downloaded chunk {chunk_number}: {len(chunk_content)} characters")
                 
                 # Update progress less frequently for better performance (every 5 chunks or important milestones)
                 if i % 5 == 0 or i == chunks_to_process - 1:
                     update_job_progress(job_id, "analyzing", 
                                       int((i / chunks_to_process) * 100), 
-                                      f"Analyzing chunk {i+1}/{chunks_to_process}...", 
+                                      f"Analyzing chunk {chunk_number} ({i+1}/{chunks_to_process})...", 
                                       current_chunk=i+1, total_chunks=chunks_to_process)
                 
                 # Process with OpenAI
+                print(f"   🤖 Sending chunk {chunk_number} to OpenAI...")
                 ai_response = openai_client.chat.completions.create(
                     model="gpt-5-nano-2025-08-07",
                     messages=[{"role": "user", "content": ucp_prompt + chunk_content}],
                     max_completion_tokens=15000,
                     timeout=120  # 2 minute timeout per chunk
                 )
+                print(f"   ✅ OpenAI response received for chunk {chunk_number}")
                 
-                # Remove redundant mid-chunk progress update for performance
+                chunk_end_time = time.time()
+                chunk_duration = chunk_end_time - chunk_start_time
                 
                 input_tokens = count_tokens(chunk_content)
                 output_tokens = ai_response.usage.completion_tokens
@@ -1598,21 +1887,52 @@ Conversation data:
                 total_output_tokens += output_tokens
                 total_cost += chunk_cost
                 
+                # Create chunk timing record
+                chunk_timing = ChunkTiming(
+                    chunk_id=chunk_number,
+                    chunk_size_tokens=input_tokens,
+                    analysis_start_time=chunk_start_time,
+                    analysis_end_time=chunk_end_time,
+                    analysis_duration_seconds=chunk_duration,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=input_tokens + output_tokens,
+                    cost_usd=chunk_cost,
+                    tokens_per_second=(input_tokens + output_tokens) / chunk_duration if chunk_duration > 0 else 0,
+                    timestamp=datetime.now().isoformat()
+                )
+                
+                chunk_timings.append(chunk_timing)
+                performance_timer.log_chunk_timing(chunk_timing)
+                
                 result = {
-                    "chunk_index": i + 1,
+                    "chunk_index": chunk_number,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
                     "cost": chunk_cost,
+                    "duration_seconds": chunk_duration,
+                    "tokens_per_second": chunk_timing.tokens_per_second,
                     "content": ai_response.choices[0].message.content,
                     "processed_at": datetime.utcnow().isoformat()
                 }
                 
                 results.append(result)
-                upload_to_r2(f"{user.r2_directory}/{job_id}/result_{i+1:03d}.json", json.dumps(result, indent=2))
+                upload_to_r2(f"{user.r2_directory}/{job_id}/result_{chunk_number:03d}.json", json.dumps(result, indent=2))
+                print(f"   💾 Saved result for chunk {chunk_number}")
                 
             except Exception as chunk_error:
-                failed_chunks.append(i+1)
+                print(f"   ❌ Error processing chunk {chunk_number}: {chunk_error}")
+                failed_chunks.append(chunk_number)
                 continue
+        
+        analysis_end_time = time.time()
+        total_analysis_duration = analysis_end_time - analysis_start_time
+        
+        print(f"🏁 ANALYSIS COMPLETE:")
+        print(f"   Requested chunks: {chunks_to_process}")
+        print(f"   Successfully processed: {len(results)}")
+        print(f"   Failed chunks: {failed_chunks}")
+        print(f"   Total duration: {total_analysis_duration:.1f} seconds")
         
         if not results:
             # Rollback credits for completely failed job
@@ -1633,17 +1953,42 @@ Conversation data:
                     "description": f"Job failure refund - {chunks_to_process} credits (Job ID: {job_id})"
                 }).execute()
                 
-                raise HTTPException(status_code=500, detail=f"All chunks failed to process. {chunks_to_process} credits have been refunded to your account.")
+                update_job_progress(job_id, "failed", 0, f"All chunks failed to process. {chunks_to_process} credits have been refunded to your account.")
+                return
                 
             except Exception as refund_error:
                 print(f"❌ Critical: Failed to refund credits for failed job: {refund_error}")
-                raise HTTPException(status_code=500, detail=f"Job failed AND credit refund failed. Please contact support with job ID: {job_id}")
+                update_job_progress(job_id, "failed", 0, f"Job failed AND credit refund failed. Please contact support with job ID: {job_id}")
+                return
         
         # Update user's chunks used count
         await update_user_chunks_used(user.user_id, len(results))
         
+        # Create comprehensive job timing record
+        average_chunk_duration = total_analysis_duration / len(results) if results else 0
+        average_tokens_per_second = (total_input_tokens + total_output_tokens) / total_analysis_duration if total_analysis_duration > 0 else 0
+        
+        job_timing = JobTiming(
+            job_id=job_id,
+            total_chunks=len(results),
+            total_start_time=analysis_start_time,
+            total_end_time=analysis_end_time,
+            total_duration_seconds=total_analysis_duration,
+            total_input_tokens=total_input_tokens,
+            total_output_tokens=total_output_tokens,
+            total_cost_usd=total_cost,
+            average_chunk_duration=average_chunk_duration,
+            average_tokens_per_second=average_tokens_per_second,
+            extraction_timing=None,  # Will be added if available
+            chunk_timings=chunk_timings,
+            timestamp=datetime.now().isoformat()
+        )
+        
+        # Log comprehensive timing data
+        performance_timer.log_job_summary(job_timing)
+        performance_timer.export_json_data(job_timing, f"timing_data_{job_id}.json")
 
-        update_job_progress(job_id, "completed", 100, f"All chunks analyzed - Universal Context Pack complete! Processed {len(results)}/{chunks_to_process} chunks")
+        update_job_progress(job_id, "completed", 100, f"All chunks analyzed - Universal Context Pack complete! Processed {len(results)}/{chunks_to_process} chunks (Duration: {total_analysis_duration:.1f}s)")
         if failed_chunks:
             print(f" Failed chunks: {failed_chunks}")
         
@@ -1674,7 +2019,7 @@ Upgrade to Pro plan ($4.99) to unlock your complete Universal Context Pack!
         upload_to_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt", aggregated_content)
 
         
-        # Save summary to R2
+        # Save summary to R2 - include timing data
         summary = {
             "job_id": job_id,
             "total_chunks": total_chunks,
@@ -1686,11 +2031,18 @@ Upgrade to Pro plan ($4.99) to unlock your complete Universal Context Pack!
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
             "total_cost": total_cost,
+            "analysis_timing": {
+                "total_duration_seconds": total_analysis_duration,
+                "total_duration_minutes": total_analysis_duration / 60,
+                "average_chunk_duration": average_chunk_duration,
+                "average_tokens_per_second": average_tokens_per_second,
+                "fastest_chunk_duration": min([ct.analysis_duration_seconds for ct in chunk_timings]) if chunk_timings else 0,
+                "slowest_chunk_duration": max([ct.analysis_duration_seconds for ct in chunk_timings]) if chunk_timings else 0
+            },
             "completed_at": datetime.utcnow().isoformat()
         }
         
         upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", json.dumps(summary, indent=2))
-        
         
         # Update job status to analyzed (triggers chunk count update)
         try:
@@ -1704,75 +2056,339 @@ Upgrade to Pro plan ($4.99) to unlock your complete Universal Context Pack!
                     "total_chunks": total_chunks,
                     "processed_chunks": len(results),
                     "total_cost": total_cost,
-                    "payment_plan": payment_status["plan"]
+                    "payment_plan": payment_status["plan"],
+                    "analysis_timing": summary["analysis_timing"]
                 }
             )
             print(f"Job {job_id} marked as completed in database")
         except Exception as e:
             print(f"Error updating job status to completed: {e}")
-        
-        # Save pack to Supabase database
+
+        # Create pack record in database
+        print(f"🔄 ATTEMPTING TO CREATE PACK FOR JOB: {job_id}")
         try:
-            pack_name = f"UCP Pack {job_id[:8]}"
-            r2_pack_path = f"{user.r2_directory}/{job_id}/"
+            # Verify job exists using backend function (bypasses RLS)
+            job_check_result = supabase.rpc("check_job_exists_for_backend", {
+                "user_uuid": user.user_id,
+                "target_job_id": job_id
+            }).execute()
             
-            extraction_stats = {
-                "total_chunks": total_chunks,
-                "processed_chunks": len(results),
-                "failed_chunks": failed_chunks,
-                "payment_plan": payment_status["plan"]
-            }
+            if not job_check_result.data or not job_check_result.data[0]["job_exists"]:
+                print(f"❌ Job {job_id} does not exist in database - cannot create pack")
+                return
             
-            chunk_stats = {"chunks_to_process": chunks_to_process}
-            analysis_stats = {
-                "total_input_tokens": total_input_tokens,
-                "total_output_tokens": total_output_tokens,
-                "total_cost": total_cost
-            }
+            # Create a generic pack name (since we can't get file name due to RLS)
+            pack_name = f"UCP Analysis - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
             
-            await create_pack_in_db(
-                user, 
-                job_id, 
-                pack_name, 
-                r2_pack_path, 
-                extraction_stats, 
-                chunk_stats, 
-                analysis_stats,
-                len(aggregated_content)
+            print(f"🔄 Pack details:")
+            print(f"   Pack name: {pack_name}")
+            print(f"   R2 path: {user.r2_directory}/{job_id}")
+            print(f"   Chunks processed: {len(results)}/{total_chunks}")
+            
+            pack_record = await create_pack_in_db(
+                user=user,
+                job_id=job_id,
+                pack_name=pack_name,
+                r2_pack_path=f"{user.r2_directory}/{job_id}",
+                extraction_stats=None,  # Will be added later if needed
+                chunk_stats={
+                    "total_chunks_available": total_chunks,  # Total chunks created from file
+                    "chunks_selected_by_user": chunks_to_process,  # Chunks user wanted to process 
+                    "processed_chunks": len(results),  # Chunks actually processed successfully
+                    "failed_chunks": len(failed_chunks) if failed_chunks else 0
+                },
+                analysis_stats={
+                    "total_input_tokens": total_input_tokens,
+                    "total_output_tokens": total_output_tokens,
+                    "total_cost": total_cost,
+                    "duration_seconds": total_analysis_duration,
+                    "average_chunk_duration": average_chunk_duration
+                },
+                file_size=None  # Can't get file size due to RLS permissions
             )
-            print(f"Pack created in database for job {job_id}")
+            
+            if pack_record:
+                print(f"✅ SUCCESS: Pack created in database with ID: {pack_record.get('pack_id')}")
+            else:
+                print(f"❌ FAILED: Pack creation returned None")
                 
         except Exception as e:
-            print(f"Error creating pack in database: {e}")
+            print(f"❌ EXCEPTION: Error creating pack in database: {e}")
+            import traceback
+            print(f"   Full traceback: {traceback.format_exc()}")
+            # Don't fail the whole job if pack creation fails
         
-        result_data = {
-            "job_id": job_id,
-            "status": "completed" if chunks_to_process == total_chunks else "partial",
-            "total_chunks": total_chunks,
-            "processed_chunks": len(results),
-            "chunks_to_process": chunks_to_process,
-            "failed_chunks": failed_chunks,
-            "total_input_tokens": total_input_tokens,
-            "total_output_tokens": total_output_tokens,
-            "total_cost": total_cost,
-            "payment_plan": payment_status["plan"],
-            "upgrade_required": chunks_to_process < total_chunks
+    except Exception as e:
+        print(f"Error in background analysis for job {job_id}: {e}")
+        update_job_progress(job_id, "failed", 0, f"Error: {str(e)}")
+
+@app.get("/api/performance-dashboard")
+async def performance_dashboard(user: AuthenticatedUser = Depends(get_current_user)):
+    """Get performance dashboard with detailed timing statistics."""
+    try:
+        dashboard_data = {
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "performance_summary": {},
+            "recent_jobs": [],
+            "system_estimates": {}
         }
         
-        if chunks_to_process < total_chunks:
-            result_data["upgrade_message"] = f"Upgrade to Pro plan to analyze remaining {total_chunks - chunks_to_process} chunks"
-        
-        print(f"Processing complete! Total cost: ${total_cost:.3f}")
-        print(f"Results stored in R2 bucket: {R2_BUCKET}")
-        print(f"Successfully processed: {len(results)}/{chunks_to_process} chunks")
-        
-        return result_data
+        # Read timing data if available
+        if os.path.exists("performance_timing.txt"):
+            with open("performance_timing.txt", 'r') as f:
+                content = f.read()
+            
+            # Parse timing data
+            lines = content.split('\n')
+            extraction_data = []
+            job_summaries = []
+            chunk_data = []
+            
+            for i, line in enumerate(lines):
+                # Parse extraction data
+                if '[EXTRACTION]' in line:
+                    extraction_info = {}
+                    for j in range(i, min(i+10, len(lines))):
+                        if 'Size:' in lines[j]:
+                            try:
+                                size_mb = float(lines[j].split('Size: ')[1].split(' MB')[0])
+                                extraction_info['size_mb'] = size_mb
+                            except: pass
+                        if 'Duration:' in lines[j]:
+                            try:
+                                duration = float(lines[j].split('Duration: ')[1].split(' seconds')[0])
+                                extraction_info['duration'] = duration
+                            except: pass
+                        if 'Rate:' in lines[j] and 'MB/s' in lines[j]:
+                            try:
+                                rate = float(lines[j].split('Rate: ')[1].split(' MB/s')[0])
+                                extraction_info['rate_mb_per_s'] = rate
+                            except: pass
+                        if 'Conversations:' in lines[j]:
+                            try:
+                                convs = int(lines[j].split('Conversations: ')[1].replace(',', ''))
+                                extraction_info['conversations'] = convs
+                            except: pass
+                    
+                    if 'size_mb' in extraction_info and 'duration' in extraction_info:
+                        extraction_data.append(extraction_info)
                 
+                # Parse job summaries
+                if '[JOB SUMMARY]' in line:
+                    job_info = {}
+                    for j in range(i, min(i+15, len(lines))):
+                        if 'Job ID:' in lines[j]:
+                            job_info['job_id'] = lines[j].split('Job ID: ')[1].strip()
+                        if 'Total Duration:' in lines[j]:
+                            try:
+                                duration_match = lines[j].split('Total Duration: ')[1]
+                                duration = float(duration_match.split(' seconds')[0])
+                                job_info['duration_seconds'] = duration
+                                job_info['duration_minutes'] = duration / 60
+                            except: pass
+                        if 'Total Chunks:' in lines[j]:
+                            try:
+                                chunks = int(lines[j].split('Total Chunks: ')[1])
+                                job_info['total_chunks'] = chunks
+                            except: pass
+                        if 'Total Cost:' in lines[j]:
+                            try:
+                                cost = float(lines[j].split('Total Cost: $')[1])
+                                job_info['cost'] = cost
+                            except: pass
+                        if 'Average Processing Rate:' in lines[j]:
+                            try:
+                                rate = float(lines[j].split('Rate: ')[1].split(' tokens/s')[0])
+                                job_info['tokens_per_second'] = rate
+                            except: pass
+                    
+                    if 'job_id' in job_info:
+                        job_summaries.append(job_info)
+            
+            # Calculate performance summary
+            if extraction_data:
+                avg_extraction_rate = sum(e['rate_mb_per_s'] for e in extraction_data if 'rate_mb_per_s' in e) / len([e for e in extraction_data if 'rate_mb_per_s' in e])
+                total_files_processed = len(extraction_data)
+                total_size_processed = sum(e['size_mb'] for e in extraction_data if 'size_mb' in e)
+                
+                dashboard_data["performance_summary"]["extraction"] = {
+                    "average_rate_mb_per_second": round(avg_extraction_rate, 3),
+                    "total_files_processed": total_files_processed,
+                    "total_size_processed_mb": round(total_size_processed, 2),
+                    "efficiency_rating": "Excellent" if avg_extraction_rate > 3 else "Good" if avg_extraction_rate > 2 else "Fair"
+                }
+            
+            if job_summaries:
+                total_chunks = sum(j['total_chunks'] for j in job_summaries if 'total_chunks' in j)
+                total_cost = sum(j['cost'] for j in job_summaries if 'cost' in j)
+                avg_tokens_per_second = sum(j['tokens_per_second'] for j in job_summaries if 'tokens_per_second' in j) / len([j for j in job_summaries if 'tokens_per_second' in j])
+                
+                dashboard_data["performance_summary"]["analysis"] = {
+                    "total_chunks_processed": total_chunks,
+                    "total_cost_usd": round(total_cost, 4),
+                    "average_tokens_per_second": round(avg_tokens_per_second, 1),
+                    "jobs_completed": len(job_summaries),
+                    "efficiency_rating": "Excellent" if avg_tokens_per_second > 2000 else "Good" if avg_tokens_per_second > 1500 else "Fair"
+                }
+            
+            # Recent jobs (last 5)
+            dashboard_data["recent_jobs"] = job_summaries[-5:] if job_summaries else []
+            
+            # System estimates based on real data
+            if extraction_data and job_summaries:
+                dashboard_data["system_estimates"] = {
+                    "extraction_estimates": {
+                        "1MB_file_seconds": round(1 / avg_extraction_rate, 1),
+                        "5MB_file_seconds": round(5 / avg_extraction_rate, 1),
+                        "10MB_file_seconds": round(10 / avg_extraction_rate, 1),
+                        "50MB_file_seconds": round(50 / avg_extraction_rate, 1)
+                    },
+                    "analysis_estimates": {
+                        "30_chunks_minutes": round((30 * 50000) / avg_tokens_per_second / 60, 1),
+                        "50_chunks_minutes": round((50 * 50000) / avg_tokens_per_second / 60, 1),
+                        "100_chunks_minutes": round((100 * 50000) / avg_tokens_per_second / 60, 1)
+                    },
+                    "confidence": "High - based on real usage data"
+                }
+        else:
+            # No timing data available
+            dashboard_data["performance_summary"] = {
+                "message": "No performance data available yet. Complete some jobs to see timing statistics.",
+                "status": "waiting_for_data"
+            }
+            dashboard_data["system_estimates"] = {
+                "extraction_estimates": {
+                    "1MB_file_seconds": 0.4,
+                    "5MB_file_seconds": 2.0,
+                    "10MB_file_seconds": 4.0,
+                    "50MB_file_seconds": 20.0
+                },
+                "analysis_estimates": {
+                    "30_chunks_minutes": 16.7,
+                    "50_chunks_minutes": 27.8,
+                    "100_chunks_minutes": 55.6
+                },
+                "confidence": "Low - estimated values, no real data yet"
+            }
+        
+        return dashboard_data
+        
     except Exception as e:
-        print(f" Error analyzing chunks: {e}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
-        print(f" Error analyzing chunks: {e}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        print(f"Error generating performance dashboard: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "message": "Could not generate performance dashboard"
+        }
+
+@app.get("/api/timing-test")
+async def run_timing_test(user: AuthenticatedUser = Depends(get_current_user)):
+    """Run comprehensive timing tests and return performance estimates."""
+    try:
+        # Read existing timing data
+        timing_estimates = {}
+        
+        if os.path.exists("performance_timing.txt"):
+            with open("performance_timing.txt", 'r') as f:
+                content = f.read()
+                
+            # Parse recent extraction data
+            extraction_rates = []
+            analysis_rates = []
+            
+            lines = content.split('\n')
+            for i, line in enumerate(lines):
+                if '[EXTRACTION]' in line:
+                    # Look for rate information in next few lines
+                    for j in range(i, min(i+10, len(lines))):
+                        if 'Rate:' in lines[j] and 'MB/s' in lines[j]:
+                            try:
+                                rate = float(lines[j].split('Rate: ')[1].split(' MB/s')[0])
+                                extraction_rates.append(rate)
+                            except:
+                                pass
+                
+                if '[JOB SUMMARY]' in line:
+                    # Look for processing rate in next few lines
+                    for j in range(i, min(i+15, len(lines))):
+                        if 'Average Processing Rate:' in lines[j]:
+                            try:
+                                rate = float(lines[j].split('Rate: ')[1].split(' tokens/s')[0])
+                                analysis_rates.append(rate)
+                            except:
+                                pass
+            
+            # Calculate averages
+            if extraction_rates:
+                avg_extraction_rate = sum(extraction_rates) / len(extraction_rates)
+                timing_estimates['extraction'] = {
+                    'average_rate_mb_per_second': avg_extraction_rate,
+                    'sample_count': len(extraction_rates),
+                    'estimates': {
+                        '1MB_file': 1 / avg_extraction_rate,
+                        '5MB_file': 5 / avg_extraction_rate,
+                        '10MB_file': 10 / avg_extraction_rate,
+                        '50MB_file': 50 / avg_extraction_rate
+                    }
+                }
+            
+            if analysis_rates:
+                avg_analysis_rate = sum(analysis_rates) / len(analysis_rates)
+                timing_estimates['analysis'] = {
+                    'average_rate_tokens_per_second': avg_analysis_rate,
+                    'sample_count': len(analysis_rates),
+                    'estimates': {
+                        '30_chunks_analysis': (30 * 50000) / avg_analysis_rate,  # 30 chunks * ~50k tokens per chunk
+                        '50_chunks_analysis': (50 * 50000) / avg_analysis_rate,
+                        '100_chunks_analysis': (100 * 50000) / avg_analysis_rate
+                    }
+                }
+        
+        # Provide fallback estimates if no data available
+        if not timing_estimates:
+            timing_estimates = {
+                'extraction': {
+                    'average_rate_mb_per_second': 2.5,  # Conservative estimate
+                    'sample_count': 0,
+                    'estimates': {
+                        '1MB_file': 0.4,
+                        '5MB_file': 2.0,
+                        '10MB_file': 4.0,
+                        '50MB_file': 20.0
+                    },
+                    'note': 'Estimates based on typical performance - will improve with usage data'
+                },
+                'analysis': {
+                    'average_rate_tokens_per_second': 1500,  # Conservative estimate
+                    'sample_count': 0,
+                    'estimates': {
+                        '30_chunks_analysis': 1000,  # ~16 minutes
+                        '50_chunks_analysis': 1667,  # ~28 minutes
+                        '100_chunks_analysis': 3333  # ~56 minutes
+                    },
+                    'note': 'Estimates based on typical AI processing speeds - will improve with usage data'
+                }
+            }
+        
+        return {
+            "status": "success",
+            "timing_estimates": timing_estimates,
+            "timestamp": datetime.now().isoformat(),
+            "message": "Performance timing data compiled from recent jobs"
+        }
+        
+    except Exception as e:
+        print(f"Error getting timing estimates: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "fallback_estimates": {
+                "extraction_time_per_mb": "0.4 seconds",
+                "analysis_time_per_chunk": "33 seconds",
+                "note": "Using fallback estimates - no timing data available"
+            }
+        }
 
 @app.get("/api/status/{job_id}")
 async def get_status(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -1943,18 +2559,23 @@ async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
         
         packs = []
         for pack in result.data:
+            # Safely extract stats with null checking
+            extraction_stats = pack.get("pack_extraction_stats") or {}
+            chunk_stats = pack.get("pack_chunk_stats") or {}
+            analysis_stats = pack.get("pack_analysis_stats") or {}
+            
             pack_data = {
                 "job_id": pack["pack_job_id"],
                 "pack_name": pack["pack_name_out"],
                 "status": "completed",
                 "created_at": pack["pack_created_at"],
                 "stats": {
-                    "total_chunks": pack.get("pack_extraction_stats", {}).get("total_chunks", 0),
-                    "processed_chunks": pack.get("pack_extraction_stats", {}).get("processed_chunks", 0),
-                    "failed_chunks": pack.get("pack_extraction_stats", {}).get("failed_chunks", 0),
-                    "total_input_tokens": pack.get("pack_analysis_stats", {}).get("total_input_tokens", 0),
-                    "total_output_tokens": pack.get("pack_analysis_stats", {}).get("total_output_tokens", 0),
-                    "total_cost": pack.get("pack_analysis_stats", {}).get("total_cost", 0)
+                    "total_chunks": chunk_stats.get("processed_chunks", 0),  # Use processed_chunks for display
+                    "processed_chunks": chunk_stats.get("processed_chunks", 0),
+                    "failed_chunks": extraction_stats.get("failed_chunks", 0),
+                    "total_input_tokens": analysis_stats.get("total_input_tokens", 0),
+                    "total_output_tokens": analysis_stats.get("total_output_tokens", 0),
+                    "total_cost": analysis_stats.get("total_cost", 0)
                 }
             }
             packs.append(pack_data)
@@ -2674,12 +3295,8 @@ async def add_credits_to_user(user_id: str, credits: int, amount: float, stripe_
         print(f"🔄 Adding {credits} credits to user {user_id}")
         print(f"💰 Amount: ${amount}, Stripe ID: {stripe_payment_id}")
         
-        # Check if this payment was already processed (duplicate protection)
-        existing_payment = supabase.table("credit_transactions").select("id").eq("stripe_payment_id", stripe_payment_id).execute()
-        
-        if existing_payment.data:
-            print(f"⚠️ Payment {stripe_payment_id} already processed, skipping duplicate")
-            return
+        # Note: Duplicate checking is handled by the database function itself
+        # We don't need to check manually as the RPC function is idempotent
         
         # Use the database function to add credits (handles both transaction and balance update)
         result = supabase.rpc("add_credits_to_user", {

@@ -23,6 +23,13 @@ export default function ProcessPage() {
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [extractionData, setExtractionData] = useState<any>(null);
   const [costEstimate, setCostEstimate] = useState<any>(null);
+  const [timeEstimatesHistory, setTimeEstimatesHistory] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ucp_time_estimates_history');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
   const [chunkData, setChunkData] = useState<any>(null);
   const [availableChunks, setAvailableChunks] = useState<any[]>([]);
   const [selectedChunks, setSelectedChunks] = useState<Set<number>>(new Set());
@@ -37,9 +44,11 @@ export default function ProcessPage() {
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [lastProgressTimestamp, setLastProgressTimestamp] = useState<number>(0);
   const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, credits_balance: number, plan?: string} | null>(null);
+  const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const paymentLimitsRequestRef = useRef<Promise<any> | null>(null);
   const router = useRouter();
 
   // Payment notifications
@@ -90,19 +99,35 @@ export default function ProcessPage() {
       const now = Date.now();
       if (!lastCheck || now - parseInt(lastCheck) > 300000) { // 5 minutes
         console.log('Checking payment limits...'); // Debug log
-        checkPaymentLimits().then((limits) => {
-          console.log('Setting payment limits:', limits); // Debug log
-          setPaymentLimits(limits);
-        }); // Fix: Actually set the payment limits
+        checkPaymentLimits()
+          .then((limits) => {
+            console.log('Setting payment limits:', limits); // Debug log
+            setPaymentLimits(limits);
+            setPaymentLimitsError(false); // Clear any previous error
+          })
+          .catch((error) => {
+            console.error('Error loading payment limits:', error);
+            setPaymentLimitsError(true); // Mark error state
+            // Set fallback state so user doesn't see "Loading..." forever
+            setPaymentLimits({ canProcess: false, credits_balance: 0 });
+          });
         localStorage.setItem('last_payment_check', now.toString());
       } else {
         // If we're using cached data, still try to get limits for initial load
         if (!paymentLimits) {
           console.log('Initial payment limits check...'); // Debug log
-          checkPaymentLimits().then((limits) => {
-            console.log('Setting initial payment limits:', limits); // Debug log
-            setPaymentLimits(limits);
-          });
+          checkPaymentLimits()
+            .then((limits) => {
+              console.log('Setting initial payment limits:', limits); // Debug log
+              setPaymentLimits(limits);
+              setPaymentLimitsError(false); // Clear any previous error
+            })
+            .catch((error) => {
+              console.error('Error loading initial payment limits:', error);
+              setPaymentLimitsError(true); // Mark error state
+              // Set fallback state so user doesn't see "Loading..." forever
+              setPaymentLimits({ canProcess: false, credits_balance: 0 });
+            });
         }
       }
     }
@@ -130,11 +155,33 @@ export default function ProcessPage() {
     return () => clearTimeout(timeoutId);
   }, [currentStep, currentJobId, progress]); // Only save on important changes
 
+  // Helper functions for time estimates history
+  const addTimeEstimate = (estimate: any) => {
+    const newHistory = [...timeEstimatesHistory, { ...estimate, timestamp: Date.now() }];
+    setTimeEstimatesHistory(newHistory);
+    // Persist to localStorage
+    localStorage.setItem('ucp_time_estimates_history', JSON.stringify(newHistory));
+  };
+
+  const clearTimeEstimatesHistory = () => {
+    setTimeEstimatesHistory([]);
+    localStorage.removeItem('ucp_time_estimates_history');
+  };
+
+  const getLatestEstimateOfType = (type: string) => {
+    return timeEstimatesHistory.filter(est => est.type === type).pop();
+  };
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (pollingInterval) {
         clearInterval(pollingInterval);
+      }
+      // Cancel any ongoing payment limits request
+      if (paymentLimitsRequestRef.current) {
+        console.log('Cleaning up payment limits request');
+        paymentLimitsRequestRef.current = null;
       }
     };
   }, [pollingInterval]);
@@ -164,6 +211,32 @@ export default function ProcessPage() {
 
   // Check payment limits when user authenticates - removed duplicate check
 
+  // Helper function to create fetch with timeout
+  const fetchWithTimeout = (url: string, options: RequestInit = {}, timeoutMs: number = 10000) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    return fetch(url, {
+      ...options,
+      signal: controller.signal
+    }).finally(() => {
+      clearTimeout(timeoutId);
+    });
+  };
+
+  // Helper function to format time in minutes and seconds
+  const formatElapsedTime = (startTime: number) => {
+    const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = elapsedSeconds % 60;
+    
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
+
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
@@ -172,6 +245,16 @@ export default function ProcessPage() {
   const checkPaymentLimits = async () => {
     if (!session?.access_token) return { canProcess: false, credits_balance: 0 };
     
+    // If there's already a request in progress, wait for it
+    if (paymentLimitsRequestRef.current) {
+      console.log('Payment limits request already in progress, waiting...');
+      try {
+        return await paymentLimitsRequestRef.current;
+      } catch (error) {
+        console.log('Previous request failed, will make new request');
+      }
+    }
+    
     // Debounce: Don't check if we checked within the last 10 seconds, unless we don't have limits yet
     const now = Date.now()
     if (now - lastPaymentCheck < 10000 && paymentLimits) {
@@ -179,46 +262,78 @@ export default function ProcessPage() {
       return paymentLimits || { canProcess: false, credits_balance: 0 };
     }
     
-    try {
-      setLastPaymentCheck(now)
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/user/profile`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const canProcess = data.credits_balance > 0;
-        const result = {
-          canProcess,
-          credits_balance: data.credits_balance || 0,
-          plan: 'credits'
-        };
-        console.log('Credit limits loaded:', result); // Debug log
-        return result;
+    // Create the request promise and store it
+    const requestPromise = (async () => {
+      try {
+        setLastPaymentCheck(now)
+        console.log('Making payment limits request with 10s timeout...');
+        
+        const response = await fetchWithTimeout(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/user/profile`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+          },
+          10000 // 10 second timeout
+        );
+        
+        if (response.ok) {
+          const data = await response.json();
+          const canProcess = data.credits_balance > 0;
+          const result = {
+            canProcess,
+            credits_balance: data.credits_balance || 0,
+            plan: 'credits'
+          };
+          console.log('Credit limits loaded:', result);
+          return result;
+        } else {
+          console.error('Failed to fetch payment limits:', response.status, response.statusText);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.error('Payment limits request timed out after 10 seconds');
+          throw new Error('Request timed out - please check your connection');
+        } else {
+          console.error('Error checking credit balance:', error);
+          throw error;
+        }
+      } finally {
+        // Clear the request reference when done
+        paymentLimitsRequestRef.current = null;
       }
-    } catch (error) {
-      console.error('Error checking credit balance:', error);
-    }
+    })();
     
-    return { canProcess: false, credits_balance: 0 };
+    // Store the request promise
+    paymentLimitsRequestRef.current = requestPromise;
+    
+    return requestPromise;
   };
 
   // Server-Sent Events helper function
   const startSSEWithAuth = async (url: string, headers: Record<string, string>) => {
     try {
-      // Use fetch to establish the SSE connection
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          ...headers
-        }
-      });
+      // Use fetch to establish the SSE connection with timeout
+      const response = await fetchWithTimeout(
+        url,
+        {
+          headers: {
+            'Accept': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            ...headers
+          }
+        },
+        15000 // 15 second timeout for SSE connection
+      );
 
       if (!response.ok) {
-        throw new Error(`SSE connection failed: ${response.status}`);
+        if (response.status === 403) {
+          console.error('Authentication failed for SSE connection - token may be expired');
+          addLog('Warning: Authentication error for real-time updates. You may need to refresh the page.');
+        }
+        throw new Error(`SSE connection failed: ${response.status} ${response.statusText}`);
       }
 
       const reader = response.body?.getReader();
@@ -289,7 +404,15 @@ export default function ProcessPage() {
       processStream();
 
     } catch (error) {
-      // Silently fall back to status polling
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('SSE connection timed out, falling back to status polling');
+        addLog('Real-time connection timed out, using standard updates');
+      } else if (error instanceof Error && error.message.includes('timed out')) {
+        console.log('SSE connection timeout, falling back to status polling');
+        addLog('Real-time connection timeout, using standard updates');
+      } else {
+        console.log('SSE connection failed, falling back to status polling:', error);
+      }
     }
   };
 
@@ -302,7 +425,22 @@ export default function ProcessPage() {
           headers['Authorization'] = `Bearer ${session.access_token}`;
         }
 
-        const statusResponse = await fetch(`http://localhost:8000/api/status/${jobId}`, { headers });
+        const statusResponse = await fetchWithTimeout(
+          `http://localhost:8000/api/status/${jobId}`, 
+          { headers },
+          8000 // 8 second timeout for status checks
+        );
+        
+        if (!statusResponse.ok) {
+          if (statusResponse.status === 403) {
+            console.error('Authentication failed for status check - token may be expired');
+            addLog('Warning: Authentication error checking status. You may need to refresh the page.');
+          } else {
+            console.error('Status check failed:', statusResponse.status, statusResponse.statusText);
+          }
+          return; // Skip processing if request failed
+        }
+        
         const data = await statusResponse.json();
         
         if (data.status === 'completed') {
@@ -338,7 +476,13 @@ export default function ProcessPage() {
           addLog(`❌ Analysis failed: ${data.error || 'Unknown error'}`);
         }
       } catch (error) {
-        // Silently handle polling errors
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('Status check timed out, will retry...');
+        } else if (error instanceof Error && error.message.includes('timed out')) {
+          console.log('Status check timeout, will retry...');
+        } else {
+          console.error('Status polling error:', error);
+        }
       }
     }, 10000); // Increased to 10 seconds for better performance
     
@@ -361,7 +505,79 @@ export default function ProcessPage() {
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const startPollingExtractionStatus = (jobId: string) => {
+    // Poll for extraction completion
+    const statusInterval = setInterval(async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
+        // Check if extraction is complete by looking for job results
+        const resultsResponse = await fetch(`http://localhost:8000/api/results/${jobId}`, { headers });
+        
+        if (resultsResponse.ok) {
+          const resultsData = await resultsResponse.json();
+          
+          if (resultsData.extracted) {
+            clearInterval(statusInterval);
+            setPollingInterval(null);
+            
+            // Extraction is complete, get the data
+            setExtractionData(resultsData);
+            setCostEstimate(resultsData.cost_estimate || { 
+              estimated_total_cost: 0, 
+              estimated_output_tokens: 0,
+              estimated_chunks: 0 
+            });
+            setCurrentStep('extracted');
+            addLog(`Extraction complete: ${resultsData.conversation_count || 0} conversations, ${resultsData.message_count || 0} messages`);
+            
+            // Now get chunking time estimate based on extracted text from job summary
+            try {
+              const summaryResponse = await fetch(`http://localhost:8000/api/job-summary/${jobId}`, { headers });
+              if (summaryResponse.ok) {
+                const summaryData = await summaryResponse.json();
+                const textLength = summaryData.content_size || 0;
+                
+                if (textLength > 0) {
+                  const chunkResponse = await fetch(`http://localhost:8000/api/estimate-chunking-time`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${session?.access_token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      text_length: textLength,
+                      job_id: jobId
+                    }),
+                  });
+                  
+                  if (chunkResponse.ok) {
+                    const chunkEstimates = await chunkResponse.json();
+                    addTimeEstimate({
+                      type: 'chunking',
+                      ...chunkEstimates
+                    });
+                    addLog(`Chunking time estimate: ${chunkEstimates.chunking_time.formatted} (for ~${chunkEstimates.estimated_chunks} chunks)`);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error getting chunking time estimate:', error);
+            }
+          }
+        }
+      } catch (error) {
+        // Silently handle polling errors, continue polling
+      }
+    }, 3000); // Poll every 3 seconds for extraction
+    
+    setPollingInterval(statusInterval);
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
       // Check if user is authenticated before allowing file upload
@@ -377,6 +593,32 @@ export default function ProcessPage() {
       setFile(selectedFile);
       setCurrentStep('uploaded');
       addLog(`File selected: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
+      
+      // Get extraction time estimate based on file size only
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        const response = await fetch('http://localhost:8000/api/estimate-time', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: formData,
+        });
+        
+        if (response.ok) {
+          const estimates = await response.json();
+          addTimeEstimate({
+            type: 'extraction',
+            ...estimates
+          });
+          addLog(`Extraction time estimate: ${estimates.time_estimates.extraction.formatted} (based on ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB file)`);
+        }
+      } catch (error) {
+        console.error('Error getting extraction time estimate:', error);
+        // Don't block file selection if estimates fail
+      }
     }
   };
 
@@ -409,12 +651,15 @@ export default function ProcessPage() {
       }
 
       const data = await response.json();
-      setExtractionData(data);
+      
+      // The extraction now happens in background, so we get a job_id and need to poll
       setJobId(data.job_id);
       setCurrentJobId(data.job_id);
-      setCostEstimate(data.cost_estimate);
-      setCurrentStep('extracted');
-      addLog(`Extraction complete: ${data.conversation_count} conversations, ${data.message_count} messages`);
+      setCurrentStep('extracting');
+      addLog(`Extraction started. Job ID: ${data.job_id}`);
+      
+      // Start polling for extraction completion
+      startPollingExtractionStatus(data.job_id);
     } catch (error) {
       addLog(`Extraction failed: ${error}`);
     } finally {
@@ -458,6 +703,27 @@ export default function ProcessPage() {
       setAvailableChunks(data.chunks);
       setCurrentStep('chunked');
       addLog(`Chunking complete! Created ${data.total_chunks} chunks ready for analysis`);
+      
+      // Now get analysis time estimate based on actual chunk count
+      try {
+        const analysisResponse = await fetch(`http://localhost:8000/api/estimate-time/${currentJobId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+        });
+        
+        if (analysisResponse.ok) {
+          const analysisEstimates = await analysisResponse.json();
+          addTimeEstimate({
+            type: 'analysis_all',
+            ...analysisEstimates
+          });
+          addLog(`Analysis time estimate: ${analysisEstimates.time_estimates.analysis.formatted} for ${analysisEstimates.total_chunks_available} chunks`);
+        }
+      } catch (error) {
+        console.error('Error getting analysis time estimate:', error);
+      }
     } catch (error) {
       addLog(`Chunking failed: ${error}`);
     } finally {
@@ -490,6 +756,32 @@ export default function ProcessPage() {
     setLastProgressTimestamp(Date.now() / 1000); // Reset progress timestamp
     addLog(`Starting analysis of ${chunksToAnalyze.length} chunks...`);
 
+    // Get time estimate for selected chunks
+    try {
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const selectedAnalysisResponse = await fetch(`http://localhost:8000/api/estimate-time/${currentJobId}?chunks_to_analyze=${chunksToAnalyze.length}`, {
+        method: 'GET',
+        headers,
+      });
+      
+      if (selectedAnalysisResponse.ok) {
+        const selectedEstimates = await selectedAnalysisResponse.json();
+        // Add a new estimate card for the selected chunks
+        addTimeEstimate({
+          type: 'analysis_selected',
+          selected_chunks: chunksToAnalyze.length,
+          ...selectedEstimates
+        });
+        addLog(`Analysis time estimate: ${selectedEstimates.time_estimates.analysis.formatted} for ${chunksToAnalyze.length} selected chunks`);
+      }
+    } catch (error) {
+      console.error('Error getting selected chunks analysis estimate:', error);
+    }
+
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -503,8 +795,7 @@ export default function ProcessPage() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          chunk_file: chunkData.chunk_file,
-          chunk_indices: chunksToAnalyze,
+          selected_chunks: chunksToAnalyze,
         }),
       });
 
@@ -598,6 +889,9 @@ export default function ProcessPage() {
     setLogs([]);
     setAnalysisStartTime(null);
     
+    // Clear time estimates history
+    clearTimeEstimatesHistory();
+    
     if (pollingInterval) {
       clearInterval(pollingInterval);
       setPollingInterval(null);
@@ -627,6 +921,7 @@ export default function ProcessPage() {
         autoHide={false}
       />
 
+      
       <div className="max-w-6xl mx-auto p-6">
 
         {/* Welcome Section for Non-Authenticated Users */}
@@ -708,6 +1003,11 @@ export default function ProcessPage() {
         {/* Main Content for Authenticated Users */}
         {user && (
           <div className="space-y-6">
+            <div className="w-full flex justify-center items-center py-8">
+        <h1 className="text-3xl font-bold text-white text-center">
+          Universal Context Processor
+        </h1>
+      </div>
             {/* Progress Steps */}
             <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
@@ -810,6 +1110,75 @@ export default function ProcessPage() {
               </div>
             </div>
 
+            {/* Time Estimates History - shows all estimates as they're calculated */}
+            {timeEstimatesHistory.length > 0 && (
+              <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg shadow-sm">
+                <div className="flex items-center space-x-2 mb-3">
+                  <BarChart3 className="h-4 w-4 text-blue-400" />
+                  <h4 className="text-sm font-medium text-text-primary">Processing Time Estimates</h4>
+                  <span className="text-xs text-text-secondary">({timeEstimatesHistory.length} estimate{timeEstimatesHistory.length > 1 ? 's' : ''})</span>
+                </div>
+                
+                <div className="space-y-3 text-sm">
+                  {timeEstimatesHistory.map((estimate, index) => (
+                    <div key={index} className="p-3 bg-blue-500/5 rounded-md border-l-4 border-blue-400/50">
+                      {estimate.type === 'extraction' && (
+                        <>
+                          <div className="text-text-primary font-medium flex items-center gap-2">
+                            Extraction: {estimate.time_estimates.extraction.formatted}
+                          </div>
+                          <div className="text-xs text-text-secondary mt-1">
+                            Based on {estimate.file_size_mb.toFixed(1)}MB file size
+                          </div>
+                        </>
+                      )}
+                      
+                      {estimate.type === 'chunking' && (
+                        <>
+                          <div className="text-text-primary font-medium flex items-center gap-2">
+                            Chunking: {estimate.chunking_time.formatted}
+                          </div>
+                          <div className="text-xs text-text-secondary mt-1">
+                            For {estimate.estimated_chunks} chunks
+                          </div>
+                        </>
+                      )}
+                      
+                      {estimate.type === 'analysis_all' && (
+                        <>
+                          <div className="text-text-primary font-medium flex items-center gap-2">
+                            Analysis (All Chunks): {estimate.time_estimates.analysis.formatted}
+                          </div>
+                          <div className="text-xs text-text-secondary mt-1">
+                            For all {estimate.total_chunks_available} chunks
+                          </div>
+                        </>
+                      )}
+                      
+                      {estimate.type === 'analysis_selected' && (
+                        <>
+                          <div className="text-text-primary font-medium flex items-center gap-2">
+                            Analysis (Selected): {estimate.time_estimates.analysis.formatted}
+                          </div>
+                          <div className="text-xs text-text-secondary mt-1">
+                            For {estimate.selected_chunks} selected chunks
+                          </div>
+                        </>
+                      )}
+                      
+                      <div className="text-xs text-text-tertiary mt-2 font-mono">
+                        {new Date(estimate.timestamp).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mt-3 text-xs text-text-secondary italic">
+                  💡 Estimates based on historical data and may vary based on content complexity
+                </div>
+              </div>
+            )}
+
             {/* Upload Section */}
             {currentStep === 'upload' && (
               <div className="bg-gray-700 border border-gray-600 rounded-lg p-8 text-center">
@@ -868,8 +1237,8 @@ export default function ProcessPage() {
             )}
 
             {/* Extraction Complete */}
-            {extractionData && currentStep === 'extracted' && (
-              <div className="bg-gray-800 border border-gray-600 rounded-lg p-6">
+            {extractionData && (currentStep === 'extracted' || currentStep === 'analyzing') && (
+              <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <FileText className="h-5 w-5 text-green-600" />
@@ -888,18 +1257,6 @@ export default function ProcessPage() {
                     Your chat export is ready for chunking
                   </div>
                 </div>
-
-                {costEstimate && (
-                  <div className="p-4 bg-gray-700 rounded-lg mb-6">
-                    <div className="text-sm font-medium text-text-primary mb-2">Estimated Cost</div>
-                    <div className="text-lg font-bold text-text-primary">
-                      ${costEstimate.estimated_total_cost.toFixed(4)}
-                    </div>
-                    <div className="text-xs text-text-secondary">
-                      {costEstimate.estimated_output_tokens.toLocaleString()} output tokens estimated
-                    </div>
-                  </div>
-                )}
 
                 <button
                   onClick={handleChunk}
@@ -987,7 +1344,7 @@ export default function ProcessPage() {
                   </div>
                   {analysisStartTime && (
                     <div className="text-sm text-text-secondary">
-                      Elapsed: {Math.round((Date.now() - analysisStartTime) / 1000)}s
+                      Elapsed: {formatElapsedTime(analysisStartTime)}
                     </div>
                   )}
                 </div>
@@ -1335,14 +1692,34 @@ export default function ProcessPage() {
 
       {/* Floating Payment Button */}
       <button
-        onClick={() => router.push('/pricing')}
-        className="fixed top-24 right-6 z-40 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer bg-bg-card border border-border-primary text-text-primary hover:border-border-accent"
+        onClick={() => {
+          if (paymentLimitsError) {
+            // Retry loading credits if there was an error
+            setPaymentLimitsError(false);
+            setPaymentLimits(null); // Reset to loading state
+            checkPaymentLimits()
+              .then((limits) => {
+                setPaymentLimits(limits);
+                setPaymentLimitsError(false);
+              })
+              .catch((error) => {
+                console.error('Retry error loading payment limits:', error);
+                setPaymentLimitsError(true);
+                setPaymentLimits({ canProcess: false, credits_balance: 0 });
+              });
+          } else {
+            router.push('/pricing');
+          }
+        }}
+        className="fixed top-32 right-6 z-40 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer bg-bg-card border border-border-primary text-text-primary hover:border-border-accent"
       >
         <CreditCard className="w-4 h-4" />
         <span className="text-sm font-medium">
           {paymentLimits ? 
             `${paymentLimits.credits_balance} credits available` 
-            : 'Loading...'}
+            : paymentLimitsError 
+              ? 'Error loading credits - Click to retry'
+              : 'Loading...'}
         </span>
       </button>
     </div>

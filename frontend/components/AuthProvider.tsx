@@ -43,14 +43,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       
-      // Only fetch profile on meaningful auth events, not token refreshes
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+      // Handle different auth events appropriately
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         if (session?.user) {
           fetchUserProfile(session.user.id)
         } else {
           setUserProfile(null)
         }
+      } else if (event === 'SIGNED_OUT') {
+        setUserProfile(null)
+      } else if (event === 'TOKEN_REFRESHED') {
+        // Don't fetch profile on token refresh to avoid unnecessary API calls
+        console.log('Token refreshed successfully')
       }
+      
       setLoading(false)
     })
 
@@ -64,23 +70,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       if (session) {
-        // Check if token is close to expiring (within 5 minutes)
+        // Check if token is close to expiring (within 10 minutes)
         const expiresAt = session.expires_at ? session.expires_at * 1000 : 0
         const now = Date.now()
-        const fiveMinutes = 5 * 60 * 1000
+        const tenMinutes = 10 * 60 * 1000
         
-        if (expiresAt - now < fiveMinutes) {
+        if (expiresAt - now < tenMinutes && expiresAt > now) {
           console.log('Token expiring soon, refreshing...')
           const { error: refreshError } = await supabase.auth.refreshSession()
           if (refreshError) {
             console.error('Token refresh failed:', refreshError)
-            // Force sign out if refresh fails
-            await signOut()
+            // Don't force sign out immediately - let the user continue and handle it on next request
+            console.log('Will handle authentication on next request')
+          } else {
+            console.log('Token refreshed successfully')
           }
-          // Note: Don't fetch profile here - let onAuthStateChange handle it
         }
       }
-    }, 60000) // Check every minute
+    }, 2 * 60 * 1000) // Check every 2 minutes instead of every minute
 
     return () => {
       subscription.unsubscribe()
@@ -98,29 +105,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     try {
       setLastProfileFetch(now)
-      // Try to get the user profile via our backend API which handles authentication properly
-      const session = await supabase.auth.getSession()
-      if (session.data.session?.access_token) {
-        try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`, {
-            headers: {
-              'Authorization': `Bearer ${session.data.session.access_token}`,
-            },
-          })
+      // Get fresh session first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session?.access_token) {
+        console.log('No valid session for profile fetch')
+        return
+      }
+      
+      // Try to get the user profile via our backend API
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          setUserProfile(data.profile)
+          return
+        } else if (response.status === 401) {
+          // Token might be expired, try to refresh once before giving up
+          console.log('Profile fetch got 401, attempting token refresh...')
+          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession()
           
-          if (response.ok) {
-            const data = await response.json()
-            setUserProfile(data.profile)
-            return
-          } else if (response.status === 401) {
-            // Token might be expired, trigger refresh
-            console.log('Profile fetch got 401, signing out...')
+          if (refreshError || !refreshedSession) {
+            console.log('Token refresh failed, signing out:', refreshError)
             await signOut()
             return
           }
-        } catch (error) {
-          console.log('Backend profile fetch failed, trying direct Supabase fetch:', error)
+          
+          // Retry with refreshed token
+          const retryResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/profile`, {
+            headers: {
+              'Authorization': `Bearer ${refreshedSession.access_token}`,
+            },
+          })
+          
+          if (retryResponse.ok) {
+            const data = await retryResponse.json()
+            setUserProfile(data.profile)
+            return
+          } else {
+            console.log('Profile fetch failed after token refresh, signing out')
+            await signOut()
+            return
+          }
         }
+      } catch (error) {
+        console.log('Backend profile fetch failed, trying direct Supabase fetch:', error)
       }
       
       // Fallback to direct Supabase query
