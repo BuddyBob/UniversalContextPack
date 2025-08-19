@@ -16,20 +16,17 @@ interface PaymentStatus {
 }
 
 export default function ProcessPage() {
-  const { user, session } = useAuth();
+  const { user, session, makeAuthenticatedRequest } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [extractionData, setExtractionData] = useState<any>(null);
   const [costEstimate, setCostEstimate] = useState<any>(null);
-  const [timeEstimatesHistory, setTimeEstimatesHistory] = useState<any[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ucp_time_estimates_history');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
+  const [timeEstimate, setTimeEstimate] = useState<any>(null);
+  const [analysisTimeEstimate, setAnalysisTimeEstimate] = useState<any>(null);
+  const [selectedChunksEstimatedTime, setSelectedChunksEstimatedTime] = useState<number>(0);
+  const [forceUpdate, setForceUpdate] = useState<number>(0);
   const [chunkData, setChunkData] = useState<any>(null);
   const [availableChunks, setAvailableChunks] = useState<any[]>([]);
   const [selectedChunks, setSelectedChunks] = useState<Set<number>>(new Set());
@@ -155,22 +152,23 @@ export default function ProcessPage() {
     return () => clearTimeout(timeoutId);
   }, [currentStep, currentJobId, progress]); // Only save on important changes
 
-  // Helper functions for time estimates history
-  const addTimeEstimate = (estimate: any) => {
-    const newHistory = [...timeEstimatesHistory, { ...estimate, timestamp: Date.now() }];
-    setTimeEstimatesHistory(newHistory);
-    // Persist to localStorage
-    localStorage.setItem('ucp_time_estimates_history', JSON.stringify(newHistory));
-  };
-
-  const clearTimeEstimatesHistory = () => {
-    setTimeEstimatesHistory([]);
-    localStorage.removeItem('ucp_time_estimates_history');
-  };
-
-  const getLatestEstimateOfType = (type: string) => {
-    return timeEstimatesHistory.filter(est => est.type === type).pop();
-  };
+  // Update time-based progress every second during analysis
+  useEffect(() => {
+    let progressInterval: NodeJS.Timeout;
+    
+    if (currentStep === 'analyzing' && analysisStartTime && selectedChunksEstimatedTime > 0) {
+      progressInterval = setInterval(() => {
+        // Force re-render to update progress bar
+        setForceUpdate(prev => prev + 1);
+      }, 1000);
+    }
+    
+    return () => {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+    };
+  }, [currentStep, analysisStartTime, selectedChunksEstimatedTime]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -237,14 +235,25 @@ export default function ProcessPage() {
     }
   };
 
+  // Calculate time-based progress for analysis
+  const getTimeBasedProgress = () => {
+    if (!analysisStartTime || !selectedChunksEstimatedTime || currentStep !== 'analyzing') {
+      return progress; // Fall back to chunk-based progress
+    }
+    
+    const elapsedSeconds = Math.floor((Date.now() - analysisStartTime) / 1000);
+    const timeProgress = Math.min(100, (elapsedSeconds / selectedChunksEstimatedTime) * 100);
+    
+    // Use the higher of time-based or chunk-based progress for smoother experience
+    return Math.max(progress, Math.round(timeProgress));
+  };
+
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, `[${timestamp}] ${message}`]);
   };
 
   const checkPaymentLimits = async () => {
-    if (!session?.access_token) return { canProcess: false, credits_balance: 0 };
-    
     // If there's already a request in progress, wait for it
     if (paymentLimitsRequestRef.current) {
       console.log('Payment limits request already in progress, waiting...');
@@ -266,16 +275,13 @@ export default function ProcessPage() {
     const requestPromise = (async () => {
       try {
         setLastPaymentCheck(now)
-        console.log('Making payment limits request with 10s timeout...');
+        console.log('Making payment limits request...');
         
-        const response = await fetchWithTimeout(
+        const response = await makeAuthenticatedRequest(
           `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/user/profile`,
           {
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-          },
-          10000 // 10 second timeout
+            method: 'GET'
+          }
         );
         
         if (response.ok) {
@@ -325,7 +331,7 @@ export default function ProcessPage() {
             ...headers
           }
         },
-        15000 // 15 second timeout for SSE connection
+        30000 // 15 second timeout for SSE connection
       );
 
       if (!response.ok) {
@@ -417,40 +423,76 @@ export default function ProcessPage() {
   };
 
   const startPollingAnalysisStatus = (jobId: string) => {
-    // Set up the status polling with reduced frequency for better performance
-    const statusInterval = setInterval(async () => {
-      try {
-        const headers: Record<string, string> = {};
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
+    // Clear any existing polling first
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+    
+    let consecutiveFailures = 0;
+    const maxFailures = 3;
+    const startTime = Date.now();
+    const maxPollingDuration = 30 * 60 * 1000; // 30 minutes max
+    
+    // Set up the status polling with exponential backoff
+    const poll = async () => {
+      // Check if we've been polling too long
+      if (Date.now() - startTime > maxPollingDuration) {
+        console.log('Polling timeout reached, stopping');
+        addLog('⚠️ Status polling timed out. Please refresh the page to check status.');
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
         }
-
-        const statusResponse = await fetchWithTimeout(
-          `http://localhost:8000/api/status/${jobId}`, 
-          { headers },
-          8000 // 8 second timeout for status checks
+        return;
+      }
+      
+      try {
+        const statusResponse = await makeAuthenticatedRequest(
+          `http://localhost:8000/api/status/${jobId}`,
+          {
+            method: 'GET'
+          }
         );
         
         if (!statusResponse.ok) {
+          consecutiveFailures++;
           if (statusResponse.status === 403) {
             console.error('Authentication failed for status check - token may be expired');
             addLog('Warning: Authentication error checking status. You may need to refresh the page.');
           } else {
             console.error('Status check failed:', statusResponse.status, statusResponse.statusText);
           }
+          
+          // Stop polling after too many failures
+          if (consecutiveFailures >= maxFailures) {
+            console.log('Too many consecutive failures, stopping status polling');
+            if (pollingInterval) {
+              clearInterval(pollingInterval);
+              setPollingInterval(null);
+            }
+            return;
+          }
           return; // Skip processing if request failed
         }
+        
+        // Reset failure count on success
+        consecutiveFailures = 0;
         
         const data = await statusResponse.json();
         
         if (data.status === 'completed') {
-          clearInterval(statusInterval);
-          setPollingInterval(null);
+          if (pollingInterval) {
+            clearInterval(pollingInterval);
+            setPollingInterval(null);
+          }
           setIsProcessing(false);
           setCurrentStep('analyzed');
         } else if (data.status === 'partial') {
-          clearInterval(statusInterval);
-          setPollingInterval(null);
+          if (pollingInterval) {
+            clearInterval(pollingInterval);
+            setPollingInterval(null);
+          }
           setIsProcessing(false);
           setCurrentStep('analyzed');
           addLog(`✅ Analysis completed with ${data.processed_chunks}/${data.total_chunks} chunks`);
@@ -460,8 +502,10 @@ export default function ProcessPage() {
             showLimitWarning(data.processed_chunks, data.chunks_to_process || 2);
           }
         } else if (data.status === 'limit_reached') {
-          clearInterval(statusInterval);
-          setPollingInterval(null);
+          if (pollingInterval) {
+            clearInterval(pollingInterval);
+            setPollingInterval(null);
+          }
           setIsProcessing(false);
           addLog('❌ Insufficient credits. Please purchase more credits to continue.');
           
@@ -470,25 +514,60 @@ export default function ProcessPage() {
             'Insufficient credits! Purchase more credits to analyze all chunks.'
           );
         } else if (data.status === 'failed') {
-          clearInterval(statusInterval);
-          setPollingInterval(null);
+          if (pollingInterval) {
+            clearInterval(pollingInterval);
+            setPollingInterval(null);
+          }
           setIsProcessing(false);
           addLog(`❌ Analysis failed: ${data.error || 'Unknown error'}`);
         }
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          console.log('Status check timed out, will retry...');
+        consecutiveFailures++;
+        if (error instanceof Error && error.message.includes('Authentication')) {
+          console.error('Authentication failed during status polling - token may be expired');
+          addLog('Warning: Authentication error checking status. You may need to refresh the page.');
+          // Stop polling on auth errors
+          if (pollingInterval) {
+            clearInterval(pollingInterval);
+            setPollingInterval(null);
+          }
+          return;
+        } else if (error instanceof Error && error.name === 'AbortError') {
+          console.log(`Status check timed out (attempt ${consecutiveFailures}/${maxFailures}), will retry...`);
         } else if (error instanceof Error && error.message.includes('timed out')) {
-          console.log('Status check timeout, will retry...');
+          console.log(`Status check timeout (attempt ${consecutiveFailures}/${maxFailures}), will retry...`);
         } else {
           console.error('Status polling error:', error);
         }
+        
+        // Stop polling after too many failures
+        if (consecutiveFailures >= maxFailures) {
+          console.log('Too many consecutive failures, stopping status polling');
+          if (pollingInterval) {
+            clearInterval(pollingInterval);
+            setPollingInterval(null);
+          }
+          addLog('⚠️ Status polling stopped due to connection issues. Refresh page to resume.');
+        }
       }
-    }, 10000); // Increased to 10 seconds for better performance
+    };
+    
+    // Initial poll
+    poll();
+    
+    // Set up interval with exponential backoff based on failures
+    const getPollingInterval = () => {
+      const baseInterval = 15000; // 15 seconds base
+      return baseInterval * Math.min(Math.pow(2, consecutiveFailures), 4); // Max 60 seconds
+    };
+    
+    const statusInterval = setInterval(poll, getPollingInterval());
     
     setPollingInterval(statusInterval);
     
+    // Disable SSE for now - causing conflicts with polling
     // Set up Server-Sent Events for real-time progress
+    /*
     try {
       const headers: Record<string, string> = {};
       if (session?.access_token) {
@@ -503,19 +582,17 @@ export default function ProcessPage() {
     } catch (error) {
       // Silently fall back to status polling only
     }
+    */
   };
 
   const startPollingExtractionStatus = (jobId: string) => {
     // Poll for extraction completion
     const statusInterval = setInterval(async () => {
       try {
-        const headers: Record<string, string> = {};
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-        }
-
         // Check if extraction is complete by looking for job results
-        const resultsResponse = await fetch(`http://localhost:8000/api/results/${jobId}`, { headers });
+        const resultsResponse = await makeAuthenticatedRequest(`http://localhost:8000/api/results/${jobId}`, {
+          method: 'GET'
+        });
         
         if (resultsResponse.ok) {
           const resultsData = await resultsResponse.json();
@@ -536,41 +613,29 @@ export default function ProcessPage() {
             
             // Now get chunking time estimate based on extracted text from job summary
             try {
-              const summaryResponse = await fetch(`http://localhost:8000/api/job-summary/${jobId}`, { headers });
+              const summaryResponse = await makeAuthenticatedRequest(`http://localhost:8000/api/job-summary/${jobId}`, {
+                method: 'GET'
+              });
               if (summaryResponse.ok) {
                 const summaryData = await summaryResponse.json();
                 const textLength = summaryData.content_size || 0;
                 
-                if (textLength > 0) {
-                  const chunkResponse = await fetch(`http://localhost:8000/api/estimate-chunking-time`, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${session?.access_token}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      text_length: textLength,
-                      job_id: jobId
-                    }),
-                  });
-                  
-                  if (chunkResponse.ok) {
-                    const chunkEstimates = await chunkResponse.json();
-                    addTimeEstimate({
-                      type: 'chunking',
-                      ...chunkEstimates
-                    });
-                    addLog(`Chunking time estimate: ${chunkEstimates.chunking_time.formatted} (for ~${chunkEstimates.estimated_chunks} chunks)`);
-                  }
-                }
+                // Chunking is fast and unpredictable in duration, so we skip the estimate
+                addLog(`Text extracted: ${textLength.toLocaleString()} characters ready for chunking`);
               }
             } catch (error) {
-              console.error('Error getting chunking time estimate:', error);
+              console.error('Error getting text info:', error);
             }
           }
         }
       } catch (error) {
-        // Silently handle polling errors, continue polling
+        // Handle authentication errors more gracefully
+        if (error instanceof Error && error.message.includes('Authentication')) {
+          addLog('Warning: Authentication error during extraction status check. You may need to refresh the page.');
+          clearInterval(statusInterval);
+          setPollingInterval(null);
+        }
+        // Silently handle other polling errors, continue polling
       }
     }, 3000); // Poll every 3 seconds for extraction
     
@@ -594,31 +659,23 @@ export default function ProcessPage() {
       setCurrentStep('uploaded');
       addLog(`File selected: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
       
-      // Get extraction time estimate based on file size only
-      try {
-        const formData = new FormData();
-        formData.append('file', selectedFile);
-        
-        const response = await fetch('http://localhost:8000/api/estimate-time', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-          },
-          body: formData,
-        });
-        
-        if (response.ok) {
-          const estimates = await response.json();
-          addTimeEstimate({
-            type: 'extraction',
-            ...estimates
-          });
-          addLog(`Extraction time estimate: ${estimates.time_estimates.extraction.formatted} (based on ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB file)`);
+      // Get extraction time estimate
+      // Simple calculation since we don't have a backend endpoint for this
+      const estimatedExtractionTime = Math.max(30, Math.min(selectedFile.size / (1024 * 1024) * 30, 300)); // 30s per MB, min 30s, max 5min
+      const formatted = estimatedExtractionTime < 60 
+        ? `${Math.round(estimatedExtractionTime)}s` 
+        : `${Math.round(estimatedExtractionTime / 60)}m`;
+      
+      setTimeEstimate({
+        time_estimates: {
+          extraction: {
+            formatted: formatted,
+            estimated_seconds: estimatedExtractionTime
+          }
         }
-      } catch (error) {
-        console.error('Error getting extraction time estimate:', error);
-        // Don't block file selection if estimates fail
-      }
+        // Don't estimate chunks until after extraction
+      });
+      addLog(`Estimated extraction time: ${formatted}`);
     }
   };
 
@@ -704,26 +761,19 @@ export default function ProcessPage() {
       setCurrentStep('chunked');
       addLog(`Chunking complete! Created ${data.total_chunks} chunks ready for analysis`);
       
-      // Now get analysis time estimate based on actual chunk count
-      try {
-        const analysisResponse = await fetch(`http://localhost:8000/api/estimate-time/${currentJobId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${session?.access_token}`,
-          },
-        });
-        
-        if (analysisResponse.ok) {
-          const analysisEstimates = await analysisResponse.json();
-          addTimeEstimate({
-            type: 'analysis_all',
-            ...analysisEstimates
-          });
-          addLog(`Analysis time estimate: ${analysisEstimates.time_estimates.analysis.formatted} for ${analysisEstimates.total_chunks_available} chunks`);
-        }
-      } catch (error) {
-        console.error('Error getting analysis time estimate:', error);
-      }
+      // Calculate analysis time estimate for all chunks (40 seconds per chunk)
+      const totalAnalysisSeconds = data.total_chunks * 40;
+      const formatted = totalAnalysisSeconds < 60 
+        ? `${totalAnalysisSeconds}s` 
+        : totalAnalysisSeconds < 3600
+        ? `${Math.round(totalAnalysisSeconds / 60)}m`
+        : `${Math.round(totalAnalysisSeconds / 3600)}h ${Math.round((totalAnalysisSeconds % 3600) / 60)}m`;
+      
+      setAnalysisTimeEstimate({
+        formatted: formatted,
+        estimated_seconds: totalAnalysisSeconds
+      });
+      addLog(`Estimated analysis time for all chunks: ${formatted}`);
     } catch (error) {
       addLog(`Chunking failed: ${error}`);
     } finally {
@@ -756,44 +806,23 @@ export default function ProcessPage() {
     setLastProgressTimestamp(Date.now() / 1000); // Reset progress timestamp
     addLog(`Starting analysis of ${chunksToAnalyze.length} chunks...`);
 
-    // Get time estimate for selected chunks
-    try {
-      const headers: Record<string, string> = {};
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-
-      const selectedAnalysisResponse = await fetch(`http://localhost:8000/api/estimate-time/${currentJobId}?chunks_to_analyze=${chunksToAnalyze.length}`, {
-        method: 'GET',
-        headers,
-      });
-      
-      if (selectedAnalysisResponse.ok) {
-        const selectedEstimates = await selectedAnalysisResponse.json();
-        // Add a new estimate card for the selected chunks
-        addTimeEstimate({
-          type: 'analysis_selected',
-          selected_chunks: chunksToAnalyze.length,
-          ...selectedEstimates
-        });
-        addLog(`Analysis time estimate: ${selectedEstimates.time_estimates.analysis.formatted} for ${chunksToAnalyze.length} selected chunks`);
-      }
-    } catch (error) {
-      console.error('Error getting selected chunks analysis estimate:', error);
-    }
+    // Calculate time estimate for selected chunks (40 seconds per chunk)
+    const selectedAnalysisSeconds = chunksToAnalyze.length * 40;
+    const formatted = selectedAnalysisSeconds < 60 
+      ? `${selectedAnalysisSeconds}s` 
+      : selectedAnalysisSeconds < 3600
+      ? `${Math.round(selectedAnalysisSeconds / 60)}m`
+      : `${Math.round(selectedAnalysisSeconds / 3600)}h ${Math.round((selectedAnalysisSeconds % 3600) / 60)}m`;
+    
+    setSelectedChunksEstimatedTime(selectedAnalysisSeconds);
+    addLog(`Estimated analysis time: ${formatted} for ${chunksToAnalyze.length} selected chunks`);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-
-      const response = await fetch(`http://localhost:8000/api/analyze/${currentJobId}`, {
+      const response = await makeAuthenticatedRequest(`http://localhost:8000/api/analyze/${currentJobId}`, {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           selected_chunks: chunksToAnalyze,
         }),
@@ -842,14 +871,8 @@ export default function ProcessPage() {
     try {
       addLog('Starting pack download...');
       
-      const headers: Record<string, string> = {};
-      
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-
-      const response = await fetch(`http://localhost:8000/api/download/${currentJobId}/pack`, {
-        headers,
+      const response = await makeAuthenticatedRequest(`http://localhost:8000/api/download/${currentJobId}/pack`, {
+        method: 'GET'
       });
       
       if (!response.ok) {
@@ -886,11 +909,9 @@ export default function ProcessPage() {
     setIsProcessing(false);
     setCurrentStep('upload');
     setProgress(0);
+    setSelectedChunksEstimatedTime(0);
     setLogs([]);
     setAnalysisStartTime(null);
-    
-    // Clear time estimates history
-    clearTimeEstimatesHistory();
     
     if (pollingInterval) {
       clearInterval(pollingInterval);
@@ -1025,6 +1046,72 @@ export default function ProcessPage() {
               {/* Timeline Progress Indicator */}
               <div className="relative mb-8">
                 
+                {/* Simple Time Overview */}
+                {(timeEstimate || analysisTimeEstimate || ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) && (
+                  <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+                    <div className="text-sm font-medium text-gray-300 mb-3">Time Estimates</div>
+                    <div className="grid grid-cols-3 gap-4 text-xs">
+                      <div className="text-center">
+                        <div className="text-gray-400 mb-1">Extract</div>
+                        <div className={
+                          ['extracted', 'chunked', 'analyzed'].includes(currentStep) 
+                            ? 'text-green-400' 
+                            : currentStep === 'extracting' 
+                            ? 'text-blue-400' 
+                            : 'text-gray-500'
+                        }>
+                          {['extracted', 'chunked', 'analyzed'].includes(currentStep) 
+                            ? '✓ Complete' 
+                            : currentStep === 'extracting' 
+                            ? 'Processing...'
+                            : timeEstimate 
+                            ? timeEstimate.time_estimates.extraction.formatted 
+                            : '~2-5m'
+                          }
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-400 mb-1">Chunk</div>
+                        <div className={
+                          ['chunked', 'analyzed'].includes(currentStep) 
+                            ? 'text-green-400' 
+                            : currentStep === 'chunking' 
+                            ? 'text-blue-400' 
+                            : 'text-gray-500'
+                        }>
+                          {['chunked', 'analyzed'].includes(currentStep) 
+                            ? '✓ Complete' 
+                            : currentStep === 'chunking' 
+                            ? 'Processing...'
+                            : '~10-30s'
+                          }
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-400 mb-1">Analyze</div>
+                        <div className={
+                          currentStep === 'analyzed' 
+                            ? 'text-green-400' 
+                            : currentStep === 'analyzing' 
+                            ? 'text-blue-400' 
+                            : 'text-gray-500'
+                        }>
+                          {currentStep === 'analyzed' 
+                            ? '✓ Complete' 
+                            : currentStep === 'analyzing' 
+                            ? 'Processing...'
+                            : analysisTimeEstimate 
+                            ? analysisTimeEstimate.formatted 
+                            : ['chunked'].includes(currentStep)
+                            ? 'Ready'
+                            : 'TBD'
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 {/* Step icons and labels with connecting lines */}
                 <div className="flex items-center justify-between relative">
                   {[
@@ -1110,75 +1197,6 @@ export default function ProcessPage() {
               </div>
             </div>
 
-            {/* Time Estimates History - shows all estimates as they're calculated */}
-            {timeEstimatesHistory.length > 0 && (
-              <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg shadow-sm">
-                <div className="flex items-center space-x-2 mb-3">
-                  <BarChart3 className="h-4 w-4 text-blue-400" />
-                  <h4 className="text-sm font-medium text-text-primary">Processing Time Estimates</h4>
-                  <span className="text-xs text-text-secondary">({timeEstimatesHistory.length} estimate{timeEstimatesHistory.length > 1 ? 's' : ''})</span>
-                </div>
-                
-                <div className="space-y-3 text-sm">
-                  {timeEstimatesHistory.map((estimate, index) => (
-                    <div key={index} className="p-3 bg-blue-500/5 rounded-md border-l-4 border-blue-400/50">
-                      {estimate.type === 'extraction' && (
-                        <>
-                          <div className="text-text-primary font-medium flex items-center gap-2">
-                            Extraction: {estimate.time_estimates.extraction.formatted}
-                          </div>
-                          <div className="text-xs text-text-secondary mt-1">
-                            Based on {estimate.file_size_mb.toFixed(1)}MB file size
-                          </div>
-                        </>
-                      )}
-                      
-                      {estimate.type === 'chunking' && (
-                        <>
-                          <div className="text-text-primary font-medium flex items-center gap-2">
-                            Chunking: {estimate.chunking_time.formatted}
-                          </div>
-                          <div className="text-xs text-text-secondary mt-1">
-                            For {estimate.estimated_chunks} chunks
-                          </div>
-                        </>
-                      )}
-                      
-                      {estimate.type === 'analysis_all' && (
-                        <>
-                          <div className="text-text-primary font-medium flex items-center gap-2">
-                            Analysis (All Chunks): {estimate.time_estimates.analysis.formatted}
-                          </div>
-                          <div className="text-xs text-text-secondary mt-1">
-                            For all {estimate.total_chunks_available} chunks
-                          </div>
-                        </>
-                      )}
-                      
-                      {estimate.type === 'analysis_selected' && (
-                        <>
-                          <div className="text-text-primary font-medium flex items-center gap-2">
-                            Analysis (Selected): {estimate.time_estimates.analysis.formatted}
-                          </div>
-                          <div className="text-xs text-text-secondary mt-1">
-                            For {estimate.selected_chunks} selected chunks
-                          </div>
-                        </>
-                      )}
-                      
-                      <div className="text-xs text-text-tertiary mt-2 font-mono">
-                        {new Date(estimate.timestamp).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="mt-3 text-xs text-text-secondary italic">
-                  💡 Estimates based on historical data and may vary based on content complexity
-                </div>
-              </div>
-            )}
-
             {/* Upload Section */}
             {currentStep === 'upload' && (
               <div className="bg-gray-700 border border-gray-600 rounded-lg p-8 text-center">
@@ -1222,6 +1240,23 @@ export default function ProcessPage() {
                     <p className="text-sm text-text-secondary">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>
+                    {/* Simple Time Estimates Display */}
+                    <div className="mt-3 space-y-1">
+                      {timeEstimate && (
+                        <div className="flex items-center text-xs text-gray-400">
+                          <span className="w-16">Extract:</span>
+                          <span>{timeEstimate.time_estimates.extraction.formatted}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center text-xs text-gray-400">
+                        <span className="w-16">Chunk:</span>
+                        <span>~10-30s</span>
+                      </div>
+                      <div className="flex items-center text-xs text-gray-400">
+                        <span className="w-16">Analyze:</span>
+                        <span>TBD after extraction</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1276,7 +1311,26 @@ export default function ProcessPage() {
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <BarChart3 className="h-5 w-5 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-text-primary">Chunking Complete</h3>
+                  <div>
+                    <h3 className="text-lg font-semibold text-text-primary">Chunking Complete</h3>
+                    {/* Simple Time Estimates Display */}
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center text-xs text-gray-400">
+                        <span className="w-16">Extract:</span>
+                        <span>✓ Complete</span>
+                      </div>
+                      <div className="flex items-center text-xs text-gray-400">
+                        <span className="w-16">Chunk:</span>
+                        <span>✓ Complete</span>
+                      </div>
+                      {analysisTimeEstimate && (
+                        <div className="flex items-center text-xs text-gray-400">
+                          <span className="w-16">Analyze:</span>
+                          <span>{analysisTimeEstimate.formatted} (all {chunkData.total_chunks} chunks)</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex space-x-3">
@@ -1332,19 +1386,40 @@ export default function ProcessPage() {
                 </div>
                 
                 <div className="space-y-3">
+                  {/* Simple Time Overview */}
+                  <div className="grid grid-cols-3 gap-4 text-xs text-gray-400 mb-4">
+                    <div className="text-center">
+                      <div className="font-medium">Extract</div>
+                      <div className="text-green-400">✓ Complete</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium">Chunk</div>
+                      <div className="text-green-400">✓ Complete</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium">Analyze</div>
+                      <div className="text-blue-400">In Progress</div>
+                    </div>
+                  </div>
+                  
                   <div className="flex justify-between text-sm">
                     <span className="text-text-secondary">Progress</span>
-                    <span className="text-text-primary font-medium">{progress}%</span>
+                    <span className="text-text-primary font-medium">{getTimeBasedProgress()}%</span>
                   </div>
-                  <div className="w-full bg-bg-secondary rounded-full h-2">
+                  <div className="w-full bg-gray-700 rounded-full h-3 border border-gray-600">
                     <div 
-                      className="bg-accent-primary h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
+                      className="bg-gradient-to-r from-gray-400 to-gray-400 h-3 rounded-full transition-all duration-300 shadow-lg"
+                      style={{ width: `${getTimeBasedProgress()}%` }}
                     ></div>
                   </div>
                   {analysisStartTime && (
                     <div className="text-sm text-text-secondary">
                       Elapsed: {formatElapsedTime(analysisStartTime)}
+                      {selectedChunksEstimatedTime > 0 && (
+                        <span className="ml-2">
+                          / Est: {Math.floor(selectedChunksEstimatedTime / 60)}m {selectedChunksEstimatedTime % 60}s
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1420,6 +1495,17 @@ export default function ProcessPage() {
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-text-secondary">
                     {selectedChunks.size} of {availableChunks.length} chunks selected
+                    {selectedChunks.size > 0 && (
+                      <div className="text-blue-400 mt-1 text-xs">
+                        Est. time: {(() => {
+                          const seconds = selectedChunks.size * 40; // 40 seconds per chunk
+                          if (seconds < 60) return `${seconds}s`;
+                          const minutes = Math.floor(seconds / 60);
+                          const remainingSeconds = seconds % 60;
+                          return remainingSeconds === 0 ? `${minutes}m` : `${minutes}m ${remainingSeconds}s`;
+                        })()}
+                      </div>
+                    )}
                   </div>
                   <div className="flex space-x-2">
                     <button
