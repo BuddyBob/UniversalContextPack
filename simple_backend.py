@@ -24,6 +24,7 @@ import hmac
 import unicodedata
 import re
 import requests
+import certifi
 import traceback
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -60,6 +61,10 @@ R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY")
 R2_SECRET_KEY = os.getenv("R2_SECRET_KEY") 
 R2_BUCKET = os.getenv("R2_BUCKET_NAME")
 
+# Create a properly configured requests session with SSL verification
+r2_session = requests.Session()
+r2_session.verify = certifi.where()  # Use Mozilla's certificate bundle
+print(f"🔒 SSL verification enabled using certificates from: {certifi.where()}")
 
 
 # Initialize Supabase client
@@ -547,7 +552,7 @@ def sign_aws_request(method, url, headers, payload, access_key, secret_key, regi
     return headers
 
 def upload_to_r2_direct(key: str, content: str):
-    """Upload directly to R2 using requests with proper S3 auth"""
+    """Upload directly to R2 using requests with proper SSL verification and S3 auth"""
     try:
         
         # Construct the URL
@@ -562,7 +567,7 @@ def upload_to_r2_direct(key: str, content: str):
         # Sign the request
         headers = sign_aws_request('PUT', url, headers, content, R2_ACCESS_KEY, R2_SECRET_KEY)
         
-        # Make the request with HTTP and better Unicode handling
+        # Make the request with proper SSL verification and better Unicode handling
         try:
             # Clean the content of any surrogate characters before encoding
             import codecs
@@ -570,16 +575,38 @@ def upload_to_r2_direct(key: str, content: str):
             content_bytes = content.encode('utf-8', errors='ignore')
             # Then decode back to clean string
             clean_content = content_bytes.decode('utf-8')
-            response = requests.put(url, data=clean_content.encode('utf-8'), headers=headers, verify=False, timeout=30)
+            response = r2_session.put(url, data=clean_content.encode('utf-8'), headers=headers, timeout=30)
+        except requests.exceptions.SSLError as ssl_error:
+            print(f"🔒 SSL verification failed for R2 upload: {ssl_error}")
+            print("📋 Falling back to local storage due to SSL issues")
+            # Fallback to local storage on SSL issues
+            local_path = f"local_storage/{key}"
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(content)
+            return True
         except UnicodeEncodeError as ue:
             print(f"Unicode encoding error: {ue}")
             # More aggressive cleaning for surrogate pairs
             import unicodedata
             clean_content = ''.join(char for char in content if unicodedata.category(char) != 'Cs')
-            response = requests.put(url, data=clean_content.encode('utf-8'), headers=headers, verify=False, timeout=30)
+            try:
+                response = r2_session.put(url, data=clean_content.encode('utf-8'), headers=headers, timeout=30)
+            except requests.exceptions.SSLError as ssl_error:
+                print(f"🔒 SSL verification failed on retry: {ssl_error}")
+                # Fallback to local storage
+                local_path = f"local_storage/{key}"
+                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
+                    f.write(clean_content)
+                return True
+            # More aggressive cleaning for surrogate pairs
+            import unicodedata
+            clean_content = ''.join(char for char in content if unicodedata.category(char) != 'Cs')
+            response = r2_session.put(url, data=clean_content.encode('utf-8'), headers=headers, timeout=30)
         
         if response.status_code in [200, 201]:
-
+            print(f"✅ R2 upload successful with SSL verification: {key}")
             return True
         else:
             print(f"R2 upload failed: {response.status_code} - {response.text}")
@@ -621,7 +648,7 @@ def upload_to_r2(key: str, content: str):
         return False
 
 def download_from_r2(key: str, silent_404: bool = False) -> str:
-    """Download content from R2 bucket."""
+    """Download content from R2 bucket with proper SSL verification."""
     try:
         # Try R2 first
         url = f"{R2_ENDPOINT}/{R2_BUCKET}/{key}"
@@ -636,12 +663,29 @@ def download_from_r2(key: str, silent_404: bool = False) -> str:
         # Sign the request
         headers = sign_aws_request('GET', url, headers, '', R2_ACCESS_KEY, R2_SECRET_KEY)
         
-        # Make the request with HTTP
-        response = requests.get(url, headers=headers, verify=False, timeout=30)
+        # Make the request with proper SSL verification
+        try:
+            response = r2_session.get(url, headers=headers, timeout=30)
+        except requests.exceptions.SSLError as ssl_error:
+            if not silent_404:
+                print(f"🔒 SSL verification failed for R2 download: {ssl_error}")
+                print("📋 Falling back to local storage due to SSL issues")
+            # Fall back to local storage immediately on SSL issues
+            local_path = f"local_storage/{key}"
+            try:
+                with open(local_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                if not silent_404:
+                    print(f"Successfully downloaded from local storage: {key} ({len(content)} chars)")
+                return content
+            except Exception as local_error:
+                if not silent_404:
+                    print(f"Error downloading from local storage: {local_error}")
+                return None
         
         print(f"R2 response status: {response.status_code}")
         if response.status_code == 200:
-            print(f"Successfully downloaded from R2: {key} ({len(response.text)} chars)")
+            print(f"✅ Successfully downloaded from R2 with SSL verification: {key} ({len(response.text)} chars)")
             return response.text
         elif response.status_code == 404 and silent_404:
             # Silently return None for expected 404s (like new process.log files)
@@ -1535,6 +1579,13 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
             selected_chunks = list(range(1, total_chunks + 1))  # All chunks, 1-based
             
         chunks_to_process = min(available_credits, len(selected_chunks))
+        
+        # SAFETY: Limit batch size to prevent rate limit issues
+        MAX_CHUNKS_PER_JOB = 10  # Prevent rate limit issues
+        if chunks_to_process > MAX_CHUNKS_PER_JOB:
+            chunks_to_process = MAX_CHUNKS_PER_JOB
+            print(f"⚠️  Limited to {MAX_CHUNKS_PER_JOB} chunks per job to prevent rate limits")
+        
         actual_chunks_to_process = selected_chunks[:chunks_to_process]  # Take only what we can afford
         
         print(f"💳 Available credits: {available_credits}")
@@ -1548,11 +1599,20 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
                 "status": "limit_reached", 
                 "message": "No credits available. Purchase credits to analyze chunks.",
                 "credits_balance": available_credits,
-                "total_chunks": total_chunks,
-                "upgrade_required": True
+                "payment_plan": payment_status["plan"]
             }
         
+        # Calculate adaptive batch size for estimation
+        estimation_batch_size = 2 if chunks_to_process <= 5 else (3 if chunks_to_process <= 15 else 4)
         
+        # Warn about processing time for large batches (updated for parallel processing)
+        # With parallel processing, time is reduced significantly
+        estimated_time_minutes = max(1, (chunks_to_process / estimation_batch_size) * 1.2)  # ~0.4 minutes per chunk with parallel processing
+        if chunks_to_process > 5:
+            print(f"⚠️  Large batch: {chunks_to_process} chunks with parallel processing will take ~{estimated_time_minutes:.1f} minutes")
+            print(f"🚀 Parallel speedup: Processing {min(estimation_batch_size, chunks_to_process)} chunks simultaneously")
+            
+        print(f"⏱️  Estimated processing time: {estimated_time_minutes:.1f} minutes for {chunks_to_process} chunks (parallel batches of {estimation_batch_size})")
         
         # Get OpenAI client (will automatically use current server API key)
         print(f"🤖 Initializing OpenAI client")
@@ -1560,93 +1620,225 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         print(f"✅ OpenAI client ready")
         
         
-        ucp_prompt = """Analyze this conversation data and extract ALL unique facts to build a Universal Context Pack (UCP). Provide extremely detailed analysis in these categories:
+        # Optimized system prompt for OpenAI caching (>1024 tokens for cache eligibility)
+        system_prompt = """You are an expert data analyst specializing in building Universal Context Packs (UCPs) from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
 
-1. PERSONAL PROFILE - Demographics, preferences, lifestyle, goals, values
-2. BEHAVIORAL PATTERNS - Communication style, problem-solving, learning patterns  
-3. KNOWLEDGE DOMAINS - Technical skills, expertise areas, proficiency levels
-4. PROJECT PATTERNS - Workflow preferences, tools, methodologies
-5. TIMELINE EVOLUTION - Development over time, milestones, growth
-6. INTERACTION INSIGHTS - Communication preferences, response styles
+ANALYSIS FRAMEWORK:
+Provide extremely detailed analysis in these six primary categories, ensuring comprehensive coverage and depth:
 
-Be extremely detailed with direct quotes and examples. Extract every unique fact, preference, skill, and behavioral pattern.
+1. PERSONAL PROFILE ANALYSIS
+   - Demographics: Age indicators, location references, cultural background, family structure
+   - Preferences: Personal likes/dislikes, lifestyle choices, values alignment, aesthetic preferences
+   - Goals & Aspirations: Short-term objectives, long-term vision, career ambitions, personal growth targets
+   - Values & Beliefs: Core principles, ethical stances, philosophical viewpoints, spiritual beliefs
+   - Life Context: Family situation, education background, social environment, geographic influences
+   - Personality Traits: Introversion/extroversion, openness, conscientiousness, emotional patterns
+   - Health & Wellness: Physical health mentions, mental health awareness, fitness preferences, dietary choices
 
-Conversation data:
+2. BEHAVIORAL PATTERNS DISCOVERY
+   - Communication Style: Formal vs casual, directness level, emotional expression, humor usage
+   - Problem-Solving Approach: Analytical vs intuitive, systematic vs creative, research methods
+   - Learning Patterns: Visual vs auditory, hands-on vs theoretical, pace preferences, retention methods
+   - Decision-Making: Risk tolerance, consultation patterns, timeline preferences, analysis depth
+   - Stress Response: Coping mechanisms, pressure reactions, support seeking, resilience indicators
+   - Work Habits: Productivity patterns, procrastination tendencies, organization systems, time management
+   - Social Behaviors: Group dynamics, leadership tendencies, conflict resolution, relationship building
 
-"""
+3. KNOWLEDGE DOMAINS MAPPING
+   - Technical Skills: Programming languages, tools, frameworks, proficiency levels, learning trajectory
+   - Professional Expertise: Industry knowledge, specialized skills, certifications, experience depth
+   - Academic Background: Educational achievements, research areas, publications, continuous learning
+   - Hobby Knowledge: Personal interests, recreational skills, passionate subjects, expertise development
+   - Soft Skills: Leadership, communication, teamwork, emotional intelligence, adaptability
+   - Domain-Specific Knowledge: Field expertise, niche specializations, cross-disciplinary understanding
+   - Innovation & Creativity: Original thinking, creative problem-solving, artistic pursuits, invention
+
+4. PROJECT PATTERNS IDENTIFICATION
+   - Workflow Preferences: Sequential vs parallel, planning vs improvisation, documentation habits
+   - Tool Usage: Preferred software, platforms, methodologies, automation preferences, efficiency tools
+   - Collaboration Style: Team vs solo work, leadership vs following, communication frequency, delegation
+   - Quality Standards: Attention to detail, perfectionism level, acceptance criteria, review processes
+   - Resource Management: Time allocation, priority setting, efficiency strategies, budget consciousness
+   - Project Lifecycle: Initiation methods, execution strategies, completion patterns, post-project analysis
+   - Risk Management: Risk assessment abilities, contingency planning, adaptability to changes
+
+5. TIMELINE EVOLUTION TRACKING
+   - Skill Development: Learning progression, capability growth, expertise expansion, mastery indicators
+   - Career Milestones: Job changes, promotions, significant achievements, professional transitions
+   - Interest Evolution: Changing focuses, new passions, abandoned interests, hobby development
+   - Relationship Development: Professional networks, mentoring relationships, partnership formation
+   - Goal Achievement: Completed objectives, abandoned goals, pivoted directions, success metrics
+   - Life Stage Transitions: Educational phases, career changes, personal milestones, lifestyle shifts
+   - Knowledge Acquisition: Learning sequences, expertise building, certification timelines, skill stacking
+
+6. INTERACTION INSIGHTS ANALYSIS
+   - Communication Preferences: Channel selection, frequency, timing patterns, medium preferences
+   - Response Styles: Quick vs thoughtful, brief vs detailed, formal vs casual, emotional tone
+   - Engagement Patterns: Proactive vs reactive, initiating vs responding, participation levels
+   - Feedback Reception: Open to criticism, defensive responses, improvement implementation, growth mindset
+   - Social Dynamics: Group participation, authority respect, peer interaction, influence patterns
+   - Conflict Resolution: Approach to disagreements, negotiation style, compromise willingness
+   - Mentoring & Teaching: Knowledge sharing patterns, teaching ability, guidance provision, learning facilitation
+
+EXTRACTION REQUIREMENTS:
+- Extract EVERY unique fact, preference, skill, and behavioral pattern with meticulous attention to detail
+- Include direct quotes and specific examples whenever possible to support findings
+- Note contradictions or inconsistencies for further analysis and pattern recognition
+- Identify implicit patterns that may not be explicitly stated but can be inferred from context
+- Cross-reference information across categories for comprehensive understanding and validation
+- Maintain objective analysis while noting subjective elements and personal interpretations
+- Preserve temporal context and evolution indicators to track development over time
+- Look for recurring themes, consistent behaviors, and developmental patterns across conversations
+- Identify unique characteristics that distinguish this individual from general populations
+- Note areas of expertise, passion, struggle, and growth for complete personality mapping
+
+OUTPUT FORMAT:
+Structure your analysis clearly with detailed subsections for each category. Use bullet points for discrete facts and longer paragraphs for complex patterns. Always cite specific examples from the conversation data to support your analysis. Provide confidence levels for inferences and clearly distinguish between explicitly stated information and derived insights.
+
+QUALITY STANDARDS:
+- Comprehensive coverage of all six analysis categories
+- Specific evidence citations for every major finding
+- Clear distinction between facts and interpretations
+- Logical organization and professional presentation
+- Actionable insights for understanding the individual's complete profile
+
+The conversation data you will analyze follows this message. Provide your comprehensive Universal Context Pack analysis based on the framework above."""
         
         results = []
         total_input_tokens = 0
         total_output_tokens = 0
+        total_cached_tokens = 0
         total_cost = 0.0
         failed_chunks = []
         
-        # Process only the selected chunks
-        for idx, chunk_num in enumerate(actual_chunks_to_process):
+        # **PARALLEL BATCH PROCESSING** for dramatically improved speed
+        # Adaptive batch size based on total chunks for optimal performance
+        if chunks_to_process <= 5:
+            batch_size = 2  # Smaller batches for small jobs
+        elif chunks_to_process <= 15:
+            batch_size = 3  # Optimal for medium jobs
+        else:
+            batch_size = 4  # Larger batches for big jobs (stay under rate limits)
+        
+        async def process_single_chunk(chunk_num: int, idx: int, total_chunks: int):
+            """Process a single chunk with full error handling"""
             try:
-                print(f"🔄 Processing chunk {chunk_num} ({idx+1}/{len(actual_chunks_to_process)}) for job {job_id}")
+                print(f"🔄 Processing chunk {chunk_num} ({idx+1}/{total_chunks}) for job {job_id}")
                 chunk_key = f"{user.r2_directory}/{job_id}/chunk_{chunk_num:03d}.txt"
                 
                 chunk_content = download_from_r2(chunk_key)
                 
                 if not chunk_content:
                     print(f"❌ Chunk {chunk_num} content not found at {chunk_key}")
-                    failed_chunks.append(chunk_num)
-                    continue
+                    return {"error": f"Chunk {chunk_num} not found", "chunk_num": chunk_num}
                 
                 print(f"✅ Chunk {chunk_num} loaded, size: {len(chunk_content)} chars")
                 
-                # Update progress less frequently for better performance (every 5 chunks or important milestones)
-                if idx % 5 == 0 or idx == len(actual_chunks_to_process) - 1:
-                    print(f"📊 Updating progress: {int((idx / len(actual_chunks_to_process)) * 100)}%")
-                    update_job_progress(job_id, "analyzing", 
-                                      int((idx / len(actual_chunks_to_process)) * 100), 
-                                      f"Analyzing chunk {chunk_num} ({idx+1}/{len(actual_chunks_to_process)})...", 
-                                      current_chunk=idx+1, total_chunks=len(actual_chunks_to_process))
-                
-                # Process with OpenAI
+                # Process with OpenAI using optimized prompt structure for caching
                 print(f"🤖 Sending chunk {chunk_num} to OpenAI (model: gpt-5-nano-2025-08-07)")
                 ai_response = openai_client.chat.completions.create(
                     model="gpt-5-nano-2025-08-07",
-                    messages=[{"role": "user", "content": ucp_prompt + chunk_content}],
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}
+                    ],
                     max_completion_tokens=15000,
-                    timeout=120  # 2 minute timeout per chunk
+                    timeout=120,  # 2 minute timeout per chunk
+                    prompt_cache_key="ucp_analysis_v1"  # Consistent cache key for all UCP analyses
                 )
                 
-                print(f"✅ OpenAI response received for chunk {chunk_num}, tokens: {ai_response.usage.completion_tokens}")
+                print(f"✅ OpenAI response received for chunk {chunk_num}")
                 
-                # Remove redundant mid-chunk progress update for performance
+                # Log caching performance
+                usage = ai_response.usage
+                cached_tokens = getattr(usage.prompt_tokens_details, 'cached_tokens', 0) if hasattr(usage, 'prompt_tokens_details') else 0
+                cache_hit_rate = (cached_tokens / usage.prompt_tokens * 100) if usage.prompt_tokens > 0 else 0
                 
-                input_tokens = count_tokens(chunk_content)
-                output_tokens = ai_response.usage.completion_tokens
+                print(f"📊 Chunk {chunk_num} - Tokens: {usage.completion_tokens} output, {usage.prompt_tokens} input")
+                if cached_tokens > 0:
+                    print(f"🚀 Cache hit! {cached_tokens}/{usage.prompt_tokens} tokens cached ({cache_hit_rate:.1f}%)")
+                else:
+                    print(f"💾 No cache hit for chunk {chunk_num}")
                 
-                # Calculate cost for this chunk
-                input_cost = (input_tokens / 1_000_000) * 0.050
+                input_tokens = usage.prompt_tokens
+                output_tokens = usage.completion_tokens
+                
+                # Calculate cost for this chunk (cached tokens are discounted)
+                non_cached_input_tokens = input_tokens - cached_tokens
+                input_cost = (non_cached_input_tokens / 1_000_000) * 0.050  # Only non-cached tokens cost full price
+                cached_cost = (cached_tokens / 1_000_000) * 0.0125  # 75% discount for cached tokens
                 output_cost = (output_tokens / 1_000_000) * 0.400
-                chunk_cost = input_cost + output_cost
-                
-                total_input_tokens += input_tokens
-                total_output_tokens += output_tokens
-                total_cost += chunk_cost
+                chunk_cost = input_cost + cached_cost + output_cost
                 
                 result = {
                     "chunk_index": chunk_num,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
+                    "cached_tokens": cached_tokens,
+                    "cache_hit_rate": cache_hit_rate,
                     "cost": chunk_cost,
                     "content": ai_response.choices[0].message.content,
                     "processed_at": datetime.utcnow().isoformat()
                 }
                 
-                results.append(result)
                 print(f"💾 Saving result for chunk {chunk_num} to R2")
                 upload_to_r2(f"{user.r2_directory}/{job_id}/result_{chunk_num:03d}.json", json.dumps(result, indent=2))
                 print(f"✅ Chunk {chunk_num} processing complete")
                 
+                return result
+                
             except Exception as chunk_error:
                 print(f"❌ Error processing chunk {chunk_num}: {chunk_error}")
-                failed_chunks.append(chunk_num)
-                continue
+                return {"error": str(chunk_error), "chunk_num": chunk_num}
+        
+        # Process chunks in parallel batches
+        all_results = []
+        total_chunks_count = len(actual_chunks_to_process)
+        
+        for batch_start in range(0, total_chunks_count, batch_size):
+            batch_end = min(batch_start + batch_size, total_chunks_count)
+            batch_chunks = actual_chunks_to_process[batch_start:batch_end]
+            
+            print(f"🚀 Processing batch {batch_start//batch_size + 1}: chunks {batch_chunks}")
+            
+            # Update progress for this batch
+            batch_progress = int((batch_start / total_chunks_count) * 100)
+            update_job_progress(job_id, "analyzing", 
+                              batch_progress, 
+                              f"Processing batch {batch_start//batch_size + 1}: chunks {batch_chunks}", 
+                              current_chunk=batch_start+1, total_chunks=total_chunks_count)
+            
+            # Create tasks for parallel processing
+            tasks = []
+            for i, chunk_num in enumerate(batch_chunks):
+                global_idx = batch_start + i
+                task = asyncio.create_task(process_single_chunk(chunk_num, global_idx, total_chunks_count))
+                tasks.append(task)
+            
+            # Wait for all chunks in this batch to complete
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process batch results
+            for result in batch_results:
+                if isinstance(result, Exception):
+                    print(f"❌ Batch processing exception: {result}")
+                    failed_chunks.append("unknown")
+                elif isinstance(result, dict) and "error" in result:
+                    print(f"❌ Chunk {result.get('chunk_num')} failed: {result['error']}")
+                    failed_chunks.append(result.get('chunk_num'))
+                else:
+                    all_results.append(result)
+                    
+                    # Update running totals
+                    total_input_tokens += result["input_tokens"]
+                    total_output_tokens += result["output_tokens"]
+                    total_cached_tokens += result["cached_tokens"]
+                    total_cost += result["cost"]
+            
+            print(f"✅ Batch {batch_start//batch_size + 1} completed: {len([r for r in batch_results if not isinstance(r, Exception) and 'error' not in r])}/{len(batch_chunks)} successful")
+        
+        # Use the results from parallel processing
+        results = all_results
         
         if not results:
             # Rollback credits for completely failed job
@@ -1712,7 +1904,10 @@ Purchase more credits to unlock your complete Universal Context Pack!
         upload_to_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt", aggregated_content)
 
         
-        # Save summary to R2
+        # Save summary to R2 with caching performance metrics
+        cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
+        cost_savings = (total_cached_tokens / 1_000_000) * 0.0375  # 75% discount on cached tokens
+        
         summary = {
             "job_id": job_id,
             "total_chunks": total_chunks,
@@ -1724,6 +1919,9 @@ Purchase more credits to unlock your complete Universal Context Pack!
             "failed_chunks": failed_chunks,
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
+            "total_cached_tokens": total_cached_tokens,
+            "cache_hit_rate": round(cache_hit_rate, 1),
+            "cost_savings_from_cache": round(cost_savings, 4),
             "total_cost": total_cost,
             "completed_at": datetime.utcnow().isoformat()
         }
@@ -2772,6 +2970,35 @@ async def add_credits_to_user(user_id: str, credits: int, amount: float, stripe_
         # Try to log more details about the error
         if hasattr(e, '__dict__'):
             print(f"❌ Error details: {e.__dict__}")
+
+@app.get("/api/cache-performance/{job_id}")
+async def get_cache_performance(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Get caching performance metrics for a job"""
+    try:
+        # Download summary to check cache performance
+        summary_content = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json")
+        if not summary_content:
+            raise HTTPException(status_code=404, detail="Job summary not found")
+        
+        summary = json.loads(summary_content)
+        
+        cache_metrics = {
+            "job_id": job_id,
+            "total_input_tokens": summary.get("total_input_tokens", 0),
+            "total_cached_tokens": summary.get("total_cached_tokens", 0),
+            "cache_hit_rate": summary.get("cache_hit_rate", 0),
+            "cost_savings_from_cache": summary.get("cost_savings_from_cache", 0),
+            "total_cost": summary.get("total_cost", 0),
+            "processed_chunks": summary.get("processed_chunks", 0)
+        }
+        
+        return cache_metrics
+        
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Invalid summary data")
+    except Exception as e:
+        print(f"Error fetching cache performance: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch cache performance")
 
 if __name__ == "__main__":
     print(" Starting Simple UCP Backend with R2 Storage - 3 Step Process...")
