@@ -2,7 +2,7 @@
   builder = "NIXPACKS"
 
 [deploy]
-  startCommand = "uvicorn simple_backend:app --host 0.0.0.0 --port $PORT"
+  startCommand = "bash start.sh"
 
 [env]
   NIXPACKS_PYTHON_VERSION = "3.11"
