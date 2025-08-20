@@ -1969,6 +1969,35 @@ async def download_chunk_file(job_id: str, chunk_index: int, user: Authenticated
         print(f"Attempted key: {user.r2_directory}/{job_id}/chunk_{chunk_index:03d}.txt")
         raise HTTPException(status_code=404, detail=f"Chunk file not found: {str(e)}")
 
+@app.get("/api/download/{job_id}/{filename}")
+async def download_result_file(job_id: str, filename: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Download individual result files (result_001.json, result_002.json, etc.) from R2."""
+    try:
+        # Validate filename to prevent directory traversal
+        if not ((filename.startswith('result_') and filename.endswith('.json')) or filename == 'summary.json'):
+            raise HTTPException(status_code=400, detail="Invalid filename format")
+        
+        file_key = f"{user.r2_directory}/{job_id}/{filename}"
+        
+        print(f"Attempting to download result file: {file_key}")
+        
+        content = download_from_r2(file_key)
+        if content is None:
+            print(f"Result file download failed - content is None for: {file_key}")
+            raise HTTPException(status_code=404, detail=f"Result file not found: {filename}")
+        
+        print(f"Successfully downloaded result file {filename} ({len(content)} chars)")
+        
+        return StreamingResponse(
+            io.BytesIO(content.encode('utf-8')),
+            media_type='application/json',
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        print(f"Error downloading result file {filename} for job {job_id}: {e}")
+        print(f"Attempted key: {user.r2_directory}/{job_id}/{filename}")
+        raise HTTPException(status_code=404, detail=f"Result file not found: {str(e)}")
+
 @app.get("/api/packs")
 async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
     """List all completed packs from Supabase for the authenticated user."""

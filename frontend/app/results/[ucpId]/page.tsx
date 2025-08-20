@@ -173,6 +173,57 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
     }
   }
 
+  const downloadResultJson = async (chunkIndex: number) => {
+    try {
+      const headers: Record<string, string> = {};
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const paddedIndex = chunkIndex.toString().padStart(3, '0')
+      const response = await fetch(`http://localhost:8000/api/download/${params.ucpId}/result_${paddedIndex}.json`, {
+        headers,
+      })
+      if (!response.ok) throw new Error('Failed to download result JSON')
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `result_${paddedIndex}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert(`Failed to download result_${chunkIndex.toString().padStart(3, '0')}.json`)
+    }
+  }
+
+  const downloadSummary = async () => {
+    try {
+      const headers: Record<string, string> = {};
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(`http://localhost:8000/api/download/${params.ucpId}/summary.json`, {
+        headers,
+      })
+      if (!response.ok) throw new Error('Failed to download summary')
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `summary_${params.ucpId}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Failed to download summary')
+    }
+  }
+
   const downloadPack = async () => {
     try {
       const headers: Record<string, string> = {};
@@ -333,27 +384,55 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         </div>
       )}
 
-      {/* Individual Chunks */}
+      {/* Result Files */}
       {result.status === 'completed' && (
         <div className="bg-white border border-gray-200 p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-6">Individual Chunk Results</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-6">Generated Result Files</h3>
           
-          {result.completedChunks > 0 ? (
-            <div className="grid gap-4">
-              {Array.from({ length: result.completedChunks }, (_, i) => i + 1).map(chunkIndex => (
-                <ChunkCard 
-                  key={chunkIndex}
-                  chunkIndex={chunkIndex}
-                  onDownload={() => downloadChunk(chunkIndex)}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Brain className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>No chunks were analyzed</p>
-            </div>
-          )}
+          <div className="grid gap-4">
+            {/* Individual Result JSON Files */}
+            {result.completedChunks > 0 && (
+              <>
+                {Array.from({ length: result.completedChunks }, (_, i) => i + 1).map(chunkIndex => (
+                  <ResultFileCard 
+                    key={chunkIndex}
+                    icon={<FileText className="h-5 w-5" />}
+                    title={`Result ${chunkIndex.toString().padStart(3, '0')}.json`}
+                    description={`AI analysis result for chunk ${chunkIndex}`}
+                    fileType="JSON"
+                    onDownload={() => downloadResultJson(chunkIndex)}
+                  />
+                ))}
+              </>
+            )}
+            
+            {/* Summary JSON */}
+            <ResultFileCard 
+              icon={<BarChart3 className="h-5 w-5" />}
+              title="Analysis Summary"
+              description="Processing statistics and metadata"
+              fileType="JSON"
+              onDownload={() => downloadSummary()}
+            />
+            
+            {/* Individual chunks for text content if needed */}
+            {result.completedChunks > 0 && (
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                  View Individual Chunk Text Files ({result.completedChunks} files)
+                </summary>
+                <div className="mt-3 grid gap-2 pl-4">
+                  {Array.from({ length: result.completedChunks }, (_, i) => i + 1).map(chunkIndex => (
+                    <ChunkCard 
+                      key={chunkIndex}
+                      chunkIndex={chunkIndex}
+                      onDownload={() => downloadChunk(chunkIndex)}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
 
           {result.totalChunks > result.completedChunks && (
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -394,6 +473,45 @@ function StatCard({
         <p className="text-gray-600 text-sm">{title}</p>
       </div>
       <p className="text-gray-900 text-lg font-semibold">{value}</p>
+    </div>
+  )
+}
+
+function ResultFileCard({ 
+  icon, 
+  title, 
+  description,
+  fileType,
+  onDownload 
+}: { 
+  icon: React.ReactNode, 
+  title: string, 
+  description: string,
+  fileType: string,
+  onDownload: () => void 
+}) {
+  return (
+    <div className="bg-gray-50 border border-gray-200 p-4 flex items-center justify-between">
+      <div className="flex items-center space-x-3">
+        <div className="w-10 h-10 bg-gray-800 flex items-center justify-center text-white text-xs font-medium rounded">
+          {icon}
+        </div>
+        <div>
+          <p className="text-gray-900 font-medium">{title}</p>
+          <p className="text-gray-600 text-sm">{description}</p>
+          <span className="inline-block mt-1 px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded">
+            {fileType} File
+          </span>
+        </div>
+      </div>
+      
+      <button
+        onClick={onDownload}
+        className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 text-sm font-medium transition-colors flex items-center space-x-2"
+      >
+        <Download className="h-4 w-4" />
+        <span>Download</span>
+      </button>
     </div>
   )
 }
