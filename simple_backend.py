@@ -78,7 +78,6 @@ app = FastAPI(title="Simple UCP Backend", version="1.0.0")
 
 # CORS middleware - Configure allowed origins from environment
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "https://universal-context-pack.vercel.app").split(",")
-print(f"CORS allowed origins: {allowed_origins}")  # Debug logging
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in allowed_origins] + ["https://universal-context-pack.vercel.app"],  # Add fallback origins
@@ -2714,8 +2713,6 @@ async def create_payment_intent(
     user: AuthenticatedUser = Depends(get_current_user)
 ):
     """Create a Stripe PaymentIntent for credit purchase"""
-    print(f"🚀 Payment intent request: {request.credits} credits for ${request.amount}")
-    print(f"👤 User: {user.user_id}")
     
     try:
         # Rate limiting: max 5 payment intents per hour per user
@@ -2727,11 +2724,8 @@ async def create_payment_intent(
                 detail=f"Too many payment attempts. You can create up to 5 payment intents per hour. Try again later."
             )
         
-        print(f"📊 Payment attempt {attempt_count}/5 for user {user.user_id}")
-        
         # Validate the amount matches our pricing
         expected_amount = calculate_credit_price(request.credits)
-        print(f"💰 Expected amount: ${expected_amount}, Received: ${request.amount}")
         
         if abs(request.amount - expected_amount) > 0.01:  # Allow for small rounding differences
             raise HTTPException(
@@ -2755,18 +2749,15 @@ async def create_payment_intent(
             description=f"Purchase {request.credits} credits for Universal Context Pack"
         )
         
-        print(f"✅ Stripe payment intent created: {intent.id}")
-        
         return {
             "client_secret": intent.client_secret,
             "payment_intent_id": intent.id
         }
         
     except stripe.error.StripeError as e:
-        print(f"❌ Stripe error: {e}")
         raise HTTPException(status_code=400, detail=f"Stripe error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create payment intent")
     except Exception as e:
-        print(f"❌ Error creating payment intent: {e}")
         raise HTTPException(status_code=500, detail="Failed to create payment intent")
 
 class PaymentValidationRequest(BaseModel):
