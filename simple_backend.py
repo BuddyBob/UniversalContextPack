@@ -2746,6 +2746,7 @@ async def create_payment_intent(
         intent = stripe.PaymentIntent.create(
             amount=int(request.amount * 100),  # Stripe uses cents
             currency='usd',
+            payment_method_types=['card'],  # Specify payment method types
             metadata={
                 'user_id': user.user_id,
                 'credits': request.credits,
