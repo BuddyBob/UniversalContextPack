@@ -39,7 +39,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email)
       
       setSession(session)
       setUser(session?.user ?? null)
@@ -55,7 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserProfile(null)
       } else if (event === 'TOKEN_REFRESHED') {
         // Don't fetch profile on token refresh to avoid unnecessary API calls
-        console.log('Token refreshed successfully')
       }
       
       setLoading(false)
@@ -77,14 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const tenMinutes = 10 * 60 * 1000
         
         if (expiresAt - now < tenMinutes && expiresAt > now) {
-          console.log('Token expiring soon, refreshing...')
           const { error: refreshError } = await supabase.auth.refreshSession()
           if (refreshError) {
             console.error('Token refresh failed:', refreshError)
             // Don't force sign out immediately - let the user continue and handle it on next request
-            console.log('Will handle authentication on next request')
           } else {
-            console.log('Token refreshed successfully')
           }
         }
       }
@@ -100,7 +95,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Debounce: Don't fetch if we fetched within the last 5 seconds
     const now = Date.now()
     if (now - lastProfileFetch < 5000) {
-      console.log('Skipping profile fetch - too recent')
       return
     }
     
@@ -110,7 +104,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
       if (sessionError || !session?.access_token) {
-        console.log('No valid session for profile fetch')
         return
       }
       
@@ -128,11 +121,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         } else if (response.status === 401) {
           // Token might be expired, try to refresh once before giving up
-          console.log('Profile fetch got 401, attempting token refresh...')
           const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession()
           
           if (refreshError || !refreshedSession) {
-            console.log('Token refresh failed, signing out:', refreshError)
             await signOut()
             return
           }
@@ -149,13 +140,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUserProfile(data.profile)
             return
           } else {
-            console.log('Profile fetch failed after token refresh, signing out')
             await signOut()
             return
           }
         }
       } catch (error) {
-        console.log('Backend profile fetch failed, trying direct Supabase fetch:', error)
       }
       
       // Fallback to direct Supabase query
@@ -221,7 +210,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const now = Date.now()
     
     if (expiresAt <= now) {
-      console.log('Token expired, attempting refresh...')
       const { error: refreshError } = await supabase.auth.refreshSession()
       if (refreshError) {
         console.error('Token refresh failed:', refreshError)
@@ -254,7 +242,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // If we get a 401, the token might be invalid - try refresh once
       if (response.status === 401) {
-        console.log('Received 401, attempting token refresh...')
         const { error: refreshError } = await supabase.auth.refreshSession()
         
         if (refreshError) {

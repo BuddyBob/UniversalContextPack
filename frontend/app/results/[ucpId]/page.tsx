@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download, FileText, Brain, BarChart3, Clock, CheckCircle } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import { API_ENDPOINTS } from '@/lib/api'
 
 interface UCPResult {
   ucpId: string
@@ -44,7 +45,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
           fetchResult(params.ucpId)
           return
         } catch (e) {
-          console.error('Failed to parse cached result:', e)
+          // Failed to parse cached result
         }
       }
       fetchResult(params.ucpId)
@@ -55,17 +56,11 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
     try {
       const headers: Record<string, string> = {};
       
-      console.log('Session info:', { 
-        hasSession: !!session, 
-        hasAccessToken: !!session?.access_token,
-        tokenLength: session?.access_token?.length 
-      });
-      
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/results/${ucpId}`, {
+      const response = await fetch(API_ENDPOINTS.results(ucpId), {
         headers,
       })
       
@@ -114,7 +109,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/chunk/${chunkIndex}`, {
+      const response = await fetch(API_ENDPOINTS.downloadChunk(params.ucpId, chunkIndex), {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download chunk')
@@ -133,7 +128,6 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
 
   const downloadComplete = async () => {
     try {
-      console.log('Starting download for UCP ID:', params.ucpId)
       
       const headers: Record<string, string> = {};
       
@@ -141,19 +135,16 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/complete`, {
+      const response = await fetch(API_ENDPOINTS.downloadComplete(params.ucpId), {
         headers,
       })
-      console.log('Response status:', response.status)
       
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('Download failed:', response.status, errorText)
         throw new Error(`Failed to download complete UCP: ${response.status}`)
       }
       
       const blob = await response.blob()
-      console.log('Blob size:', blob.size, 'bytes')
       
       if (blob.size === 0) {
         throw new Error('Downloaded file is empty')
@@ -165,9 +156,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
       a.download = `complete_ucp_${params.ucpId}.txt`
       a.click()
       URL.revokeObjectURL(url)
-      console.log('Download completed successfully')
     } catch (err) {
-      console.error('Download error:', err)
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       alert(`Failed to download complete UCP: ${errorMessage}`)
     }
@@ -182,7 +171,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
       }
 
       const paddedIndex = chunkIndex.toString().padStart(3, '0')
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/result_${paddedIndex}.json`, {
+      const response = await fetch(API_ENDPOINTS.downloadResult(params.ucpId, chunkIndex), {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download result JSON')
@@ -207,7 +196,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/summary.json`, {
+      const response = await fetch(API_ENDPOINTS.downloadSummary(params.ucpId), {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download summary')
@@ -232,7 +221,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/pack`, {
+      const response = await fetch(API_ENDPOINTS.downloadPack(params.ucpId), {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download pack')

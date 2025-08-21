@@ -31,11 +31,8 @@ function PaymentForm({ credits, amount, session, onSuccess, onError }: StripePay
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     
-    console.log('🚀 Payment form submitted')
-    console.log('Credits:', credits, 'Amount:', amount)
     
     if (!stripe || !elements) {
-      console.log('❌ Stripe not loaded yet')
       return
     }
 
@@ -43,14 +40,11 @@ function PaymentForm({ credits, amount, session, onSuccess, onError }: StripePay
 
     try {
       // Use the passed session
-      console.log('📝 Using provided session...')
       if (!session) {
-        console.log('❌ No session provided')
         onError('Please log in to continue')
         return
       }
 
-      console.log('✅ Session available, creating payment intent...')
       
       // Create payment intent
       const response = await fetch(API_ENDPOINTS.createPaymentIntent, {
@@ -65,16 +59,13 @@ function PaymentForm({ credits, amount, session, onSuccess, onError }: StripePay
         })
       })
 
-      console.log('📡 Backend response status:', response.status)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.log('❌ Backend error:', errorText)
         throw new Error(`Backend error: ${response.status}`)
       }
 
       const { client_secret } = await response.json()
-      console.log('✅ Payment intent created, confirming with Stripe...')
 
       // Confirm payment
       const { error, paymentIntent } = await stripe.confirmCardPayment(client_secret, {
@@ -84,14 +75,11 @@ function PaymentForm({ credits, amount, session, onSuccess, onError }: StripePay
       })
 
       if (error) {
-        console.log('❌ Stripe error:', error)
         onError(error.message || 'Payment failed')
       } else if (paymentIntent?.status === 'succeeded') {
-        console.log('✅ Payment succeeded!')
         
         // Manually add credits since webhook might not be working
         try {
-          console.log('🔄 Manually adding credits...')
           const addCreditsResponse = await fetch(API_ENDPOINTS.addCreditsManual, {
             method: 'POST',
             headers: {
@@ -106,18 +94,14 @@ function PaymentForm({ credits, amount, session, onSuccess, onError }: StripePay
           })
           
           if (addCreditsResponse.ok) {
-            console.log('✅ Credits added manually!')
           } else {
-            console.log('⚠️ Manual credit addition failed, but payment succeeded')
           }
         } catch (error) {
-          console.log('⚠️ Error adding credits manually:', error)
         }
         
         onSuccess()
       }
     } catch (error) {
-      console.log('❌ Payment error:', error)
       onError(error instanceof Error ? error.message : 'Payment failed')
     } finally {
       setLoading(false)

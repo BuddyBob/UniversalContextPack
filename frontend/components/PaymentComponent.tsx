@@ -38,25 +38,20 @@ export default function PaymentComponent({
       setLoading(true)
       setError(null)
 
-      console.log('PaymentComponent - Current user from AuthProvider:', user)
       
       if (!user) {
         // If no user, don't show error - just don't fetch payment status
-        console.log('PaymentComponent - No user found, stopping fetch')
         setLoading(false)
         return
       }
 
-      console.log('PaymentComponent - Current session from AuthProvider:', session ? 'exists' : 'null')
       
       if (!session?.access_token) {
         // If no session, don't show error - just don't fetch payment status
-        console.log('PaymentComponent - No session/token found, stopping fetch')
         setLoading(false)
         return
       }
 
-      console.log('PaymentComponent - Fetching payment status from backend...')
       
       // Fetch payment status from backend
       const response = await fetch(API_ENDPOINTS.paymentStatus, {
@@ -66,14 +61,12 @@ export default function PaymentComponent({
         }
       })
 
-      console.log('PaymentComponent - Response status:', response.status)
 
       if (!response.ok) {
         throw new Error(`Payment status fetch failed: ${response.status}`)
       }
 
       const data = await response.json()
-      console.log('PaymentComponent - Payment data received:', data)
       setPaymentStatus(data)
     } catch (err) {
       console.error('PaymentComponent - Error fetching payment status:', err)
@@ -96,17 +89,13 @@ export default function PaymentComponent({
   useEffect(() => {
     // Don't do anything if auth is still loading
     if (authLoading) {
-      console.log('PaymentComponent - Auth still loading, waiting...')
       return
     }
 
-    console.log('PaymentComponent - Auth loaded, user:', user ? 'authenticated' : 'not authenticated')
 
     if (user && session) {
-      console.log('PaymentComponent - User authenticated, fetching payment status')
       fetchPaymentStatus()
     } else {
-      console.log('PaymentComponent - No user or session, setting loading to false')
       setLoading(false)
     }
   }, [user, session, authLoading])

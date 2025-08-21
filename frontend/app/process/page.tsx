@@ -96,10 +96,8 @@ export default function ProcessPage() {
       const lastCheck = localStorage.getItem('last_payment_check');
       const now = Date.now();
       if (!lastCheck || now - parseInt(lastCheck) > 300000) { // 5 minutes
-        console.log('Checking payment limits...'); // Debug log
         checkPaymentLimits()
           .then((limits) => {
-            console.log('Setting payment limits:', limits); // Debug log
             setPaymentLimits(limits);
             setPaymentLimitsError(false); // Clear any previous error
           })
@@ -113,10 +111,8 @@ export default function ProcessPage() {
       } else {
         // If we're using cached data, still try to get limits for initial load
         if (!paymentLimits) {
-          console.log('Initial payment limits check...'); // Debug log
           checkPaymentLimits()
             .then((limits) => {
-              console.log('Setting initial payment limits:', limits); // Debug log
               setPaymentLimits(limits);
               setPaymentLimitsError(false); // Clear any previous error
             })
@@ -179,7 +175,6 @@ export default function ProcessPage() {
       }
       // Cancel any ongoing payment limits request
       if (paymentLimitsRequestRef.current) {
-        console.log('Cleaning up payment limits request');
         paymentLimitsRequestRef.current = null;
       }
     };
@@ -257,18 +252,15 @@ export default function ProcessPage() {
   const checkPaymentLimits = async () => {
     // If there's already a request in progress, wait for it
     if (paymentLimitsRequestRef.current) {
-      console.log('Payment limits request already in progress, waiting...');
       try {
         return await paymentLimitsRequestRef.current;
       } catch (error) {
-        console.log('Previous request failed, will make new request');
       }
     }
     
     // Debounce: Don't check if we checked within the last 10 seconds, unless we don't have limits yet
     const now = Date.now()
     if (now - lastPaymentCheck < 10000 && paymentLimits) {
-      console.log('Skipping payment status check - too recent')
       return paymentLimits || { canProcess: false, credits_balance: 0 };
     }
     
@@ -276,7 +268,6 @@ export default function ProcessPage() {
     const requestPromise = (async () => {
       try {
         setLastPaymentCheck(now)
-        console.log('Making payment limits request...');
         
         const response = await makeAuthenticatedRequest(
           API_ENDPOINTS.userProfile,
@@ -293,7 +284,6 @@ export default function ProcessPage() {
             credits_balance: data.credits_balance || 0,
             plan: 'credits'
           };
-          console.log('Credit limits loaded:', result);
           return result;
         } else {
           console.error('Failed to fetch payment limits:', response.status, response.statusText);
@@ -412,13 +402,10 @@ export default function ProcessPage() {
 
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('SSE connection timed out, falling back to status polling');
         addLog('Real-time connection timed out, using standard updates');
       } else if (error instanceof Error && error.message.includes('timed out')) {
-        console.log('SSE connection timeout, falling back to status polling');
         addLog('Real-time connection timeout, using standard updates');
       } else {
-        console.log('SSE connection failed, falling back to status polling:', error);
       }
     }
   };
@@ -439,7 +426,6 @@ export default function ProcessPage() {
     const poll = async () => {
       // Check if we've been polling too long
       if (Date.now() - startTime > maxPollingDuration) {
-        console.log('Polling timeout reached, stopping');
         addLog('⚠️ Status polling timed out. Please refresh the page to check status.');
         if (pollingInterval) {
           clearInterval(pollingInterval);
@@ -467,7 +453,6 @@ export default function ProcessPage() {
           
           // Stop polling after too many failures
           if (consecutiveFailures >= maxFailures) {
-            console.log('Too many consecutive failures, stopping status polling');
             if (pollingInterval) {
               clearInterval(pollingInterval);
               setPollingInterval(null);
@@ -534,16 +519,13 @@ export default function ProcessPage() {
           }
           return;
         } else if (error instanceof Error && error.name === 'AbortError') {
-          console.log(`Status check timed out (attempt ${consecutiveFailures}/${maxFailures}), will retry...`);
         } else if (error instanceof Error && error.message.includes('timed out')) {
-          console.log(`Status check timeout (attempt ${consecutiveFailures}/${maxFailures}), will retry...`);
         } else {
           console.error('Status polling error:', error);
         }
         
         // Stop polling after too many failures
         if (consecutiveFailures >= maxFailures) {
-          console.log('Too many consecutive failures, stopping status polling');
           if (pollingInterval) {
             clearInterval(pollingInterval);
             setPollingInterval(null);

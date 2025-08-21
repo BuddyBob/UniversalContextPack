@@ -15,7 +15,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 if (typeof window !== 'undefined') {
   (window as any).getSupabaseToken = async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    console.log('Access token:', session?.access_token)
     return session?.access_token
   }
   // Make supabase available globally for debugging
