@@ -78,11 +78,12 @@ app = FastAPI(title="Simple UCP Backend", version="1.0.0")
 
 # CORS middleware - Configure allowed origins from environment
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "https://universal-context-pack.vercel.app").split(",")
+print(f"CORS allowed origins: {allowed_origins}")  # Debug logging
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in allowed_origins],
+    allow_origins=[origin.strip() for origin in allowed_origins] + ["https://universal-context-pack.vercel.app"],  # Add fallback origins
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
