@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap } from 'lucide-react'
+import { analytics } from '@/lib/analytics'
 
 const ExportGuide = () => {
   const [scrollY, setScrollY] = useState(0)
@@ -9,6 +10,9 @@ const ExportGuide = () => {
   const [activeStep, setActiveStep] = useState(0)
 
   useEffect(() => {
+    // Track landing page view
+    analytics.landingPage()
+    
     const handleScroll = () => setScrollY(window.scrollY)
     const handleMouseMove = (e: MouseEvent) => {
       setMousePosition({ x: e.clientX, y: e.clientY })

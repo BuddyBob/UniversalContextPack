@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
 import { API_ENDPOINTS } from '@/lib/api';
+import { analytics } from '@/lib/analytics';
 
 interface PaymentStatus {
   plan: string
@@ -59,6 +60,9 @@ export default function ProcessPage() {
 
   // Load session from localStorage on mount
   useEffect(() => {
+    // Track process page view
+    analytics.processPageView()
+    
     const savedSession = localStorage.getItem('ucp_process_session');
     if (savedSession) {
       try {
@@ -591,6 +595,10 @@ export default function ProcessPage() {
               estimated_output_tokens: 0,
               estimated_chunks: 0 
             });
+            
+            // Track extraction completion
+            analytics.extractionComplete(resultsData.chunk_count || 0);
+            
             setCurrentStep('extracted');
             addLog(`Extraction complete: ${resultsData.conversation_count || 0} conversations, ${resultsData.message_count || 0} messages`);
             
@@ -642,6 +650,9 @@ export default function ProcessPage() {
       setCurrentStep('uploaded');
       addLog(`File selected: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
       
+      // Track file upload
+      analytics.fileUpload(selectedFile.size);
+      
       // Get extraction time estimate
       // Simple calculation since we don't have a backend endpoint for this
       const estimatedExtractionTime = Math.max(30, Math.min(selectedFile.size / (1024 * 1024) * 30, 300)); // 30s per MB, min 30s, max 5min
@@ -664,6 +675,9 @@ export default function ProcessPage() {
 
   const handleExtract = async () => {
     if (!file) return;
+
+    // Track extraction start
+    analytics.extractionStart();
 
     setIsProcessing(true);
     setCurrentStep('extracting');
@@ -770,6 +784,9 @@ export default function ProcessPage() {
       return;
     }
 
+    // Track analysis start
+    analytics.analysisStart(selectedChunks.size);
+
     // Check payment limits before starting analysis
     const currentLimits = await checkPaymentLimits();
     setPaymentLimits(currentLimits); // Update the state as well
@@ -850,6 +867,9 @@ export default function ProcessPage() {
 
   const downloadPack = async () => {
     if (!currentJobId) return;
+    
+    // Track download
+    analytics.downloadPack();
     
     try {
       addLog('Starting pack download...');

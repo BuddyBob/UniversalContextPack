@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Download, FileText, Brain, BarChart3, Clock, CheckCircle } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import { API_ENDPOINTS } from '@/lib/api'
+import { analytics } from '@/lib/analytics'
 
 interface UCPResult {
   ucpId: string
@@ -128,6 +129,8 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
 
   const downloadComplete = async () => {
     try {
+      // Track download
+      analytics.downloadUCP();
       
       const headers: Record<string, string> = {};
       
@@ -215,6 +218,9 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
 
   const downloadPack = async () => {
     try {
+      // Track download
+      analytics.downloadPack();
+      
       const headers: Record<string, string> = {};
       
       if (session?.access_token) {
