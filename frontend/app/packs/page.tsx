@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Download, FileText, Brain, BarChart3, Calendar, DollarSign, ExternalLink } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
-
-const BACKEND_URL = 'http://localhost:8000'
+import { API_BASE_URL } from '@/lib/api'
 
 interface UCPPack {
   ucpId?: string
@@ -44,7 +43,7 @@ export default function PacksPage() {
     try {
       setLoading(true)
       
-      const response = await makeAuthenticatedRequest(`${BACKEND_URL}/api/packs`)
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/packs`)
       
       if (!response.ok) {
         throw new Error(`Failed to fetch packs: ${response.status} ${response.statusText}`)
@@ -79,7 +78,7 @@ export default function PacksPage() {
       console.error('Failed to load packs from server:', e)
       // Fallback to /api/jobs endpoint
       try {
-        const response = await makeAuthenticatedRequest(`${BACKEND_URL}/api/jobs`)
+        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/jobs`)
         
         if (response.ok) {
           const jobs = await response.json()
@@ -134,7 +133,7 @@ export default function PacksPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/download/${ucpId}/complete`, {
+      const response = await fetch(`${API_BASE_URL}/api/download/${ucpId}/complete`, {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download complete UCP')
@@ -159,7 +158,7 @@ export default function PacksPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/download/${ucpId}/pack`, {
+      const response = await fetch(`${API_BASE_URL}/api/download/${ucpId}/pack`, {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download pack')

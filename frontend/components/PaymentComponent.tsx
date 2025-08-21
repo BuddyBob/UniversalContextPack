@@ -58,7 +58,7 @@ export default function PaymentComponent({
       console.log('PaymentComponent - Fetching payment status from backend...')
       
       // Fetch payment status from backend
-      const response = await fetch('http://localhost:8000/api/payment/status', {
+      const response = await fetch('${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/payment/status', {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'

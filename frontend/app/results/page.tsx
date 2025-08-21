@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../components/AuthProvider'
-
-const BACKEND_URL = 'http://localhost:8000'
+import { API_BASE_URL } from '@/lib/api'
 
 interface JobResult {
   job_id: string
@@ -32,7 +31,7 @@ export default function ResultsPage() {
 
   const loadJobs = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/jobs`, {
+      const response = await fetch(`${API_BASE_URL}/api/jobs`, {
         headers: {
           'Authorization': `Bearer ${session?.access_token}`
         }
@@ -50,7 +49,7 @@ export default function ResultsPage() {
 
   const loadJobDetails = async (jobId: string) => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/status/${jobId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/status/${jobId}`, {
         headers: {
           'Authorization': `Bearer ${session?.access_token}`
         }
@@ -66,7 +65,7 @@ export default function ResultsPage() {
   const viewChunk = async (jobId: string, chunkIndex: number) => {
     try {
       // Use 1-based indexing to match backend
-      const response = await fetch(`${BACKEND_URL}/api/download/${jobId}/chunk/${chunkIndex + 1}`, {
+      const response = await fetch(`${API_BASE_URL}/api/download/${jobId}/chunk/${chunkIndex + 1}`, {
         headers: {
           'Authorization': `Bearer ${session?.access_token}`
         }
@@ -81,7 +80,7 @@ export default function ResultsPage() {
 
   const downloadFile = async (jobId: string, type: 'complete' | 'original' | 'chunks') => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/download/${jobId}/${type}`, {
+      const response = await fetch(`${API_BASE_URL}/api/download/${jobId}/${type}`, {
         headers: {
           'Authorization': `Bearer ${session?.access_token}`
         }

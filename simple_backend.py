@@ -77,7 +77,7 @@ else:
 app = FastAPI(title="Simple UCP Backend", version="1.0.0")
 
 # CORS middleware - Configure allowed origins from environment
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "https://universal-context-pack.vercel.app").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in allowed_origins],

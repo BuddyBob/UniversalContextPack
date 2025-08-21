@@ -278,7 +278,7 @@ export default function ProcessPage() {
         console.log('Making payment limits request...');
         
         const response = await makeAuthenticatedRequest(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/user/profile`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL || '${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}'}/api/user/profile`,
           {
             method: 'GET'
           }
@@ -449,7 +449,7 @@ export default function ProcessPage() {
       
       try {
         const statusResponse = await makeAuthenticatedRequest(
-          `http://localhost:8000/api/status/${jobId}`,
+          `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/status/${jobId}`,
           {
             method: 'GET'
           }
@@ -574,7 +574,7 @@ export default function ProcessPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
       
-      const url = `http://localhost:8000/api/progress-stream/${jobId}`;
+      const url = `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/progress-stream/${jobId}`;
       
       // Start SSE with authentication
       startSSEWithAuth(url, headers);
@@ -590,7 +590,7 @@ export default function ProcessPage() {
     const statusInterval = setInterval(async () => {
       try {
         // Check if extraction is complete by looking for job results
-        const resultsResponse = await makeAuthenticatedRequest(`http://localhost:8000/api/results/${jobId}`, {
+        const resultsResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/results/${jobId}`, {
           method: 'GET'
         });
         
@@ -613,7 +613,7 @@ export default function ProcessPage() {
             
             // Now get chunking time estimate based on extracted text from job summary
             try {
-              const summaryResponse = await makeAuthenticatedRequest(`http://localhost:8000/api/job-summary/${jobId}`, {
+              const summaryResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/job-summary/${jobId}`, {
                 method: 'GET'
               });
               if (summaryResponse.ok) {
@@ -696,7 +696,7 @@ export default function ProcessPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch('http://localhost:8000/api/extract', {
+      const response = await fetch('${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/extract', {
         method: 'POST',
         headers,
         body: formData,
@@ -740,7 +740,7 @@ export default function ProcessPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`http://localhost:8000/api/chunk/${currentJobId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/chunk/${currentJobId}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -818,7 +818,7 @@ export default function ProcessPage() {
     addLog(`Estimated analysis time: ${formatted} for ${chunksToAnalyze.length} selected chunks`);
 
     try {
-      const response = await makeAuthenticatedRequest(`http://localhost:8000/api/analyze/${currentJobId}`, {
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/analyze/${currentJobId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -871,7 +871,7 @@ export default function ProcessPage() {
     try {
       addLog('Starting pack download...');
       
-      const response = await makeAuthenticatedRequest(`http://localhost:8000/api/download/${currentJobId}/pack`, {
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${currentJobId}/pack`, {
         method: 'GET'
       });
       

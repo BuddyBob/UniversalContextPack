@@ -63,7 +63,7 @@ export default function PricingPage() {
 
   const fetchPaymentStatus = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/payment/status`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || '${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || http://localhost:8000}'}/api/payment/status`, {
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
         },

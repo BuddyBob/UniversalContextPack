@@ -65,7 +65,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`http://localhost:8000/api/results/${ucpId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/results/${ucpId}`, {
         headers,
       })
       
@@ -114,7 +114,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`http://localhost:8000/api/download/${params.ucpId}/chunk/${chunkIndex}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/chunk/${chunkIndex}`, {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download chunk')
@@ -141,7 +141,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`http://localhost:8000/api/download/${params.ucpId}/complete`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/complete`, {
         headers,
       })
       console.log('Response status:', response.status)
@@ -182,7 +182,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
       }
 
       const paddedIndex = chunkIndex.toString().padStart(3, '0')
-      const response = await fetch(`http://localhost:8000/api/download/${params.ucpId}/result_${paddedIndex}.json`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/result_${paddedIndex}.json`, {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download result JSON')
@@ -207,7 +207,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`http://localhost:8000/api/download/${params.ucpId}/summary.json`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/summary.json`, {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download summary')
@@ -232,7 +232,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`http://localhost:8000/api/download/${params.ucpId}/pack`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${params.ucpId}/pack`, {
         headers,
       })
       if (!response.ok) throw new Error('Failed to download pack')
