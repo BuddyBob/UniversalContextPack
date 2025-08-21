@@ -6,6 +6,7 @@ import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Termin
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
+import { API_ENDPOINTS } from '@/lib/api';
 
 interface PaymentStatus {
   plan: string
@@ -278,7 +279,7 @@ export default function ProcessPage() {
         console.log('Making payment limits request...');
         
         const response = await makeAuthenticatedRequest(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL || '${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}'}/api/user/profile`,
+          API_ENDPOINTS.userProfile,
           {
             method: 'GET'
           }
@@ -696,7 +697,7 @@ export default function ProcessPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch('${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/extract', {
+      const response = await fetch(API_ENDPOINTS.extract, {
         method: 'POST',
         headers,
         body: formData,

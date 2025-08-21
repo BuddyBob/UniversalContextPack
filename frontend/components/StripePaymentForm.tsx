@@ -8,6 +8,7 @@ import {
   useStripe,
   useElements
 } from '@stripe/react-stripe-js'
+import { API_ENDPOINTS } from '@/lib/api'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 // Initialize Stripe
@@ -52,7 +53,7 @@ function PaymentForm({ credits, amount, session, onSuccess, onError }: StripePay
       console.log('✅ Session available, creating payment intent...')
       
       // Create payment intent
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || '${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}'}/api/create-payment-intent`, {
+      const response = await fetch(API_ENDPOINTS.createPaymentIntent, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -91,7 +92,7 @@ function PaymentForm({ credits, amount, session, onSuccess, onError }: StripePay
         // Manually add credits since webhook might not be working
         try {
           console.log('🔄 Manually adding credits...')
-          const addCreditsResponse = await fetch('${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/add-credits-manual', {
+          const addCreditsResponse = await fetch(API_ENDPOINTS.addCreditsManual, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

@@ -6,6 +6,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/components/AuthProvider'
 import { CreditCard, ArrowLeft, Calculator, Sparkles, Zap, Shield, Star } from 'lucide-react'
 import StripePaymentForm from '@/components/StripePaymentForm'
+import { API_ENDPOINTS } from '@/lib/api'
 
 interface PaymentStatus {
   plan: string
@@ -63,7 +64,7 @@ export default function PricingPage() {
 
   const fetchPaymentStatus = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || '${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || http://localhost:8000}'}/api/payment/status`, {
+      const response = await fetch(API_ENDPOINTS.paymentStatus, {
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
         },

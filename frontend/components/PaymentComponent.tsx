@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from './AuthProvider'
+import { API_ENDPOINTS } from '@/lib/api'
 
 interface PaymentStatus {
   plan: string
@@ -58,7 +59,7 @@ export default function PaymentComponent({
       console.log('PaymentComponent - Fetching payment status from backend...')
       
       // Fetch payment status from backend
-      const response = await fetch('${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/payment/status', {
+      const response = await fetch(API_ENDPOINTS.paymentStatus, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'

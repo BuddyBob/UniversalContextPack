@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, UserProfile } from '@/lib/supabase'
+import { API_ENDPOINTS } from '@/lib/api'
 
 interface AuthContextType {
   user: User | null
@@ -115,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Try to get the user profile via our backend API
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || '${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}'}/api/profile`, {
+        const response = await fetch(API_ENDPOINTS.profile, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
           },
@@ -137,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           
           // Retry with refreshed token
-          const retryResponse = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || '${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}'}/api/profile`, {
+          const retryResponse = await fetch(API_ENDPOINTS.profile, {
             headers: {
               'Authorization': `Bearer ${refreshedSession.access_token}`,
             },
