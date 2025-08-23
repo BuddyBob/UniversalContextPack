@@ -437,4 +437,4 @@ export default function PricingPageClient() {
       `}</style>
     </div>
   )
-};
+}
