@@ -1607,11 +1607,16 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
             
         chunks_to_process = min(available_credits, len(selected_chunks))
         
-        # SAFETY: Limit batch size to prevent rate limit issues
-        MAX_CHUNKS_PER_JOB = 10  # Prevent rate limit issues
-        if chunks_to_process > MAX_CHUNKS_PER_JOB:
-            chunks_to_process = MAX_CHUNKS_PER_JOB
-            print(f"⚠️  Limited to {MAX_CHUNKS_PER_JOB} chunks per job to prevent rate limits")
+        # Respect user's available credits - no artificial limits for paid users
+        # Only limit free users to prevent abuse
+        if payment_status.get("plan") == "free":
+            MAX_CHUNKS_FREE = 5  # Free users limited to 5 chunks per job
+            if chunks_to_process > MAX_CHUNKS_FREE:
+                chunks_to_process = MAX_CHUNKS_FREE
+                print(f"⚠️  Free plan limited to {MAX_CHUNKS_FREE} chunks per job")
+        else:
+            # Paid users can process up to their available credits (no artificial limit)
+            print(f"✅ Paid plan - processing up to {chunks_to_process} chunks based on available credits")
         
         actual_chunks_to_process = selected_chunks[:chunks_to_process]  # Take only what we can afford
         
