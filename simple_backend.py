@@ -78,9 +78,16 @@ app = FastAPI(title="Simple UCP Backend", version="1.0.0")
 
 # CORS middleware - Configure allowed origins from environment
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "https://universal-context-pack.vercel.app").split(",")
+# Add additional domains that might be accessing the API
+additional_origins = [
+    "https://universal-context-pack.vercel.app",
+    "https://universalcontextpack.vercel.app", 
+    "http://localhost:3000",
+    "http://localhost:3001"
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in allowed_origins] + ["https://universal-context-pack.vercel.app"],  # Add fallback origins
+    allow_origins=[origin.strip() for origin in allowed_origins] + additional_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -847,9 +854,10 @@ def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progres
             # Increased list processing for comprehensive extraction
             for i, item in enumerate(obj[:5000]):  # Increased from 1000 to 5000 items
                 if progress_callback and len(obj) > 100:  # Report progress for any large list, not just depth 0
-                    # Update progress for large list items
-                    progress = (i + 1) / min(len(obj), 5000) * 100
-                    progress_callback(f"Processing item {i+1}/{min(len(obj), 5000)} ({progress:.1f}%)")
+                    # Update progress every 50 items or at milestones to reduce logging
+                    if i % 50 == 0 or i == len(obj) - 1 or i == 0:
+                        progress = (i + 1) / min(len(obj), 5000) * 100
+                        progress_callback(f"Processing item {i+1}/{min(len(obj), 5000)} ({progress:.1f}%)")
                 extract_text_from_structure(item, extracted_texts, depth + 1, progress_callback, total_items, current_item, seen_objects)
                 
         elif isinstance(obj, str):
@@ -1057,7 +1065,6 @@ async def process_extraction_background(job_id: str, file_content: str, filename
             update_job_progress(job_id, "extracting", 20, "Processing JSON data structure...")
             
             def progress_callback(message):
-                print(f"Progress callback called: {message}")
                 # Parse progress from message like "Processing item 500/1000 (50.0%)"
                 if "Processing item" in message and "%" in message:
                     try:
@@ -1067,23 +1074,23 @@ async def process_extraction_background(job_id: str, file_content: str, filename
                         item_part = message.split("Processing item ")[1].split("/")[0]
                         item_num = int(item_part)
                         
-                        # Send update every 25 items OR every 1% progress OR at major milestones
-                        if (item_num % 25 == 0 or 
-                            int(percent) != int(getattr(progress_callback, 'last_percent', 0)) or 
+                        # Send update every 100 items OR every 5% progress OR at major milestones
+                        # This significantly reduces the logging frequency
+                        if (item_num % 100 == 0 or 
+                            int(percent) % 5 == 0 and int(percent) != int(getattr(progress_callback, 'last_percent', 0)) or 
                             percent >= 99.0 or 
                             item_num == 1):
                             # Scale from 20% to 80% (extraction phase)
                             scaled_progress = 20 + (percent * 0.6)
-                            print(f"Updating progress: {scaled_progress}% - {message}")
                             update_job_progress(job_id, "extracting", scaled_progress, message)
                             progress_callback.last_percent = percent
                     except Exception as e:
-                        print(f"Progress parsing error: {e}")
-                        # Fallback for any parsing errors
+                        # Fallback for any parsing errors - no verbose logging
                         update_job_progress(job_id, "extracting", 50, message)
                 else:
-                    print(f"Non-item progress message: {message}")
-                    update_job_progress(job_id, "extracting", 50, message)
+                    # Non-item progress messages - only log important ones
+                    if any(keyword in message.lower() for keyword in ['completed', 'finished', 'error', 'failed']):
+                        update_job_progress(job_id, "extracting", 50, message)
             
             extracted_texts = extract_text_from_structure(json_data, progress_callback=progress_callback)
         except json.JSONDecodeError:
@@ -1150,6 +1157,26 @@ async def process_extraction_background(job_id: str, file_content: str, filename
     except Exception as e:
         print(f"Error in background extraction for job {job_id}: {e}")
         update_job_progress(job_id, "extracting", 0, f"Error: {str(e)}")
+
+@app.get("/api/job-summary/{job_id}")
+async def get_job_summary(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Get job summary information."""
+    try:
+        # Try to get job summary from R2
+        job_summary_content = download_from_r2(f"{user.r2_directory}/{job_id}/job_summary.json")
+        if job_summary_content:
+            return json.loads(job_summary_content)
+        
+        # If no job summary exists, return a default response
+        return {
+            "job_id": job_id,
+            "status": "not_found",
+            "message": "Job summary not available"
+        }
+        
+    except Exception as e:
+        print(f"Error getting job summary for {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving job summary: {str(e)}")
 
 # Legacy endpoint response format - add a status endpoint to get final results
 @app.get("/api/results/{job_id}")
