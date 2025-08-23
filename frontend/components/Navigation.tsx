@@ -5,12 +5,13 @@ import { useAuth } from './AuthProvider'
 import AuthModal from './AuthModal'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Settings, User, LogOut, Sun, Moon } from 'lucide-react'
+import { Settings, User, LogOut, Sun, Moon, Menu, X } from 'lucide-react'
 
 export default function Navigation() {
   const { user, userProfile, signOut, loading, session, makeAuthenticatedRequest } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [theme, setTheme] = useState('dark')
   const dropdownRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
@@ -70,7 +71,7 @@ export default function Navigation() {
               <h1 className="nav-title">Universal Context Pack</h1>
             </Link>
 
-            {/* Navigation Links */}
+            {/* Desktop Navigation Links */}
             <nav className="nav-links hidden md:flex">
               <Link 
                 href="/" 
@@ -109,52 +110,137 @@ export default function Navigation() {
                 </button>
               </div>
 
-              {/* User Menu */}
-              <div className="nav-user-section">
-              {user ? (
-                <div className="relative" ref={dropdownRef}>
-                  <div 
-                    className="nav-user-dropdown"
-                    onClick={() => setShowUserDropdown(!showUserDropdown)}
-                  >
-                    {userProfile?.avatar_url && (
-                      <img
-                        src={userProfile.avatar_url}
-                        alt={userProfile.full_name || 'User'}
-                        className="nav-user-avatar"
-                      />
-                    )}
-                    <div className="nav-user-info hidden md:block">
-                      <p className="nav-user-name">
-                        {userProfile?.full_name || user.email?.split('@')[0]}
-                      </p>
-                      <p className="nav-user-email">{user.email}</p>
+              {/* Desktop User Menu */}
+              <div className="nav-user-section hidden md:block">
+                {user ? (
+                  <div className="relative" ref={dropdownRef}>
+                    <div 
+                      className="nav-user-dropdown"
+                      onClick={() => setShowUserDropdown(!showUserDropdown)}
+                    >
+                      {userProfile?.avatar_url && (
+                        <img
+                          src={userProfile.avatar_url}
+                          alt={userProfile.full_name || 'User'}
+                          className="nav-user-avatar"
+                        />
+                      )}
+                      <div className="nav-user-info">
+                        <p className="nav-user-name">
+                          {userProfile?.full_name || user.email?.split('@')[0]}
+                        </p>
+                        <p className="nav-user-email">{user.email}</p>
+                      </div>
                     </div>
-                  </div>
 
-                  {showUserDropdown && (
-                    <div className="nav-dropdown-menu">
-                      <button
-                        onClick={signOut}
-                        className="nav-dropdown-item"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Sign Out
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="nav-sign-in-btn"
-                >
-                  Sign In
-                </button>
-              )}
-            </div>
+                    {showUserDropdown && (
+                      <div className="nav-dropdown-menu">
+                        <button
+                          onClick={signOut}
+                          className="nav-dropdown-item"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          Sign Out
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="nav-sign-in-btn"
+                  >
+                    Sign In
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile Hamburger Button */}
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="md:hidden p-2 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-card-hover transition-colors"
+                aria-label="Toggle mobile menu"
+              >
+                {showMobileMenu ? (
+                  <X className="h-6 w-6" />
+                ) : (
+                  <Menu className="h-6 w-6" />
+                )}
+              </button>
             </div>
           </div>
+
+          {/* Mobile Menu */}
+          {showMobileMenu && (
+            <div className="md:hidden mt-4 pb-4 border-t border-border-primary">
+              <nav className="flex flex-col space-y-2 pt-4">
+                <Link 
+                  href="/" 
+                  className={`mobile-nav-link ${pathname === '/' ? 'active' : ''}`}
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  Home
+                </Link>
+                <Link 
+                  href="/process" 
+                  className={`mobile-nav-link ${pathname === '/process' ? 'active' : ''}`}
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  Process
+                </Link>
+                <Link 
+                  href="/packs" 
+                  className={`mobile-nav-link ${pathname === '/packs' ? 'active' : ''}`}
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  Packs
+                </Link>
+                
+                {/* Mobile User Section */}
+                <div className="pt-4 border-t border-border-primary mt-4">
+                  {user ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-3 px-3 py-2">
+                        {userProfile?.avatar_url && (
+                          <img
+                            src={userProfile.avatar_url}
+                            alt={userProfile.full_name || 'User'}
+                            className="w-8 h-8 rounded-full"
+                          />
+                        )}
+                        <div>
+                          <p className="text-text-primary font-medium text-sm">
+                            {userProfile?.full_name || user.email?.split('@')[0]}
+                          </p>
+                          <p className="text-text-muted text-xs">{user.email}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          signOut()
+                          setShowMobileMenu(false)
+                        }}
+                        className="flex items-center space-x-2 w-full text-left px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-card-hover rounded-md transition-colors"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setShowAuthModal(true)
+                        setShowMobileMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 text-accent-primary font-medium hover:bg-bg-card-hover rounded-md transition-colors"
+                    >
+                      Sign In
+                    </button>
+                  )}
+                </div>
+              </nav>
+            </div>
+          )}
         </div>
       </header>
 
