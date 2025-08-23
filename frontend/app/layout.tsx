@@ -5,12 +5,74 @@ import Navigation from '@/components/Navigation'
 import Script from 'next/script'
 import { GA_TRACKING_ID } from '@/lib/analytics'
 import { Analytics } from '@vercel/analytics/next'
+import type { Metadata } from 'next'
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
-  title: 'Universal Context Pack - UCP System',
-  description: 'Process and analyze conversation data with AI',
+export const metadata: Metadata = {
+  metadataBase: new URL('https://universal-context-pack.vercel.app'),
+  title: {
+    default: 'Universal Context Pack - AI Memory Migration Platform',
+    template: '%s | Universal Context Pack'
+  },
+  description: 'Transform your ChatGPT, Claude, and AI assistant conversations into portable context packs. Migrate your AI memory between platforms seamlessly with advanced conversation analysis.',
+  keywords: [
+    'AI context migration',
+    'ChatGPT export',
+    'Claude conversation analysis', 
+    'AI assistant memory',
+    'conversation data processing',
+    'AI personalization',
+    'context pack',
+    'AI tool switching',
+    'OpenAI conversation export',
+    'AI conversation backup'
+  ],
+  authors: [{ name: 'Universal Context Pack Team' }],
+  creator: 'Universal Context Pack',
+  publisher: 'Universal Context Pack',
+  alternates: {
+    canonical: '/'
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://universal-context-pack.vercel.app',
+    siteName: 'Universal Context Pack',
+    title: 'Universal Context Pack - AI Memory Migration Platform',
+    description: 'Transform your AI conversations into portable context packs. Migrate your memory between ChatGPT, Claude, and other AI assistants seamlessly.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'Universal Context Pack - AI Memory Migration'
+      }
+    ]
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Universal Context Pack - AI Memory Migration Platform',
+    description: 'Transform your AI conversations into portable context packs. Migrate your memory between ChatGPT, Claude, and other AI assistants.',
+    images: ['/og-image.png'],
+    creator: '@UCPlatform'
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  verification: {
+    google: 'your-google-verification-code-here', // Add your Google Search Console verification code
+    // yandex: 'your-yandex-verification-code',
+    // bing: 'your-bing-verification-code',
+  },
 }
 
 export default function RootLayout({
@@ -18,9 +80,34 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Universal Context Pack',
+    description: 'Transform your ChatGPT, Claude, and AI assistant conversations into portable context packs. Migrate your AI memory between platforms seamlessly.',
+    url: 'https://universal-context-pack.vercel.app',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    offers: {
+      '@type': 'Offer',
+      priceCurrency: 'USD',
+      price: '0.08',
+      description: 'Pay-per-use AI conversation analysis starting at $0.08 per credit'
+    },
+    creator: {
+      '@type': 'Organization',
+      name: 'Universal Context Pack',
+      url: 'https://universal-context-pack.vercel.app'
+    }
+  }
+
   return (
     <html lang="en">
       <body className={`${inter.className} bg-gray-50 min-h-screen`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
         {/* Google Analytics */}
         {GA_TRACKING_ID && (
           <>
