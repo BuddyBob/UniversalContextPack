@@ -123,9 +123,19 @@ const ExportGuide = () => {
               </h1>
             </div>
             
-            <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto leading-relaxed">
               Transfer months of conversation history between any AI model in seconds
             </p>
+
+            {/* Free Credits Badge */}
+            <div className="flex justify-center mb-8">
+              <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/40 rounded-full px-6 py-3 flex items-center gap-3">
+                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-green-300 font-medium text-lg">
+                  🎉 FREE: Get 5 credits to start • No payment required
+                </span>
+              </div>
+            </div>
 
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <button 
@@ -134,7 +144,7 @@ const ExportGuide = () => {
                 }}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-lg text-lg font-medium transition-all duration-300 hover:shadow-2xl hover:scale-105"
               >
-                Get Started
+                Start Free Trial
               </button>
               
               <a 
@@ -302,6 +312,22 @@ const ExportGuide = () => {
                       <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
                       <span>Start chatting - it knows you instantly</span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Free Credits Callout */}
+                <div className="bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-400/30 rounded-xl p-6 mb-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-6 h-6 bg-green-400 rounded-full flex items-center justify-center">
+                      <span className="text-black text-sm font-bold">✓</span>
+                    </div>
+                    <div className="text-green-300 font-semibold text-lg">Try it FREE right now</div>
+                  </div>
+                  <div className="text-white mb-3">
+                    Get <span className="font-bold text-green-300">5 free credits</span> when you sign up – no payment required!
+                  </div>
+                  <div className="text-sm text-gray-300">
+                    That's enough to process thousands of conversations and create your first context pack.
                   </div>
                 </div>
 

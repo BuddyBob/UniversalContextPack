@@ -148,9 +148,12 @@ export default function Navigation() {
                 ) : (
                   <button
                     onClick={() => setShowAuthModal(true)}
-                    className="nav-sign-in-btn"
+                    className="nav-sign-in-btn group relative"
                   >
-                    Sign In
+                    <span>Sign In</span>
+                    <span className="hidden sm:inline ml-2 text-xs bg-green-500 text-white px-2 py-1 rounded-full">
+                      5 Free Credits
+                    </span>
                   </button>
                 )}
               </div>
@@ -232,9 +235,12 @@ export default function Navigation() {
                         setShowAuthModal(true)
                         setShowMobileMenu(false)
                       }}
-                      className="w-full text-left px-3 py-2 text-accent-primary font-medium hover:bg-bg-card-hover rounded-md transition-colors"
+                      className="w-full text-left px-3 py-2 text-accent-primary font-medium hover:bg-bg-card-hover rounded-md transition-colors flex items-center justify-between"
                     >
-                      Sign In
+                      <span>Sign In</span>
+                      <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-full">
+                        5 Free Credits
+                      </span>
                     </button>
                   )}
                 </div>

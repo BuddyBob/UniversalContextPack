@@ -956,17 +956,27 @@ export default function ProcessPage() {
               <h1 className="text-5xl font-semibold text-white mb-6 tracking-tight">
                 Universal Context Processor
               </h1>
-              <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
+              <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto leading-relaxed">
                 Transform conversation data into structured intelligence. 
                 Professional-grade processing for AI applications.
               </p>
+              
+              {/* Free Credits Badge */}
+              <div className="flex justify-center mb-8">
+                <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/40 rounded-full px-6 py-3 flex items-center gap-3">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-green-300 font-medium text-lg">
+                    🎉 FREE: Get 5 credits to start • No payment required
+                  </span>
+                </div>
+              </div>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
                 <button
                   onClick={() => setShowAuthModal(true)}
                   className="bg-blue-600 text-white px-8 py-3 rounded-md font-medium hover:bg-blue-700 transition-colors shadow-sm"
                 >
-                  Get started
+                  Start Free Trial
                 </button>
                 <button
                   onClick={() => router.push('/pricing')}
