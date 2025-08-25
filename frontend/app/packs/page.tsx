@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { Download, FileText, Brain, BarChart3, Calendar, DollarSign, ExternalLink } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
+import AuthModal from '@/components/AuthModal'
+import FreeCreditsPrompt from '@/components/FreeCreditsPrompt'
+import { useFreeCreditsPrompt } from '@/hooks/useFreeCreditsPrompt'
 import { API_BASE_URL } from '@/lib/api'
 
 interface UCPPack {
@@ -22,6 +25,7 @@ export default function PacksPage() {
   const [packs, setPacks] = useState<UCPPack[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPack, setSelectedPack] = useState<UCPPack | null>(null)
+  const freeCreditsPrompt = useFreeCreditsPrompt()
 
   useEffect(() => {
     if (user && session) {
@@ -208,14 +212,14 @@ export default function PacksPage() {
                   </div>
                   <h3 className="font-medium text-gray-900 mb-2">Your Context Packs</h3>
                   <p className="text-gray-600 text-sm mb-4">
-                    Process chat exports to see your packs here
+                    Process chat exports to see your packs here. <strong>Get 5 free credits</strong> when you sign in!
                   </p>
-                  <a 
-                    href="/process" 
-                    className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 text-sm font-medium transition-colors inline-block rounded"
+                  <button 
+                    onClick={() => freeCreditsPrompt.triggerPrompt("viewing your processed context packs")}
+                    className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-4 py-2 text-sm font-medium transition-colors inline-block rounded"
                   >
-                    Get Started
-                  </a>
+                    Sign In & Get Started
+                  </button>
                 </div>
               ) : packs.length === 0 ? (
                 <div className="bg-white border border-gray-200 p-6 text-center">
@@ -371,6 +375,22 @@ export default function PacksPage() {
           </div>
         </div>
       </div>
+
+      {/* Free Credits Prompt */}
+      <FreeCreditsPrompt
+        isOpen={freeCreditsPrompt.showPrompt}
+        onClose={freeCreditsPrompt.closePrompt}
+        onSignIn={freeCreditsPrompt.handleSignIn}
+        feature="viewing your processed context packs"
+      />
+
+      {/* Auth Modal from Free Credits Prompt */}
+      {freeCreditsPrompt.showAuthModal && (
+        <AuthModal 
+          isOpen={freeCreditsPrompt.showAuthModal}
+          onClose={freeCreditsPrompt.closeAuthModal}
+        />
+      )}
     </div>
   )
 }

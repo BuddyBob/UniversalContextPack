@@ -6,6 +6,8 @@ import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Termin
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
+import FreeCreditsPrompt from '@/components/FreeCreditsPrompt';
+import { useFreeCreditsPrompt } from '@/hooks/useFreeCreditsPrompt';
 import { API_ENDPOINTS } from '@/lib/api';
 import { analytics } from '@/lib/analytics';
 
@@ -20,6 +22,7 @@ interface PaymentStatus {
 export default function ProcessPage() {
   const { user, session, makeAuthenticatedRequest } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const freeCreditsPrompt = useFreeCreditsPrompt();
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
@@ -637,8 +640,7 @@ export default function ProcessPage() {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
       // Check if user is authenticated before allowing file upload
-      if (!user) {
-        setShowAuthModal(true);
+      if (!freeCreditsPrompt.triggerPrompt("document processing")) {
         // Reset the file input
         if (event.target) {
           event.target.value = '';
@@ -1228,7 +1230,12 @@ export default function ProcessPage() {
                 />
                 
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => {
+                    if (!freeCreditsPrompt.triggerPrompt("document processing")) {
+                      return;
+                    }
+                    fileInputRef.current?.click();
+                  }}
                   className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors"
                 >
                   Choose File
@@ -1786,6 +1793,22 @@ export default function ProcessPage() {
         <AuthModal 
           isOpen={showAuthModal}
           onClose={() => setShowAuthModal(false)}
+        />
+      )}
+
+      {/* Free Credits Prompt */}
+      <FreeCreditsPrompt
+        isOpen={freeCreditsPrompt.showPrompt}
+        onClose={freeCreditsPrompt.closePrompt}
+        onSignIn={freeCreditsPrompt.handleSignIn}
+        feature="document processing"
+      />
+
+      {/* Auth Modal from Free Credits Prompt */}
+      {freeCreditsPrompt.showAuthModal && (
+        <AuthModal 
+          isOpen={freeCreditsPrompt.showAuthModal}
+          onClose={freeCreditsPrompt.closeAuthModal}
         />
       )}
 
