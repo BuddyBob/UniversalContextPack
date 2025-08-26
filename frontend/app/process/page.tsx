@@ -1711,17 +1711,8 @@ export default function ProcessPage() {
       <FreeCreditsPrompt
         isOpen={freeCreditsPrompt.showPrompt}
         onClose={freeCreditsPrompt.closePrompt}
-        onSignIn={freeCreditsPrompt.handleSignIn}
         feature="document processing"
       />
-
-      {/* Auth Modal from Free Credits Prompt */}
-      {freeCreditsPrompt.showAuthModal && (
-        <AuthModal 
-          isOpen={freeCreditsPrompt.showAuthModal}
-          onClose={freeCreditsPrompt.closeAuthModal}
-        />
-      )}
 
       {/* Floating Payment Button */}
       <button

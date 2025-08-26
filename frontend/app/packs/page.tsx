@@ -380,17 +380,8 @@ export default function PacksPage() {
       <FreeCreditsPrompt
         isOpen={freeCreditsPrompt.showPrompt}
         onClose={freeCreditsPrompt.closePrompt}
-        onSignIn={freeCreditsPrompt.handleSignIn}
         feature="viewing your processed context packs"
       />
-
-      {/* Auth Modal from Free Credits Prompt */}
-      {freeCreditsPrompt.showAuthModal && (
-        <AuthModal 
-          isOpen={freeCreditsPrompt.showAuthModal}
-          onClose={freeCreditsPrompt.closeAuthModal}
-        />
-      )}
     </div>
   )
 }
