@@ -26,19 +26,19 @@ export default function FreeCreditsPrompt({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card rounded-lg max-w-md w-full p-6 relative">
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-bg-card border border-border-primary rounded-lg max-w-md w-full p-6 relative shadow-lg">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-text-muted hover:text-text-primary"
+          className="absolute top-4 right-4 text-text-muted hover:text-text-primary transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="bg-gradient-to-r from-blue-500 to-cyan-500 p-3 rounded-full">
-              <Sparkles className="w-6 h-6 text-white" />
+            <div className="bg-accent-primary/20 p-3 rounded-full">
+              <Sparkles className="w-6 h-6 text-accent-primary" />
             </div>
           </div>
 
@@ -54,7 +54,7 @@ export default function FreeCreditsPrompt({
             <button
               onClick={handleSignIn}
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-medium py-3 px-4 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              className="w-full bg-accent-primary hover:bg-accent-primary-hover text-white font-medium py-3 px-4 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               {isLoading ? (
                 <>
