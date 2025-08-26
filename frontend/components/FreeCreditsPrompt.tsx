@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Sparkles } from 'lucide-react'
+import { X, Sparkles, Loader2 } from 'lucide-react'
 
 interface FreeCreditsPromptProps {
   isOpen: boolean
@@ -16,6 +16,13 @@ export default function FreeCreditsPrompt({
   onSignIn, 
   feature = "this feature" 
 }: FreeCreditsPromptProps) {
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSignIn = () => {
+    setIsLoading(true)
+    onSignIn()
+    // Note: Loading state will be reset when component unmounts/remounts after auth
+  }
   if (!isOpen) return null
 
   return (
@@ -45,15 +52,24 @@ export default function FreeCreditsPrompt({
 
           <div className="space-y-3">
             <button
-              onClick={onSignIn}
-              className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-medium py-3 px-4 rounded-md transition-all duration-200"
+              onClick={handleSignIn}
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-medium py-3 px-4 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
-              Sign In & Start Processing
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Opening Google...</span>
+                </>
+              ) : (
+                <span>Sign In & Start Processing</span>
+              )}
             </button>
             
             <button
               onClick={onClose}
-              className="w-full text-text-muted hover:text-text-primary py-2 transition-colors"
+              disabled={isLoading}
+              className="w-full text-text-muted hover:text-text-primary py-2 transition-colors disabled:opacity-50"
             >
               Maybe later
             </button>

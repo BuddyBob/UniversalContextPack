@@ -151,9 +151,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to UCP</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in to Continue</h2>
           <p className="text-gray-600">
-            Sign in to start processing your chat exports and analyzing conversations
+            You'll get 5 processing credits to start immediately. Quick Google sign-in.
           </p>
         </div>
 
@@ -168,15 +168,20 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full bg-text-secondary border border-gray-200 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center space-x-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <Chrome className="h-5 w-5" />
           )}
-          <span>{loading ? 'Signing in...' : 'Continue with Google'}</span>
+          <span>{loading ? 'Opening Google...' : 'Sign in with Google'}</span>
         </button>
+
+        {/* Info about redirect */}
+        <div className="mt-4 text-center text-sm text-gray-500">
+          <p>You'll be taken to Google to sign in, then returned here to continue processing.</p>
+        </div>
 
         {/* Footer */}
         <div className="mt-6 text-center text-sm text-gray-500">
