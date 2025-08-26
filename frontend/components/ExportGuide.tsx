@@ -123,19 +123,9 @@ const ExportGuide = () => {
               </h1>
             </div>
             
-            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto leading-relaxed">
               Transfer months of conversation history between any AI model in seconds
             </p>
-
-            {/* Free Credits Badge */}
-            <div className="flex justify-center mb-8">
-              <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/40 rounded-full px-6 py-3 flex items-center gap-3">
-                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-green-300 font-medium text-lg">
-                  🎉 FREE: Get 5 credits to start • No payment required
-                </span>
-              </div>
-            </div>
 
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
               <button 
@@ -144,7 +134,7 @@ const ExportGuide = () => {
                 }}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-lg text-lg font-medium transition-all duration-300 hover:shadow-2xl hover:scale-105"
               >
-                Start Free Trial
+                Get Started
               </button>
               
               <a 

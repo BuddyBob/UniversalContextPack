@@ -36,11 +36,11 @@ export default function FreeCreditsPrompt({
           </div>
 
           <h3 className="text-xl font-semibold text-text-primary mb-2">
-            Get 5 Free Credits!
+            Sign in to Continue
           </h3>
           
           <p className="text-text-secondary mb-6">
-            Sign in to access {feature} with <strong>5 free credits</strong>. No payment required to get started.
+            Sign in to process {feature}. You'll get <strong>5 processing credits</strong> to get started immediately.
           </p>
 
           <div className="space-y-3">
@@ -48,7 +48,7 @@ export default function FreeCreditsPrompt({
               onClick={onSignIn}
               className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-medium py-3 px-4 rounded-md transition-all duration-200"
             >
-              Sign In & Get 5 Free Credits
+              Sign In & Start Processing
             </button>
             
             <button

@@ -146,17 +146,12 @@ export default function Navigation() {
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center space-x-3">
-                    <span className="text-xs text-text-muted">
-                      5 free credits available
-                    </span>
-                    <button
-                      onClick={() => setShowAuthModal(true)}
-                      className="nav-sign-in-btn group relative"
-                    >
-                      <span>Sign In</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="nav-sign-in-btn group relative"
+                  >
+                    <span>Sign In</span>
+                  </button>
                 )}
               </div>
 
@@ -232,22 +227,15 @@ export default function Navigation() {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between w-full px-3 py-2">
-                      <div className="flex items-center space-x-3">
-                        <span className="text-sm text-text-muted">
-                          5 free credits available
-                        </span>
-                        <button
-                          onClick={() => {
-                            setShowAuthModal(true)
-                            setShowMobileMenu(false)
-                          }}
-                          className="text-accent-primary font-medium hover:bg-bg-card-hover rounded-md px-2 py-1 transition-colors"
-                        >
-                          Sign In
-                        </button>
-                      </div>
-                    </div>
+                    <button
+                      onClick={() => {
+                        setShowAuthModal(true)
+                        setShowMobileMenu(false)
+                      }}
+                      className="w-full text-left px-3 py-2 text-accent-primary font-medium hover:bg-bg-card-hover rounded-md transition-colors"
+                    >
+                      Sign In
+                    </button>
                   )}
                 </div>
               </nav>

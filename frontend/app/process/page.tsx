@@ -949,101 +949,13 @@ export default function ProcessPage() {
 
       
       <div className="max-w-6xl mx-auto p-6">
-
-        {/* Welcome Section for Non-Authenticated Users */}
-        {!user && (
-          <div className="mb-8">
-            {/* Hero Section */}
-            <div className="text-center py-16 px-8">
-              <h1 className="text-5xl font-semibold text-white mb-6 tracking-tight">
-                Universal Context Processor
-              </h1>
-              <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto leading-relaxed">
-                Transform conversation data into structured intelligence. 
-                Professional-grade processing for AI applications.
-              </p>
-              
-              {/* Free Credits Badge */}
-              <div className="flex justify-center mb-8">
-                <div className="bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-400/40 rounded-full px-6 py-3 flex items-center gap-3">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-green-300 font-medium text-lg">
-                    🎉 FREE: Get 5 credits to start • No payment required
-                  </span>
-                </div>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="bg-blue-600 text-white px-8 py-3 rounded-md font-medium hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  Start Free Trial
-                </button>
-                <button
-                  onClick={() => router.push('/pricing')}
-                  className="border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 px-8 py-3 rounded-md font-medium transition-colors dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:border-gray-500"
-                >
-                  View pricing
-                </button>
-              </div>
-            </div>
-
-            {/* Process Steps */}
-            <div className="grid md:grid-cols-4 gap-8 mb-16">
-              <div className="text-center">
-                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-sm font-medium text-gray-300">1</span>
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">Upload</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  Upload conversation exports from any platform
-                </p>
-              </div>
-              
-              <div className="text-center">
-                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-sm font-medium text-gray-300">2</span>
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">Extract</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  Intelligent extraction preserves context and structure
-                </p>
-              </div>
-              
-              <div className="text-center">
-                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-sm font-medium text-gray-300">3</span>
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">Process</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  Optimal chunking for AI model consumption
-                </p>
-              </div>
-              
-              <div className="text-center">
-                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-sm font-medium text-gray-300">4</span>
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">Analyze</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  AI-powered insights and pattern recognition
-                </p>
-              </div>
-            </div>
-
-           
+        {/* Main Content - Always Show Interface */}
+        <div className="space-y-6">
+          <div className="w-full flex justify-center items-center py-8">
+            <h1 className="text-3xl font-bold text-white text-center">
+              Universal Context Processor
+            </h1>
           </div>
-        )}
-
-        {/* Main Content for Authenticated Users */}
-        {user && (
-          <div className="space-y-6">
-            <div className="w-full flex justify-center items-center py-8">
-        <h1 className="text-3xl font-bold text-white text-center">
-          Universal Context Processor
-        </h1>
-      </div>
             {/* Progress Steps */}
             <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
@@ -1495,7 +1407,6 @@ export default function ProcessPage() {
               </div>
             )}
           </div>
-        )}
 
         {/* Chunk Selection Modal */}
         {showChunkModal && (
