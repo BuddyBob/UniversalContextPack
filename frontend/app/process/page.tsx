@@ -1131,7 +1131,8 @@ export default function ProcessPage() {
                   <Upload className="h-8 w-8 text-accent-primary" />
                 </div>
                 <h3 className="text-lg font-semibold text-text-primary mb-2">Upload Document</h3>
-                <p className="text-text-secondary mb-6">JSON, TXT, CSV, ZIP, and HTML formats supported</p>
+                <p className="text-text-secondary mb-6">Likely - conversations.json</p>
+                <p className="text-text-secondary mb-6">JSON, TXT, CSV, ZIP, and HTML , (conversations.json)</p>
                 
                 <input
                   ref={fileInputRef}
