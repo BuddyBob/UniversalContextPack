@@ -910,16 +910,14 @@ def extract_from_html_content(file_content: str) -> List[str]:
             text_only = clean_text(text_only)
             
             # Split by common conversation delimiters in HTML exports
+            # BUT keep conversations together rather than splitting into sentences
             chunks = re.split(r'\n\s*\n|\r\n\s*\r\n|User\s*ChatGPT|ChatGPT\s*User', text_only)
             
             for chunk in chunks:
                 cleaned_chunk = clean_text(chunk)
-                if cleaned_chunk and len(cleaned_chunk) > 20:
-                    # Split long chunks further if they contain multiple sentences
-                    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', cleaned_chunk)
-                    for sentence in sentences:
-                        if len(sentence.strip()) > 15:
-                            extracted_texts.append(sentence.strip())
+                if cleaned_chunk and len(cleaned_chunk) > 50:  # Only keep substantial chunks
+                    # Don't split into sentences - keep the full conversation chunk
+                    extracted_texts.append(cleaned_chunk)
         
         print(f"HTML extraction found {len(extracted_texts)} text segments")
         return extracted_texts
