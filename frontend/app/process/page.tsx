@@ -548,8 +548,8 @@ export default function ProcessPage() {
     
     // Set up interval with exponential backoff based on failures
     const getPollingInterval = () => {
-      const baseInterval = 15000; // 15 seconds base
-      return baseInterval * Math.min(Math.pow(2, consecutiveFailures), 4); // Max 60 seconds
+      const baseInterval = 3000; // 3 seconds base for faster feedback
+      return baseInterval * Math.min(Math.pow(1.5, consecutiveFailures), 8); // Max 24 seconds
     };
     
     const statusInterval = setInterval(poll, getPollingInterval());
@@ -788,8 +788,8 @@ export default function ProcessPage() {
       }
 
       const requestBody = {
-        chunk_size: 8000,
-        overlap: 200,
+        chunk_size: 120000, // ~150k tokens (4 chars per token)
+        overlap: 2000,      // Proportional overlap
       };
       
       console.log('Request body:', requestBody);
