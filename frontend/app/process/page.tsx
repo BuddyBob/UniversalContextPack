@@ -48,6 +48,7 @@ export default function ProcessPage() {
   const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, credits_balance: number, plan?: string} | null>(null);
   const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const paymentLimitsRequestRef = useRef<Promise<any> | null>(null);
@@ -639,39 +640,71 @@ export default function ProcessPage() {
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
-      // Check if user is authenticated before allowing file upload
-      if (!freeCreditsPrompt.triggerPrompt("document processing")) {
-        // Reset the file input
-        if (event.target) {
-          event.target.value = '';
-        }
-        return;
+      await processSelectedFile(selectedFile);
+      // Reset the file input
+      if (event.target) {
+        event.target.value = '';
       }
-      
-      setFile(selectedFile);
-      setCurrentStep('uploaded');
-      addLog(`File selected: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
-      
-      // Track file upload
-      analytics.fileUpload(selectedFile.size);
-      
-      // Get extraction time estimate
-      // Simple calculation since we don't have a backend endpoint for this
-      const estimatedExtractionTime = Math.max(30, Math.min(selectedFile.size / (1024 * 1024) * 30, 300)); // 30s per MB, min 30s, max 5min
-      const formatted = estimatedExtractionTime < 60 
-        ? `${Math.round(estimatedExtractionTime)}s` 
-        : `${Math.round(estimatedExtractionTime / 60)}m`;
-      
-      setTimeEstimate({
-        time_estimates: {
-          extraction: {
-            formatted: formatted,
-            estimated_seconds: estimatedExtractionTime
-          }
+    }
+  };
+
+  const processSelectedFile = async (selectedFile: File) => {
+    // Check if user is authenticated before allowing file upload
+    if (!freeCreditsPrompt.triggerPrompt("document processing")) {
+      return;
+    }
+    
+    setFile(selectedFile);
+    setCurrentStep('uploaded');
+    addLog(`File selected: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
+    
+    // Track file upload
+    analytics.fileUpload(selectedFile.size);
+    
+    // Get extraction time estimate
+    // Simple calculation since we don't have a backend endpoint for this
+    const estimatedExtractionTime = Math.max(30, Math.min(selectedFile.size / (1024 * 1024) * 30, 300)); // 30s per MB, min 30s, max 5min
+    const formatted = estimatedExtractionTime < 60 
+      ? `${Math.round(estimatedExtractionTime)}s` 
+      : `${Math.round(estimatedExtractionTime / 60)}m`;
+    
+    setTimeEstimate({
+      time_estimates: {
+        extraction: {
+          formatted: formatted,
+          estimated_seconds: estimatedExtractionTime
         }
-        // Don't estimate chunks until after extraction
-      });
-      addLog(`Estimated extraction time: ${formatted}`);
+      }
+      // Don't estimate chunks until after extraction
+    });
+    addLog(`Estimated extraction time: ${formatted}`);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    const validFile = droppedFiles.find(file => 
+      ['.json', '.txt', '.csv', '.zip', '.html', '.htm'].some(ext => 
+        file.name.toLowerCase().endsWith(ext)
+      )
+    );
+    
+    if (validFile) {
+      processSelectedFile(validFile);
+    } else {
+      addLog('Please drop a valid file: .json, .txt, .csv, .zip, or .html');
     }
   };
 
@@ -1144,33 +1177,90 @@ export default function ProcessPage() {
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
-              <div className="bg-gray-700 border border-gray-600 rounded-lg p-8 text-center">
-                <div className="w-16 h-16 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Upload className="h-8 w-8 text-accent-primary" />
+              <div className="bg-gray-700 border border-gray-600 rounded-lg p-8">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <Upload className="h-8 w-8 text-accent-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-text-primary mb-2">Upload Your Chat Export</h3>
+                  <p className="text-text-secondary mb-6">
+                    Upload conversation exports from ChatGPT, Claude, or other AI assistants
+                  </p>
                 </div>
-                <h3 className="text-lg font-semibold text-text-primary mb-2">Upload Document</h3>
-                <p className="text-text-secondary mb-6">Likely - conversations.json</p>
-                <p className="text-text-secondary mb-6">JSON, TXT, CSV, ZIP, and HTML , (conversations.json)</p>
-                
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json,.txt,.csv,.zip,.html"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                
-                <button
-                  onClick={() => {
-                    if (!freeCreditsPrompt.triggerPrompt("document processing")) {
-                      return;
-                    }
-                    fileInputRef.current?.click();
-                  }}
-                  className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors"
+
+                {/* Supported File Types */}
+                <div className="grid md:grid-cols-2 gap-6 mb-8">
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="w-8 h-8 bg-blue-500/20 rounded flex items-center justify-center">
+                        <FileText className="h-4 w-4 text-blue-400" />
+                      </div>
+                      <h4 className="font-medium text-text-primary">ChatGPT Exports</h4>
+                    </div>
+                    <ul className="text-sm text-text-secondary space-y-1">
+                      <li>• <span className="font-mono text-blue-300">conversations.json</span> (Settings → Data Export)</li>
+                      <li>• <span className="font-mono text-blue-300">chat.html</span> (Share conversation → Copy link)</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="w-8 h-8 bg-purple-500/20 rounded flex items-center justify-center">
+                        <FileText className="h-4 w-4 text-purple-400" />
+                      </div>
+                      <h4 className="font-medium text-text-primary">Other Formats</h4>
+                    </div>
+                    <ul className="text-sm text-text-secondary space-y-1">
+                      <li>• <span className="font-mono text-purple-300">.txt</span> - Plain text conversations</li>
+                      <li>• <span className="font-mono text-purple-300">.csv</span> - Structured conversation data</li>
+                      <li>• <span className="font-mono text-purple-300">.zip</span> - Compressed exports</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Upload Area */}
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                    isDragOver 
+                      ? 'border-accent-primary bg-accent-primary/5' 
+                      : 'border-gray-500 hover:border-accent-primary/50'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
                 >
-                  Choose File
-                </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,.txt,.csv,.zip,.html"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  
+                  <button
+                    onClick={() => {
+                      if (!freeCreditsPrompt.triggerPrompt("document processing")) {
+                        return;
+                      }
+                      fileInputRef.current?.click();
+                    }}
+                    className="bg-accent-primary hover:bg-accent-primary-hover text-white px-8 py-4 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
+                  >
+                    <Upload className="h-5 w-5" />
+                    <span>Choose Your Chat Export File</span>
+                  </button>
+                  
+                  <p className="text-text-muted text-sm mt-4">
+                    Or drag and drop your file here
+                  </p>
+                </div>
+
+                {/* Help Text */}
+                <div className="mt-6 text-center">
+                  <p className="text-xs text-text-muted">
+                    Need help? <a href="#" className="text-accent-primary hover:underline">Learn how to export your conversations</a>
+                  </p>
+                </div>
               </div>
             )}
 
