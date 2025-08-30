@@ -18,6 +18,9 @@ import tiktoken
 from openai import OpenAI
 import boto3
 from botocore.config import Config
+import html
+from html.parser import HTMLParser
+import re
 import jwt
 import hashlib
 import hmac
@@ -814,6 +817,118 @@ def is_meaningful_text(text: str) -> bool:
     
     return True
 
+def clean_text(text: str) -> str:
+    """Clean and normalize text content"""
+    if not text:
+        return ""
+    
+    # Decode HTML entities
+    text = html.unescape(text)
+    
+    # Remove excessive whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Strip leading/trailing whitespace
+    text = text.strip()
+    
+    return text
+
+class ChatHTMLParser(HTMLParser):
+    """HTML parser specifically designed for ChatGPT HTML exports"""
+    
+    def __init__(self):
+        super().__init__()
+        self.conversations = []
+        self.current_text = ""
+        self.in_conversation = False
+        self.current_speaker = None
+        self.current_content = []
+        
+    def handle_starttag(self, tag, attrs):
+        # Look for conversation boundaries or speaker indicators
+        if tag in ['div', 'p', 'article', 'section']:
+            # Check for class names that might indicate conversation structure
+            for name, value in attrs:
+                if name == 'class' and any(keyword in value.lower() for keyword in 
+                    ['conversation', 'message', 'user', 'assistant', 'chat', 'turn']):
+                    self.in_conversation = True
+                    break
+    
+    def handle_endtag(self, tag):
+        if tag in ['div', 'p', 'article', 'section'] and self.in_conversation:
+            if self.current_text.strip():
+                self.conversations.append(self.current_text.strip())
+                self.current_text = ""
+            self.in_conversation = False
+        elif tag in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+            # Headers might indicate conversation titles
+            if self.current_text.strip():
+                self.conversations.append(f"TITLE: {self.current_text.strip()}")
+                self.current_text = ""
+    
+    def handle_data(self, data):
+        cleaned_data = clean_text(data)
+        if cleaned_data and len(cleaned_data) > 5:  # Filter out very short text
+            if self.in_conversation:
+                self.current_text += cleaned_data + " "
+            else:
+                # Check if this might be a conversation turn even without explicit markup
+                # Look for patterns like "User" or "ChatGPT" at the start
+                if any(cleaned_data.lower().startswith(prefix) for prefix in 
+                    ['user', 'chatgpt', 'assistant', 'human', 'ai', 'you:', 'me:']):
+                    self.conversations.append(cleaned_data)
+                elif len(cleaned_data) > 20:  # Longer text is likely conversation content
+                    self.current_text += cleaned_data + " "
+    
+    def close(self):
+        super().close()
+        # Add any remaining text
+        if self.current_text.strip():
+            self.conversations.append(self.current_text.strip())
+
+def extract_from_html_content(file_content: str) -> List[str]:
+    """Extract conversations from HTML chat export files"""
+    extracted_texts = []
+    
+    try:
+        # First, try the structured HTML parser
+        parser = ChatHTMLParser()
+        parser.feed(file_content)
+        parser.close()
+        
+        if parser.conversations:
+            # Filter and clean the extracted conversations
+            for conv in parser.conversations:
+                cleaned = clean_text(conv)
+                if cleaned and len(cleaned) > 10:  # Filter very short entries
+                    extracted_texts.append(cleaned)
+        
+        # If structured parsing didn't yield much, fall back to simpler text extraction
+        if len(extracted_texts) < 5:
+            # Remove HTML tags entirely and look for conversation patterns
+            text_only = re.sub(r'<[^>]+>', ' ', file_content)
+            text_only = clean_text(text_only)
+            
+            # Split by common conversation delimiters in HTML exports
+            chunks = re.split(r'\n\s*\n|\r\n\s*\r\n|User\s*ChatGPT|ChatGPT\s*User', text_only)
+            
+            for chunk in chunks:
+                cleaned_chunk = clean_text(chunk)
+                if cleaned_chunk and len(cleaned_chunk) > 20:
+                    # Split long chunks further if they contain multiple sentences
+                    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', cleaned_chunk)
+                    for sentence in sentences:
+                        if len(sentence.strip()) > 15:
+                            extracted_texts.append(sentence.strip())
+        
+        print(f"HTML extraction found {len(extracted_texts)} text segments")
+        return extracted_texts
+        
+    except Exception as e:
+        print(f"Error in HTML extraction: {e}")
+        # Fallback to basic text extraction
+        return extract_from_text_content(re.sub(r'<[^>]+>', ' ', file_content))
+
 def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progress_callback=None, total_items=None, current_item=None, seen_objects=None) -> List[str]:
     """Recursively extract meaningful text from any data structure - enhanced version from universal_text_extractor.py"""
     if extracted_texts is None:
@@ -1058,46 +1173,52 @@ async def process_extraction_background(job_id: str, file_content: str, filename
         
         extracted_texts = []
         
-        try:
-            # Try parsing as JSON first
-            json_data = json.loads(file_content)
-            print("Processing JSON data structure...")
-            update_job_progress(job_id, "extracting", 20, "Processing JSON data structure...")
-            
-            def progress_callback(message):
-                # Parse progress from message like "Processing item 500/1000 (50.0%)"
-                if "Processing item" in message and "%" in message:
-                    try:
-                        percent_part = message.split("(")[1].split("%")[0]
-                        percent = float(percent_part)
-                        # Get current item number for batch updates
-                        item_part = message.split("Processing item ")[1].split("/")[0]
-                        item_num = int(item_part)
-                        
-                        # Send update every 100 items OR every 5% progress OR at major milestones
-                        # This significantly reduces the logging frequency
-                        if (item_num % 100 == 0 or 
-                            int(percent) % 5 == 0 and int(percent) != int(getattr(progress_callback, 'last_percent', 0)) or 
-                            percent >= 99.0 or 
-                            item_num == 1):
-                            # Scale from 20% to 80% (extraction phase)
-                            scaled_progress = 20 + (percent * 0.6)
-                            update_job_progress(job_id, "extracting", scaled_progress, message)
-                            progress_callback.last_percent = percent
-                    except Exception as e:
-                        # Fallback for any parsing errors - no verbose logging
-                        update_job_progress(job_id, "extracting", 50, message)
-                else:
-                    # Non-item progress messages - only log important ones
-                    if any(keyword in message.lower() for keyword in ['completed', 'finished', 'error', 'failed']):
-                        update_job_progress(job_id, "extracting", 50, message)
-            
-            extracted_texts = extract_text_from_structure(json_data, progress_callback=progress_callback)
-        except json.JSONDecodeError:
-            # Fallback to text processing using enhanced function
-            print("Processing as text content...")
-            update_job_progress(job_id, "extracting", 30, "Processing as text content...")
-            extracted_texts = extract_from_text_content(file_content)
+        # Check if it's an HTML file first
+        if filename.lower().endswith('.html') or filename.lower().endswith('.htm'):
+            print("Processing HTML chat export...")
+            update_job_progress(job_id, "extracting", 20, "Processing HTML chat export...")
+            extracted_texts = extract_from_html_content(file_content)
+        else:
+            try:
+                # Try parsing as JSON first
+                json_data = json.loads(file_content)
+                print("Processing JSON data structure...")
+                update_job_progress(job_id, "extracting", 20, "Processing JSON data structure...")
+                
+                def progress_callback(message):
+                    # Parse progress from message like "Processing item 500/1000 (50.0%)"
+                    if "Processing item" in message and "%" in message:
+                        try:
+                            percent_part = message.split("(")[1].split("%")[0]
+                            percent = float(percent_part)
+                            # Get current item number for batch updates
+                            item_part = message.split("Processing item ")[1].split("/")[0]
+                            item_num = int(item_part)
+                            
+                            # Send update every 100 items OR every 5% progress OR at major milestones
+                            # This significantly reduces the logging frequency
+                            if (item_num % 100 == 0 or 
+                                int(percent) % 5 == 0 and int(percent) != int(getattr(progress_callback, 'last_percent', 0)) or 
+                                percent >= 99.0 or 
+                                item_num == 1):
+                                # Scale from 20% to 80% (extraction phase)
+                                scaled_progress = 20 + (percent * 0.6)
+                                update_job_progress(job_id, "extracting", scaled_progress, message)
+                                progress_callback.last_percent = percent
+                        except Exception as e:
+                            # Fallback for any parsing errors - no verbose logging
+                            update_job_progress(job_id, "extracting", 50, message)
+                    else:
+                        # Non-item progress messages - only log important ones
+                        if any(keyword in message.lower() for keyword in ['completed', 'finished', 'error', 'failed']):
+                            update_job_progress(job_id, "extracting", 50, message)
+                
+                extracted_texts = extract_text_from_structure(json_data, progress_callback=progress_callback)
+            except json.JSONDecodeError:
+                # Fallback to text processing using enhanced function
+                print("Processing as text content...")
+                update_job_progress(job_id, "extracting", 30, "Processing as text content...")
+                extracted_texts = extract_from_text_content(file_content)
 
         if not extracted_texts:
             update_job_progress(job_id, "extracting", 0, "Error: No meaningful text found in file")

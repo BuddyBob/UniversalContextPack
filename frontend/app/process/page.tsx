@@ -724,13 +724,22 @@ export default function ProcessPage() {
   };
 
   const handleChunk = async () => {
-    if (!extractionData || !currentJobId) return;
+    if (!extractionData || !currentJobId) {
+      console.error('Missing required data for chunking:', { extractionData: !!extractionData, currentJobId });
+      addLog('Error: Missing extraction data or job ID');
+      return;
+    }
 
+    console.log('Starting chunking process with jobId:', currentJobId);
     setIsProcessing(true);
     setCurrentStep('chunking');
     addLog('Creating semantic chunks...');
 
     try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const chunkUrl = `${backendUrl}/api/chunk/${currentJobId}`;
+      console.log('Making chunking request to:', chunkUrl);
+      
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
@@ -739,22 +748,31 @@ export default function ProcessPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/chunk/${currentJobId}`, {
+      const requestBody = {
+        extracted_file: extractionData.extracted_file,
+        chunk_size: 8000,
+        overlap: 200,
+      };
+      
+      console.log('Request body:', requestBody);
+
+      const response = await fetch(chunkUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          extracted_file: extractionData.extracted_file,
-          chunk_size: 8000,
-          overlap: 200,
-        }),
+        body: JSON.stringify(requestBody),
       });
+
+      console.log('Chunking response status:', response.status);
+      console.log('Chunking response URL:', response.url);
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Chunking error response:', errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('Chunking response data:', data);
       setChunkData(data);
       setAvailableChunks(data.chunks);
       setCurrentStep('chunked');
