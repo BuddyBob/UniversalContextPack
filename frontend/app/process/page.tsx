@@ -1309,9 +1309,31 @@ export default function ProcessPage() {
                   disabled={isProcessing}
                   className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
                 >
-                  <BarChart3 className="h-4 w-4" />
-                  <span>Create Chunks</span>
+                  {isProcessing ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-accent-primary border-t-transparent rounded-full" />
+                  ) : (
+                    <BarChart3 className="h-4 w-4" />
+                  )}
+                  <span>{isProcessing ? 'Creating Chunks...' : 'Create Chunks'}</span>
                 </button>
+              </div>
+            )}
+
+            {/* Chunking Progress */}
+            {currentStep === 'chunking' && (
+              <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-text-primary">Creating Chunks</h3>
+                    <p className="text-text-secondary text-sm">Breaking your content into semantic chunks for analysis...</p>
+                  </div>
+                </div>
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                  <div className="text-sm text-blue-300">⚡ Processing your content with optimized 150k token chunks</div>
+                </div>
               </div>
             )}
 
