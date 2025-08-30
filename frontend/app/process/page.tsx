@@ -1178,44 +1178,16 @@ export default function ProcessPage() {
             {/* Upload Section */}
             {currentStep === 'upload' && (
               <div className="bg-gray-700 border border-gray-600 rounded-lg p-8">
-                <div className="text-center mb-8">
+                <div className="text-center mb-6">
                   <div className="w-16 h-16 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <Upload className="h-8 w-8 text-accent-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-text-primary mb-2">Upload Your Chat Export</h3>
-                  <p className="text-text-secondary mb-6">
-                    Upload conversation exports from ChatGPT, Claude, or other AI assistants
+                  <p className="text-text-secondary text-sm">
+                    <span className="font-mono text-blue-300">conversations.json</span> • 
+                    <span className="font-mono text-green-300 mx-2">chat.html</span> • 
+                    <span className="font-mono text-purple-300">.txt files</span>
                   </p>
-                </div>
-
-                {/* Supported File Types */}
-                <div className="grid md:grid-cols-2 gap-6 mb-8">
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className="w-8 h-8 bg-blue-500/20 rounded flex items-center justify-center">
-                        <FileText className="h-4 w-4 text-blue-400" />
-                      </div>
-                      <h4 className="font-medium text-text-primary">ChatGPT Exports</h4>
-                    </div>
-                    <ul className="text-sm text-text-secondary space-y-1">
-                      <li>• <span className="font-mono text-blue-300">conversations.json</span> (Settings → Data Export)</li>
-                      <li>• <span className="font-mono text-blue-300">chat.html</span> (Share conversation → Copy link)</li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gray-800 rounded-lg p-4">
-                    <div className="flex items-center space-x-3 mb-3">
-                      <div className="w-8 h-8 bg-purple-500/20 rounded flex items-center justify-center">
-                        <FileText className="h-4 w-4 text-purple-400" />
-                      </div>
-                      <h4 className="font-medium text-text-primary">Other Formats</h4>
-                    </div>
-                    <ul className="text-sm text-text-secondary space-y-1">
-                      <li>• <span className="font-mono text-purple-300">.txt</span> - Plain text conversations</li>
-                      <li>• <span className="font-mono text-purple-300">.csv</span> - Structured conversation data</li>
-                      <li>• <span className="font-mono text-purple-300">.zip</span> - Compressed exports</li>
-                    </ul>
-                  </div>
                 </div>
 
                 {/* Upload Area */}
@@ -1232,7 +1204,7 @@ export default function ProcessPage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".json,.txt,.csv,.zip,.html"
+                    accept=".json,.txt,.html"
                     onChange={handleFileSelect}
                     className="hidden"
                   />
@@ -1247,18 +1219,11 @@ export default function ProcessPage() {
                     className="bg-accent-primary hover:bg-accent-primary-hover text-white px-8 py-4 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
                   >
                     <Upload className="h-5 w-5" />
-                    <span>Choose Your Chat Export File</span>
+                    <span>Choose File</span>
                   </button>
                   
                   <p className="text-text-muted text-sm mt-4">
-                    Or drag and drop your file here
-                  </p>
-                </div>
-
-                {/* Help Text */}
-                <div className="mt-6 text-center">
-                  <p className="text-xs text-text-muted">
-                    Need help? <a href="#" className="text-accent-primary hover:underline">Learn how to export your conversations</a>
+                    Or drag and drop here
                   </p>
                 </div>
               </div>
