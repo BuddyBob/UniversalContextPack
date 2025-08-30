@@ -1193,18 +1193,14 @@ export default function ProcessPage() {
                     <span className="font-mono text-green-300 mx-2">chat.html</span> • 
                     <span className="font-mono text-purple-300">.txt files</span>
                   </p>
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-sm">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <div className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
-                        <span className="text-amber-900 text-xs font-bold">!</span>
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                        <span className="text-blue-900 text-xs font-bold">💡</span>
                       </div>
-                      <span className="text-amber-300 font-medium">File Type Impact</span>
+                      <span className="text-blue-300 font-medium">Recommended: </span>
+                      <span className="text-blue-200">Use <span className="font-mono text-blue-300">conversations.json</span> for more efficient processing</span>
                     </div>
-                    <p className="text-amber-200 text-xs leading-relaxed">
-                      <span className="font-mono text-blue-300">conversations.json</span> creates ~30-40 chunks<br/>
-                      <span className="font-mono text-green-300">chat.html</span> creates ~4-5x more chunks due to formatting<br/>
-                      Choose JSON format when possible to minimize processing costs
-                    </p>
                   </div>
                 </div>
 
