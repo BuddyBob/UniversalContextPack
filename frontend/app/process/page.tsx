@@ -1193,14 +1193,10 @@ export default function ProcessPage() {
                     <span className="font-mono text-green-300 mx-2">chat.html</span> • 
                     <span className="font-mono text-purple-300">.txt files</span>
                   </p>
-                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                        <span className="text-blue-900 text-xs font-bold">💡</span>
-                      </div>
-                      <span className="text-blue-300 font-medium">Recommended: </span>
-                      <span className="text-blue-200">Use <span className="font-mono text-blue-300">conversations.json</span> for more efficient processing</span>
-                    </div>
+                  <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-3 text-sm">
+                    <p className="text-gray-300">
+                      <span className="font-medium">Recommended:</span> Use <span className="font-mono text-accent-primary">conversations.json</span> for more efficient processing
+                    </p>
                   </div>
                 </div>
 
