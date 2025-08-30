@@ -763,6 +763,12 @@ export default function ProcessPage() {
       return;
     }
 
+    // Prevent multiple simultaneous chunking requests
+    if (isProcessing || currentStep === 'chunking') {
+      console.log('Chunking already in progress, ignoring duplicate request');
+      return;
+    }
+
     console.log('Starting chunking process with jobId:', currentJobId);
     setIsProcessing(true);
     setCurrentStep('chunking');
@@ -782,7 +788,6 @@ export default function ProcessPage() {
       }
 
       const requestBody = {
-        extracted_file: extractionData.extracted_file,
         chunk_size: 8000,
         overlap: 200,
       };
