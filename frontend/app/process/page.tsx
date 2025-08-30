@@ -1188,11 +1188,24 @@ export default function ProcessPage() {
                     <Upload className="h-8 w-8 text-accent-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-text-primary mb-2">Upload Your Chat Export</h3>
-                  <p className="text-text-secondary text-sm">
+                  <p className="text-text-secondary text-sm mb-3">
                     <span className="font-mono text-blue-300">conversations.json</span> • 
                     <span className="font-mono text-green-300 mx-2">chat.html</span> • 
                     <span className="font-mono text-purple-300">.txt files</span>
                   </p>
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-sm">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <div className="w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                        <span className="text-amber-900 text-xs font-bold">!</span>
+                      </div>
+                      <span className="text-amber-300 font-medium">File Type Impact</span>
+                    </div>
+                    <p className="text-amber-200 text-xs leading-relaxed">
+                      <span className="font-mono text-blue-300">conversations.json</span> creates ~30-40 chunks<br/>
+                      <span className="font-mono text-green-300">chat.html</span> creates ~4-5x more chunks due to formatting<br/>
+                      Choose JSON format when possible to minimize processing costs
+                    </p>
+                  </div>
                 </div>
 
                 {/* Upload Area */}

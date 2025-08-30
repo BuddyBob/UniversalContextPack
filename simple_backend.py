@@ -127,6 +127,10 @@ def check_rate_limit(user_id: str, limit_type: str = "payment", max_attempts: in
 class AnalyzeRequest(BaseModel):
     selected_chunks: List[int] = []  # List of chunk indices to analyze
 
+class ChunkRequest(BaseModel):
+    chunk_size: Optional[int] = 120000  # Default to 120k characters (~150k tokens)
+    overlap: Optional[int] = 2000       # Default overlap
+
 class CreditPurchaseRequest(BaseModel):
     credits: int
     amount: float
@@ -891,35 +895,62 @@ def extract_from_html_content(file_content: str) -> List[str]:
     extracted_texts = []
     
     try:
-        # First, try the structured HTML parser
-        parser = ChatHTMLParser()
-        parser.feed(file_content)
-        parser.close()
+        # For HTML files, we need to be more selective to avoid excessive chunks
+        print(f"Processing HTML file of {len(file_content)} characters")
         
-        if parser.conversations:
-            # Filter and clean the extracted conversations
-            for conv in parser.conversations:
-                cleaned = clean_text(conv)
-                if cleaned and len(cleaned) > 10:  # Filter very short entries
-                    extracted_texts.append(cleaned)
+        # Remove HTML tags entirely and get plain text
+        text_only = re.sub(r'<[^>]+>', ' ', file_content)
+        text_only = clean_text(text_only)
         
-        # If structured parsing didn't yield much, fall back to simpler text extraction
-        if len(extracted_texts) < 5:
-            # Remove HTML tags entirely and look for conversation patterns
-            text_only = re.sub(r'<[^>]+>', ' ', file_content)
-            text_only = clean_text(text_only)
-            
-            # Split by common conversation delimiters in HTML exports
-            # BUT keep conversations together rather than splitting into sentences
-            chunks = re.split(r'\n\s*\n|\r\n\s*\r\n|User\s*ChatGPT|ChatGPT\s*User', text_only)
+        print(f"After HTML tag removal: {len(text_only)} characters")
+        
+        # Split by conversation patterns to identify actual chat content
+        # Look for patterns like "User" followed by "ChatGPT" or "Assistant"
+        conversation_pattern = r'(?i)(?:^|\n\s*)((?:user|human|you)[\s:]+.*?)(?=(?:\n\s*(?:chatgpt|assistant|ai|gpt)[\s:])|$)'
+        assistant_pattern = r'(?i)(?:^|\n\s*)((?:chatgpt|assistant|ai|gpt)[\s:]+.*?)(?=(?:\n\s*(?:user|human|you)[\s:])|$)'
+        
+        # Extract user messages
+        user_messages = re.findall(conversation_pattern, text_only, re.DOTALL)
+        assistant_messages = re.findall(assistant_pattern, text_only, re.DOTALL)
+        
+        # Combine and clean messages
+        all_messages = user_messages + assistant_messages
+        
+        for message in all_messages:
+            cleaned_message = clean_text(message)
+            if cleaned_message and len(cleaned_message) > 50:  # Filter short messages
+                # Remove common HTML artifacts and navigation text
+                if not any(artifact in cleaned_message.lower() for artifact in [
+                    'copy code', 'share', 'regenerate', 'continue', 'new conversation',
+                    'upgrade', 'settings', 'history', 'menu', 'sidebar'
+                ]):
+                    extracted_texts.append(cleaned_message)
+        
+        # If conversation pattern matching didn't work well, fall back to paragraph splitting
+        if len(extracted_texts) < 10:
+            print("Falling back to paragraph-based extraction...")
+            # Split by multiple line breaks but be more aggressive about filtering
+            chunks = re.split(r'\n\s*\n\s*\n|\r\n\s*\r\n\s*\r\n', text_only)
+            extracted_texts = []
             
             for chunk in chunks:
                 cleaned_chunk = clean_text(chunk)
-                if cleaned_chunk and len(cleaned_chunk) > 50:  # Only keep substantial chunks
-                    # Don't split into sentences - keep the full conversation chunk
+                # More restrictive filtering for HTML to avoid UI elements
+                if (cleaned_chunk and 
+                    len(cleaned_chunk) > 100 and  # Longer threshold for HTML
+                    len(cleaned_chunk.split()) > 10 and  # At least 10 words
+                    not any(artifact in cleaned_chunk.lower() for artifact in [
+                        'copy code', 'share', 'regenerate', 'continue', 'new conversation',
+                        'upgrade', 'settings', 'history', 'menu', 'sidebar', 'chatgpt',
+                        'openai', 'terms', 'privacy', 'help', 'support'
+                    ])):
                     extracted_texts.append(cleaned_chunk)
         
-        print(f"HTML extraction found {len(extracted_texts)} text segments")
+        # Log the total amount of extracted content for debugging
+        total_chars = sum(len(text) for text in extracted_texts)
+        print(f"HTML extraction found {len(extracted_texts)} text segments, total {total_chars} characters")
+        print(f"Reduction ratio: {len(file_content)} -> {total_chars} ({total_chars/len(file_content)*100:.1f}%)")
+        
         return extracted_texts
         
     except Exception as e:
@@ -1400,10 +1431,11 @@ async def estimate_processing_cost(job_id: str, user: AuthenticatedUser = Depend
         raise HTTPException(status_code=500, detail=f"Failed to estimate cost: {str(e)}")
 
 @app.post("/api/chunk/{job_id}")
-async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+async def chunk_text(job_id: str, request: ChunkRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """Step 2: Create chunks from extracted text."""
     try:
         print(f"Starting chunking for job {job_id} for user {user.user_id}")
+        print(f"Chunk parameters: size={request.chunk_size}, overlap={request.overlap}")
         # Remove redundant update_progress calls - use only update_job_progress
         update_job_progress(job_id, "chunking", 0, "Creating semantic chunks...")
         
@@ -1412,8 +1444,11 @@ async def chunk_text(job_id: str, user: AuthenticatedUser = Depends(get_current_
         if not extracted_content:
             raise HTTPException(status_code=404, detail="Extracted text not found")
         
-        # Chunk the text with reduced token limit to stay under OpenAI rate limits
-        max_tokens = 150000  # Reduced from 200,000 to 150,000 to stay well under 200k limit
+        print(f"Extracted content length: {len(extracted_content)} characters")
+        
+        # Use the chunk_size from request (characters) and convert to approximate tokens
+        # Rough conversion: 4 characters per token
+        max_tokens = min(request.chunk_size // 4, 150000)  # Cap at 150k tokens for safety
         chunks = []
         
         # Split by conversation entries
