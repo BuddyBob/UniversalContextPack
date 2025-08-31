@@ -95,30 +95,23 @@ export default function PricingPageClient() {
 
     try {
       // Create checkout session and redirect directly to Stripe
+      const requestBody: any = {
+        credits: isUnlimitedSelected ? -1 : customCredits, // -1 indicates unlimited
+        amount: calculatePrice(customCredits)
+      }
+      
+      // Only include unlimited field if it's true (for backward compatibility)
+      if (isUnlimitedSelected) {
+        requestBody.unlimited = true
+      }
+      
       const response = await fetch(API_ENDPOINTS.createCheckoutSession, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        const requestBody: any = {
-          credits: isUnlimitedSelected ? -1 : customCredits, // -1 indicates unlimited
-          amount: calculatePrice(customCredits)
-        }
-        
-        // Only include unlimited field if it's true (for backward compatibility)
-        if (isUnlimitedSelected) {
-          requestBody.unlimited = true
-        }
-        
-        const response = await fetch(API_ENDPOINTS.createCheckoutSession, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
-          },
-          body: JSON.stringify(requestBody)
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (!response.ok) {
