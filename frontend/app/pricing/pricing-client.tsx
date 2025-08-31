@@ -22,7 +22,7 @@ export default function PricingPageClient() {
   const [loading, setLoading] = useState(true)
   const [processingPurchase, setProcessingPurchase] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [customCredits, setCustomCredits] = useState(25)
+  const [customCredits, setCustomCredits] = useState(50)
   const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(false)
   const router = useRouter()
   const supabase = createClientComponentClient()
@@ -206,7 +206,7 @@ export default function PricingPageClient() {
                       <button
                         onClick={() => {
                           setIsUnlimitedSelected(false)
-                          setCustomCredits(25)
+                          setCustomCredits(50)
                         }}
                         className={`p-6 rounded-lg border transition-all text-left ${
                           !isUnlimitedSelected
@@ -250,75 +250,21 @@ export default function PricingPageClient() {
 
                   {!isUnlimitedSelected && (
                     <>
-                      {/* Credit Amount Input */}
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-3">
-                            Credit Amount
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="500"
-                            value={customCredits}
-                            onChange={(e) => setCustomCredits(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
-                            className="w-full bg-gray-700 border border-gray-500 rounded-lg px-4 py-3 text-white text-lg font-medium focus:outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-400/20"
-                            placeholder="Enter amount"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-3">
-                            Total Cost
-                          </label>
-                          <div className="bg-gray-700 border border-gray-500 rounded-lg px-4 py-3 h-12 flex items-center">
-                            <span className="text-2xl font-bold text-white">${calculatePrice(customCredits)}</span>
-                            <span className="text-gray-400 ml-2 text-sm">USD</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Professional Slider */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-4">
-                          Adjust Credit Amount
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="range"
-                            min="1"
-                            max="500"
-                            value={customCredits}
-                            onChange={(e) => setCustomCredits(Number(e.target.value))}
-                            className="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
-                            style={{
-                              background: `linear-gradient(to right, #ffffff 0%, #ffffff ${(customCredits / 500) * 100}%, #374151 ${(customCredits / 500) * 100}%, #374151 100%)`
-                            }}
-                          />
-                          <div className="flex justify-between text-xs text-gray-500 mt-3">
-                            <span>1 credit</span>
-                            <span className="text-gray-400">${getPricePerCredit(customCredits)} per credit</span>
-                            <span>500 credits</span>
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Business Tier Selection */}
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-4">
-                          Popular Business Tiers
+                          Choose Credit Amount
                         </label>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           {[
-                            { amount: 25, label: 'Starter', desc: 'Small projects' },
-                            { amount: 100, label: 'Professional', desc: 'Regular use', popular: true },
-                            { amount: 250, label: 'Business', desc: 'Team projects' },
-                            { amount: 500, label: 'Enterprise', desc: 'Large scale' }
-                          ].map(({ amount, label, desc, popular }) => (
+                            { amount: 50, label: 'Starter', desc: 'Small projects', price: '$1.00' },
+                            { amount: 100, label: 'Professional', desc: 'Regular use', popular: true, price: '$1.70' },
+                            { amount: 250, label: 'Business', desc: 'Team projects', price: '$3.75' }
+                          ].map(({ amount, label, desc, popular, price }) => (
                             <button
                               key={amount}
                               onClick={() => setCustomCredits(amount)}
-                              className={`relative p-4 rounded-lg border transition-all text-left ${
+                              className={`relative p-6 rounded-lg border transition-all text-center ${
                                 customCredits === amount
                                   ? 'border-white bg-gray-700 shadow-lg'
                                   : 'border-gray-600 bg-gray-800 hover:border-gray-500 hover:bg-gray-750'
@@ -331,8 +277,9 @@ export default function PricingPageClient() {
                                   </span>
                                 </div>
                               )}
-                              <div className="font-semibold text-white">{amount}</div>
-                              <div className="text-xs text-gray-400 mb-1">{label}</div>
+                              <div className="text-2xl font-bold text-white mb-1">{amount}</div>
+                              <div className="text-sm text-gray-400 mb-1">{label}</div>
+                              <div className="text-lg font-semibold text-green-400 mb-1">{price}</div>
                               <div className="text-xs text-gray-500">{desc}</div>
                             </button>
                           ))}
@@ -341,46 +288,16 @@ export default function PricingPageClient() {
                     </>
                   )}
 
-                  {/* Pricing Details */}
-                  <div className="bg-gray-900 border border-gray-600 rounded-lg p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <div className="text-lg text-gray-300">
-                          {isUnlimitedSelected ? 'Unlimited Plan' : 'Subtotal'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {isUnlimitedSelected 
-                            ? 'One-time payment • Lifetime access' 
-                            : `${customCredits} credits × $${getPricePerCredit(customCredits)}`
-                          }
-                        </div>
-                      </div>
-                      <div className="text-xl font-semibold text-white">${calculatePrice(customCredits)}</div>
+                  {/* Simplified Pricing Summary */}
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-white mb-2">
+                      ${calculatePrice(customCredits)}
                     </div>
-                    
-                    {!isUnlimitedSelected && getDiscountPercent(customCredits) > 0 && (
-                      <div className="flex items-center justify-between mb-4 text-green-400">
-                        <div className="flex items-center">
-                          <Zap className="h-4 w-4 mr-2" />
-                          <span className="text-sm">Volume Discount ({getDiscountPercent(customCredits)}% off)</span>
-                        </div>
-                        <div className="font-medium">-${(customCredits * 0.02 - calculatePrice(customCredits)).toFixed(2)}</div>
-                      </div>
-                    )}
-                    
-                    {isUnlimitedSelected && (
-                      <div className="flex items-center justify-between mb-4 text-green-400">
-                        <div className="flex items-center">
-                          <Zap className="h-4 w-4 mr-2" />
-                          <span className="text-sm">Best Value • Never buy credits again!</span>
-                        </div>
-                        <div className="font-medium">🎉</div>
-                      </div>
-                    )}
-                    
-                    <div className="border-t border-gray-600 pt-4 flex items-center justify-between">
-                      <div className="text-lg font-semibold text-white">Total</div>
-                      <div className="text-2xl font-bold text-white">${calculatePrice(customCredits)} USD</div>
+                    <div className="text-gray-400 text-sm">
+                      {isUnlimitedSelected 
+                        ? 'One-time payment • Lifetime access' 
+                        : `${customCredits} credits • $${getPricePerCredit(customCredits)} each`
+                      }
                     </div>
                   </div>
 
@@ -406,59 +323,26 @@ export default function PricingPageClient() {
                     )}
                   </button>
 
-                  {/* Security & Trust Indicators */}
-                  <div className="flex items-center justify-center space-x-6 text-xs text-gray-500">
-                    <div className="flex items-center">
-                      <Shield className="h-3 w-3 mr-1" />
-                      Secure Payment
-                    </div>
-                    <div className="flex items-center">
-                      <CreditCard className="h-3 w-3 mr-1" />
-                      Powered by Stripe
-                    </div>
-                    <div className="flex items-center">
-                      <Star className="h-3 w-3 mr-1" />
-                      {isUnlimitedSelected ? 'Lifetime Access' : 'Credits Never Expire'}
-                    </div>
+                  {/* Security Indicator */}
+                  <div className="flex items-center justify-center text-xs text-gray-500">
+                    <Shield className="h-3 w-3 mr-1" />
+                    Secure Payment Powered by Stripe
                   </div>
                 </div>
             </div>
           </div>
         </div>
 
-        {/* Benefits Section */}
+        {/* Simple Benefits */}
         <div className="text-center">
-          <h3 className="text-xl font-medium text-text-primary mb-6 mt-12">
-            How Credits Work
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-                <Shield className="h-5 w-5 text-accent-primary" />
-              </div>
-              <h4 className="font-medium text-text-primary mb-1">Pay Per Use</h4>
-              <p className="text-text-secondary text-sm">
-                1 credit = 1 conversation chunk analyzed with GPT-5 nano. Credits never expire.
-              </p>
+          <div className="max-w-md mx-auto">
+            <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
+              <Shield className="h-5 w-5 text-accent-primary" />
             </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-                <Zap className="h-5 w-5 text-accent-primary" />
-              </div>
-              <h4 className="font-medium text-text-primary mb-1">Volume Discounts</h4>
-              <p className="text-text-secondary text-sm">
-                Save up to 33% automatically when purchasing larger amounts.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-                <Star className="h-5 w-5 text-accent-primary" />
-              </div>
-              <h4 className="font-medium text-text-primary mb-1">Premium AI</h4>
-              <p className="text-text-secondary text-sm">
-                Each analysis uses the latest GPT-5 nano for deep conversation insights.
-              </p>
-            </div>
+            <h4 className="font-medium text-text-primary mb-2">Simple & Secure</h4>
+            <p className="text-text-secondary text-sm">
+              1 credit = 1 conversation chunk analyzed. Credits never expire. Secure payments via Stripe.
+            </p>
           </div>
         </div>
 
@@ -469,44 +353,6 @@ export default function PricingPageClient() {
           </div>
         )}
       </div>
-
-      {/* Professional Slider Styles */}
-      <style jsx>{`
-        .slider::-webkit-slider-thumb {
-          appearance: none;
-          height: 24px;
-          width: 24px;
-          border-radius: 50%;
-          background: #ffffff;
-          cursor: pointer;
-          border: 3px solid #1f2937;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-          transition: all 0.2s ease;
-        }
-        
-        .slider::-webkit-slider-thumb:hover {
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
-          transform: scale(1.1);
-        }
-        
-        .slider::-moz-range-thumb {
-          height: 24px;
-          width: 24px;
-          border-radius: 50%;
-          background: #ffffff;
-          cursor: pointer;
-          border: 3px solid #1f2937;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-        }
-
-        .slider:focus {
-          outline: none;
-        }
-
-        .slider:focus::-webkit-slider-thumb {
-          box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
-        }
-      `}</style>
     </div>
   )
 }
