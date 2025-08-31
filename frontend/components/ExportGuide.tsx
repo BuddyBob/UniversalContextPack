@@ -112,15 +112,6 @@ const ExportGuide = () => {
           
           <div className="max-w-6xl mx-auto text-center relative z-10">
             <div className="mb-8">
-              <div className="flex justify-center mb-6">
-                <Image
-                  src="/Logo.png"
-                  alt="Universal Context Pack"
-                  width={100}
-                  height={100}
-                  className="rounded-lg shadow-lg"
-                />
-              </div>
               <div className="text-sm text-blue-400 font-mono mb-4">~/universal-context-pack</div>
               <h1 className="text-7xl font-light text-white mb-6 leading-tight tracking-tight">
                 Your AI
