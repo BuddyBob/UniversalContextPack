@@ -6,6 +6,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/components/AuthProvider'
 import { CreditCard, ArrowLeft, Calculator, Sparkles, Zap, Shield, Star } from 'lucide-react'
 import { API_ENDPOINTS } from '@/lib/api'
+import Image from 'next/image'
 
 interface PaymentStatus {
   plan: string
@@ -150,8 +151,17 @@ export default function PricingPageClient() {
           </button>
       <div className="max-w-4xl mx-auto px-4 py-12">
         
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="text-center mb-12">
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/Logo.png"
+              alt="Universal Context Pack"
+              width={120}
+              height={120}
+              className="rounded-lg shadow-lg"
+            />
+          </div>
           <h1 className="text-3xl font-semibold text-white mb-4">
             Analysis Credits
           </h1>
