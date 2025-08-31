@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useAuth } from './AuthProvider'
 import AuthModal from './AuthModal'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { Settings, User, LogOut, Sun, Moon, Menu, X } from 'lucide-react'
 
@@ -51,7 +52,13 @@ export default function Navigation() {
         <div className="nav-container">
           <div className="nav-content">
             <div className="nav-brand">
-              <div className="nav-logo">U</div>
+              <Image
+                src="/Logo.png"
+                alt="UCP Logo"
+                width={32}
+                height={32}
+                className="nav-logo-img"
+              />
               <h1 className="nav-title">Universal Context Pack</h1>
             </div>
             <div className="w-20 h-8 bg-card animate-pulse rounded"></div>
@@ -67,7 +74,13 @@ export default function Navigation() {
         <div className="nav-container">
           <div className="nav-content">
             <Link href="/" className="nav-brand">
-              <div className="nav-logo">U</div>
+              <Image
+                src="/Logo.png"
+                alt="UCP Logo"
+                width={32}
+                height={32}
+                className="nav-logo-img"
+              />
               <h1 className="nav-title">Universal Context Pack</h1>
             </Link>
 

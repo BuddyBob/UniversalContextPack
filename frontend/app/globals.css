@@ -670,6 +670,13 @@
     color: white !important;
     font-size: 1.125rem !important;
   }
+
+  .nav-logo-img {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    border-radius: 6px !important;
+    object-fit: contain !important;
+  }
   
   .nav-title {
     font-size: 1.5rem !important;
@@ -909,6 +916,11 @@
       width: 2rem !important;
       height: 2rem !important;
       font-size: 1rem !important;
+    }
+
+    .nav-logo-img {
+      width: 2rem !important;
+      height: 2rem !important;
     }
   }
 
