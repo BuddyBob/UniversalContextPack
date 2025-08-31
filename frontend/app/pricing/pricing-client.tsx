@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/components/AuthProvider'
 import { CreditCard, ArrowLeft, Calculator, Sparkles, Zap, Shield, Star } from 'lucide-react'
-import StripePaymentForm from '@/components/StripePaymentForm'
+import StripeCheckout from '@/components/StripeCheckout'
 import { API_ENDPOINTS } from '@/lib/api'
 
 interface PaymentStatus {
@@ -182,7 +182,7 @@ export default function PricingPageClient() {
                     </p>
                   </div>
                   
-                  <StripePaymentForm
+                  <StripeCheckout
                     credits={customCredits}
                     amount={calculatePrice(customCredits)}
                     session={session}

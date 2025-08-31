@@ -2946,6 +2946,72 @@ async def create_payment_intent(
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to create payment intent")
 
+@app.post("/api/create-checkout-session")
+async def create_checkout_session(
+    request: StripePaymentIntentRequest,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Create a Stripe Checkout Session for credit purchase (hosted payment page)"""
+    
+    try:
+        # Rate limiting: max 5 checkout sessions per hour per user
+        can_proceed, attempt_count = check_rate_limit(user.user_id, "checkout", max_attempts=5, window_hours=1)
+        
+        if not can_proceed:
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Too many checkout attempts. You can create up to 5 checkout sessions per hour. Try again later."
+            )
+        
+        # Validate the amount matches our pricing
+        expected_amount = calculate_credit_price(request.credits)
+        
+        if abs(request.amount - expected_amount) > 0.01:  # Allow for small rounding differences
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Amount mismatch. Expected ${expected_amount}, got ${request.amount}"
+            )
+        
+        # Get the frontend URL for success/cancel redirects
+        frontend_url = os.getenv("FRONTEND_URL", "https://universal-context-pack.vercel.app")
+        
+        # Create Stripe checkout session
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': f'{request.credits} Analysis Credits',
+                        'description': f'Credits for Universal Context Pack analysis (1 credit = 1 conversation chunk ~150k tokens)',
+                    },
+                    'unit_amount': int(request.amount * 100),  # Convert to cents
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=f"{frontend_url}/process?payment_success=true&session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{frontend_url}/process?payment_cancelled=true",
+            metadata={
+                'user_id': user.user_id,
+                'credits': request.credits,
+                'email': user.email
+            },
+            customer_email=user.email,
+            # Add automatic tax calculation if needed
+            # automatic_tax={'enabled': True},
+        )
+        
+        return {
+            "checkout_url": session.url,
+            "session_id": session.id
+        }
+        
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=f"Stripe error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to create checkout session")
+
 class PaymentValidationRequest(BaseModel):
     credits: int
     amount: float
@@ -3087,6 +3153,21 @@ async def stripe_webhook(request: Request):
             payment_intent = event['data']['object']
             print(f"🔐 Payment requires action: {payment_intent['id']}")
             # This is normal for 3D Secure, just log it
+            
+        elif event['type'] == 'checkout.session.completed':
+            session = event['data']['object']
+            
+            # Extract metadata from the checkout session
+            user_id = session['metadata'].get('user_id')
+            credits = int(session['metadata'].get('credits', 0))
+            amount = session['amount_total'] / 100  # Convert cents to dollars
+            
+            if user_id and credits > 0:
+                # Add credits to user account
+                await add_credits_to_user(user_id, credits, amount, session['id'])
+                print(f"✅ [Checkout] Added {credits} credits to user {user_id}")
+            else:
+                print(f"❌ [Checkout] Missing metadata: user_id={user_id}, credits={credits}")
             
         else:
             print(f"📝 Unhandled webhook event: {event['type']}")

@@ -20,6 +20,7 @@ export const API_ENDPOINTS = {
   },
   downloadSummary: (ucpId: string) => `${API_BASE_URL}/api/download/${ucpId}/summary.json`,
   createPaymentIntent: `${API_BASE_URL}/api/create-payment-intent`,
+  createCheckoutSession: `${API_BASE_URL}/api/create-checkout-session`,
   addCreditsManual: `${API_BASE_URL}/api/add-credits-manual`,
   paymentStatus: `${API_BASE_URL}/api/payment/status`,
 };
