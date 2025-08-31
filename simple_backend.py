@@ -139,7 +139,7 @@ class CreditPurchaseRequest(BaseModel):
 class StripePaymentIntentRequest(BaseModel):
     credits: int
     amount: float
-    amount: float
+    unlimited: Optional[bool] = False
     package_id: str = None
 
 # User model for authentication
@@ -2964,13 +2964,20 @@ async def create_checkout_session(
             )
         
         # Validate the amount matches our pricing
-        expected_amount = calculate_credit_price(request.credits)
-        
-        if abs(request.amount - expected_amount) > 0.01:  # Allow for small rounding differences
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Amount mismatch. Expected ${expected_amount}, got ${request.amount}"
-            )
+        if request.unlimited:
+            expected_amount = 20.00
+            if abs(request.amount - expected_amount) > 0.01:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Amount mismatch for unlimited plan. Expected $20.00, got ${request.amount}"
+                )
+        else:
+            expected_amount = calculate_credit_price(request.credits)
+            if abs(request.amount - expected_amount) > 0.01:  # Allow for small rounding differences
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Amount mismatch. Expected ${expected_amount}, got ${request.amount}"
+                )
         
         # Get the frontend URL for success/cancel redirects
         frontend_url = os.getenv("FRONTEND_URL", "https://universal-context-pack.vercel.app")
@@ -2982,8 +2989,8 @@ async def create_checkout_session(
                 'price_data': {
                     'currency': 'usd',
                     'product_data': {
-                        'name': f'{request.credits} Analysis Credits',
-                        'description': f'Credits for Universal Context Pack analysis (1 credit = 1 conversation chunk ~150k tokens)',
+                        'name': 'Unlimited Access' if request.unlimited else f'{request.credits} Analysis Credits',
+                        'description': 'Lifetime unlimited access to Universal Context Pack analysis' if request.unlimited else f'Credits for Universal Context Pack analysis (1 credit = 1 conversation chunk ~150k tokens)',
                     },
                     'unit_amount': int(request.amount * 100),  # Convert to cents
                 },
@@ -2995,7 +3002,8 @@ async def create_checkout_session(
             metadata={
                 'user_id': user.user_id,
                 'credits': request.credits,
-                'email': user.email
+                'email': user.email,
+                'unlimited': str(request.unlimited)
             },
             customer_email=user.email,
             # Add automatic tax calculation if needed
@@ -3160,14 +3168,22 @@ async def stripe_webhook(request: Request):
             # Extract metadata from the checkout session
             user_id = session['metadata'].get('user_id')
             credits = int(session['metadata'].get('credits', 0))
+            unlimited = session['metadata'].get('unlimited', 'False').lower() == 'true'
             amount = session['amount_total'] / 100  # Convert cents to dollars
             
-            if user_id and credits > 0:
-                # Add credits to user account
-                await add_credits_to_user(user_id, credits, amount, session['id'])
-                print(f"✅ [Checkout] Added {credits} credits to user {user_id}")
+            if user_id:
+                if unlimited:
+                    # Grant unlimited access
+                    await grant_unlimited_access(user_id, amount, session['id'])
+                    print(f"✅ [Checkout] Granted unlimited access to user {user_id}")
+                elif credits > 0:
+                    # Add credits to user account
+                    await add_credits_to_user(user_id, credits, amount, session['id'])
+                    print(f"✅ [Checkout] Added {credits} credits to user {user_id}")
+                else:
+                    print(f"❌ [Checkout] Invalid purchase: user_id={user_id}, credits={credits}, unlimited={unlimited}")
             else:
-                print(f"❌ [Checkout] Missing metadata: user_id={user_id}, credits={credits}")
+                print(f"❌ [Checkout] Missing metadata: user_id={user_id}, credits={credits}, unlimited={unlimited}")
             
         else:
             print(f"📝 Unhandled webhook event: {event['type']}")
@@ -3180,17 +3196,21 @@ async def stripe_webhook(request: Request):
 
 def calculate_credit_price(credits: int) -> float:
     """Calculate price for credits with volume discounts"""
-    base_price = 0.10  # $0.10 per credit
+    # Special case: unlimited plan
+    if credits == -1:
+        return 20.00
+    
+    base_price = 0.02  # $0.02 per credit (85% cheaper!)
     
     if credits >= 250:
-        # 20% off for 250+ credits
-        return round(credits * base_price * 0.8, 2)
+        # 25% off for 250+ credits
+        return round(credits * base_price * 0.75, 2)
     elif credits >= 100:
-        # 10% off for 100+ credits  
-        return round(credits * base_price * 0.9, 2)
+        # 15% off for 100+ credits  
+        return round(credits * base_price * 0.85, 2)
     elif credits >= 50:
-        # 5% off for 50+ credits
-        return round(credits * base_price * 0.95, 2)
+        # 10% off for 50+ credits
+        return round(credits * base_price * 0.9, 2)
     else:
         return round(credits * base_price, 2)
 
@@ -3227,6 +3247,43 @@ async def add_credits_to_user(user_id: str, credits: int, amount: float, stripe_
             
     except Exception as e:
         print(f"❌ Error adding credits to user {user_id}: {e}")
+        # Try to log more details about the error
+        if hasattr(e, '__dict__'):
+            print(f"❌ Error details: {e.__dict__}")
+
+async def grant_unlimited_access(user_id: str, amount: float, stripe_payment_id: str):
+    """Grant unlimited access to user after successful payment"""
+    try:
+        if not supabase:
+            print("Warning: Supabase not available")
+            return
+        
+        print(f"🌟 Granting unlimited access to user {user_id}")
+        print(f"💰 Amount: ${amount}, Stripe ID: {stripe_payment_id}")
+        
+        # Check if this payment was already processed (duplicate protection)
+        existing_payment = supabase.table("credit_transactions").select("id").eq("stripe_payment_id", stripe_payment_id).execute()
+        
+        if existing_payment.data:
+            print(f"⚠️ Payment {stripe_payment_id} already processed, skipping duplicate")
+            return
+        
+        # Set unlimited access for the user (set credits to a very high number like 999999)
+        # and update their plan to unlimited
+        result = supabase.rpc("grant_unlimited_access", {
+            "user_uuid": user_id,
+            "transaction_description": f"Stripe payment - ${amount} for unlimited access (Payment ID: {stripe_payment_id})"
+        }).execute()
+        
+        print(f"📊 Supabase RPC result: {result}")
+        
+        if result.data and result.data != -1:
+            print(f"✅ Successfully granted unlimited access to user {user_id}")
+        else:
+            print(f"❌ Failed to grant unlimited access to user {user_id}. Error: {result}")
+            
+    except Exception as e:
+        print(f"❌ Error granting unlimited access to user {user_id}: {e}")
         # Try to log more details about the error
         if hasattr(e, '__dict__'):
             print(f"❌ Error details: {e.__dict__}")
