@@ -172,7 +172,7 @@ Universal Context Pack (UCP) is an AI-powered platform that transforms conversat
 
 ## Technical Specifications
 - **Processing Capacity**: Handles multi-gigabyte conversation files
-- **Analysis Depth**: 150,000+ token chunks with comprehensive pattern analysis
+- **Analysis Depth**: 150,000 token chunks with comprehensive pattern analysis (optimized for reliability)
 - **Response Time**: Real-time processing with progress updates
 - **Reliability**: 99%+ uptime with robust error handling
 - **Scalability**: Auto-scaling infrastructure handles traffic spikes

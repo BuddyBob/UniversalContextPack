@@ -788,8 +788,8 @@ export default function ProcessPage() {
       }
 
       const requestBody = {
-        chunk_size: 120000, // ~150k tokens (4 chars per token)
-        overlap: 2000,      // Proportional overlap
+        chunk_size: 600000, // ~150k tokens (4 chars per token) - safe margin below GPT's 200k limit
+        overlap: 6000,      // Proportional overlap
       };
       
       console.log('Request body:', requestBody);

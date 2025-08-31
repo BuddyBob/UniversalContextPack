@@ -128,8 +128,8 @@ class AnalyzeRequest(BaseModel):
     selected_chunks: List[int] = []  # List of chunk indices to analyze
 
 class ChunkRequest(BaseModel):
-    chunk_size: Optional[int] = 120000  # Default to 120k characters (~150k tokens)
-    overlap: Optional[int] = 2000       # Default overlap
+    chunk_size: Optional[int] = 600000  # Default to 600k characters (~150k tokens) - safe margin below GPT's limit
+    overlap: Optional[int] = 6000       # Proportional overlap
 
 class CreditPurchaseRequest(BaseModel):
     credits: int
@@ -1448,7 +1448,7 @@ async def chunk_text(job_id: str, request: ChunkRequest, user: AuthenticatedUser
         
         # Use the chunk_size from request (characters) and convert to approximate tokens
         # Rough conversion: 4 characters per token
-        max_tokens = min(request.chunk_size // 4, 150000)  # Cap at 150k tokens for safety
+        max_tokens = min(request.chunk_size // 4, 150000)  # Cap at 150k tokens - safe margin below GPT's 200k limit
         chunks = []
         
         # Split by conversation entries
