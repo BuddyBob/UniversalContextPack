@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/components/AuthProvider'
 import { CreditCard, ArrowLeft, Calculator, Sparkles, Zap, Shield, Star } from 'lucide-react'
-import StripeCheckout from '@/components/StripeCheckout'
 import { API_ENDPOINTS } from '@/lib/api'
 
 interface PaymentStatus {
@@ -24,7 +23,6 @@ export default function PricingPageClient() {
   const [processingPurchase, setProcessingPurchase] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [customCredits, setCustomCredits] = useState(25)
-  const [showPaymentForm, setShowPaymentForm] = useState(false)
   const router = useRouter()
   const supabase = createClientComponentClient()
   const { user, session, loading: authLoading } = useAuth()
@@ -81,29 +79,44 @@ export default function PricingPageClient() {
     }
   }
 
-  const handlePurchase = () => {
+  const handlePurchase = async () => {
     if (!user) {
       router.push('/auth')
       return
     }
-    setShowPaymentForm(true)
-    setError(null)
-  }
-
-  const handlePaymentSuccess = async () => {
-    setShowPaymentForm(false)
-    setProcessingPurchase(false)
-    await fetchPaymentStatus()
     
-    // Show success message and redirect
-    setTimeout(() => {
-      router.push('/process?upgraded=true')
-    }, 2000)
-  }
+    setError(null)
+    setProcessingPurchase(true)
 
-  const handlePaymentError = (error: string) => {
-    setError(error)
-    setProcessingPurchase(false)
+    try {
+      // Create checkout session and redirect directly to Stripe
+      const response = await fetch(API_ENDPOINTS.createCheckoutSession, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          credits: customCredits,
+          amount: calculatePrice(customCredits)
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to create checkout session')
+      }
+
+      const data = await response.json()
+      
+      // Redirect directly to Stripe Checkout
+      window.location.href = data.checkout_url
+
+    } catch (error: any) {
+      console.error('Checkout error:', error)
+      setError(error.message || 'Failed to start checkout process')
+      setProcessingPurchase(false)
+    }
   }
 
   if (authLoading || loading) {
@@ -171,34 +184,7 @@ export default function PricingPageClient() {
 
             {/* Credit Selection Interface */}
             <div className="p-8">
-              {showPaymentForm ? (
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <h3 className="text-xl font-medium text-white mb-2">
-                      Complete Your Purchase
-                    </h3>
-                    <p className="text-gray-400">
-                      {customCredits} credits for ${calculatePrice(customCredits)}
-                    </p>
-                  </div>
-                  
-                  <StripeCheckout
-                    credits={customCredits}
-                    amount={calculatePrice(customCredits)}
-                    session={session}
-                    onSuccess={handlePaymentSuccess}
-                    onError={handlePaymentError}
-                  />
-                  
-                  <button
-                    onClick={() => setShowPaymentForm(false)}
-                    className="w-full text-gray-400 hover:text-white transition-colors"
-                  >
-                    ← Cancel
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-8">
+              <div className="space-y-8">
                   {/* Credit Amount Input */}
                   <div className="grid md:grid-cols-2 gap-6">
                     <div>
@@ -328,7 +314,7 @@ export default function PricingPageClient() {
                     ) : (
                       <>
                         <CreditCard className="h-5 w-5 mr-2" />
-                        Purchase {customCredits} Credits - ${calculatePrice(customCredits)}
+                        Continue to Secure Payment - ${calculatePrice(customCredits)}
                       </>
                     )}
                   </button>
@@ -349,7 +335,6 @@ export default function PricingPageClient() {
                     </div>
                   </div>
                 </div>
-              )}
             </div>
           </div>
         </div>
