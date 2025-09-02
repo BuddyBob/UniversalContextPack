@@ -22,6 +22,7 @@ interface PaymentStatus {
 export default function ProcessPage() {
   const { user, session, makeAuthenticatedRequest } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [pendingExtraction, setPendingExtraction] = useState(false); // Track if extraction is pending after auth
   const freeCreditsPrompt = useFreeCreditsPrompt();
   const [file, setFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -210,6 +211,83 @@ export default function ProcessPage() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId]);
+
+  // Handle automatic extraction after authentication
+  useEffect(() => {
+    if (user && pendingExtraction && file) {
+      // User just authenticated and we have a pending extraction
+      setPendingExtraction(false);
+      setShowAuthModal(false);
+      addLog('Authentication successful! Continuing with extraction...');
+      
+      // Automatically start extraction by calling the extraction logic directly
+      performExtraction();
+    }
+  }, [user, pendingExtraction, file]);
+
+  // Extracted function to perform the actual extraction logic
+  const performExtraction = async () => {
+    if (!file || !user) return;
+
+    // Track extraction start
+    analytics.extractionStart();
+
+    setIsProcessing(true);
+    setCurrentStep('extracting');
+    addLog('Starting text extraction...');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const headers: Record<string, string> = {};
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(API_ENDPOINTS.extract, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      // The extraction now happens in background, so we get a job_id and need to poll
+      setJobId(data.job_id);
+      setCurrentJobId(data.job_id);
+      setCurrentStep('extracting');
+      addLog(`Extraction started. Job ID: ${data.job_id}`);
+      
+      // Start polling for extraction completion
+      startPollingExtractionStatus(data.job_id);
+    } catch (error) {
+      addLog(`Extraction failed: ${error}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleExtract = async () => {
+    if (!file) return;
+
+    // Check if user is authenticated - if not, show auth modal
+    if (!user) {
+      setPendingExtraction(true); // Mark that we want to extract after auth
+      setShowAuthModal(true);
+      addLog('Please sign in to continue with extraction...');
+      return;
+    }
+
+    // User is authenticated, proceed with extraction
+    await performExtraction();
+  };
 
   // Check payment limits when user authenticates - removed duplicate check
 
@@ -705,54 +783,6 @@ export default function ProcessPage() {
       processSelectedFile(validFile);
     } else {
       addLog('Please drop a valid file: .json, .txt, .csv, .zip, or .html');
-    }
-  };
-
-  const handleExtract = async () => {
-    if (!file) return;
-
-    // Track extraction start
-    analytics.extractionStart();
-
-    setIsProcessing(true);
-    setCurrentStep('extracting');
-    addLog('Starting text extraction...');
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const headers: Record<string, string> = {};
-      
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-
-      const response = await fetch(API_ENDPOINTS.extract, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      
-      // The extraction now happens in background, so we get a job_id and need to poll
-      setJobId(data.job_id);
-      setCurrentJobId(data.job_id);
-      setCurrentStep('extracting');
-      addLog(`Extraction started. Job ID: ${data.job_id}`);
-      
-      // Start polling for extraction completion
-      startPollingExtractionStatus(data.job_id);
-    } catch (error) {
-      addLog(`Extraction failed: ${error}`);
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -1809,7 +1839,11 @@ export default function ProcessPage() {
       {showAuthModal && (
         <AuthModal 
           isOpen={showAuthModal}
-          onClose={() => setShowAuthModal(false)}
+          onClose={() => {
+            setShowAuthModal(false);
+            setPendingExtraction(false); // Clear pending extraction if user cancels
+            addLog('Authentication cancelled');
+          }}
         />
       )}
 
