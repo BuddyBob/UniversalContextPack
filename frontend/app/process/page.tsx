@@ -727,11 +727,6 @@ export default function ProcessPage() {
   };
 
   const processSelectedFile = async (selectedFile: File) => {
-    // Check if user is authenticated before allowing file upload
-    if (!freeCreditsPrompt.triggerPrompt("document processing")) {
-      return;
-    }
-    
     setFile(selectedFile);
     setCurrentStep('uploaded');
     addLog(`File selected: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
