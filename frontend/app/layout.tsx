@@ -2,6 +2,7 @@ import './globals.css'
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/components/AuthProvider'
 import Navigation from '@/components/Navigation'
+import Footer from '@/components/Footer'
 import Script from 'next/script'
 import { GA_TRACKING_ID } from '@/lib/analytics'
 import { Analytics } from '@vercel/analytics/next'
@@ -134,8 +135,11 @@ export default function RootLayout({
         )}
         
         <AuthProvider>
-          <Navigation />
-          <main className="min-h-screen">{children}</main>
+          <div className="flex flex-col min-h-screen">
+            <Navigation />
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
         </AuthProvider>
         <Analytics />
       </body>
