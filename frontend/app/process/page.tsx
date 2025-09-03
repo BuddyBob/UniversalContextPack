@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard } from 'lucide-react';
+import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
@@ -40,8 +40,8 @@ export default function ProcessPage() {
   const [currentStep, setCurrentStep] = useState<'upload' | 'uploaded' | 'extracting' | 'extracted' | 'chunking' | 'chunked' | 'analyzing' | 'analyzed'>('upload');
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
-  const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showChunkModal, setShowChunkModal] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [sessionId] = useState(() => Date.now().toString()); // Unique session ID
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
@@ -681,7 +681,6 @@ export default function ProcessPage() {
             // Track extraction completion
             analytics.extractionComplete(resultsData.chunk_count || 0);
             
-            setCurrentStep('extracted');
             addLog(`Extraction complete: ${resultsData.conversation_count || 0} conversations, ${resultsData.message_count || 0} messages`);
             
             // Now get chunking time estimate based on extracted text from job summary
@@ -693,12 +692,18 @@ export default function ProcessPage() {
                 const summaryData = await summaryResponse.json();
                 const textLength = summaryData.content_size || 0;
                 
-                // Chunking is fast and unpredictable in duration, so we skip the estimate
                 addLog(`Text extracted: ${textLength.toLocaleString()} characters ready for chunking`);
               }
             } catch (error) {
               console.error('Error getting text info:', error);
             }
+            
+            // Automatically start chunking after extraction
+            addLog('Automatically starting chunking process...');
+            setCurrentStep('chunking');
+            setTimeout(() => {
+              handleChunk();
+            }, 1000); // Small delay to show the transition
           }
         }
       } catch (error) {
@@ -949,7 +954,9 @@ export default function ProcessPage() {
   };
 
   const downloadPack = async () => {
-    if (!currentJobId) return;
+    if (!currentJobId || isDownloading) return;
+    
+    setIsDownloading(true);
     
     // Track download
     analytics.downloadPack();
@@ -979,12 +986,14 @@ export default function ProcessPage() {
     } catch (error) {
       addLog(`Pack download failed: ${error}`);
     } finally {
-      setShowDownloadModal(false);
+      setIsDownloading(false);
     }
   };
 
   const downloadChunks = async () => {
-    if (!currentJobId) return;
+    if (!currentJobId || isDownloading) return;
+    
+    setIsDownloading(true);
     
     // Track download
     analytics.downloadPack();
@@ -1014,7 +1023,7 @@ export default function ProcessPage() {
     } catch (error) {
       addLog(`Chunks download failed: ${error}`);
     } finally {
-      setShowDownloadModal(false);
+      setIsDownloading(false);
     }
   };
 
@@ -1092,41 +1101,25 @@ export default function ProcessPage() {
                 {/* Simple Time Overview */}
                 {(timeEstimate || analysisTimeEstimate || ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) && (
                   <div className="mb-6 p-4 bg-gray-800 rounded-lg">
-                    <div className="text-sm font-medium text-gray-300 mb-3">Time Estimates</div>
-                    <div className="grid grid-cols-3 gap-4 text-xs">
-                      <div className="text-center">
-                        <div className="text-gray-400 mb-1">Extract</div>
-                        <div className={
-                          ['extracted', 'chunked', 'analyzed'].includes(currentStep) 
-                            ? 'text-green-400' 
-                            : currentStep === 'extracting' 
-                            ? 'text-blue-400' 
-                            : 'text-gray-500'
-                        }>
-                          {['extracted', 'chunked', 'analyzed'].includes(currentStep) 
-                            ? '✓ Complete' 
-                            : currentStep === 'extracting' 
-                            ? 'Processing...'
-                            : timeEstimate 
-                            ? timeEstimate.time_estimates.extraction.formatted 
-                            : '~2-5m'
-                          }
-                        </div>
-                      </div>
+                    <div className="text-sm font-medium text-gray-300 mb-3">Time Estimates </div>
+                    <div className="text-xs text-gray-500">(Can be up to 10-20 minutes depending on conversation size)</div>
+                    <div className="grid grid-cols-2 gap-4 text-xs">
                       <div className="text-center">
                         <div className="text-gray-400 mb-1">Chunk</div>
                         <div className={
                           ['chunked', 'analyzed'].includes(currentStep) 
                             ? 'text-green-400' 
-                            : currentStep === 'chunking' 
+                            : ['extracting', 'chunking'].includes(currentStep) 
                             ? 'text-blue-400' 
                             : 'text-gray-500'
                         }>
                           {['chunked', 'analyzed'].includes(currentStep) 
                             ? '✓ Complete' 
-                            : currentStep === 'chunking' 
+                            : ['extracting', 'chunking'].includes(currentStep) 
                             ? 'Processing...'
-                            : '~10-30s'
+                            : timeEstimate 
+                            ? timeEstimate.time_estimates.extraction.formatted 
+                            : '~2-5m'
                           }
                         </div>
                       </div>
@@ -1159,37 +1152,32 @@ export default function ProcessPage() {
                 <div className="flex items-center justify-between relative">
                   {[
                     { key: 'upload', icon: Upload, label: 'Upload' },
-                    { key: 'extract', icon: FileText, label: 'Extract' },
                     { key: 'chunk', icon: BarChart3, label: 'Chunk' },
                     { key: 'analyze', icon: Play, label: 'Analyze' }
                   ].map((step, index) => {
                     const Icon = step.icon;
                     const isActive = 
-                      (step.key === 'upload' && ['upload', 'uploaded', 'extracting'].includes(currentStep)) ||
-                      (step.key === 'extract' && ['extracting', 'extracted', 'chunking'].includes(currentStep)) ||
-                      (step.key === 'chunk' && ['chunking', 'chunked', 'analyzing'].includes(currentStep)) ||
+                      (step.key === 'upload' && ['upload', 'uploaded'].includes(currentStep)) ||
+                      (step.key === 'chunk' && ['extracting', 'extracted', 'chunking', 'chunked'].includes(currentStep)) ||
                       (step.key === 'analyze' && ['analyzing', 'analyzed'].includes(currentStep));
                     
                     const isCompleted = 
-                      (step.key === 'upload' && ['extracted', 'chunked', 'analyzed'].includes(currentStep)) ||
-                      (step.key === 'extract' && ['chunked', 'analyzed'].includes(currentStep)) ||
-                      (step.key === 'chunk' && ['analyzed'].includes(currentStep));
+                      (step.key === 'upload' && ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
+                      (step.key === 'chunk' && ['analyzing', 'analyzed'].includes(currentStep));
 
                     // Show connecting line to next step if current step is completed
                     const showCompletedLine = 
-                      (step.key === 'upload' && ['extracted', 'chunked', 'analyzed'].includes(currentStep)) ||
-                      (step.key === 'extract' && ['chunked', 'analyzed'].includes(currentStep)) ||
-                      (step.key === 'chunk' && ['analyzed'].includes(currentStep));
+                      (step.key === 'upload' && ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
+                      (step.key === 'chunk' && ['analyzing', 'analyzed'].includes(currentStep));
 
                     const showActiveLine = 
                       (step.key === 'upload' && ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
-                      (step.key === 'extract' && ['chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
                       (step.key === 'chunk' && ['analyzing', 'analyzed'].includes(currentStep));
 
                     return (
                       <div key={step.key} className="flex flex-col items-center relative z-10 flex-1">
                         {/* Connecting line to next step */}
-                        {index < 3 && (
+                        {index < 2 && (
                           <div 
                             className="absolute top-5 left-1/2 w-full h-1 transition-all duration-500"
                             style={{
@@ -1311,7 +1299,7 @@ export default function ProcessPage() {
                     <div className="mt-3 space-y-1">
                       {timeEstimate && (
                         <div className="flex items-center text-xs text-gray-400">
-                          <span className="w-16">Extract:</span>
+                          <span className="w-16">Chunk:</span>
                           <span>{timeEstimate.time_estimates.extraction.formatted}</span>
                         </div>
                       )}
@@ -1333,44 +1321,7 @@ export default function ProcessPage() {
                   className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
                 >
                   <FileText className="h-4 w-4" />
-                  <span>Extract Content</span>
-                </button>
-              </div>
-            )}
-
-            {/* Extraction Complete */}
-            {extractionData && currentStep === 'extracted' && !chunkData && (
-              <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <FileText className="h-5 w-5 text-green-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-text-primary">Extraction Complete</h3>
-                </div>
-
-      
-
-                <div className="p-4 bg-accent-primary/5 border border-accent-primary/20 rounded-lg mb-6">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <CheckCircle className="h-4 w-4 text-accent-primary" />
-                    <div className="text-sm font-medium text-text-primary">Content extracted successfully</div>
-                  </div>
-                  <div className="text-xs text-text-secondary">
-                    Ready for chunking and analysis
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleChunk}
-                  disabled={isProcessing}
-                  className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
-                >
-                  {isProcessing ? (
-                    <div className="animate-spin h-4 w-4 border-2 border-accent-primary border-t-transparent rounded-full" />
-                  ) : (
-                    <BarChart3 className="h-4 w-4" />
-                  )}
-                  <span>{isProcessing ? 'Creating Chunks...' : 'Create Chunks'}</span>
+                  <span>Chunk Content</span>
                 </button>
               </div>
             )}
@@ -1413,7 +1364,7 @@ export default function ProcessPage() {
                           <Download className="h-5 w-5 text-gray-400" />
                           <div>
                             <div className="font-medium text-white">Download Chunks</div>
-                            <div className="text-sm text-gray-400">Export to use with any LLM</div>
+                            <div className="text-sm text-gray-400">These should be analyzed with the analyze feature</div>
                           </div>
                         </div>
                       </div>
@@ -1433,11 +1384,16 @@ export default function ProcessPage() {
 
                 <div className="flex space-x-3">
                   <button
-                    onClick={() => setShowDownloadModal(true)}
-                    className="flex-1 py-3 border border-gray-600 rounded-lg text-gray-300 hover:text-white hover:border-gray-500 transition-colors flex items-center justify-center space-x-2"
+                    onClick={downloadChunks}
+                    disabled={isDownloading}
+                    className="flex-1 py-3 border border-gray-600 rounded-lg text-gray-300 hover:text-white hover:border-gray-500 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Download className="h-4 w-4" />
-                    <span>Download Chunks</span>
+                    {isDownloading ? (
+                      <Loader className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    <span>{isDownloading ? 'Downloading...' : 'Download Chunks'}</span>
                   </button>
 
                   {currentStep === 'chunked' && (
@@ -1485,7 +1441,7 @@ export default function ProcessPage() {
                   {/* Simple Time Overview */}
                   <div className="grid grid-cols-3 gap-4 text-xs text-gray-400 mb-4">
                     <div className="text-center">
-                      <div className="font-medium">Extract</div>
+                      <div className="font-medium">Chunk</div>
                       <div className="text-green-400">✓ Complete</div>
                     </div>
                     <div className="text-center">
@@ -1541,11 +1497,16 @@ export default function ProcessPage() {
                     <span>View Results</span>
                   </button>
                   <button
-                    onClick={() => setShowDownloadModal(true)}
-                    className="px-6 py-3 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors flex items-center space-x-2"
+                    onClick={downloadPack}
+                    disabled={isDownloading}
+                    className="px-6 py-3 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Download className="h-4 w-4" />
-                    <span>Download Pack</span>
+                    {isDownloading ? (
+                      <Loader className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    <span>{isDownloading ? 'Downloading...' : 'Download Pack'}</span>
                   </button>
                 </div>
               </div>
@@ -1685,48 +1646,6 @@ export default function ProcessPage() {
             </div>
           </div>
         )}
-
-        {/* Download Modal */}
-        {showDownloadModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="content-card max-w-md w-full mx-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">
-                  {currentStep === 'chunked' ? 'Download Chunks' : 'Download Pack'}
-                </h3>
-                <button
-                  onClick={() => setShowDownloadModal(false)}
-                  className="text-text-muted hover:text-text-primary"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <p className="text-text-secondary mb-6">
-                {currentStep === 'chunked' 
-                  ? 'Your conversation chunks are ready for download. Use these with any LLM (Claude, ChatGPT, etc.).'
-                  : 'Your analysis pack is ready for download. This includes the original data, chunks, and AI analysis results.'
-                }
-              </p>
-              
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowDownloadModal(false)}
-                  className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={currentStep === 'chunked' ? downloadChunks : downloadPack}
-                  className="px-4 py-2 bg-bg-secondary border border-border-primary text-text-primary rounded-lg hover:bg-bg-tertiary hover:border-border-accent transition-colors flex items-center space-x-2"
-                >
-                  <Download className="h-4 w-4" />
-                  <span>Download</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
         
         {/* Chunk Selection Modal */}
         {showChunkModal && (
@@ -1823,45 +1742,6 @@ export default function ProcessPage() {
                     : `Analyze Selected (${selectedChunks.size})`
                   }
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Download Modal */}
-        {showDownloadModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-bg-card border border-border-primary rounded-lg max-w-md w-full mx-4">
-              <div className="flex items-center justify-between p-6 border-b border-border-primary">
-                <h3 className="text-lg font-semibold text-text-primary">Download Pack</h3>
-                <button
-                  onClick={() => setShowDownloadModal(false)}
-                  className="text-text-muted hover:text-text-primary"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <div className="p-6">
-                <p className="text-text-secondary mb-6">
-                  Your analysis pack is ready for download. This includes the original data, chunks, and AI analysis results.
-                </p>
-                
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => setShowDownloadModal(false)}
-                    className="px-4 py-2 border border-border-primary rounded-lg text-text-primary hover:border-border-accent transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={downloadPack}
-                    className="px-4 py-2 bg-accent-primary text-white rounded-lg hover:bg-accent-primary/90 transition-colors flex items-center space-x-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Download</span>
-                  </button>
-                </div>
               </div>
             </div>
           </div>
