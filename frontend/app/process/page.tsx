@@ -983,6 +983,41 @@ export default function ProcessPage() {
     }
   };
 
+  const downloadChunks = async () => {
+    if (!jobId) return;
+    
+    // Track download
+    analytics.downloadPack();
+    
+    try {
+      addLog('Starting chunks download...');
+      
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${jobId}/chunks`, {
+        method: 'GET'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ucp_chunks_${jobId}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      addLog('Chunks download completed successfully');
+    } catch (error) {
+      addLog(`Chunks download failed: ${error}`);
+    } finally {
+      setShowDownloadModal(false);
+    }
+  };
+
   const resetProcess = () => {
     setFile(null);
     setJobId(null);
@@ -1656,7 +1691,9 @@ export default function ProcessPage() {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="content-card max-w-md w-full mx-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Download Pack</h3>
+                <h3 className="text-lg font-semibold">
+                  {currentStep === 'chunked' ? 'Download Chunks' : 'Download Pack'}
+                </h3>
                 <button
                   onClick={() => setShowDownloadModal(false)}
                   className="text-text-muted hover:text-text-primary"
@@ -1666,7 +1703,10 @@ export default function ProcessPage() {
               </div>
               
               <p className="text-text-secondary mb-6">
-                Your analysis pack is ready for download. This includes the original data, chunks, and AI analysis results.
+                {currentStep === 'chunked' 
+                  ? 'Your conversation chunks are ready for download. Use these with any LLM (Claude, ChatGPT, etc.).'
+                  : 'Your analysis pack is ready for download. This includes the original data, chunks, and AI analysis results.'
+                }
               </p>
               
               <div className="flex space-x-3">
@@ -1677,7 +1717,7 @@ export default function ProcessPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={downloadPack}
+                  onClick={currentStep === 'chunked' ? downloadChunks : downloadPack}
                   className="px-4 py-2 bg-bg-secondary border border-border-primary text-text-primary rounded-lg hover:bg-bg-tertiary hover:border-border-accent transition-colors flex items-center space-x-2"
                 >
                   <Download className="h-4 w-4" />

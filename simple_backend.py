@@ -2865,6 +2865,49 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
         print(f"Error creating pack for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create pack: {str(e)}")
 
+@app.get("/api/download/{job_id}/chunks")
+async def download_chunks_only(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Download chunks as ZIP file containing only the chunked text files."""
+    try:
+        import zipfile
+        import tempfile
+        
+        # Create a temporary file for the ZIP
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
+            with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                
+                # Add chunk metadata
+                chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+                if chunk_metadata_content:
+                    zipf.writestr("chunks_metadata.json", chunk_metadata_content)
+                    chunk_metadata = json.loads(chunk_metadata_content)
+                    total_chunks = chunk_metadata.get("total_chunks", 0)
+                    
+                    # Add all chunk files
+                    for i in range(1, total_chunks + 1):
+                        chunk_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunk_{i:03d}.txt")
+                        if chunk_content:
+                            zipf.writestr(f"chunk_{i:03d}.txt", chunk_content)
+                else:
+                    raise HTTPException(status_code=404, detail="Chunks not found for this job")
+        
+        # Read the ZIP file and return it
+        with open(temp_zip.name, 'rb') as f:
+            zip_data = f.read()
+        
+        # Clean up temp file
+        os.unlink(temp_zip.name)
+        
+        return StreamingResponse(
+            io.BytesIO(zip_data),
+            media_type='application/zip',
+            headers={"Content-Disposition": f"attachment; filename=ucp_chunks_{job_id}.zip"}
+        )
+        
+    except Exception as e:
+        print(f"Error creating chunks pack for job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create chunks pack: {str(e)}")
+
 # ============================================================================
 # USER PROFILE ENDPOINTS
 # ============================================================================
