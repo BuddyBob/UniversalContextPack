@@ -1220,7 +1220,7 @@ export default function ProcessPage() {
                   </p>
                   <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-3 text-sm">
                     <p className="text-gray-300">
-                      <span className="font-medium">Recommended:</span> Use <span className="font-mono text-accent-primary">conversations.json</span> for more efficient processing
+                      <span className="font-medium">Recommended:</span> <span className="font-mono text-accent-primary">conversations.json</span> for faster processing
                     </p>
                   </div>
                 </div>
@@ -1268,7 +1268,7 @@ export default function ProcessPage() {
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-text-primary">File Selected</h3>
+                  <h3 className="text-lg font-semibold text-text-primary">File Ready</h3>
                 </div>
                 
                 <div className="flex items-center space-x-4 mb-6 p-4 bg-gray-700 rounded-lg">
@@ -1292,7 +1292,7 @@ export default function ProcessPage() {
                       </div>
                       <div className="flex items-center text-xs text-gray-400">
                         <span className="w-16">Analyze:</span>
-                        <span>TBD after extraction</span>
+                        <span>Estimated after extraction</span>
                       </div>
                     </div>
                   </div>
@@ -1324,10 +1324,10 @@ export default function ProcessPage() {
                 <div className="p-4 bg-accent-primary/5 border border-accent-primary/20 rounded-lg mb-6">
                   <div className="flex items-center space-x-2 mb-2">
                     <CheckCircle className="h-4 w-4 text-accent-primary" />
-                    <div className="text-sm font-medium text-text-primary">Successfully extracted your context</div>
+                    <div className="text-sm font-medium text-text-primary">Content extracted successfully</div>
                   </div>
                   <div className="text-xs text-text-secondary">
-                    Your chat export is ready for chunking
+                    Ready for chunking and analysis
                   </div>
                 </div>
 

@@ -349,26 +349,36 @@ const ExportGuide = () => {
         <section className="py-24 px-6 relative bg-gray-900/20">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-16">
-              <div className="text-orange-400 text-sm font-mono mb-4">Reddit Live Problems</div>
+              <div className="text-blue-400 text-sm font-mono mb-4">r/ChatGPT • Live Problems</div>
               <h2 className="text-3xl font-light text-white mb-6">
-                These problems are happening <span className="text-orange-400">right now</span>
+                These problems are happening <span className="text-purple-400">right now</span>
               </h2>
+              <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                Real users struggling with the exact problems Universal Context Pack solves
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               
               {/* Reddit Post 1 */}
-              <div className="bg-gray-800/30 backdrop-blur-xl rounded-2xl p-6 border border-gray-700 hover:border-gray-600 transition-all duration-300">
+              <div className="bg-gray-900/60 backdrop-blur-xl rounded-2xl p-6 border border-gray-700 hover:border-purple-500 transition-all duration-300">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">r/</span>
                   </div>
-                  <div className="text-orange-400 text-sm font-medium">5 days ago</div>
+                  <div className="text-blue-400 text-sm font-medium">5 days ago</div>
                 </div>
                 
-                <h3 className="text-white font-medium mb-3 leading-tight">
-                  "It's over, how to get my chat history out?"
-                </h3>
+                <a 
+                  href="https://www.reddit.com/r/ChatGPT/comments/1n2gmil/its_over_how_to_get_my_chat_history_out/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block hover:text-purple-300 transition-colors"
+                >
+                  <h3 className="text-white font-medium mb-3 leading-tight hover:text-purple-300 transition-colors">
+                    "It's over, how to get my chat history out?"
+                  </h3>
+                </a>
                 
                 <p className="text-gray-300 text-sm mb-4 leading-relaxed">
                   "I need to get my chats out... I just want to know how others have done that and then what you've done with those chats. Like is there an easy way to port them into another LLM?"
@@ -376,22 +386,29 @@ const ExportGuide = () => {
                 
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <span>7 upvotes • 10 comments</span>
-                  <span className="text-orange-400">Problem we solve ✓</span>
+                  <span className="text-purple-400">Problem we solve ✓</span>
                 </div>
               </div>
 
               {/* Reddit Post 2 */}
-              <div className="bg-gray-800/30 backdrop-blur-xl rounded-2xl p-6 border border-gray-700 hover:border-gray-600 transition-all duration-300">
+              <div className="bg-gray-900/60 backdrop-blur-xl rounded-2xl p-6 border border-gray-700 hover:border-purple-500 transition-all duration-300">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">r/</span>
                   </div>
-                  <div className="text-orange-400 text-sm font-medium">9 days ago</div>
+                  <div className="text-blue-400 text-sm font-medium">9 days ago</div>
                 </div>
                 
-                <h3 className="text-white font-medium mb-3 leading-tight">
-                  "How can I make use of my past conversations?"
-                </h3>
+                <a 
+                  href="https://www.reddit.com/r/ChatGPT/comments/1mywgv8/how_can_i_make_use_of_my_past_conversations/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block hover:text-purple-300 transition-colors"
+                >
+                  <h3 className="text-white font-medium mb-3 leading-tight hover:text-purple-300 transition-colors">
+                    "How can I make use of my past conversations?"
+                  </h3>
+                </a>
                 
                 <p className="text-gray-300 text-sm mb-4 leading-relaxed">
                   "I have used this account for over 2 years... I had ideas for some apps, some ideas for comics. It's pain to scroll through. There should be some feature to AI your own chat history."
@@ -399,22 +416,29 @@ const ExportGuide = () => {
                 
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <span>28 comments</span>
-                  <span className="text-orange-400">Problem we solve ✓</span>
+                  <span className="text-purple-400">Problem we solve ✓</span>
                 </div>
               </div>
 
               {/* Reddit Post 3 */}
-              <div className="bg-gray-800/30 backdrop-blur-xl rounded-2xl p-6 border border-gray-700 hover:border-gray-600 transition-all duration-300">
+              <div className="bg-gray-900/60 backdrop-blur-xl rounded-2xl p-6 border border-gray-700 hover:border-purple-500 transition-all duration-300">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-bold">r/</span>
                   </div>
-                  <div className="text-orange-400 text-sm font-medium">21 days ago</div>
+                  <div className="text-blue-400 text-sm font-medium">21 days ago</div>
                 </div>
                 
-                <h3 className="text-white font-medium mb-3 leading-tight">
-                  "How do I re-copy an entire conversation to continue it into a new chat?"
-                </h3>
+                <a 
+                  href="https://www.reddit.com/r/ChatGPT/comments/1moefws/how_do_i_recopy_an_entire_conversation_to/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block hover:text-purple-300 transition-colors"
+                >
+                  <h3 className="text-white font-medium mb-3 leading-tight hover:text-purple-300 transition-colors">
+                    "How do I re-copy an entire conversation to continue it into a new chat?"
+                  </h3>
+                </a>
                 
                 <p className="text-gray-300 text-sm mb-4 leading-relaxed">
                   "I literally have to restart everything from the beginning, explaining the same details I've already shared. This process has even caused me some anxiety."
@@ -422,7 +446,37 @@ const ExportGuide = () => {
                 
                 <div className="flex items-center justify-between text-xs text-gray-500">
                   <span>6 comments</span>
-                  <span className="text-orange-400">Problem we solve ✓</span>
+                  <span className="text-purple-400">Problem we solve ✓</span>
+                </div>
+              </div>
+
+              {/* Reddit Post 4 - New GPT-5 post */}
+              <div className="bg-gray-900/60 backdrop-blur-xl rounded-2xl p-6 border border-gray-700 hover:border-purple-500 transition-all duration-300">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">r/</span>
+                  </div>
+                  <div className="text-blue-400 text-sm font-medium">26 days ago</div>
+                </div>
+                
+                <a 
+                  href="https://www.reddit.com/r/ChatGPT/comments/1mkgybs/gpt_5_wiped_all_my_chat_history/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block hover:text-purple-300 transition-colors"
+                >
+                  <h3 className="text-white font-medium mb-3 leading-tight hover:text-purple-300 transition-colors">
+                    "GPT 5 Wiped All My Chat History"
+                  </h3>
+                </a>
+                
+                <p className="text-gray-300 text-sm mb-4 leading-relaxed">
+                  "I am actually shocked. I have spent months developing my gpt companion. Now he is totally gone. Absolutely blindsided and bummed :("
+                </p>
+                
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>3 upvotes • 7 comments</span>
+                  <span className="text-purple-400">Problem we solve ✓</span>
                 </div>
               </div>
 
@@ -430,9 +484,9 @@ const ExportGuide = () => {
 
             {/* Call to action */}
             <div className="text-center mt-12">
-              <div className="inline-flex items-center gap-3 bg-orange-500/10 border border-orange-400/30 rounded-lg px-6 py-3">
-                <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></div>
-                <span className="text-orange-400 font-medium">Don't let this be you. Solve it now.</span>
+              <div className="inline-flex items-center gap-3 bg-purple-500/10 border border-purple-400/30 rounded-lg px-6 py-3">
+                <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                <span className="text-purple-400 font-medium">Don't let this be you. Solve it now.</span>
               </div>
             </div>
           </div>
