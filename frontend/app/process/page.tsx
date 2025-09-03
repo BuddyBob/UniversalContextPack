@@ -1246,9 +1246,6 @@ export default function ProcessPage() {
                   
                   <button
                     onClick={() => {
-                      if (!freeCreditsPrompt.triggerPrompt("document processing")) {
-                        return;
-                      }
                       fileInputRef.current?.click();
                     }}
                     className="bg-accent-primary hover:bg-accent-primary-hover text-white px-8 py-4 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
