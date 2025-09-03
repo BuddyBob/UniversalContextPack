@@ -702,7 +702,7 @@ export default function ProcessPage() {
             addLog('Automatically starting chunking process...');
             setCurrentStep('chunking');
             setTimeout(() => {
-              handleChunk();
+              handleChunkWithData(resultsData, jobId);
             }, 1000); // Small delay to show the transition
           }
         }
@@ -807,6 +807,86 @@ export default function ProcessPage() {
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const chunkUrl = `${backendUrl}/api/chunk/${currentJobId}`;
+      console.log('Making chunking request to:', chunkUrl);
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const requestBody = {
+        chunk_size: 600000, // ~150k tokens (4 chars per token) - safe margin below GPT's 200k limit
+        overlap: 6000,      // Proportional overlap
+      };
+      
+      console.log('Request body:', requestBody);
+
+      const response = await fetch(chunkUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('Chunking response status:', response.status);
+      console.log('Chunking response URL:', response.url);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Chunking error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Chunking response data:', data);
+      setChunkData(data);
+      setAvailableChunks(data.chunks);
+      setCurrentStep('chunked');
+      addLog(`Chunking complete! Created ${data.total_chunks} chunks ready for analysis`);
+      
+      // Calculate analysis time estimate for all chunks (40 seconds per chunk)
+      const totalAnalysisSeconds = data.total_chunks * 40;
+      const formatted = totalAnalysisSeconds < 60 
+        ? `${totalAnalysisSeconds}s` 
+        : totalAnalysisSeconds < 3600
+        ? `${Math.round(totalAnalysisSeconds / 60)}m`
+        : `${Math.round(totalAnalysisSeconds / 3600)}h ${Math.round((totalAnalysisSeconds % 3600) / 60)}m`;
+      
+      setAnalysisTimeEstimate({
+        formatted: formatted,
+        estimated_seconds: totalAnalysisSeconds
+      });
+      addLog(`Estimated analysis time for all chunks: ${formatted}`);
+    } catch (error) {
+      addLog(`Chunking failed: ${error}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleChunkWithData = async (extractionResults: any, jobId: string) => {
+    if (!extractionResults || !jobId) {
+      console.error('Missing required data for chunking:', { extractionResults: !!extractionResults, jobId });
+      addLog('Error: Missing extraction data or job ID');
+      return;
+    }
+
+    // Prevent multiple simultaneous chunking requests
+    if (isProcessing || currentStep === 'chunking') {
+      console.log('Chunking already in progress, ignoring duplicate request');
+      return;
+    }
+
+    console.log('Starting chunking process with jobId:', jobId);
+    setIsProcessing(true);
+    setCurrentStep('chunking');
+    addLog('Creating semantic chunks...');
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const chunkUrl = `${backendUrl}/api/chunk/${jobId}`;
       console.log('Making chunking request to:', chunkUrl);
       
       const headers: Record<string, string> = {
@@ -1303,10 +1383,6 @@ export default function ProcessPage() {
                           <span>{timeEstimate.time_estimates.extraction.formatted}</span>
                         </div>
                       )}
-                      <div className="flex items-center text-xs text-gray-400">
-                        <span className="w-16">Chunk:</span>
-                        <span>~10-30s</span>
-                      </div>
                       <div className="flex items-center text-xs text-gray-400">
                         <span className="w-16">Analyze:</span>
                         <span>Estimated after extraction</span>
