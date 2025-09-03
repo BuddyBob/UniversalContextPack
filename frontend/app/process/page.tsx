@@ -984,7 +984,7 @@ export default function ProcessPage() {
   };
 
   const downloadChunks = async () => {
-    if (!jobId) return;
+    if (!currentJobId) return;
     
     // Track download
     analytics.downloadPack();
@@ -992,7 +992,7 @@ export default function ProcessPage() {
     try {
       addLog('Starting chunks download...');
       
-      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${jobId}/chunks`, {
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${currentJobId}/chunks`, {
         method: 'GET'
       });
       
@@ -1004,7 +1004,7 @@ export default function ProcessPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `ucp_chunks_${jobId}.zip`;
+      link.download = `ucp_chunks_${currentJobId}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
