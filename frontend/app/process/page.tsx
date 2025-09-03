@@ -1366,23 +1366,28 @@ export default function ProcessPage() {
                     <BarChart3 className="h-5 w-5 text-green-600" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-text-primary">Chunking Complete</h3>
-                    {/* Simple Time Estimates Display */}
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center text-xs text-gray-400">
-                        <span className="w-16">Extract:</span>
-                        <span>✓ Complete</span>
-                      </div>
-                      <div className="flex items-center text-xs text-gray-400">
-                        <span className="w-16">Chunk:</span>
-                        <span>✓ Complete</span>
-                      </div>
-                      {analysisTimeEstimate && (
-                        <div className="flex items-center text-xs text-gray-400">
-                          <span className="w-16">Analyze:</span>
-                          <span>{analysisTimeEstimate.formatted} (all {chunkData.total_chunks} chunks)</span>
+                    <h3 className="text-lg font-semibold text-text-primary">Chunks Ready</h3>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Your conversation has been broken into {chunkData.total_chunks} optimized chunks. Choose your next step:
+                    </p>
+                    
+                    {/* Options */}
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-start space-x-3 p-3 bg-gray-800 rounded-lg border border-gray-600">
+                        <Download className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-medium text-white text-sm">Download Chunks</div>
+                          <div className="text-xs text-gray-400">Export chunks to use with any LLM (Claude, ChatGPT, etc.)</div>
                         </div>
-                      )}
+                      </div>
+                      
+                      <div className="flex items-start space-x-3 p-3 bg-green-900/20 rounded-lg border border-green-600/30">
+                        <Brain className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <div className="font-medium text-white text-sm">AI Analysis <span className="text-green-400 text-xs">(Recommended)</span></div>
+                          <div className="text-xs text-gray-400">Get thorough context analysis with patterns, themes & insights</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1392,8 +1397,8 @@ export default function ProcessPage() {
                     onClick={() => setShowChunkModal(true)}
                     className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors flex items-center space-x-2"
                   >
-                    <BarChart3 className="h-4 w-4" />
-                    <span>Select Chunks</span>
+                    <Download className="h-4 w-4" />
+                    <span>Download Chunks</span>
                   </button>
 
                   {currentStep === 'chunked' && (
@@ -1412,15 +1417,15 @@ export default function ProcessPage() {
                         }
                       }}
                       disabled={isProcessing || Boolean(paymentLimits && !paymentLimits.canProcess)}
-                      className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-2 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
+                      className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center space-x-2"
                     >
-                      <Play className="h-4 w-4" />
+                      <Brain className="h-4 w-4" />
                       <span>
                         {(paymentLimits && !paymentLimits.canProcess)
-                          ? 'AI Analysis Limit Reached'
+                          ? 'Analysis Limit Reached'
                           : selectedChunks.size > 0
-                          ? `Analyze Selected (${selectedChunks.size})`
-                          : `Analyze All (${availableChunks.length})`
+                          ? `Get AI Analysis (${selectedChunks.size} chunks)`
+                          : `Get AI Analysis (${availableChunks.length} chunks)`
                         }
                       </span>
                     </button>

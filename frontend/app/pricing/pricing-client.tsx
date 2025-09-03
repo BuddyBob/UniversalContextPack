@@ -188,7 +188,7 @@ export default function PricingPageClient() {
         )}
 
         {/* Business Credit Calculator */}
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-2xl mx-auto">
           <div className="bg-gray-800 border border-gray-600 rounded-xl overflow-hidden">
             {/* Header Section */}
             <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-4 border-b border-gray-600">
@@ -205,7 +205,7 @@ export default function PricingPageClient() {
             </div>
 
             {/* Credit Selection Interface */}
-            <div className="p-6">
+            <div className="p-8">
               <div className="space-y-6">
                   {/* Plan Selection */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -216,7 +216,7 @@ export default function PricingPageClient() {
                       }}
                       className={`p-4 rounded-lg border transition-all text-left ${
                         !isUnlimitedSelected
-                          ? 'border-white bg-gray-700'
+                          ? 'border-gray-400 bg-gray-700'
                           : 'border-gray-600 bg-gray-800 hover:border-gray-500'
                       }`}
                     >
@@ -231,7 +231,7 @@ export default function PricingPageClient() {
                       }}
                       className={`relative p-4 rounded-lg border transition-all text-left ${
                         isUnlimitedSelected
-                          ? 'border-white bg-gray-700'
+                          ? 'border-gray-400 bg-gray-700'
                           : 'border-gray-600 bg-gray-800 hover:border-gray-500'
                       }`}
                     >
@@ -257,7 +257,7 @@ export default function PricingPageClient() {
                           onClick={() => setCustomCredits(amount)}
                           className={`relative p-4 rounded-lg border transition-all text-center ${
                             customCredits === amount
-                              ? 'border-white bg-gray-700'
+                              ? 'border-gray-400 bg-gray-700'
                               : 'border-gray-600 bg-gray-800 hover:border-gray-500'
                           }`}
                         >
