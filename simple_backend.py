@@ -2809,7 +2809,7 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
         with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
             with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 
-                # List of files to include in the pack
+                # List of files to include in the pack (only add if they exist)
                 file_mappings = [
                     (f"{user.r2_directory}/{job_id}/extracted.txt", "extracted.txt"),
                     (f"{user.r2_directory}/{job_id}/complete_ucp.txt", "complete_ucp.txt"),
@@ -2818,11 +2818,18 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
                     (f"{user.r2_directory}/{job_id}/chunks_metadata.json", "chunks_metadata.json"),
                 ]
                 
-                # Add main files
+                # Add main files (only if they exist)
+                files_added = 0
                 for r2_key, zip_name in file_mappings:
-                    content = download_from_r2(r2_key)
-                    if content:
-                        zipf.writestr(zip_name, content)
+                    try:
+                        content = download_from_r2(r2_key)
+                        if content:
+                            zipf.writestr(zip_name, content)
+                            files_added += 1
+                    except Exception as e:
+                        # Skip missing files
+                        print(f"Skipping missing file {zip_name}: {e}")
+                        continue
                 
                 # Add all chunk files
                 chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
@@ -2836,17 +2843,26 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
                         if chunk_content:
                             zipf.writestr(f"chunks/chunk_{i:03d}.txt", chunk_content)
                 
-                # Add all result files
+                # Add all result files (only if they exist)
                 summary_content = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json")
                 if summary_content:
-                    summary = json.loads(summary_content)
-                    processed_chunks = summary.get("processed_chunks", 0)
-                    
-                    # Create results directory in ZIP
-                    for i in range(1, processed_chunks + 1):
-                        result_content = download_from_r2(f"{user.r2_directory}/{job_id}/result_{i:03d}.json")
-                        if result_content:
-                            zipf.writestr(f"results/result_{i:03d}.json", result_content)
+                    try:
+                        summary = json.loads(summary_content)
+                        processed_chunks = summary.get("processed_chunks", 0)
+                        
+                        # Create results directory in ZIP only if we have processed chunks
+                        if processed_chunks > 0:
+                            for i in range(1, processed_chunks + 1):
+                                result_content = download_from_r2(f"{user.r2_directory}/{job_id}/result_{i:03d}.json")
+                                if result_content:
+                                    zipf.writestr(f"results/result_{i:03d}.json", result_content)
+                    except (json.JSONDecodeError, KeyError):
+                        # Skip results if summary is invalid
+                        pass
+                
+                # Check if we have any files in the ZIP
+                if zipf.namelist() == []:
+                    raise HTTPException(status_code=404, detail="No files found for this job")
         
         # Read the ZIP file and return it
         with open(temp_zip.name, 'rb') as f:
