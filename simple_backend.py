@@ -2489,6 +2489,53 @@ async def debug_user_info(user: AuthenticatedUser = Depends(get_current_user)):
         "expected_path_format": f"{user.r2_directory}/{{job_id}}/{{filename}}"
     }
 
+@app.get("/api/jobs/{job_id}/exists")
+async def check_job_exists(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Quick check if a job exists and has any files."""
+    try:
+        # Check for the most basic file that should exist after extraction
+        job_summary_path = f"{user.r2_directory}/{job_id}/job_summary.json"
+        job_summary = download_from_r2_with_fallback(job_summary_path, job_id, "job_summary.json", silent_404=True)
+        
+        # Also check for chunks metadata
+        chunks_metadata_path = f"{user.r2_directory}/{job_id}/chunks_metadata.json"
+        chunks_metadata = download_from_r2_with_fallback(chunks_metadata_path, job_id, "chunks_metadata.json", silent_404=True)
+        
+        # Try to list some common alternative paths that might exist
+        alternative_checks = []
+        if not job_summary and not chunks_metadata:
+            # Try some alternative user directory formats
+            alt_user_dirs = [
+                f"user_{user.user_id}",
+                user.user_id,
+                f"users/{user.user_id}",
+                f"prod/{user.user_id}"
+            ]
+            
+            for alt_dir in alt_user_dirs:
+                alt_job_summary = download_from_r2(f"{alt_dir}/{job_id}/job_summary.json", silent_404=True)
+                alt_chunks = download_from_r2(f"{alt_dir}/{job_id}/chunks_metadata.json", silent_404=True)
+                alternative_checks.append({
+                    "path": alt_dir,
+                    "job_summary_exists": alt_job_summary is not None,
+                    "chunks_metadata_exists": alt_chunks is not None
+                })
+        
+        return {
+            "job_id": job_id,
+            "user_directory": user.r2_directory,
+            "job_summary_exists": job_summary is not None,
+            "chunks_metadata_exists": chunks_metadata is not None,
+            "alternative_paths_checked": alternative_checks
+        }
+        
+    except Exception as e:
+        return {
+            "job_id": job_id,
+            "error": str(e),
+            "user_directory": user.r2_directory
+        }
+
 @app.get("/api/packs")
 async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
     """List all completed packs from Supabase for the authenticated user."""
