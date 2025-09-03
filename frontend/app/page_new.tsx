@@ -112,7 +112,7 @@ export default function HomePage() {
               </div>
               
               <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto leading-relaxed">
-                Transfer months of conversation history between any AI model in seconds
+                Store your conversations with AI | Move your conversations across different AI's 
               </p>
 
               <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">

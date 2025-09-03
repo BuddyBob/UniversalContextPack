@@ -1212,15 +1212,9 @@ export default function ProcessPage() {
                   <div className="w-16 h-16 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <Upload className="h-8 w-8 text-accent-primary" />
                   </div>
-                  <h3 className="text-lg font-semibold text-text-primary mb-2">Upload Your Chat Export</h3>
-                  <p className="text-text-secondary text-sm mb-3">
-                    <span className="font-mono text-blue-300">conversations.json</span> • 
-                    <span className="font-mono text-green-300 mx-2">chat.html</span> • 
-                    <span className="font-mono text-purple-300">.txt files</span>
-                  </p>
                   <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-3 text-sm">
                     <p className="text-gray-300">
-                      <span className="font-medium">Recommended:</span> <span className="font-mono text-accent-primary">conversations.json</span> for faster processing
+                      <span className="font-medium">Upload:</span> <span className="font-mono text-accent-primary">conversations.json</span> for faster processing
                     </p>
                   </div>
                 </div>

@@ -188,126 +188,100 @@ export default function PricingPageClient() {
         )}
 
         {/* Business Credit Calculator */}
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-lg mx-auto">
           <div className="bg-gray-800 border border-gray-600 rounded-xl overflow-hidden">
             {/* Header Section */}
-            <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-8 py-6 border-b border-gray-600">
+            <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-4 border-b border-gray-600">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-xl font-semibold text-white">Purchase Credits</h3>
-                  <p className="text-gray-300 text-sm mt-1">1 credit = 1 conversation chunk (~150k tokens)</p>
+                  <h3 className="text-lg font-semibold text-white">Purchase Credits</h3>
+                  <p className="text-gray-400 text-sm">1 credit = 1 conversation chunk</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-4xl font-bold text-white">{customCredits}</div>
-                  <div className="text-gray-300 text-sm">analysis credits</div>
+                  <div className="text-3xl font-bold text-white">{customCredits}</div>
+                  <div className="text-gray-400 text-sm">credits</div>
                 </div>
               </div>
             </div>
 
             {/* Credit Selection Interface */}
-            <div className="p-8">
-              <div className="space-y-8">
+            <div className="p-6">
+              <div className="space-y-6">
                   {/* Plan Selection */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-4">
-                      Choose Your Plan
-                    </label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      <button
-                        onClick={() => {
-                          setIsUnlimitedSelected(false)
-                          setCustomCredits(50)
-                        }}
-                        className={`p-6 rounded-lg border transition-all text-left ${
-                          !isUnlimitedSelected
-                            ? 'border-white bg-gray-700 shadow-lg'
-                            : 'border-gray-600 bg-gray-800 hover:border-gray-500'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="font-semibold text-white text-lg">Pay Per Use</div>
-                          <div className="text-sm text-gray-400">Starting at $0.50</div>
-                        </div>
-                        <div className="text-sm text-gray-400 mb-2">Credits (85% cheaper!)</div>
-                        <div className="text-xs text-gray-500">Perfect for occasional use • Credits never expire</div>
-                      </button>
-                      
-                      <button
-                        onClick={() => {
-                          setIsUnlimitedSelected(true)
-                          setCustomCredits(1000) // Set high number for display
-                        }}
-                        className={`relative p-6 rounded-lg border transition-all text-left ${
-                          isUnlimitedSelected
-                            ? 'border-white bg-gray-700 shadow-lg'
-                            : 'border-gray-600 bg-gray-800 hover:border-gray-500'
-                        }`}
-                      >
-                        <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                          <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-                            Best Value
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="font-semibold text-white text-lg">Unlimited</div>
-                          <div className="text-sm text-green-400">$20 once</div>
-                        </div>
-                        <div className="text-sm text-gray-400 mb-2">One-time payment</div>
-                        <div className="text-xs text-gray-500">Use as much as you want • Lifetime access</div>
-                      </button>
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        setIsUnlimitedSelected(false)
+                        setCustomCredits(50)
+                      }}
+                      className={`p-4 rounded-lg border transition-all text-left ${
+                        !isUnlimitedSelected
+                          ? 'border-white bg-gray-700'
+                          : 'border-gray-600 bg-gray-800 hover:border-gray-500'
+                      }`}
+                    >
+                      <div className="font-medium text-white">Pay Per Use</div>
+                      <div className="text-sm text-gray-400">Credits never expire</div>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setIsUnlimitedSelected(true)
+                        setCustomCredits(1000)
+                      }}
+                      className={`relative p-4 rounded-lg border transition-all text-left ${
+                        isUnlimitedSelected
+                          ? 'border-white bg-gray-700'
+                          : 'border-gray-600 bg-gray-800 hover:border-gray-500'
+                      }`}
+                    >
+                      <div className="absolute -top-2 left-4">
+                        <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                          Best Value
+                        </span>
+                      </div>
+                      <div className="font-medium text-white">Unlimited</div>
+                      <div className="text-sm text-green-400">$20 once</div>
+                    </button>
                   </div>
 
                   {!isUnlimitedSelected && (
-                    <>
-                      {/* Business Tier Selection */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-4">
-                          Choose Credit Amount
-                        </label>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {[
-                            { amount: 50, label: 'Starter', desc: 'Small projects', price: '$1.00' },
-                            { amount: 100, label: 'Professional', desc: 'Regular use', popular: true, price: '$1.70' },
-                            { amount: 250, label: 'Business', desc: 'Team projects', price: '$3.75' }
-                          ].map(({ amount, label, desc, popular, price }) => (
-                            <button
-                              key={amount}
-                              onClick={() => setCustomCredits(amount)}
-                              className={`relative p-6 rounded-lg border transition-all text-center ${
-                                customCredits === amount
-                                  ? 'border-white bg-gray-700 shadow-lg'
-                                  : 'border-gray-600 bg-gray-800 hover:border-gray-500 hover:bg-gray-750'
-                              }`}
-                            >
-                              {popular && (
-                                <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-                                  <span className="bg-white text-gray-900 text-xs px-2 py-1 rounded-full font-medium">
-                                    Popular
-                                  </span>
-                                </div>
-                              )}
-                              <div className="text-2xl font-bold text-white mb-1">{amount}</div>
-                              <div className="text-sm text-gray-400 mb-1">{label}</div>
-                              <div className="text-lg font-semibold text-green-400 mb-1">{price}</div>
-                              <div className="text-xs text-gray-500">{desc}</div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { amount: 50, price: '$1.00' },
+                        { amount: 100, price: '$1.70', popular: true },
+                        { amount: 250, price: '$3.75' }
+                      ].map(({ amount, price, popular }) => (
+                        <button
+                          key={amount}
+                          onClick={() => setCustomCredits(amount)}
+                          className={`relative p-4 rounded-lg border transition-all text-center ${
+                            customCredits === amount
+                              ? 'border-white bg-gray-700'
+                              : 'border-gray-600 bg-gray-800 hover:border-gray-500'
+                          }`}
+                        >
+                          {popular && (
+                            <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+                              <span className="bg-white text-gray-900 text-xs px-2 py-1 rounded-full">
+                                Popular
+                              </span>
+                            </div>
+                          )}
+                          <div className="text-xl font-bold text-white">{amount}</div>
+                          <div className="text-green-400 font-medium">{price}</div>
+                        </button>
+                      ))}
+                    </div>
                   )}
 
-                  {/* Simplified Pricing Summary */}
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-white mb-2">
+                  {/* Price Display */}
+                  <div className="text-center py-4">
+                    <div className="text-2xl font-bold text-white">
                       ${calculatePrice(customCredits)}
                     </div>
                     <div className="text-gray-400 text-sm">
-                      {isUnlimitedSelected 
-                        ? 'One-time payment • Lifetime access' 
-                        : `${customCredits} credits • $${getPricePerCredit(customCredits)} each`
-                      }
+                      {isUnlimitedSelected ? 'One-time payment' : `$${getPricePerCredit(customCredits)} per credit`}
                     </div>
                   </div>
 
@@ -315,7 +289,7 @@ export default function PricingPageClient() {
                   <button
                     onClick={handlePurchase}
                     disabled={processingPurchase}
-                    className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-600 text-gray-900 disabled:text-gray-400 py-4 rounded-lg font-semibold text-lg transition-colors flex items-center justify-center"
+                    className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-600 text-gray-900 disabled:text-gray-400 py-3 rounded-lg font-medium transition-colors flex items-center justify-center"
                   >
                     {processingPurchase ? (
                       <>
@@ -324,35 +298,19 @@ export default function PricingPageClient() {
                       </>
                     ) : (
                       <>
-                        <CreditCard className="h-5 w-5 mr-2" />
-                        {isUnlimitedSelected 
-                          ? `Get Unlimited Access - $20.00`
-                          : `Continue to Secure Payment - $${calculatePrice(customCredits)}`
-                        }
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Continue to Payment - ${calculatePrice(customCredits)}
                       </>
                     )}
                   </button>
 
-                  {/* Security Indicator */}
+                  {/* Security */}
                   <div className="flex items-center justify-center text-xs text-gray-500">
                     <Shield className="h-3 w-3 mr-1" />
                     Secure Payment Powered by Stripe
                   </div>
                 </div>
             </div>
-          </div>
-        </div>
-
-        {/* Simple Benefits */}
-        <div className="text-center">
-          <div className="max-w-md mx-auto">
-            <div className="w-12 h-12 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <Shield className="h-5 w-5 text-accent-primary" />
-            </div>
-            <h4 className="font-medium text-text-primary mb-2">Simple & Secure</h4>
-            <p className="text-text-secondary text-sm">
-              1 credit = 1 conversation chunk analyzed. Credits never expire. Secure payments via Stripe.
-            </p>
           </div>
         </div>
 
