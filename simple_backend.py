@@ -35,6 +35,7 @@ import stripe
 from collections import defaultdict
 from datetime import timedelta
 import stripe
+from urllib.parse import urlparse
 
 # Load environment variables with override to refresh from file
 load_dotenv(override=True)
@@ -728,6 +729,45 @@ def download_from_r2(key: str, silent_404: bool = False) -> str:
             if not silent_404:
                 print(f"Error downloading from local storage: {local_error}")
             return None
+
+def download_from_r2_with_fallback(primary_key: str, job_id: str, filename: str, silent_404: bool = False) -> str:
+    """Try to download from multiple possible paths based on different user directory formats."""
+    
+    # First try the primary key (current user directory)
+    content = download_from_r2(primary_key, silent_404=True)
+    if content:
+        if not silent_404:
+            print(f"✅ Found file at primary path: {primary_key}")
+        return content
+    
+    # Extract the user ID from the primary key if possible
+    import re
+    user_id_match = re.search(r'user_([a-f0-9-]{36})', primary_key)
+    if user_id_match:
+        user_id = user_id_match.group(1)
+        
+        # Try alternative path formats
+        alternative_paths = [
+            f"user_{user_id}/{job_id}/{filename}",
+            f"{user_id}/{job_id}/{filename}",
+            f"users/{user_id}/{job_id}/{filename}",
+            f"prod/{user_id}/{job_id}/{filename}",
+        ]
+        
+        for alt_path in alternative_paths:
+            if alt_path == primary_key:
+                continue  # Skip if it's the same as primary
+                
+            content = download_from_r2(alt_path, silent_404=True)
+            if content:
+                if not silent_404:
+                    print(f"✅ Found file at alternative path: {alt_path}")
+                return content
+    
+    # If all paths failed, return None
+    if not silent_404:
+        print(f"❌ File not found at any path for job {job_id}, filename {filename}")
+    return None
 
 def list_r2_objects(prefix: str = "") -> List[str]:
     """List objects in R2 bucket with optional prefix."""
@@ -2382,6 +2422,73 @@ async def download_result_file(job_id: str, filename: str, user: AuthenticatedUs
         print(f"Attempted key: {user.r2_directory}/{job_id}/{filename}")
         raise HTTPException(status_code=404, detail=f"Result file not found: {str(e)}")
 
+@app.get("/api/debug/{job_id}/files")
+async def debug_job_files(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Debug endpoint to check which files exist for a job."""
+    try:
+        base_path = f"{user.r2_directory}/{job_id}"
+        files_to_check = [
+            "extracted.txt",
+            "complete_ucp.txt", 
+            "summary.json",
+            "job_summary.json",
+            "chunks_metadata.json"
+        ]
+        
+        file_status = {}
+        for filename in files_to_check:
+            full_path = f"{base_path}/{filename}"
+            try:
+                content = download_from_r2(full_path, silent_404=True)
+                file_status[filename] = {
+                    "exists": content is not None,
+                    "size": len(content) if content else 0,
+                    "path": full_path
+                }
+            except Exception as e:
+                file_status[filename] = {
+                    "exists": False,
+                    "error": str(e),
+                    "path": full_path
+                }
+        
+        # Check chunks
+        chunks_info = {"total_chunks": 0, "existing_chunks": []}
+        chunk_metadata = download_from_r2(f"{base_path}/chunks_metadata.json", silent_404=True)
+        if chunk_metadata:
+            try:
+                metadata = json.loads(chunk_metadata)
+                total_chunks = metadata.get("total_chunks", 0)
+                chunks_info["total_chunks"] = total_chunks
+                
+                for i in range(1, total_chunks + 1):
+                    chunk_content = download_from_r2(f"{base_path}/chunk_{i:03d}.txt", silent_404=True)
+                    if chunk_content:
+                        chunks_info["existing_chunks"].append(i)
+            except Exception as e:
+                chunks_info["error"] = str(e)
+        
+        return {
+            "job_id": job_id,
+            "user_directory": user.r2_directory,
+            "base_path": base_path,
+            "files": file_status,
+            "chunks": chunks_info
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
+
+@app.get("/api/debug/user")
+async def debug_user_info(user: AuthenticatedUser = Depends(get_current_user)):
+    """Debug endpoint to check user authentication and directory."""
+    return {
+        "user_id": user.user_id,
+        "email": user.email,
+        "r2_directory": user.r2_directory,
+        "expected_path_format": f"{user.r2_directory}/{{job_id}}/{{filename}}"
+    }
+
 @app.get("/api/packs")
 async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
     """List all completed packs from Supabase for the authenticated user."""
@@ -2805,6 +2912,8 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
         import zipfile
         import tempfile
         
+        print(f"Download pack request for job {job_id} by user {user.user_id} (directory: {user.r2_directory})")
+        
         # Create a temporary file for the ZIP
         with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
             with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -2820,49 +2929,80 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
                 
                 # Add main files (only if they exist)
                 files_added = 0
+                missing_files = []
                 for r2_key, zip_name in file_mappings:
                     try:
-                        content = download_from_r2(r2_key)
+                        print(f"Attempting to download: {r2_key}")
+                        # Extract filename from the path for fallback function
+                        filename = zip_name  # Use the zip name as the filename
+                        content = download_from_r2_with_fallback(r2_key, job_id, filename)
                         if content:
                             zipf.writestr(zip_name, content)
                             files_added += 1
+                            print(f"✅ Added {zip_name} to pack")
+                        else:
+                            missing_files.append(zip_name)
+                            print(f"❌ File not found: {zip_name}")
                     except Exception as e:
                         # Skip missing files
-                        print(f"Skipping missing file {zip_name}: {e}")
+                        missing_files.append(zip_name)
+                        print(f"❌ Error downloading {zip_name}: {e}")
                         continue
                 
                 # Add all chunk files
-                chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+                chunk_metadata_content = download_from_r2_with_fallback(f"{user.r2_directory}/{job_id}/chunks_metadata.json", job_id, "chunks_metadata.json")
                 if chunk_metadata_content:
                     chunk_metadata = json.loads(chunk_metadata_content)
                     total_chunks = chunk_metadata.get("total_chunks", 0)
+                    print(f"Found chunk metadata with {total_chunks} chunks")
                     
                     # Create chunks directory in ZIP
+                    chunks_added = 0
                     for i in range(1, total_chunks + 1):
-                        chunk_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunk_{i:03d}.txt")
+                        chunk_filename = f"chunk_{i:03d}.txt"
+                        chunk_content = download_from_r2_with_fallback(f"{user.r2_directory}/{job_id}/{chunk_filename}", job_id, chunk_filename)
                         if chunk_content:
-                            zipf.writestr(f"chunks/chunk_{i:03d}.txt", chunk_content)
+                            zipf.writestr(f"chunks/{chunk_filename}", chunk_content)
+                            chunks_added += 1
+                    print(f"Added {chunks_added}/{total_chunks} chunk files")
+                else:
+                    print("No chunk metadata found")
                 
                 # Add all result files (only if they exist)
-                summary_content = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json")
+                summary_content = download_from_r2_with_fallback(f"{user.r2_directory}/{job_id}/summary.json", job_id, "summary.json")
                 if summary_content:
                     try:
                         summary = json.loads(summary_content)
                         processed_chunks = summary.get("processed_chunks", 0)
+                        print(f"Found summary with {processed_chunks} processed chunks")
                         
                         # Create results directory in ZIP only if we have processed chunks
+                        results_added = 0
                         if processed_chunks > 0:
                             for i in range(1, processed_chunks + 1):
-                                result_content = download_from_r2(f"{user.r2_directory}/{job_id}/result_{i:03d}.json")
+                                result_filename = f"result_{i:03d}.json"
+                                result_content = download_from_r2_with_fallback(f"{user.r2_directory}/{job_id}/{result_filename}", job_id, result_filename)
                                 if result_content:
-                                    zipf.writestr(f"results/result_{i:03d}.json", result_content)
+                                    zipf.writestr(f"results/{result_filename}", result_content)
+                                    results_added += 1
+                        print(f"Added {results_added}/{processed_chunks} result files")
                     except (json.JSONDecodeError, KeyError):
                         # Skip results if summary is invalid
+                        print("Invalid summary JSON, skipping results")
                         pass
+                else:
+                    print("No summary found")
                 
                 # Check if we have any files in the ZIP
-                if zipf.namelist() == []:
-                    raise HTTPException(status_code=404, detail="No files found for this job")
+                zip_files = zipf.namelist()
+                print(f"Total files in ZIP: {len(zip_files)}")
+                if len(zip_files) == 0:
+                    print(f"No files found for job {job_id} in directory {user.r2_directory}")
+                    print(f"Missing files: {missing_files}")
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"No files found for job {job_id}. This job may not exist, may belong to a different user, or may not have completed processing yet."
+                    )
         
         # Read the ZIP file and return it
         with open(temp_zip.name, 'rb') as f:
@@ -2888,24 +3028,54 @@ async def download_chunks_only(job_id: str, user: AuthenticatedUser = Depends(ge
         import zipfile
         import tempfile
         
+        print(f"Download chunks request for job {job_id} by user {user.user_id} (directory: {user.r2_directory})")
+        
         # Create a temporary file for the ZIP
         with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
             with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 
                 # Add chunk metadata
-                chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+                metadata_path = f"{user.r2_directory}/{job_id}/chunks_metadata.json"
+                print(f"Looking for chunk metadata at: {metadata_path}")
+                chunk_metadata_content = download_from_r2_with_fallback(metadata_path, job_id, "chunks_metadata.json")
+                
                 if chunk_metadata_content:
                     zipf.writestr("chunks_metadata.json", chunk_metadata_content)
                     chunk_metadata = json.loads(chunk_metadata_content)
                     total_chunks = chunk_metadata.get("total_chunks", 0)
+                    print(f"Found {total_chunks} chunks in metadata")
                     
                     # Add all chunk files
+                    chunks_added = 0
                     for i in range(1, total_chunks + 1):
-                        chunk_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunk_{i:03d}.txt")
+                        chunk_filename = f"chunk_{i:03d}.txt"
+                        chunk_path = f"{user.r2_directory}/{job_id}/{chunk_filename}"
+                        print(f"Looking for chunk {i} at: {chunk_path}")
+                        chunk_content = download_from_r2_with_fallback(chunk_path, job_id, chunk_filename)
                         if chunk_content:
-                            zipf.writestr(f"chunk_{i:03d}.txt", chunk_content)
+                            zipf.writestr(chunk_filename, chunk_content)
+                            chunks_added += 1
+                            print(f"✅ Added {chunk_filename} to ZIP")
+                        else:
+                            print(f"❌ Chunk {i} not found")
+                    
+                    print(f"Successfully added {chunks_added}/{total_chunks} chunks to ZIP")
+                    
+                    if chunks_added == 0:
+                        raise HTTPException(
+                            status_code=404, 
+                            detail=f"No chunk files found for job {job_id}. Expected path: {user.r2_directory}/{job_id}/chunk_XXX.txt"
+                        )
                 else:
-                    raise HTTPException(status_code=404, detail="Chunks not found for this job")
+                    print(f"❌ Chunk metadata not found at: {metadata_path}")
+                    # Let's also check what the user path is vs the screenshot path
+                    screenshot_path = f"user_08192f18-0b1c-4d00-9b90-208c64dd972e/{job_id}/chunks_metadata.json"
+                    print(f"Screenshot shows path like: {screenshot_path}")
+                    print(f"User directory is: {user.r2_directory}")
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Chunks metadata not found for job {job_id}. Expected at: {metadata_path}"
+                    )
         
         # Read the ZIP file and return it
         with open(temp_zip.name, 'rb') as f:
