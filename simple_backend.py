@@ -2736,7 +2736,7 @@ async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
         
         # Add timeout for the RPC call to prevent hanging requests
         import asyncio
-        async def fetch_packs_with_timeout():
+        def fetch_packs_with_timeout():
             # Fetch packs from Supabase using backend function
             result = supabase.rpc("get_user_packs_for_backend", {"user_uuid": user.user_id}).execute()
             return result
