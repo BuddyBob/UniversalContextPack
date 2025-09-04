@@ -385,6 +385,15 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
           <h3 className="text-lg font-medium text-gray-900 mb-6">Generated Result Files</h3>
           
           <div className="grid gap-4">
+            {/* Complete UCP Text File - Main deliverable */}
+            <ResultFileCard 
+              icon={<FileText className="h-5 w-5" />}
+              title="Complete_UCP.txt"
+              description="Complete Universal Context Pack - Main deliverable with all analysis"
+              fileType="TXT File"
+              onDownload={() => downloadComplete()}
+            />
+            
             {/* Individual Result JSON Files */}
             {result.completedChunks > 0 && (
               <>
