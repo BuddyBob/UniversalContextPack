@@ -87,11 +87,12 @@ additional_origins = [
     "https://universal-context-pack.vercel.app",
     "https://universalcontextpack.vercel.app", 
     "http://localhost:3000",
-    "http://localhost:3001"
+    "http://localhost:3001",
+    "*"  # Allow all origins temporarily to debug CORS issue
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in allowed_origins] + additional_origins,
+    allow_origins=["*"],  # Allow all origins temporarily
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
