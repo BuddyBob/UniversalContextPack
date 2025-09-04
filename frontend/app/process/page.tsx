@@ -212,6 +212,21 @@ export default function ProcessPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId]);
 
+  // Utility function to format time estimates (rounds up)
+  const formatAnalysisTime = (totalSeconds: number): string => {
+    if (totalSeconds < 60) {
+      return `${totalSeconds}s`;
+    } else if (totalSeconds < 3600) {
+      const minutes = Math.ceil(totalSeconds / 60); // Round up to next minute
+      return `${minutes}m`;
+    } else {
+      const hours = Math.floor(totalSeconds / 3600);
+      const remainingSeconds = totalSeconds % 3600;
+      const minutes = Math.ceil(remainingSeconds / 60); // Round up remaining minutes
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+    }
+  };
+
   // Handle automatic extraction after authentication
   useEffect(() => {
     if (user && pendingExtraction && file) {
@@ -848,11 +863,7 @@ export default function ProcessPage() {
       
       // Calculate analysis time estimate for all chunks (40 seconds per chunk)
       const totalAnalysisSeconds = data.total_chunks * 40;
-      const formatted = totalAnalysisSeconds < 60 
-        ? `${totalAnalysisSeconds}s` 
-        : totalAnalysisSeconds < 3600
-        ? `${Math.round(totalAnalysisSeconds / 60)}m`
-        : `${Math.round(totalAnalysisSeconds / 3600)}h ${Math.round((totalAnalysisSeconds % 3600) / 60)}m`;
+      const formatted = formatAnalysisTime(totalAnalysisSeconds);
       
       setAnalysisTimeEstimate({
         formatted: formatted,
@@ -928,11 +939,7 @@ export default function ProcessPage() {
       
       // Calculate analysis time estimate for all chunks (40 seconds per chunk)
       const totalAnalysisSeconds = data.total_chunks * 40;
-      const formatted = totalAnalysisSeconds < 60 
-        ? `${totalAnalysisSeconds}s` 
-        : totalAnalysisSeconds < 3600
-        ? `${Math.round(totalAnalysisSeconds / 60)}m`
-        : `${Math.round(totalAnalysisSeconds / 3600)}h ${Math.round((totalAnalysisSeconds % 3600) / 60)}m`;
+      const formatted = formatAnalysisTime(totalAnalysisSeconds);
       
       setAnalysisTimeEstimate({
         formatted: formatted,
@@ -976,11 +983,7 @@ export default function ProcessPage() {
 
     // Calculate time estimate for selected chunks (40 seconds per chunk)
     const selectedAnalysisSeconds = chunksToAnalyze.length * 40;
-    const formatted = selectedAnalysisSeconds < 60 
-      ? `${selectedAnalysisSeconds}s` 
-      : selectedAnalysisSeconds < 3600
-      ? `${Math.round(selectedAnalysisSeconds / 60)}m`
-      : `${Math.round(selectedAnalysisSeconds / 3600)}h ${Math.round((selectedAnalysisSeconds % 3600) / 60)}m`;
+    const formatted = formatAnalysisTime(selectedAnalysisSeconds);
     
     setSelectedChunksEstimatedTime(selectedAnalysisSeconds);
     addLog(`Estimated analysis time: ${formatted} for ${chunksToAnalyze.length} selected chunks`);
@@ -1181,8 +1184,8 @@ export default function ProcessPage() {
                 {/* Simple Time Overview */}
                 {(timeEstimate || analysisTimeEstimate || ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) && (
                   <div className="mb-6 p-4 bg-gray-800 rounded-lg">
-                    <div className="text-sm font-medium text-gray-300 mb-3">Time Estimates </div>
-                    <div className="text-xs text-gray-500">(Can be up to 10-20 minutes depending on conversation size)</div>
+                    <div className="text-sm font-medium text-gray-300 mb-3">Time Estimates - 10-20 min depending on conversation sizes</div>
+
                     <div className="grid grid-cols-2 gap-4 text-xs">
                       <div className="text-center">
                         <div className="text-gray-400 mb-1">Chunk</div>
@@ -1435,15 +1438,6 @@ export default function ProcessPage() {
                     
                     {/* Simple Options */}
                     <div className="mt-6 space-y-3">
-                      <div className="p-4 bg-gray-750 rounded-lg border border-gray-600">
-                        <div className="flex items-center space-x-3">
-                          <Download className="h-5 w-5 text-gray-400" />
-                          <div>
-                            <div className="font-medium text-white">Download Chunks</div>
-                            <div className="text-sm text-gray-400">These should be analyzed with the analyze feature</div>
-                          </div>
-                        </div>
-                      </div>
                       
                       <div className="p-4 bg-gray-750 rounded-lg border border-gray-600">
                         <div className="flex items-center space-x-3">
@@ -1459,19 +1453,6 @@ export default function ProcessPage() {
                 </div>
 
                 <div className="flex space-x-3">
-                  <button
-                    onClick={downloadChunks}
-                    disabled={isDownloading}
-                    className="flex-1 py-3 border border-gray-600 rounded-lg text-gray-300 hover:text-white hover:border-gray-500 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isDownloading ? (
-                      <Loader className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="h-4 w-4" />
-                    )}
-                    <span>{isDownloading ? 'Downloading...' : 'Download Chunks'}</span>
-                  </button>
-
                   {currentStep === 'chunked' && (
                     <button
                       onClick={() => {
@@ -1488,17 +1469,30 @@ export default function ProcessPage() {
                         }
                       }}
                       disabled={isProcessing || Boolean(paymentLimits && !paymentLimits.canProcess)}
-                      className="flex-1 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2"
+                      className="flex-1 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 font-medium shadow-lg"
                     >
-                      <Brain className="h-4 w-4" />
+                      <Brain className="h-5 w-5" />
                       <span>
                         {(paymentLimits && !paymentLimits.canProcess)
                           ? 'Analysis Limit Reached'
-                          : `Get AI Analysis (${availableChunks.length})`
+                          : `Start AI Analysis (${availableChunks.length})`
                         }
                       </span>
                     </button>
                   )}
+
+                  <button
+                    onClick={downloadChunks}
+                    disabled={isDownloading}
+                    className="py-3 px-4 border border-gray-600 rounded-lg text-gray-400 hover:text-gray-300 hover:border-gray-500 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    {isDownloading ? (
+                      <Loader className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    <span>{isDownloading ? 'Downloading...' : 'Download Chunks'}</span>
+                  </button>
                 </div>
               </div>
             )}
