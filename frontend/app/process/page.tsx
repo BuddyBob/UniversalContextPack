@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
@@ -21,6 +21,8 @@ interface PaymentStatus {
 
 export default function ProcessPage() {
   const { user, session, makeAuthenticatedRequest } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingExtraction, setPendingExtraction] = useState(false); // Track if extraction is pending after auth
   const freeCreditsPrompt = useFreeCreditsPrompt();
@@ -53,7 +55,6 @@ export default function ProcessPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const paymentLimitsRequestRef = useRef<Promise<any> | null>(null);
-  const router = useRouter();
 
   // Payment notifications
   const { 
@@ -135,6 +136,55 @@ export default function ProcessPage() {
       }
     }
   }, [user?.id]); // Only depend on user ID, not session object
+
+  // Handle payment success from URL parameters
+  useEffect(() => {
+    const paymentSuccess = searchParams.get('payment_success');
+    const sessionId = searchParams.get('session_id');
+    
+    if (paymentSuccess === 'true' && sessionId && user) {
+      addLog('Payment successful! Refreshing credit balance...');
+      
+      // Show success notification
+      showNotification(
+        'upgrade_success',
+        'Payment successful! Your credits have been added to your account.'
+      );
+      
+      // Refresh payment limits after a short delay to allow webhook processing
+      setTimeout(() => {
+        checkPaymentLimits()
+          .then((limits) => {
+            setPaymentLimits(limits);
+            setPaymentLimitsError(false);
+            addLog(`Credit balance updated: ${limits.credits_balance} credits available`);
+          })
+          .catch((error) => {
+            console.error('Error refreshing payment limits after payment:', error);
+            // If webhook hasn't processed yet, try manual credit verification
+            addLog('Payment is processing...');
+            manualCreditVerification(sessionId);
+          });
+      }, 1000); // Wait 1 second first, then try the fallback verification
+      
+      // Clean up URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+    
+    const paymentCancelled = searchParams.get('payment_cancelled');
+    if (paymentCancelled === 'true') {
+      addLog('Payment was cancelled');
+      showNotification(
+        'info',
+        'Payment was cancelled. No charges were made.'
+      );
+      
+      // Clean up URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [searchParams, user]);
 
   // Save session to localStorage less frequently for better performance
   useEffect(() => {
@@ -241,6 +291,55 @@ export default function ProcessPage() {
   }, [user, pendingExtraction, file]);
 
   // Extracted function to perform the actual extraction logic
+  const manualCreditVerification = async (stripeSessionId: string) => {
+    try {
+      addLog('Checking payment status...');
+      
+      // Instead of a new endpoint, just refresh payment limits multiple times
+      // in case the webhook is delayed
+      let attempts = 0;
+      const maxAttempts = 5;
+      
+      const checkWithDelay = async (delay: number) => {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        attempts++;
+        
+        try {
+          const limits = await checkPaymentLimits();
+          setPaymentLimits(limits);
+          setPaymentLimitsError(false);
+          
+          if (limits.credits_balance > 0 || attempts >= maxAttempts) {
+            if (limits.credits_balance > 0) {
+              addLog(`Payment processed! Credit balance: ${limits.credits_balance} credits available`);
+            } else {
+              addLog('Payment is still processing. Please refresh the page in a few minutes if credits don\'t appear.');
+            }
+            return;
+          }
+          
+          // Try again with longer delay
+          if (attempts < maxAttempts) {
+            addLog(`Attempt ${attempts}/${maxAttempts}: Payment still processing...`);
+            await checkWithDelay(delay * 1.5);
+          }
+        } catch (error) {
+          console.error(`Payment check attempt ${attempts} failed:`, error);
+          if (attempts >= maxAttempts) {
+            addLog('Unable to verify payment. Please refresh the page or contact support if the issue persists.');
+          }
+        }
+      };
+      
+      // Start with 5 second delay, then increase
+      await checkWithDelay(5000);
+      
+    } catch (error) {
+      addLog(`Payment verification error: ${error}`);
+      console.error('Payment verification error:', error);
+    }
+  };
+
   const performExtraction = async () => {
     if (!file || !user) return;
 
