@@ -109,11 +109,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Try to get the user profile via our backend API
       try {
+        // Create AbortController for timeout
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+        
         const response = await fetch(API_ENDPOINTS.profile, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
           },
+          signal: controller.signal,
         })
+        
+        clearTimeout(timeoutId)
         
         if (response.ok) {
           const data = await response.json()
@@ -128,12 +135,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return
           }
           
-          // Retry with refreshed token
+          // Retry with refreshed token and timeout
+          const retryController = new AbortController()
+          const retryTimeoutId = setTimeout(() => retryController.abort(), 30000) // 30 second timeout
+          
           const retryResponse = await fetch(API_ENDPOINTS.profile, {
             headers: {
               'Authorization': `Bearer ${refreshedSession.access_token}`,
             },
+            signal: retryController.signal,
           })
+          
+          clearTimeout(retryTimeoutId)
           
           if (retryResponse.ok) {
             const data = await retryResponse.json()
@@ -145,6 +158,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.warn('Profile request timed out after 30 seconds')
+        } else {
+          console.error('Profile request error:', error)
+        }
       }
       
       // Fallback to direct Supabase query
@@ -243,6 +261,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Set up timeout if not already provided
+    if (!options.signal) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+      options.signal = controller.signal
+      
+      // Store timeout ID for cleanup
+      const originalSignal = options.signal
+      options.signal.addEventListener('abort', () => clearTimeout(timeoutId))
+    }
+
     try {
       const response = await fetch(url, options)
       
@@ -257,15 +286,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw new Error('Authentication expired')
         }
         
-        // Retry the request with refreshed token
+        // Retry the request with refreshed token and new timeout
         const { data: { session: newSession } } = await supabase.auth.getSession()
         if (newSession) {
-          options.headers = {
-            ...options.headers,
-            'Authorization': `Bearer ${newSession.access_token}`,
+          const retryOptions = {
+            ...options,
+            headers: {
+              ...options.headers,
+              'Authorization': `Bearer ${newSession.access_token}`,
+            },
           }
           
-          return await fetch(url, options)
+          // Set up new timeout for retry
+          const retryController = new AbortController()
+          const retryTimeoutId = setTimeout(() => retryController.abort(), 30000)
+          retryOptions.signal = retryController.signal
+          retryController.signal.addEventListener('abort', () => clearTimeout(retryTimeoutId))
+          
+          return await fetch(url, retryOptions)
         } else {
           await signOut()
           throw new Error('Authentication refresh failed')
@@ -274,6 +312,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       return response
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn('Request timed out after 30 seconds')
+        throw new Error('Request timeout')
+      }
       console.error('Request failed:', error)
       throw error
     }
