@@ -3712,6 +3712,11 @@ async def get_cache_performance(job_id: str, user: AuthenticatedUser = Depends(g
         print(f"Error fetching cache performance: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch cache performance")
 
+@app.post("/stripe/webhook")
+async def stripe_webhook_alias(request: Request):
+    """Alias endpoint for Stripe webhooks (matches Stripe dashboard configuration)"""
+    return await stripe_webhook(request)
+
 if __name__ == "__main__":
     print(" Starting Simple UCP Backend with R2 Storage - 3 Step Process...")
     print(f" Using R2 bucket: {R2_BUCKET}")

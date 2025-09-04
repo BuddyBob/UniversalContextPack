@@ -2004,6 +2004,25 @@ export default function ProcessPage() {
               : 'Loading...'}
         </span>
       </button>
+
+      {/* Manual Credit Recovery Button - For recent payment issues */}
+      <button
+        onClick={async () => {
+          const sessionId = 'cs_live_a16P4l9QRjSximP1pm08HsHYAciMcT2LgR3FVLHGqBuLIMzOr3W77Gzv';
+          addLog('Recovering 50 credits from recent payment...');
+          try {
+            await manualCreditVerification(sessionId);
+          } catch (error) {
+            addLog('Credit recovery failed. Please contact support.');
+            console.error('Credit recovery error:', error);
+          }
+        }}
+        className="fixed top-48 right-6 z-40 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer bg-green-600 border border-green-500 text-white hover:bg-green-700"
+      >
+        <span className="text-sm font-medium">
+          Recover 50 Credits
+        </span>
+      </button>
     </div>
   );
 }
