@@ -264,11 +264,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up timeout if not already provided
     if (!options.signal) {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+      
+      // Use different timeouts based on the endpoint
+      let timeoutMs = 30000 // Default 30 seconds
+      
+      if (url.includes('/api/analyze/')) {
+        timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
+      } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
+        timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
+      }
+      
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
       options.signal = controller.signal
       
       // Store timeout ID for cleanup
-      const originalSignal = options.signal
       options.signal.addEventListener('abort', () => clearTimeout(timeoutId))
     }
 
@@ -299,7 +308,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Set up new timeout for retry
           const retryController = new AbortController()
-          const retryTimeoutId = setTimeout(() => retryController.abort(), 30000)
+          
+          // Use appropriate timeout for retry based on endpoint
+          let retryTimeoutMs = 30000 // Default 30 seconds
+          if (url.includes('/api/analyze/')) {
+            retryTimeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
+          } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
+            retryTimeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
+          }
+          
+          const retryTimeoutId = setTimeout(() => retryController.abort(), retryTimeoutMs)
           retryOptions.signal = retryController.signal
           retryController.signal.addEventListener('abort', () => clearTimeout(retryTimeoutId))
           
@@ -313,8 +331,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        console.warn('Request timed out after 30 seconds')
-        throw new Error('Request timeout')
+        const timeoutType = url.includes('/api/analyze/') ? 'Analysis request' 
+                          : url.includes('/api/chunk/') ? 'Chunking request'
+                          : url.includes('/api/extract/') ? 'Extraction request'
+                          : 'Request'
+        
+        const timeoutDuration = url.includes('/api/analyze/') ? '30 minutes'
+                              : url.includes('/api/chunk/') || url.includes('/api/extract/') ? '10 minutes'
+                              : '30 seconds'
+        
+        console.warn(`${timeoutType} timed out after ${timeoutDuration}`)
+        throw new Error(`${timeoutType} timeout (${timeoutDuration})`)
       }
       console.error('Request failed:', error)
       throw error

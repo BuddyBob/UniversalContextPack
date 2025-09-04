@@ -990,6 +990,18 @@ export default function ProcessPage() {
     }
 
     const chunksToAnalyze = Array.from(selectedChunks);
+    
+    // Enforce credit limit
+    const maxAllowedChunks = currentLimits.credits_balance;
+    if (chunksToAnalyze.length > maxAllowedChunks) {
+      addLog(`Warning: Selected ${chunksToAnalyze.length} chunks but only ${maxAllowedChunks} credits available. Limiting to ${maxAllowedChunks} chunks.`);
+      chunksToAnalyze.splice(maxAllowedChunks); // Trim to available credits
+    }
+    
+    if (chunksToAnalyze.length !== selectedChunks.size) {
+      addLog(`Processing ${chunksToAnalyze.length} chunks (limited by available credits)`);
+    }
+    
     setCurrentStep('analyzing');
     setAnalysisStartTime(Date.now());
     setLastProgressTimestamp(Date.now() / 1000); // Reset progress timestamp
@@ -1470,8 +1482,10 @@ export default function ProcessPage() {
                         if (isProcessing) return; // Prevent double-clicks
                         
                         if (selectedChunks.size === 0) {
-                          const allChunkIds = new Set(availableChunks.map((_, index) => index));
-                          setSelectedChunks(allChunkIds);
+                          // Limit selection to available credits
+                          const maxChunks = paymentLimits ? Math.min(paymentLimits.credits_balance, availableChunks.length) : availableChunks.length;
+                          const limitedChunkIds = new Set(Array.from({ length: maxChunks }, (_, index) => index));
+                          setSelectedChunks(limitedChunkIds);
                           setIsProcessing(true); // Set immediately
                           setTimeout(() => handleAnalyze(), 100);
                         } else {
@@ -1486,7 +1500,7 @@ export default function ProcessPage() {
                       <span>
                         {(paymentLimits && !paymentLimits.canProcess)
                           ? 'Analysis Limit Reached'
-                          : `Start AI Analysis (${availableChunks.length})`
+                          : `Start AI Analysis (${paymentLimits ? Math.min(paymentLimits.credits_balance, availableChunks.length) : availableChunks.length})`
                         }
                       </span>
                     </button>
