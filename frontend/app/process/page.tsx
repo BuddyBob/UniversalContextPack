@@ -802,6 +802,8 @@ export default function ProcessPage() {
   };
 
   const handleChunk = async () => {
+    console.log('handleChunk called with:', { extractionData: !!extractionData, currentJobId, currentStep });
+    
     if (!extractionData || !currentJobId) {
       console.error('Missing required data for chunking:', { extractionData: !!extractionData, currentJobId });
       addLog('Error: Missing extraction data or job ID');
@@ -878,6 +880,8 @@ export default function ProcessPage() {
   };
 
   const handleChunkWithData = async (extractionResults: any, jobId: string) => {
+    console.log('handleChunkWithData called with:', { extractionResults: !!extractionResults, jobId, currentStep });
+    
     if (!extractionResults || !jobId) {
       console.error('Missing required data for chunking:', { extractionResults: !!extractionResults, jobId });
       addLog('Error: Missing extraction data or job ID');
@@ -954,11 +958,21 @@ export default function ProcessPage() {
   };
 
   const handleAnalyze = async () => {
+    console.log('handleAnalyze called with:', { 
+      chunkData: !!chunkData, 
+      selectedChunks: selectedChunks.size, 
+      currentJobId,
+      currentStep 
+    });
+    
     if (!chunkData || selectedChunks.size === 0 || !currentJobId) {
+      console.log('handleAnalyze early return due to missing data');
       setIsProcessing(false); // Reset if invalid state
       return;
     }
 
+    console.log('handleAnalyze proceeding with analysis...');
+    
     // Track analysis start
     analytics.analysisStart(selectedChunks.size);
 
