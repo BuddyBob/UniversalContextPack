@@ -2733,8 +2733,22 @@ async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
             # Fallback to R2-based jobs if Supabase is not available
             return await list_jobs(user)
         
-        # Fetch packs from Supabase using backend function
-        result = supabase.rpc("get_user_packs_for_backend", {"user_uuid": user.user_id}).execute()
+        # Add timeout for the RPC call to prevent hanging requests
+        import asyncio
+        async def fetch_packs_with_timeout():
+            # Fetch packs from Supabase using backend function
+            result = supabase.rpc("get_user_packs_for_backend", {"user_uuid": user.user_id}).execute()
+            return result
+        
+        try:
+            # Set a 30-second timeout for the database query
+            result = await asyncio.wait_for(
+                asyncio.to_thread(fetch_packs_with_timeout), 
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            print(f"Database query timeout for user {user.user_id}, falling back to R2 jobs")
+            return await list_jobs(user)
         
         packs = []
         for pack in result.data:

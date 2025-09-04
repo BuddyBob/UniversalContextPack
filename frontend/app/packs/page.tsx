@@ -47,37 +47,54 @@ export default function PacksPage() {
     try {
       setLoading(true)
       
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/packs`)
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch packs: ${response.status} ${response.statusText}`)
+      try {
+        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/packs`, {
+          signal: controller.signal
+        })
+        clearTimeout(timeoutId)
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch packs: ${response.status} ${response.statusText}`)
+        }
+        
+        const jobs = await response.json()
+        
+        // Validate that the response is an array
+        if (!Array.isArray(jobs)) {
+          console.warn('Server returned non-array response:', jobs)
+          throw new Error('Invalid response format from server')
+        }
+        
+        // Transform the packs data to match the UCPPack interface
+        const transformedPacks: UCPPack[] = jobs.map((pack: any) => ({
+          ucpId: pack.job_id,
+          id: pack.job_id,
+          status: pack.status,
+          totalChunks: pack.stats?.total_chunks || 0,
+          totalInputTokens: pack.stats?.total_input_tokens || 0,
+          totalOutputTokens: pack.stats?.total_output_tokens || 0,
+          totalCost: pack.stats?.total_cost || 0,
+          completedAt: pack.created_at,
+          savedAt: pack.created_at
+        }))
+        
+        // Sort by completedAt date, most recent first
+        transformedPacks.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+        
+        setPacks(transformedPacks)
+        return // Success, exit early
+      } catch (fetchError) {
+        clearTimeout(timeoutId)
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          console.error('Request timed out after 30 seconds')
+          throw new Error('Request timed out. Please try again.')
+        }
+        throw fetchError
       }
-      
-      const jobs = await response.json()
-      
-      // Validate that the response is an array
-      if (!Array.isArray(jobs)) {
-        console.warn('Server returned non-array response:', jobs)
-        throw new Error('Invalid response format from server')
-      }
-      
-      // Transform the packs data to match the UCPPack interface
-      const transformedPacks: UCPPack[] = jobs.map((pack: any) => ({
-        ucpId: pack.job_id,
-        id: pack.job_id,
-        status: pack.status,
-        totalChunks: pack.stats?.total_chunks || 0,
-        totalInputTokens: pack.stats?.total_input_tokens || 0,
-        totalOutputTokens: pack.stats?.total_output_tokens || 0,
-        totalCost: pack.stats?.total_cost || 0,
-        completedAt: pack.created_at,
-        savedAt: pack.created_at
-      }))
-      
-      // Sort by completedAt date, most recent first
-      transformedPacks.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
-      
-      setPacks(transformedPacks)
     } catch (e) {
       console.error('Failed to load packs from server:', e)
       // Fallback to /api/jobs endpoint

@@ -1427,9 +1427,6 @@ export default function ProcessPage() {
             {['chunked', 'analyzing', 'analyzed'].includes(currentStep) && chunkData && (
               <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <BarChart3 className="h-5 w-5 text-green-600" />
-                  </div>
                   <div>
                     <h3 className="text-lg font-semibold text-text-primary">Chunks Ready</h3>
                     <p className="text-sm text-gray-400 mt-1">
@@ -1469,7 +1466,7 @@ export default function ProcessPage() {
                         }
                       }}
                       disabled={isProcessing || Boolean(paymentLimits && !paymentLimits.canProcess)}
-                      className="flex-1 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 font-medium shadow-lg"
+                      className="flex-1 py-4 bg-blue-800 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center space-x-2 font-medium shadow-lg"
                     >
                       <Brain className="h-5 w-5" />
                       <span>
@@ -1501,29 +1498,10 @@ export default function ProcessPage() {
             {currentStep === 'analyzing' && (
               <div className="bg-bg-card border border-border-primary rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Terminal className="h-5 w-5 text-blue-600" />
-                  </div>
                   <h3 className="text-lg font-semibold text-text-primary">Analysis in Progress</h3>
                 </div>
                 
                 <div className="space-y-3">
-                  {/* Simple Time Overview */}
-                  <div className="grid grid-cols-3 gap-4 text-xs text-gray-400 mb-4">
-                    <div className="text-center">
-                      <div className="font-medium">Chunk</div>
-                      <div className="text-green-400">✓ Complete</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-medium">Chunk</div>
-                      <div className="text-green-400">✓ Complete</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-medium">Analyze</div>
-                      <div className="text-blue-400">In Progress</div>
-                    </div>
-                  </div>
-                  
                   <div className="flex justify-between text-sm">
                     <span className="text-text-secondary">Progress</span>
                     <span className="text-text-primary font-medium">{getTimeBasedProgress()}%</span>

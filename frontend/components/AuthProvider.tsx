@@ -209,11 +209,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Authentication required')
     }
 
-    // Check if token is expired or expiring soon
+    // Check if token is expired or expiring soon (within 5 minutes)
     const expiresAt = session.expires_at ? session.expires_at * 1000 : 0
     const now = Date.now()
+    const fiveMinutes = 5 * 60 * 1000
     
-    if (expiresAt <= now) {
+    if (expiresAt <= now + fiveMinutes) {
+      console.log('Token expiring soon, refreshing...')
       const { error: refreshError } = await supabase.auth.refreshSession()
       if (refreshError) {
         console.error('Token refresh failed:', refreshError)
@@ -246,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // If we get a 401, the token might be invalid - try refresh once
       if (response.status === 401) {
+        console.log('Got 401, attempting token refresh...')
         const { error: refreshError } = await supabase.auth.refreshSession()
         
         if (refreshError) {
