@@ -3351,6 +3351,73 @@ class ManualCreditRequest(BaseModel):
     amount: float
     paymentIntentId: str
 
+class StripeSessionRequest(BaseModel):
+    session_id: str
+
+@app.post("/api/process-stripe-session")
+async def process_stripe_session(
+    request: StripeSessionRequest,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Manually process a Stripe session for credit addition (fallback for webhook issues)"""
+    try:
+        print(f"🔄 Manual Stripe session processing for user {user.email}")
+        print(f"Session ID: {request.session_id}")
+        
+        # Retrieve the session from Stripe
+        session = stripe.checkout.Session.retrieve(request.session_id)
+        
+        print(f"📊 Session status: {session.status}")
+        print(f"📊 Payment status: {session.payment_status}")
+        print(f"📊 Session metadata: {session.metadata}")
+        
+        # Verify this session belongs to the current user
+        if session.metadata.get('user_id') != user.user_id:
+            raise HTTPException(status_code=403, detail="Session does not belong to current user")
+        
+        # Check if payment was successful
+        if session.payment_status != 'paid':
+            raise HTTPException(status_code=400, detail=f"Payment not completed. Status: {session.payment_status}")
+        
+        # Extract metadata
+        credits = int(session.metadata.get('credits', 0))
+        unlimited = session.metadata.get('unlimited', 'False').lower() == 'true'
+        amount = session.amount_total / 100 if session.amount_total else 0
+        
+        # Check if this session was already processed
+        existing = supabase.table("credit_transactions").select("id").eq("stripe_payment_id", session.id).execute()
+        if existing.data:
+            return {
+                "success": True,
+                "message": "Credits already added for this payment",
+                "already_processed": True
+            }
+        
+        # Process the payment
+        if unlimited:
+            await grant_unlimited_access(user.user_id, amount, session.id)
+            print(f"✅ Manually granted unlimited access to user {user.email}")
+            return {
+                "success": True,
+                "message": "Unlimited access granted to your account"
+            }
+        elif credits > 0:
+            await add_credits_to_user(user.user_id, credits, amount, session.id)
+            print(f"✅ Manually added {credits} credits to user {user.email}")
+            return {
+                "success": True,
+                "message": f"Added {credits} credits to your account"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Invalid session data")
+        
+    except stripe.error.StripeError as e:
+        print(f"❌ Stripe error in manual session processing: {e}")
+        raise HTTPException(status_code=400, detail=f"Stripe error: {str(e)}")
+    except Exception as e:
+        print(f"❌ Error in manual session processing: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process session")
+
 @app.post("/api/add-credits-manual")
 async def add_credits_manual(
     request: ManualCreditRequest,
@@ -3456,25 +3523,62 @@ async def stripe_webhook(request: Request):
         elif event['type'] == 'checkout.session.completed':
             session = event['data']['object']
             
+            print(f"🛒 [Webhook] Checkout session completed: {session['id']}")
+            print(f"🛒 [Webhook] Payment status: {session.get('payment_status', 'unknown')}")
+            print(f"🛒 [Webhook] Session status: {session.get('status', 'unknown')}")
+            print(f"🛒 [Webhook] Amount total: {session.get('amount_total', 0)}")
+            
             # Extract metadata from the checkout session
             user_id = session['metadata'].get('user_id')
             credits = int(session['metadata'].get('credits', 0))
             unlimited = session['metadata'].get('unlimited', 'False').lower() == 'true'
-            amount = session['amount_total'] / 100  # Convert cents to dollars
+            amount = session['amount_total'] / 100 if session.get('amount_total') else 0  # Convert cents to dollars
+            
+            print(f"🛒 [Webhook] Metadata - user_id: {user_id}, credits: {credits}, unlimited: {unlimited}, amount: ${amount}")
+            
+            # Only process if payment was successful
+            if session.get('payment_status') == 'paid':
+                if user_id:
+                    if unlimited:
+                        # Grant unlimited access
+                        await grant_unlimited_access(user_id, amount, session['id'])
+                        print(f"✅ [Checkout] Granted unlimited access to user {user_id}")
+                    elif credits > 0:
+                        # Add credits to user account
+                        await add_credits_to_user(user_id, credits, amount, session['id'])
+                        print(f"✅ [Checkout] Added {credits} credits to user {user_id}")
+                    else:
+                        print(f"❌ [Checkout] Invalid purchase: user_id={user_id}, credits={credits}, unlimited={unlimited}")
+                else:
+                    print(f"❌ [Checkout] Missing user_id in metadata")
+            else:
+                print(f"⚠️ [Checkout] Session completed but payment not paid yet. Status: {session.get('payment_status', 'unknown')}")
+                print(f"⚠️ [Checkout] This might be a timing issue - payment might complete shortly")
+                
+        elif event['type'] == 'checkout.session.async_payment_succeeded':
+            session = event['data']['object']
+            
+            print(f"🛒 [Webhook] Checkout session async payment succeeded: {session['id']}")
+            
+            # Extract metadata from the checkout session
+            user_id = session['metadata'].get('user_id')
+            credits = int(session['metadata'].get('credits', 0))
+            unlimited = session['metadata'].get('unlimited', 'False').lower() == 'true'
+            amount = session['amount_total'] / 100 if session.get('amount_total') else 0
             
             if user_id:
                 if unlimited:
                     # Grant unlimited access
                     await grant_unlimited_access(user_id, amount, session['id'])
-                    print(f"✅ [Checkout] Granted unlimited access to user {user_id}")
+                    print(f"✅ [Async Payment] Granted unlimited access to user {user_id}")
                 elif credits > 0:
                     # Add credits to user account
                     await add_credits_to_user(user_id, credits, amount, session['id'])
-                    print(f"✅ [Checkout] Added {credits} credits to user {user_id}")
+                    print(f"✅ [Async Payment] Added {credits} credits to user {user_id}")
                 else:
-                    print(f"❌ [Checkout] Invalid purchase: user_id={user_id}, credits={credits}, unlimited={unlimited}")
+                    print(f"❌ [Async Payment] Invalid purchase: user_id={user_id}, credits={credits}, unlimited={unlimited}")
             else:
-                print(f"❌ [Checkout] Missing metadata: user_id={user_id}, credits={credits}, unlimited={unlimited}")
+                print(f"❌ [Async Payment] Missing metadata: user_id={user_id}, credits={credits}, unlimited={unlimited}")
             
         else:
             print(f"📝 Unhandled webhook event: {event['type']}")

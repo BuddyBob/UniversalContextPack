@@ -293,10 +293,40 @@ export default function ProcessPage() {
   // Extracted function to perform the actual extraction logic
   const manualCreditVerification = async (stripeSessionId: string) => {
     try {
-      addLog('Checking payment status...');
+      addLog('Verifying payment with Stripe session...');
       
-      // Instead of a new endpoint, just refresh payment limits multiple times
-      // in case the webhook is delayed
+      // Try the new manual session processing endpoint first
+      try {
+        const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/process-stripe-session`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_id: stripeSessionId
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          addLog(`✅ ${data.message}`);
+          
+          // Refresh payment limits
+          const limits = await checkPaymentLimits();
+          setPaymentLimits(limits);
+          setPaymentLimitsError(false);
+          addLog(`Credit balance updated: ${limits.credits_balance} credits available`);
+          return; // Success, no need to do fallback checks
+        } else {
+          const errorData = await response.json();
+          addLog(`⚠️ Session processing: ${errorData.detail || 'Unknown error'}`);
+        }
+      } catch (error) {
+        addLog(`⚠️ Session processing failed: ${error}`);
+      }
+      
+      // Fallback: Check payment limits multiple times in case webhook is delayed
+      addLog('Checking payment status with fallback method...');
       let attempts = 0;
       const maxAttempts = 5;
       
