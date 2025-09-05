@@ -384,104 +384,149 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
           </div>
           
           {result.status === 'completed' && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Download Your UCP</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-900">Download Your UCP</h3>
+                <div className="text-sm text-gray-500">Choose your preferred size</div>
+              </div>
+
+              {/* Three Tier System */}
+              <div className="grid grid-cols-3 gap-4">
                 
-                {/* Ultra-Compact UCP */}
-                <div className="border border-green-200 bg-green-50 p-4 rounded-lg">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium text-green-900">Ultra-Compact UCP</h4>
-                      <p className="text-sm text-green-700 mt-1">~50k tokens • Fits any LLM</p>
-                      <p className="text-xs text-green-600 mt-2">Essential context only. Perfect for Claude, GPT-3.5, or when you need minimal tokens.</p>
+                {/* Tier 1 - Compact */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>
+                  <div className="relative bg-white border-2 border-gray-200 hover:border-emerald-400 rounded-xl p-6 transition-all duration-300 hover:shadow-lg">
+                    <div className="text-center space-y-4">
+                      <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+                        <span className="text-emerald-600 font-bold text-lg">S</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Compact</h4>
+                        <p className="text-sm text-gray-500">~50k tokens</p>
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        Essentials only • Works everywhere
+                      </div>
+                      <button
+                        onClick={downloadUltraCompact}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded-lg font-medium transition-colors duration-200"
+                      >
+                        Download
+                      </button>
                     </div>
-                    <button
-                      onClick={downloadUltraCompact}
-                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-sm font-medium rounded transition-colors flex items-center space-x-1"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Download</span>
-                    </button>
                   </div>
                 </div>
 
-                {/* Standard UCP */}
-                <div className="border border-blue-200 bg-blue-50 p-4 rounded-lg">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium text-blue-900">Standard UCP</h4>
-                      <p className="text-sm text-blue-700 mt-1">~100k tokens • Balanced detail</p>
-                      <p className="text-xs text-blue-600 mt-2">Recommended for most use cases. Works with GPT-4, Claude, and most modern LLMs.</p>
+                {/* Tier 2 - Standard */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>
+                  <div className="relative bg-white border-2 border-blue-400 rounded-xl p-6 transition-all duration-300 hover:shadow-lg ring-2 ring-blue-100">
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className="bg-blue-500 text-white text-xs px-3 py-1 rounded-full font-medium">Recommended</span>
                     </div>
-                    <button
-                      onClick={downloadStandard}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-sm font-medium rounded transition-colors flex items-center space-x-1"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Download</span>
-                    </button>
+                    <div className="text-center space-y-4">
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
+                        <span className="text-blue-600 font-bold text-lg">M</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Standard</h4>
+                        <p className="text-sm text-gray-500">~100k tokens</p>
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        Perfect balance • Most LLMs
+                      </div>
+                      <button
+                        onClick={downloadStandard}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors duration-200"
+                      >
+                        Download
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Complete UCP */}
-                <div className="border border-purple-200 bg-purple-50 p-4 rounded-lg">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium text-purple-900">Complete UCP</h4>
-                      <p className="text-sm text-purple-700 mt-1">{result.totalOutputTokens ? `~${Math.round(result.totalOutputTokens/1000)}k tokens` : 'Full analysis'} • Everything included</p>
-                      <p className="text-xs text-purple-600 mt-2">Complete detailed analysis. May need chunking for some LLMs.</p>
+                {/* Tier 3 - Complete */}
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>
+                  <div className="relative bg-white border-2 border-gray-200 hover:border-purple-400 rounded-xl p-6 transition-all duration-300 hover:shadow-lg">
+                    <div className="text-center space-y-4">
+                      <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto">
+                        <span className="text-purple-600 font-bold text-lg">L</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">Complete</h4>
+                        <p className="text-sm text-gray-500">{result.totalOutputTokens ? `~${Math.round(result.totalOutputTokens/1000)}k tokens` : 'Full detail'}</p>
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        Everything included • Advanced LLMs
+                      </div>
+                      <button
+                        onClick={downloadComplete}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg font-medium transition-colors duration-200"
+                      >
+                        Download
+                      </button>
                     </div>
-                    <button
-                      onClick={downloadComplete}
-                      className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 text-sm font-medium rounded transition-colors flex items-center space-x-1"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Download</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Chunked UCP */}
-                <div className="border border-gray-200 bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium text-gray-900">Chunked UCP</h4>
-                      <p className="text-sm text-gray-700 mt-1">Split into parts • Context-safe</p>
-                      <p className="text-xs text-gray-600 mt-2">Complete analysis split into manageable chunks. Download index to see all parts.</p>
-                    </div>
-                    <button
-                      onClick={downloadChunkedIndex}
-                      className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 text-sm font-medium rounded transition-colors flex items-center space-x-1"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>Get Index</span>
-                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Usage Guide */}
-              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-                <h4 className="font-medium text-yellow-900 mb-2">💡 Usage Guide</h4>
-                <div className="text-sm text-yellow-800 space-y-1">
-                  <p><strong>Claude:</strong> Use Ultra-Compact (Claude has strict context limits)</p>
-                  <p><strong>GPT-4:</strong> Use Standard or Chunked (100k context window)</p>
-                  <p><strong>GPT-3.5:</strong> Use Ultra-Compact only (16k context window)</p>
-                  <p><strong>Gemini:</strong> Use any version (1M+ context window)</p>
+              {/* Quick Guide Dropdown */}
+              <details className="group">
+                <summary className="flex items-center justify-between cursor-pointer p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                  <span className="text-sm font-medium text-gray-700">Which size should I choose?</span>
+                  <svg className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="mt-3 p-4 bg-white border border-gray-200 rounded-lg text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Claude</span>
+                    <span className="text-emerald-600">→ Compact</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">GPT-4</span>
+                    <span className="text-blue-600">→ Standard</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Gemini</span>
+                    <span className="text-purple-600">→ Complete</span>
+                  </div>
                 </div>
-              </div>
+              </details>
 
-              {/* Legacy Downloads */}
-              <div className="pt-4 border-t border-gray-200">
-                <button
-                  onClick={downloadPack}
-                  className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 text-sm font-medium transition-colors flex items-center space-x-2"
-                >
-                  <Download className="h-4 w-4" />
-                  <span>Download Complete Pack (All Files)</span>
-                </button>
-              </div>
+              {/* Advanced Options */}
+              <details className="group">
+                <summary className="flex items-center justify-between cursor-pointer p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                  <span className="text-sm font-medium text-gray-700">Advanced options</span>
+                  <svg className="w-4 h-4 text-gray-500 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="mt-3 p-4 bg-white border border-gray-200 rounded-lg space-y-3">
+                  <button
+                    onClick={downloadChunkedIndex}
+                    className="w-full flex items-center justify-between p-3 border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium text-gray-900">Chunked Version</div>
+                      <div className="text-sm text-gray-500">Split into multiple parts</div>
+                    </div>
+                    <Download className="h-4 w-4 text-gray-400" />
+                  </button>
+                  <button
+                    onClick={downloadPack}
+                    className="w-full flex items-center justify-between p-3 border border-gray-200 hover:border-gray-300 rounded-lg transition-colors"
+                  >
+                    <div className="text-left">
+                      <div className="font-medium text-gray-900">Complete Pack</div>
+                      <div className="text-sm text-gray-500">All files and formats</div>
+                    </div>
+                    <Download className="h-4 w-4 text-gray-400" />
+                  </button>
+                </div>
+              </details>
             </div>
           )}
         </div>
