@@ -48,11 +48,13 @@ export default function ProcessPage() {
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [lastProgressTimestamp, setLastProgressTimestamp] = useState<number>(0);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'warning'>('connected');
   const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, credits_balance: number, plan?: string} | null>(null);
   const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const paymentLimitsRequestRef = useRef<Promise<any> | null>(null);
 
@@ -648,11 +650,11 @@ export default function ProcessPage() {
     }
     
     let consecutiveFailures = 0;
-    const maxFailures = 3;
+    const maxFailures = 5; // Increased from 3 to handle more server issues
     const startTime = Date.now();
     const maxPollingDuration = 30 * 60 * 1000; // 30 minutes max
     
-    // Set up the status polling with exponential backoff
+    // Set up the status polling with exponential backoff and server warming
     const poll = async () => {
       // Check if we've been polling too long
       if (Date.now() - startTime > maxPollingDuration) {
@@ -665,6 +667,29 @@ export default function ProcessPage() {
       }
       
       try {
+        // If we've had failures, try a health check first to warm the server
+        if (consecutiveFailures > 0) {
+          setConnectionStatus('connecting');
+          try {
+            const healthResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/health`,
+              {
+                method: 'GET',
+                signal: AbortSignal.timeout(15000) // 15 second timeout for health check
+              }
+            );
+            
+            if (healthResponse.ok) {
+              const healthData = await healthResponse.json();
+              console.log('Server warmed up, health status:', healthData.status);
+              addLog(`🔄 Server reconnected (attempt ${consecutiveFailures + 1})`);
+            }
+          } catch (healthError) {
+            console.warn('Health check failed during retry:', healthError);
+            addLog(`⚠️ Server warming failed, retrying status check...`);
+          }
+        }
+        
         const statusResponse = await makeAuthenticatedRequest(
           `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/status/${jobId}`,
           {
@@ -674,26 +699,44 @@ export default function ProcessPage() {
         
         if (!statusResponse.ok) {
           consecutiveFailures++;
+          setConnectionStatus('warning');
+          
+          // Add different retry delays based on failure count
+          const retryDelay = Math.min(2000 * Math.pow(2, consecutiveFailures - 1), 30000); // Exponential backoff, max 30s
+          
           if (statusResponse.status === 403) {
             console.error('Authentication failed for status check - token may be expired');
             addLog('Warning: Authentication error checking status. You may need to refresh the page.');
+          } else if (statusResponse.status === 408) {
+            console.error('Request timeout - server may be stalled');
+            addLog(`⚠️ Server timeout detected (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
           } else {
             console.error('Status check failed:', statusResponse.status, statusResponse.statusText);
+            addLog(`⚠️ Status check failed (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
           }
           
           // Stop polling after too many failures
           if (consecutiveFailures >= maxFailures) {
+            setConnectionStatus('disconnected');
+            addLog('❌ Too many failed attempts. Server may be down. Please try refreshing the page.');
             if (pollingInterval) {
               clearInterval(pollingInterval);
               setPollingInterval(null);
             }
             return;
           }
-          return; // Skip processing if request failed
+          
+          // Schedule retry with exponential backoff
+          setTimeout(poll, retryDelay);
+          return;
         }
         
         // Reset failure count on success
-        consecutiveFailures = 0;
+        if (consecutiveFailures > 0) {
+          addLog('✅ Server connection restored');
+          consecutiveFailures = 0;
+        }
+        setConnectionStatus('connected');
         
         const data = await statusResponse.json();
         
@@ -799,75 +842,179 @@ export default function ProcessPage() {
   };
 
   const startPollingExtractionStatus = (jobId: string) => {
-    // Poll for extraction completion
-    const statusInterval = setInterval(async () => {
+    // Poll for extraction completion with improved error handling
+    let consecutiveFailures = 0;
+    const maxFailures = 5;
+    const startTime = Date.now();
+    const maxPollingDuration = 10 * 60 * 1000; // 10 minutes max for extraction
+    
+    const poll = async () => {
+      // Check if we've been polling too long
+      if (Date.now() - startTime > maxPollingDuration) {
+        addLog('⚠️ Extraction polling timed out. Please refresh the page to check status.');
+        return;
+      }
+      
       try {
+        // If we've had failures, try a health check first to warm the server
+        if (consecutiveFailures > 0) {
+          setConnectionStatus('connecting');
+          try {
+            const healthResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/health`,
+              {
+                method: 'GET',
+                signal: AbortSignal.timeout(15000)
+              }
+            );
+            
+            if (healthResponse.ok) {
+              console.log('Server warmed up for extraction check');
+              addLog(`🔄 Server reconnected (attempt ${consecutiveFailures + 1})`);
+            }
+          } catch (healthError) {
+            console.warn('Health check failed during extraction retry:', healthError);
+            addLog(`⚠️ Server warming failed, retrying extraction check...`);
+          }
+        }
+        
         // Check if extraction is complete by looking for job results
         const resultsResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/results/${jobId}`, {
           method: 'GET'
         });
         
-        if (resultsResponse.ok) {
-          const resultsData = await resultsResponse.json();
+        if (!resultsResponse.ok) {
+          consecutiveFailures++;
+          setConnectionStatus('warning');
           
-          if (resultsData.extracted) {
-            clearInterval(statusInterval);
-            setPollingInterval(null);
-            
-            // Extraction is complete, get the data
-            setExtractionData(resultsData);
-            setCostEstimate(resultsData.cost_estimate || { 
-              estimated_total_cost: 0, 
-              estimated_output_tokens: 0,
-              estimated_chunks: 0 
-            });
-            
-            // Track extraction completion
-            analytics.extractionComplete(resultsData.chunk_count || 0);
-            
-            addLog(`Extraction complete: ${resultsData.conversation_count || 0} conversations, ${resultsData.message_count || 0} messages`);
-            
-            // Now get chunking time estimate based on extracted text from job summary
-            try {
-              const summaryResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/job-summary/${jobId}`, {
-                method: 'GET'
-              });
-              if (summaryResponse.ok) {
-                const summaryData = await summaryResponse.json();
-                const textLength = summaryData.content_size || 0;
-                
-                addLog(`Text extracted: ${textLength.toLocaleString()} characters ready for chunking`);
-              }
-            } catch (error) {
-              console.error('Error getting text info:', error);
-            }
-            
-            // Automatically start chunking after extraction
-            addLog('Automatically starting chunking process...');
-            setCurrentStep('chunking');
-            setTimeout(() => {
-              handleChunkWithData(resultsData, jobId);
-            }, 1000); // Small delay to show the transition
+          const retryDelay = Math.min(3000 * Math.pow(2, consecutiveFailures - 1), 30000); // Start with 3s, max 30s
+          
+          if (resultsResponse.status === 408) {
+            addLog(`⚠️ Server timeout during extraction check (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
+          } else {
+            addLog(`⚠️ Extraction check failed (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
           }
+          
+          if (consecutiveFailures >= maxFailures) {
+            setConnectionStatus('disconnected');
+            addLog('❌ Too many failed attempts checking extraction. Please refresh the page.');
+            return;
+          }
+          
+          // Schedule retry with exponential backoff
+          setTimeout(poll, retryDelay);
+          return;
         }
+        
+        // Reset failure count and connection status on success
+        if (consecutiveFailures > 0) {
+          addLog('✅ Server connection restored');
+          consecutiveFailures = 0;
+        }
+        setConnectionStatus('connected');
+        
+        const resultsData = await resultsResponse.json();
+        
+        if (resultsData.extracted) {
+          // Extraction is complete, get the data
+          setExtractionData(resultsData);
+          setCostEstimate(resultsData.cost_estimate || { 
+            estimated_total_cost: 0, 
+            estimated_output_tokens: 0,
+            estimated_chunks: 0 
+          });
+          
+          // Track extraction completion
+          analytics.extractionComplete(resultsData.chunk_count || 0);
+          
+          addLog(`Extraction complete: ${resultsData.conversation_count || 0} conversations, ${resultsData.message_count || 0} messages`);
+          
+          // Now get chunking time estimate based on extracted text from job summary
+          try {
+            const summaryResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/job-summary/${jobId}`, {
+              method: 'GET'
+            });
+            if (summaryResponse.ok) {
+              const summaryData = await summaryResponse.json();
+              const textLength = summaryData.content_size || 0;
+              
+              addLog(`Text extracted: ${textLength.toLocaleString()} characters ready for chunking`);
+            }
+          } catch (error) {
+            console.error('Error getting text info:', error);
+          }
+          
+          // Automatically start chunking after extraction
+          addLog('Automatically starting chunking process...');
+          setCurrentStep('chunking');
+          setTimeout(() => {
+            handleChunkWithData(resultsData, jobId);
+          }, 1000); // Small delay to show the transition
+        } else {
+          // Still processing, schedule next poll with normal interval
+          setTimeout(poll, 5000); // 5 second interval for normal polling
+        }
+        
       } catch (error) {
+        consecutiveFailures++;
+        setConnectionStatus('warning');
+        
         // Handle authentication errors more gracefully
         if (error instanceof Error && error.message.includes('Authentication')) {
           addLog('Warning: Authentication error during extraction status check. You may need to refresh the page.');
-          clearInterval(statusInterval);
-          setPollingInterval(null);
+          return; // Stop polling on auth errors
         }
-        // Silently handle other polling errors, continue polling
+        
+        console.error('Error checking extraction status:', error);
+        
+        const retryDelay = Math.min(3000 * Math.pow(2, consecutiveFailures - 1), 30000);
+        addLog(`⚠️ Error checking extraction status (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
+        
+        if (consecutiveFailures >= maxFailures) {
+          setConnectionStatus('disconnected');
+          addLog('❌ Too many failed attempts. Please refresh the page.');
+          return;
+        }
+        
+        setTimeout(poll, retryDelay);
       }
-    }, 3000); // Poll every 3 seconds for extraction
+    };
     
-    setPollingInterval(statusInterval);
+    // Start the polling
+    poll();
+          setPollingInterval(null);
+    // Start the polling
+    poll();
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
       await processSelectedFile(selectedFile);
+      // Reset the file input
+      if (event.target) {
+        event.target.value = '';
+      }
+    }
+  };
+
+  const handleFolderSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      // Look for conversations.json file in the uploaded folder
+      const conversationsFile = Array.from(files).find(file => 
+        file.name === 'conversations.json' || file.webkitRelativePath.endsWith('/conversations.json')
+      );
+      
+      if (conversationsFile) {
+        addLog(`Found conversations.json in ChatGPT export folder`);
+        await processSelectedFile(conversationsFile);
+      } else {
+        addLog('Error: No conversations.json file found in the uploaded folder. Please make sure you\'re uploading a ChatGPT data export folder.');
+        // Show user-friendly error
+        alert('No conversations.json file found in the uploaded folder.\n\nPlease make sure you\'re uploading a ChatGPT data export folder that contains a conversations.json file.');
+      }
+      
       // Reset the file input
       if (event.target) {
         event.target.value = '';
@@ -917,6 +1064,19 @@ export default function ProcessPage() {
     setIsDragOver(false);
     
     const droppedFiles = Array.from(e.dataTransfer.files);
+    
+    // First, check if there's a conversations.json file among the dropped files
+    const conversationsFile = droppedFiles.find(file => 
+      file.name === 'conversations.json'
+    );
+    
+    if (conversationsFile) {
+      addLog(`Found conversations.json in dropped files`);
+      processSelectedFile(conversationsFile);
+      return;
+    }
+    
+    // Otherwise, look for any valid individual file
     const validFile = droppedFiles.find(file => 
       ['.json', '.txt', '.csv', '.zip', '.html', '.htm'].some(ext => 
         file.name.toLowerCase().endsWith(ext)
@@ -926,7 +1086,7 @@ export default function ProcessPage() {
     if (validFile) {
       processSelectedFile(validFile);
     } else {
-      addLog('Please drop a valid file: .json, .txt, .csv, .zip, or .html');
+      addLog('Please drop a valid file: conversations.json, .json, .txt, .csv, .zip, or .html');
     }
   };
 
@@ -1265,6 +1425,50 @@ export default function ProcessPage() {
     }
   };
 
+  const checkServerHealth = async () => {
+    try {
+      addLog('🔍 Checking server health...');
+      setConnectionStatus('connecting');
+      
+      const healthResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/health`,
+        {
+          method: 'GET',
+          signal: AbortSignal.timeout(15000) // 15 second timeout
+        }
+      );
+      
+      if (!healthResponse.ok) {
+        throw new Error(`Health check failed: ${healthResponse.status}`);
+      }
+      
+      const healthData = await healthResponse.json();
+      setConnectionStatus('connected');
+      
+      addLog(`✅ Server health check passed: ${healthData.status}`);
+      addLog(`📊 Response time: ${healthData.response_time_ms}ms`);
+      
+      if (healthData.system) {
+        addLog(`💾 Memory usage: ${healthData.system.memory_used_percent}%`);
+        addLog(`🖥️ CPU usage: ${healthData.system.cpu_percent}%`);
+      }
+      
+      if (healthData.job_queue) {
+        addLog(`📝 Jobs: ${healthData.job_queue.pending_jobs} pending, ${healthData.job_queue.processing_jobs} processing`);
+      }
+      
+      if (healthData.database?.healthy === false) {
+        addLog('⚠️ Database connection issues detected');
+        setConnectionStatus('warning');
+      }
+      
+    } catch (error) {
+      setConnectionStatus('disconnected');
+      addLog(`❌ Server health check failed: ${error}`);
+      addLog('💡 Try refreshing the page or contact support if issues persist');
+    }
+  };
+
   const resetProcess = () => {
     setFile(null);
     setJobId(null);
@@ -1315,22 +1519,60 @@ export default function ProcessPage() {
         {/* Main Content - Always Show Interface */}
         <div className="space-y-6">
           <div className="w-full flex justify-center items-center py-8">
-            <h1 className="text-3xl font-bold text-white text-center">
-              Universal Context Processor
-            </h1>
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-white mb-4">
+                Universal Context Processor
+              </h1>
+              
+              {/* Connection Status Indicator */}
+              {isProcessing && (
+                <div className="flex items-center justify-center space-x-2 text-sm">
+                  <div className={`w-2 h-2 rounded-full ${
+                    connectionStatus === 'connected' ? 'bg-green-500' :
+                    connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                    connectionStatus === 'warning' ? 'bg-orange-500 animate-pulse' :
+                    'bg-red-500'
+                  }`}></div>
+                  <span className={`${
+                    connectionStatus === 'connected' ? 'text-green-400' :
+                    connectionStatus === 'connecting' ? 'text-yellow-400' :
+                    connectionStatus === 'warning' ? 'text-orange-400' :
+                    'text-red-400'
+                  }`}>
+                    {connectionStatus === 'connected' ? 'Connected to server' :
+                     connectionStatus === 'connecting' ? 'Reconnecting to server...' :
+                     connectionStatus === 'warning' ? 'Connection issues detected' :
+                     'Server connection lost'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
             {/* Progress Steps */}
             <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-semibold text-text-primary">Progress</h2>
-                {currentStep !== 'upload' && (
-                  <button
-                    onClick={resetProcess}
-                    className="text-sm text-text-secondary hover:text-text-primary px-3 py-1 border border-border-secondary rounded hover:border-border-accent hover:bg-bg-tertiary transition-colors"
-                  >
-                    Reset
-                  </button>
-                )}
+                <div className="flex items-center space-x-2">
+                  {/* Server Health Check Button */}
+                  {(connectionStatus !== 'connected') && (
+                    <button
+                      onClick={checkServerHealth}
+                      disabled={connectionStatus === 'connecting'}
+                      className="text-sm text-text-secondary hover:text-text-primary px-3 py-1 border border-border-secondary rounded hover:border-border-accent hover:bg-bg-tertiary transition-colors disabled:opacity-50"
+                    >
+                      {connectionStatus === 'connecting' ? 'Checking...' : 'Check Server'}
+                    </button>
+                  )}
+                  
+                  {currentStep !== 'upload' && (
+                    <button
+                      onClick={resetProcess}
+                      className="text-sm text-text-secondary hover:text-text-primary px-3 py-1 border border-border-secondary rounded hover:border-border-accent hover:bg-bg-tertiary transition-colors"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
               
               {/* Timeline Progress Indicator */}
@@ -1499,19 +1741,48 @@ export default function ProcessPage() {
                     className="hidden"
                   />
                   
-                  <button
-                    onClick={() => {
-                      fileInputRef.current?.click();
-                    }}
-                    className="bg-accent-primary hover:bg-accent-primary-hover text-white px-8 py-4 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
-                  >
-                    <Upload className="h-5 w-5" />
-                    <span>Choose File</span>
-                  </button>
+                  <input
+                    ref={folderInputRef}
+                    type="file"
+                    {...({ webkitdirectory: 'true' } as any)}
+                    multiple
+                    onChange={handleFolderSelect}
+                    className="hidden"
+                  />
+                  
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                    <button
+                      onClick={() => {
+                        fileInputRef.current?.click();
+                      }}
+                      className="bg-accent-primary hover:bg-accent-primary-hover text-white px-8 py-4 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
+                    >
+                      <Upload className="h-5 w-5" />
+                      <span>Choose File</span>
+                    </button>
+                    
+                    <div className="text-gray-400 text-sm">or</div>
+                    
+                    <button
+                      onClick={() => {
+                        folderInputRef.current?.click();
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
+                    >
+                      <FileText className="h-5 w-5" />
+                      <span>Upload ChatGPT Folder</span>
+                    </button>
+                  </div>
                   
                   <p className="text-text-muted text-sm mt-4">
-                    Or drag and drop here
+                    Choose a file directly or upload your entire ChatGPT export folder
                   </p>
+                  
+                  <div className="mt-4 p-3 bg-gray-800/50 border border-gray-600 rounded-lg text-sm">
+                    <p className="text-gray-300">
+                      💡 <span className="font-medium">Tip:</span> If you have a ChatGPT data export, use "Upload ChatGPT Folder" - we'll automatically find and process your <span className="font-mono text-accent-primary">conversations.json</span> file.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

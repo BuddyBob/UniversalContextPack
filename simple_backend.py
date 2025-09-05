@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import uvicorn
@@ -97,6 +97,55 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Request timeout and connection handling middleware
+@app.middleware("http")
+async def timeout_middleware(request: Request, call_next):
+    """Add request timeout handling to prevent server stalling"""
+    import asyncio
+    import time
+    
+    start_time = time.time()
+    
+    # Set different timeouts based on endpoint
+    if "/api/analyze/" in str(request.url) or "/api/extract" in str(request.url):
+        timeout_seconds = 1800  # 30 minutes for analysis/extraction
+    elif "/api/progress-stream/" in str(request.url):
+        timeout_seconds = 900   # 15 minutes for streaming endpoints
+    elif "/api/health" in str(request.url) or str(request.url).path == "/":
+        timeout_seconds = 10    # 10 seconds for health checks
+    else:
+        timeout_seconds = 120   # 2 minutes for other endpoints
+    
+    try:
+        # Execute request with timeout
+        response = await asyncio.wait_for(
+            call_next(request),
+            timeout=timeout_seconds
+        )
+        
+        # Add processing time header
+        process_time = time.time() - start_time
+        response.headers["X-Process-Time"] = str(round(process_time, 4))
+        
+        return response
+        
+    except asyncio.TimeoutError:
+        print(f"Request timeout after {timeout_seconds}s for {request.url}")
+        return JSONResponse(
+            status_code=408,
+            content={
+                "detail": f"Request timeout after {timeout_seconds} seconds",
+                "timeout": timeout_seconds,
+                "endpoint": str(request.url)
+            }
+        )
+    except Exception as e:
+        print(f"Request middleware error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Server error: {str(e)}"}
+        )
 
 # Authentication
 security = HTTPBearer()
@@ -1172,6 +1221,71 @@ async def delete_job(job_id: str):
 @app.get("/")
 async def health_check():
     return {"status": "healthy", "service": "Simple UCP Backend with R2 - 3 Steps"}
+
+@app.get("/api/health")
+async def detailed_health_check():
+    """Comprehensive health check endpoint"""
+    import time
+    import psutil
+    import threading
+    
+    try:
+        start_time = time.time()
+        
+        # Check database connectivity
+        db_healthy = True
+        db_latency = 0
+        try:
+            db_start = time.time()
+            result = supabase.table('users').select('id').limit(1).execute()
+            db_latency = round((time.time() - db_start) * 1000, 2)
+        except Exception as e:
+            db_healthy = False
+            print(f"Database health check failed: {e}")
+        
+        # Check system resources
+        memory_usage = psutil.virtual_memory()
+        cpu_usage = psutil.cpu_percent(interval=0.1)
+        
+        # Check active threads and connections
+        active_threads = threading.active_count()
+        
+        # Check job queue status
+        pending_jobs = len([job for job in job_progress.values() if job.get('status') == 'pending'])
+        processing_jobs = len([job for job in job_progress.values() if job.get('status') == 'processing'])
+        
+        response_time = round((time.time() - start_time) * 1000, 2)
+        
+        health_status = {
+            "status": "healthy" if db_healthy else "degraded",
+            "timestamp": time.time(),
+            "response_time_ms": response_time,
+            "database": {
+                "healthy": db_healthy,
+                "latency_ms": db_latency
+            },
+            "system": {
+                "memory_used_percent": memory_usage.percent,
+                "memory_available_gb": round(memory_usage.available / (1024**3), 2),
+                "cpu_percent": cpu_usage,
+                "active_threads": active_threads
+            },
+            "job_queue": {
+                "pending_jobs": pending_jobs,
+                "processing_jobs": processing_jobs,
+                "total_tracked_jobs": len(job_progress)
+            }
+        }
+        
+        return health_status
+        
+    except Exception as e:
+        print(f"Health check error: {e}")
+        return {
+            "status": "error",
+            "timestamp": time.time(),
+            "error": str(e)
+        }
 
 @app.post("/api/reload-env")
 async def reload_environment():

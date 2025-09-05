@@ -218,6 +218,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}): Promise<Response> => {
+    // Server health check and warming for critical operations
+    const isCriticalOperation = url.includes('/api/analyze/') || url.includes('/api/extract') || url.includes('/api/chunk/')
+    
+    if (isCriticalOperation) {
+      try {
+        // Quick health check to warm up the server
+        const healthController = new AbortController()
+        const healthTimeout = setTimeout(() => healthController.abort(), 10000) // 10 second timeout for health check
+        
+        const baseUrl = new URL(url).origin
+        const healthResponse = await fetch(`${baseUrl}/api/health`, {
+          method: 'GET',
+          signal: healthController.signal,
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        })
+        
+        clearTimeout(healthTimeout)
+        
+        if (!healthResponse.ok) {
+          console.warn('Server health check failed, proceeding anyway...')
+        } else {
+          const healthData = await healthResponse.json()
+          console.log('Server health check passed:', healthData.status)
+          
+          // If server is unhealthy, add extra delay
+          if (healthData.status !== 'healthy') {
+            console.warn('Server reports unhealthy status, adding delay...')
+            await new Promise(resolve => setTimeout(resolve, 2000))
+          }
+        }
+      } catch (healthError) {
+        // Health check failed, but continue with main request
+        console.warn('Health check failed, server may be cold starting:', healthError)
+        // Add a small delay to allow potential cold start
+        await new Promise(resolve => setTimeout(resolve, 3000))
+      }
+    }
+    
     // Get fresh session to ensure token is valid
     const { data: { session }, error } = await supabase.auth.getSession()
     
