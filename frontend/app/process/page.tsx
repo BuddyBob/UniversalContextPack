@@ -1926,11 +1926,6 @@ export default function ProcessPage() {
                       Your conversation has been segmented into {chunkData.total_chunks} optimized chunks. These need to be analyzed and structured into a Universal Context Pack for AI use.
                     </p>
                     
-                    <div className="mt-3 p-3 bg-blue-900/20 border border-blue-700/30 rounded-lg">
-                      <p className="text-xs text-blue-300">
-                        💡 Raw chunks aren't ready for AI context. The UCP creation process analyzes, structures, and formats them for optimal AI understanding.
-                      </p>
-                    </div>
                     
                     {/* Simple Options */}
                     <div className="mt-6 space-y-3">

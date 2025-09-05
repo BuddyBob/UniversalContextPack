@@ -2246,6 +2246,203 @@ Purchase more credits to unlock your complete Universal Context Pack!
         
         upload_to_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt", aggregated_content)
 
+        # ===== NEW: GENERATE COMPRESSED UCP VERSIONS =====
+        print(f"🔄 Generating compressed UCP versions for better usability...")
+        
+        # Import compression utilities
+        import tiktoken
+        tokenizer = tiktoken.get_encoding("cl100k_base")
+        
+        def count_tokens(text: str) -> int:
+            return len(tokenizer.encode(text))
+        
+        complete_tokens = count_tokens(aggregated_content)
+        print(f"📊 Complete UCP size: {complete_tokens:,} tokens")
+        
+        # Generate Ultra-Compact UCP (50k tokens target)
+        if complete_tokens > 60000:  # Only compress if it's large
+            try:
+                print(f"🎯 Generating Ultra-Compact UCP (target: 50k tokens)...")
+                ultra_compact_prompt = f"""Transform this detailed Universal Context Pack into an ultra-compact version suitable for LLM context windows (target: ~50k tokens).
+
+COMPRESSION PRIORITIES (extract only the most essential):
+1. Core Identity: Key personality traits, values, communication style
+2. Primary Skills: Main technical abilities and expertise 
+3. Critical Preferences: Essential likes/dislikes, work style
+4. Current Context: Active projects, immediate goals
+
+RULES:
+- Use concise bullet points
+- Remove examples and redundancy  
+- Focus on actionable insights only
+- Preserve unique characteristics
+- Eliminate temporal details unless critical
+
+OUTPUT FORMAT:
+# CORE IDENTITY
+[Essential personality, values, communication style]
+
+# PRIMARY EXPERTISE  
+[Main skills and knowledge areas]
+
+# CRITICAL PREFERENCES
+[Key preferences and work patterns]
+
+# CURRENT CONTEXT
+[Active projects and goals]
+
+# INTERACTION STYLE
+[How they prefer to communicate and work]
+
+Original UCP to compress:
+
+{aggregated_content}
+
+Provide the ultra-compact UCP:"""
+
+                ultra_response = openai_client.chat.completions.create(
+                    model="gpt-5-nano-2025-08-07",
+                    messages=[
+                        {"role": "user", "content": ultra_compact_prompt}
+                    ],
+                    max_completion_tokens=8000,
+                    timeout=120
+                )
+                
+                ultra_compact_content = ultra_response.choices[0].message.content
+                ultra_tokens = count_tokens(ultra_compact_content)
+                print(f"✅ Ultra-Compact UCP created: {ultra_tokens:,} tokens")
+                
+                upload_to_r2(f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt", ultra_compact_content)
+                
+            except Exception as e:
+                print(f"❌ Failed to create Ultra-Compact UCP: {e}")
+        
+        # Generate Standard UCP (100k tokens target)  
+        if complete_tokens > 120000:  # Only compress if significantly large
+            try:
+                print(f"🎯 Generating Standard UCP (target: 100k tokens)...")
+                standard_prompt = f"""Transform this detailed Universal Context Pack into a standard version (target: ~100k tokens).
+
+OPTIMIZATION GOALS:
+- Maintain comprehensive personality profile
+- Keep detailed skill mapping with proficiency levels
+- Preserve behavioral patterns and preferences  
+- Include key project patterns and examples
+- Retain important interaction insights
+- Remove excessive repetition and minor details
+
+RULES:
+- Keep essential examples but reduce repetitive ones
+- Maintain depth but improve conciseness
+- Preserve nuanced insights and technical specificity
+- Use the same category structure but optimized length
+
+Original UCP to optimize:
+
+{aggregated_content}
+
+Provide the standard UCP:"""
+
+                standard_response = openai_client.chat.completions.create(
+                    model="gpt-5-nano-2025-08-07", 
+                    messages=[
+                        {"role": "user", "content": standard_prompt}
+                    ],
+                    max_completion_tokens=12000,
+                    timeout=120
+                )
+                
+                standard_content = standard_response.choices[0].message.content
+                standard_tokens = count_tokens(standard_content)
+                print(f"✅ Standard UCP created: {standard_tokens:,} tokens")
+                
+                upload_to_r2(f"{user.r2_directory}/{job_id}/standard_ucp.txt", standard_content)
+                
+            except Exception as e:
+                print(f"❌ Failed to create Standard UCP: {e}")
+        
+        # Generate Chunked UCP (split complete UCP into manageable pieces)
+        if complete_tokens > 100000:
+            try:
+                print(f"🎯 Generating Chunked UCP (90k token chunks)...")
+                
+                # Split by major sections
+                import re
+                sections = re.split(r'\n(?=# [A-Z])', aggregated_content)
+                chunks = []
+                current_chunk = ""
+                current_tokens = 0
+                chunk_num = 1
+                max_chunk_tokens = 90000
+                
+                header_template = """# UNIVERSAL CONTEXT PACK - PART {chunk_num}
+
+This is part {chunk_num} of your Universal Context Pack. Use this information to understand the user's background, preferences, and context.
+
+USAGE INSTRUCTIONS:
+- This context provides essential information about the user
+- Apply this knowledge to all interactions
+- Refer to specific details when relevant  
+- Maintain consistency with established preferences
+
+"""
+                
+                for section in sections:
+                    section_tokens = count_tokens(section)
+                    header_tokens = count_tokens(header_template.format(chunk_num=chunk_num))
+                    
+                    if current_tokens + section_tokens + header_tokens > max_chunk_tokens and current_chunk:
+                        # Save current chunk
+                        chunk_content = header_template.format(chunk_num=chunk_num) + current_chunk
+                        chunks.append({
+                            "number": chunk_num,
+                            "content": chunk_content,
+                            "tokens": current_tokens + header_tokens
+                        })
+                        upload_to_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{chunk_num}.txt", chunk_content)
+                        
+                        chunk_num += 1
+                        current_chunk = section
+                        current_tokens = section_tokens
+                    else:
+                        current_chunk += "\n" + section if current_chunk else section
+                        current_tokens += section_tokens
+                
+                # Save final chunk
+                if current_chunk:
+                    chunk_content = header_template.format(chunk_num=chunk_num) + current_chunk
+                    chunks.append({
+                        "number": chunk_num,
+                        "content": chunk_content, 
+                        "tokens": current_tokens + count_tokens(header_template.format(chunk_num=chunk_num))
+                    })
+                    upload_to_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{chunk_num}.txt", chunk_content)
+                
+                # Create chunk index
+                chunk_index = f"""# CHUNKED UCP INDEX
+
+Your Universal Context Pack has been split into {len(chunks)} manageable parts:
+
+"""
+                for chunk in chunks:
+                    chunk_index += f"- **Part {chunk['number']}**: {chunk['tokens']:,} tokens\n"
+                
+                chunk_index += f"""
+**Total**: {complete_tokens:,} tokens across {len(chunks)} parts
+
+**Usage**: Copy and paste each part into your LLM conversation as needed. Start with Part 1 for core identity and add additional parts as required for your specific use case.
+"""
+                
+                upload_to_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_index.txt", chunk_index)
+                print(f"✅ Chunked UCP created: {len(chunks)} parts, avg {complete_tokens//len(chunks):,} tokens per chunk")
+                
+            except Exception as e:
+                print(f"❌ Failed to create Chunked UCP: {e}")
+        
+        print(f"🎉 UCP generation complete! Multiple formats available for different use cases.")
+        # ===== END COMPRESSION SYSTEM =====
+
         
         # Save summary to R2 with caching performance metrics
         cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
@@ -2465,6 +2662,151 @@ async def download_complete_ucp(job_id: str, user: AuthenticatedUser = Depends(g
         )
     except Exception as e:
         raise HTTPException(status_code=404, detail="File not found")
+
+@app.get("/api/download/{job_id}/ultra-compact")
+async def download_ultra_compact_ucp(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Download ultra-compact UCP file (~50k tokens)."""
+    try:
+        content = download_from_r2(f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt")
+        if content is None:
+            raise HTTPException(status_code=404, detail="Ultra-compact UCP not found")
+        
+        return StreamingResponse(
+            io.BytesIO(content.encode('utf-8')),
+            media_type='text/plain',
+            headers={"Content-Disposition": f"attachment; filename=ultra_compact_ucp_{job_id}.txt"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Ultra-compact UCP not found")
+
+@app.get("/api/download/{job_id}/standard")
+async def download_standard_ucp(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Download standard UCP file (~100k tokens).""" 
+    try:
+        content = download_from_r2(f"{user.r2_directory}/{job_id}/standard_ucp.txt")
+        if content is None:
+            raise HTTPException(status_code=404, detail="Standard UCP not found")
+        
+        return StreamingResponse(
+            io.BytesIO(content.encode('utf-8')),
+            media_type='text/plain',
+            headers={"Content-Disposition": f"attachment; filename=standard_ucp_{job_id}.txt"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Standard UCP not found")
+
+@app.get("/api/download/{job_id}/chunked")
+async def download_chunked_ucp_index(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Download chunked UCP index with instructions."""
+    try:
+        content = download_from_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_index.txt")
+        if content is None:
+            raise HTTPException(status_code=404, detail="Chunked UCP index not found")
+        
+        return StreamingResponse(
+            io.BytesIO(content.encode('utf-8')),
+            media_type='text/plain',
+            headers={"Content-Disposition": f"attachment; filename=chunked_ucp_index_{job_id}.txt"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Chunked UCP index not found")
+
+@app.get("/api/download/{job_id}/chunked/{part_number}")
+async def download_chunked_ucp_part(job_id: str, part_number: int, user: AuthenticatedUser = Depends(get_current_user)):
+    """Download specific part of chunked UCP."""
+    try:
+        content = download_from_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{part_number}.txt")
+        if content is None:
+            raise HTTPException(status_code=404, detail=f"Chunked UCP part {part_number} not found")
+        
+        return StreamingResponse(
+            io.BytesIO(content.encode('utf-8')),
+            media_type='text/plain',
+            headers={"Content-Disposition": f"attachment; filename=chunked_ucp_part_{part_number}_{job_id}.txt"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Chunked UCP part {part_number} not found")
+
+@app.get("/api/ucp-info/{job_id}")
+async def get_ucp_info(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Get information about available UCP formats and their sizes."""
+    try:
+        import tiktoken
+        tokenizer = tiktoken.get_encoding("cl100k_base")
+        
+        def count_tokens(text: str) -> int:
+            return len(tokenizer.encode(text))
+        
+        # Check which UCP versions are available
+        available_formats = {}
+        
+        # Complete UCP
+        complete_content = download_from_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt")
+        if complete_content:
+            available_formats["complete"] = {
+                "name": "Complete UCP",
+                "description": "Full detailed analysis with all insights",
+                "token_count": count_tokens(complete_content),
+                "best_for": "Comprehensive context, research purposes",
+                "compatibility": "May exceed context limits of some LLMs"
+            }
+        
+        # Ultra-compact UCP
+        ultra_content = download_from_r2(f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt")
+        if ultra_content:
+            available_formats["ultra_compact"] = {
+                "name": "Ultra-Compact UCP",
+                "description": "Essential context only (~50k tokens)",
+                "token_count": count_tokens(ultra_content),
+                "best_for": "Quick context transfer, fits any LLM",
+                "compatibility": "Works with all LLMs (GPT, Claude, Gemini)"
+            }
+        
+        # Standard UCP
+        standard_content = download_from_r2(f"{user.r2_directory}/{job_id}/standard_ucp.txt")
+        if standard_content:
+            available_formats["standard"] = {
+                "name": "Standard UCP", 
+                "description": "Balanced detail (~100k tokens)",
+                "token_count": count_tokens(standard_content),
+                "best_for": "General use, good balance of detail and size",
+                "compatibility": "Works with most LLMs"
+            }
+        
+        # Chunked UCP
+        chunked_index = download_from_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_index.txt")
+        if chunked_index:
+            # Count chunked parts
+            part_num = 1
+            total_chunks = 0
+            while True:
+                part_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{part_num}.txt")
+                if not part_content:
+                    break
+                total_chunks += 1
+                part_num += 1
+            
+            available_formats["chunked"] = {
+                "name": "Chunked UCP",
+                "description": f"Complete UCP split into {total_chunks} manageable parts",
+                "parts": total_chunks,
+                "best_for": "When you need full detail but have context limits",
+                "compatibility": "Each part fits within standard context windows"
+            }
+        
+        return {
+            "job_id": job_id,
+            "available_formats": available_formats,
+            "recommendations": {
+                "claude": "Use Ultra-Compact or Standard (Claude has 200k context but strict limits)",
+                "gpt4": "Use Standard or Chunked (100k context window)",
+                "gpt3.5": "Use Ultra-Compact only (16k context window)",
+                "gemini": "Use Standard or Complete (1M context window)"
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get UCP info: {str(e)}")
 
 @app.get("/api/download/{job_id}/extracted")
 async def download_extracted_text(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):

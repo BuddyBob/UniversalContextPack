@@ -165,6 +165,81 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
     }
   }
 
+  const downloadUltraCompact = async () => {
+    try {
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(API_ENDPOINTS.downloadUltraCompact(params.ucpId), {
+        headers,
+      })
+      
+      if (!response.ok) throw new Error('Ultra-compact UCP not available')
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ultra_compact_ucp_${params.ucpId}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Ultra-compact UCP not available for this job')
+    }
+  }
+
+  const downloadStandard = async () => {
+    try {
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(API_ENDPOINTS.downloadStandard(params.ucpId), {
+        headers,
+      })
+      
+      if (!response.ok) throw new Error('Standard UCP not available')
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `standard_ucp_${params.ucpId}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Standard UCP not available for this job')
+    }
+  }
+
+  const downloadChunkedIndex = async () => {
+    try {
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(API_ENDPOINTS.downloadChunked(params.ucpId), {
+        headers,
+      })
+      
+      if (!response.ok) throw new Error('Chunked UCP not available')
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `chunked_ucp_index_${params.ucpId}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Chunked UCP not available for this job')
+    }
+  }
+
   const downloadResultJson = async (chunkIndex: number) => {
     try {
       const headers: Record<string, string> = {};
@@ -309,21 +384,104 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
           </div>
           
           {result.status === 'completed' && (
-            <div className="flex space-x-3">
-              <button
-                onClick={downloadComplete}
-                className="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 text-sm font-medium transition-colors flex items-center space-x-2 border border-gray-300"
-              >
-                <Download className="h-4 w-4" />
-                <span>Download UCP</span>
-              </button>
-              <button
-                onClick={downloadPack}
-                className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 text-sm font-medium transition-colors flex items-center space-x-2"
-              >
-                <Download className="h-4 w-4" />
-                <span>Download Pack</span>
-              </button>
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-gray-900">Download Your UCP</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Ultra-Compact UCP */}
+                <div className="border border-green-200 bg-green-50 p-4 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-medium text-green-900">Ultra-Compact UCP</h4>
+                      <p className="text-sm text-green-700 mt-1">~50k tokens • Fits any LLM</p>
+                      <p className="text-xs text-green-600 mt-2">Essential context only. Perfect for Claude, GPT-3.5, or when you need minimal tokens.</p>
+                    </div>
+                    <button
+                      onClick={downloadUltraCompact}
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-sm font-medium rounded transition-colors flex items-center space-x-1"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Download</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Standard UCP */}
+                <div className="border border-blue-200 bg-blue-50 p-4 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-medium text-blue-900">Standard UCP</h4>
+                      <p className="text-sm text-blue-700 mt-1">~100k tokens • Balanced detail</p>
+                      <p className="text-xs text-blue-600 mt-2">Recommended for most use cases. Works with GPT-4, Claude, and most modern LLMs.</p>
+                    </div>
+                    <button
+                      onClick={downloadStandard}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 text-sm font-medium rounded transition-colors flex items-center space-x-1"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Download</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Complete UCP */}
+                <div className="border border-purple-200 bg-purple-50 p-4 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-medium text-purple-900">Complete UCP</h4>
+                      <p className="text-sm text-purple-700 mt-1">{result.totalOutputTokens ? `~${Math.round(result.totalOutputTokens/1000)}k tokens` : 'Full analysis'} • Everything included</p>
+                      <p className="text-xs text-purple-600 mt-2">Complete detailed analysis. May need chunking for some LLMs.</p>
+                    </div>
+                    <button
+                      onClick={downloadComplete}
+                      className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 text-sm font-medium rounded transition-colors flex items-center space-x-1"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Download</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chunked UCP */}
+                <div className="border border-gray-200 bg-gray-50 p-4 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Chunked UCP</h4>
+                      <p className="text-sm text-gray-700 mt-1">Split into parts • Context-safe</p>
+                      <p className="text-xs text-gray-600 mt-2">Complete analysis split into manageable chunks. Download index to see all parts.</p>
+                    </div>
+                    <button
+                      onClick={downloadChunkedIndex}
+                      className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 text-sm font-medium rounded transition-colors flex items-center space-x-1"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>Get Index</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Usage Guide */}
+              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                <h4 className="font-medium text-yellow-900 mb-2">💡 Usage Guide</h4>
+                <div className="text-sm text-yellow-800 space-y-1">
+                  <p><strong>Claude:</strong> Use Ultra-Compact (Claude has strict context limits)</p>
+                  <p><strong>GPT-4:</strong> Use Standard or Chunked (100k context window)</p>
+                  <p><strong>GPT-3.5:</strong> Use Ultra-Compact only (16k context window)</p>
+                  <p><strong>Gemini:</strong> Use any version (1M+ context window)</p>
+                </div>
+              </div>
+
+              {/* Legacy Downloads */}
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={downloadPack}
+                  className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 text-sm font-medium transition-colors flex items-center space-x-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download Complete Pack (All Files)</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
