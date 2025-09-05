@@ -1239,7 +1239,7 @@ async def detailed_health_check():
         db_latency = 0
         try:
             db_start = time.time()
-            result = supabase.table('users').select('id').limit(1).execute()
+            result = supabase.table('user_profiles').select('id').limit(1).execute()
             db_latency = round((time.time() - db_start) * 1000, 2)
         except Exception as e:
             db_healthy = False

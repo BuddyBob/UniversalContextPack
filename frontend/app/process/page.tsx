@@ -57,8 +57,8 @@ export default function ProcessPage() {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const paymentLimitsRequestRef = useRef<Promise<any> | null>(null);
-  const extractionPollingRef = useRef<AbortController | null>(null);
-  const isPollingRef = useRef<boolean>(false);
+  const isExtractionPollingRef = useRef<boolean>(false);
+  const extractionAbortControllerRef = useRef<AbortController | null>(null);
 
   // Payment notifications
   const { 
@@ -298,10 +298,10 @@ export default function ProcessPage() {
   useEffect(() => {
     return () => {
       // Cancel any ongoing polling when component unmounts
-      if (extractionPollingRef.current) {
-        extractionPollingRef.current.abort();
+      if (extractionAbortControllerRef.current) {
+        extractionAbortControllerRef.current.abort();
       }
-      isPollingRef.current = false;
+      isExtractionPollingRef.current = false;
     };
   }, []);
 
@@ -856,19 +856,19 @@ export default function ProcessPage() {
 
   const startPollingExtractionStatus = (jobId: string) => {
     // Prevent multiple concurrent polling instances
-    if (isPollingRef.current) {
+    if (isExtractionPollingRef.current) {
       console.log('Extraction polling already in progress, skipping');
       return;
     }
     
     // Cancel any existing polling
-    if (extractionPollingRef.current) {
-      extractionPollingRef.current.abort();
+    if (extractionAbortControllerRef.current) {
+      extractionAbortControllerRef.current.abort();
     }
     
     // Create new abort controller for this polling session
-    extractionPollingRef.current = new AbortController();
-    isPollingRef.current = true;
+    extractionAbortControllerRef.current = new AbortController();
+    isExtractionPollingRef.current = true;
     
     console.log('Starting extraction polling for job:', jobId);
     
@@ -880,16 +880,16 @@ export default function ProcessPage() {
     
     const poll = async () => {
       // Check if polling was cancelled
-      if (extractionPollingRef.current?.signal.aborted) {
+      if (extractionAbortControllerRef.current?.signal.aborted) {
         console.log('Extraction polling was cancelled');
-        isPollingRef.current = false;
+        isExtractionPollingRef.current = false;
         return;
       }
       
       // Check if we've been polling too long
       if (Date.now() - startTime > maxPollingDuration) {
         addLog('⚠️ Extraction polling timed out. Please refresh the page to check status.');
-        isPollingRef.current = false;
+        isExtractionPollingRef.current = false;
         return;
       }
       
@@ -919,7 +919,7 @@ export default function ProcessPage() {
         // Check if extraction is complete by looking for job results
         const resultsResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/results/${jobId}`, {
           method: 'GET',
-          signal: extractionPollingRef.current?.signal
+          signal: extractionAbortControllerRef.current?.signal
         });
         
         if (!resultsResponse.ok) {
@@ -937,13 +937,13 @@ export default function ProcessPage() {
           if (consecutiveFailures >= maxFailures) {
             setConnectionStatus('disconnected');
             addLog('❌ Too many failed attempts checking extraction. Please refresh the page.');
-            isPollingRef.current = false;
+            isExtractionPollingRef.current = false;
             return;
           }
           
           // Schedule retry with exponential backoff
           setTimeout(() => {
-            if (!extractionPollingRef.current?.signal.aborted) {
+            if (!extractionAbortControllerRef.current?.signal.aborted) {
               poll();
             }
           }, retryDelay);
@@ -961,7 +961,7 @@ export default function ProcessPage() {
         
         if (resultsData.extracted) {
           // Extraction is complete, stop polling
-          isPollingRef.current = false;
+          isExtractionPollingRef.current = false;
           console.log('Extraction completed, stopping polling');
           
           // Extraction is complete, get the data
@@ -1001,7 +1001,7 @@ export default function ProcessPage() {
         } else {
           // Still processing, schedule next poll with normal interval
           setTimeout(() => {
-            if (!extractionPollingRef.current?.signal.aborted) {
+            if (!extractionAbortControllerRef.current?.signal.aborted) {
               poll();
             }
           }, 5000); // 5 second interval for normal polling
@@ -1009,9 +1009,9 @@ export default function ProcessPage() {
         
       } catch (error) {
         // Check if error is due to cancellation
-        if (extractionPollingRef.current?.signal.aborted) {
+        if (extractionAbortControllerRef.current?.signal.aborted) {
           console.log('Extraction polling request was cancelled');
-          isPollingRef.current = false;
+          isExtractionPollingRef.current = false;
           return;
         }
         
@@ -1021,7 +1021,7 @@ export default function ProcessPage() {
         // Handle authentication errors more gracefully
         if (error instanceof Error && error.message.includes('Authentication')) {
           addLog('Warning: Authentication error during extraction status check. You may need to refresh the page.');
-          isPollingRef.current = false;
+          isExtractionPollingRef.current = false;
           return; // Stop polling on auth errors
         }
         
@@ -1033,21 +1033,18 @@ export default function ProcessPage() {
         if (consecutiveFailures >= maxFailures) {
           setConnectionStatus('disconnected');
           addLog('❌ Too many failed attempts. Please refresh the page.');
-          isPollingRef.current = false;
+          isExtractionPollingRef.current = false;
           return;
         }
         
         setTimeout(() => {
-          if (!extractionPollingRef.current?.signal.aborted) {
+          if (!extractionAbortControllerRef.current?.signal.aborted) {
             poll();
           }
         }, retryDelay);
       }
     };
     
-    // Start the polling
-    poll();
-          setPollingInterval(null);
     // Start the polling
     poll();
   };
@@ -1536,11 +1533,11 @@ export default function ProcessPage() {
 
   const resetProcess = () => {
     // Cancel any ongoing polling
-    if (extractionPollingRef.current) {
-      extractionPollingRef.current.abort();
-      extractionPollingRef.current = null;
+    if (extractionAbortControllerRef.current) {
+      extractionAbortControllerRef.current.abort();
+      extractionAbortControllerRef.current = null;
     }
-    isPollingRef.current = false;
+    isExtractionPollingRef.current = false;
     
     setFile(null);
     setJobId(null);
@@ -1787,19 +1784,18 @@ export default function ProcessPage() {
                   <div className="w-16 h-16 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <Upload className="h-8 w-8 text-accent-primary" />
                   </div>
-                  <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-3 text-sm">
-                    <p className="text-gray-300">
-                      <span className="font-medium">Upload:</span> <span className="font-mono text-accent-primary">conversations.json</span> for faster processing
-                    </p>
-                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-2">Upload Your Data</h3>
+                  <p className="text-gray-400 text-sm">
+                    Select a file or folder to get started
+                  </p>
                 </div>
 
                 {/* Upload Area */}
                 <div 
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                     isDragOver 
                       ? 'border-accent-primary bg-accent-primary/5' 
-                      : 'border-gray-500 hover:border-accent-primary/50'
+                      : 'border-gray-600 hover:border-gray-500'
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -1827,33 +1823,32 @@ export default function ProcessPage() {
                       onClick={() => {
                         fileInputRef.current?.click();
                       }}
-                      className="bg-accent-primary hover:bg-accent-primary-hover text-white px-8 py-4 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
+                      className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2 border border-gray-600"
                     >
-                      <Upload className="h-5 w-5" />
+                      <Upload className="h-4 w-4" />
                       <span>Choose File</span>
                     </button>
                     
-                    <div className="text-gray-400 text-sm">or</div>
+                    <div className="text-gray-500 text-sm font-medium">or</div>
                     
                     <button
                       onClick={() => {
                         folderInputRef.current?.click();
                       }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
                     >
-                      <FileText className="h-5 w-5" />
-                      <span>Upload ChatGPT Folder</span>
+                      <FileText className="h-4 w-4" />
+                      <span>Upload Folder</span>
                     </button>
                   </div>
                   
-                  <p className="text-text-muted text-sm mt-4">
-                    Choose a file directly or upload your entire ChatGPT export folder
-                  </p>
-                  
-                  <div className="mt-4 p-3 bg-gray-800/50 border border-gray-600 rounded-lg text-sm">
-                    <p className="text-gray-300">
-                      💡 <span className="font-medium">Tip:</span> If you have a ChatGPT data export, use "Upload ChatGPT Folder" - we'll automatically find and process your <span className="font-mono text-accent-primary">conversations.json</span> file.
+                  <div className="text-center mt-6">
+                    <p className="text-gray-400 text-sm mb-3">
+                      Support: .json, .txt, .csv, .zip, .html
                     </p>
+                    <div className="text-xs text-gray-500 bg-gray-800/50 px-3 py-2 rounded-lg inline-block border border-gray-700">
+                      💡 For ChatGPT exports, use folder upload to auto-detect conversations.json
+                    </div>
                   </div>
                 </div>
               </div>
