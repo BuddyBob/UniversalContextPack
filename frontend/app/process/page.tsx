@@ -1838,16 +1838,16 @@ export default function ProcessPage() {
                       className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
                     >
                       <FileText className="h-4 w-4" />
-                      <span>Upload Folder</span>
+                      <span>Upload Export Folder</span>
                     </button>
                   </div>
                   
                   <div className="text-center mt-6">
                     <p className="text-gray-400 text-sm mb-3">
-                      Support: .json, .txt, .csv, .zip, .html
+                      Support: .json, .txt
                     </p>
                     <div className="text-xs text-gray-500 bg-gray-800/50 px-3 py-2 rounded-lg inline-block border border-gray-700">
-                      💡 For ChatGPT exports, use folder upload to auto-detect conversations.json
+                      For ChatGPT exports, use folder upload to auto-detect conversations.json
                     </div>
                   </div>
                 </div>
@@ -1880,7 +1880,7 @@ export default function ProcessPage() {
                         </div>
                       )}
                       <div className="flex items-center text-xs text-gray-400">
-                        <span className="w-16">Analyze:</span>
+                        <span className="w-16">Pack:</span>
                         <span>Estimated after extraction</span>
                       </div>
                     </div>
@@ -1911,7 +1911,7 @@ export default function ProcessPage() {
                   </div>
                 </div>
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                  <div className="text-sm text-blue-300">⚡ Processing your content with optimized 150k token chunks</div>
+                  <div className="text-sm text-blue-300">⚡ Pack your chunks intooptimized 150k token chunks</div>
                 </div>
               </div>
             )}
@@ -1921,20 +1921,26 @@ export default function ProcessPage() {
               <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
                   <div>
-                    <h3 className="text-lg font-semibold text-text-primary">Chunks Ready</h3>
+                    <h3 className="text-lg font-semibold text-text-primary">Ready for UCP Creation</h3>
                     <p className="text-sm text-gray-400 mt-1">
-                      Your conversation has been broken into {chunkData.total_chunks} optimized chunks. Choose your next step:
+                      Your conversation has been segmented into {chunkData.total_chunks} optimized chunks. These need to be analyzed and structured into a Universal Context Pack for AI use.
                     </p>
+                    
+                    <div className="mt-3 p-3 bg-blue-900/20 border border-blue-700/30 rounded-lg">
+                      <p className="text-xs text-blue-300">
+                        💡 Raw chunks aren't ready for AI context. The UCP creation process analyzes, structures, and formats them for optimal AI understanding.
+                      </p>
+                    </div>
                     
                     {/* Simple Options */}
                     <div className="mt-6 space-y-3">
                       
                       <div className="p-4 bg-gray-750 rounded-lg border border-gray-600">
                         <div className="flex items-center space-x-3">
-                          <Brain className="h-5 w-5 text-gray-400" />
+                          <Brain className="h-5 w-5 text-blue-400" />
                           <div>
-                            <div className="font-medium text-white">AI Analysis</div>
-                            <div className="text-sm text-gray-400">Get patterns, themes & insights</div>
+                            <div className="font-medium text-white">Create Universal Context Pack</div>
+                            <div className="text-sm text-gray-400">Transform chunks into context format</div>
                           </div>
                         </div>
                       </div>
@@ -1966,8 +1972,8 @@ export default function ProcessPage() {
                       <Brain className="h-5 w-5" />
                       <span>
                         {(paymentLimits && !paymentLimits.canProcess)
-                          ? 'Analysis Limit Reached'
-                          : `Start AI Analysis (${paymentLimits ? Math.min(paymentLimits.credits_balance, availableChunks.length) : availableChunks.length})`
+                          ? 'Credits Required for UCP Creation'
+                          : `Create UCP (${paymentLimits ? Math.min(paymentLimits.credits_balance, availableChunks.length) : availableChunks.length} chunks)`
                         }
                       </span>
                     </button>
@@ -1977,23 +1983,24 @@ export default function ProcessPage() {
                     onClick={downloadChunks}
                     disabled={isDownloading}
                     className="py-3 px-4 border border-gray-600 rounded-lg text-gray-400 hover:text-gray-300 hover:border-gray-500 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    title="Download Raw Chunks"
                   >
                     {isDownloading ? (
                       <Loader className="h-4 w-4 animate-spin" />
                     ) : (
                       <Download className="h-4 w-4" />
                     )}
-                    <span>{isDownloading ? 'Downloading...' : 'Download Chunks'}</span>
+                    <span>{isDownloading ? 'Downloading...' : 'Download Raw Chunks'}</span>
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Analysis Progress */}
+            {/* UCP Creation Progress */}
             {currentStep === 'analyzing' && (
               <div className="bg-bg-card border border-border-primary rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-4">
-                  <h3 className="text-lg font-semibold text-text-primary">Analysis in Progress</h3>
+                  <h3 className="text-lg font-semibold text-text-primary">Creating Universal Context Pack</h3>
                 </div>
                 
                 <div className="space-y-3">
@@ -2021,14 +2028,14 @@ export default function ProcessPage() {
               </div>
             )}
 
-            {/* Analysis Complete */}
+            {/* UCP Creation Complete */}
             {currentStep === 'analyzed' && (
               <div className="bg-bg-card border border-border-primary rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-text-primary">Analysis Complete</h3>
+                  <h3 className="text-lg font-semibold text-text-primary">Universal Context Pack Created</h3>
                 </div>
 
                 <div className="flex space-x-3">
@@ -2049,7 +2056,7 @@ export default function ProcessPage() {
                     ) : (
                       <Download className="h-4 w-4" />
                     )}
-                    <span>{isDownloading ? 'Downloading...' : 'Download Pack'}</span>
+                    <span>{isDownloading ? 'Downloading...' : 'Download UCP'}</span>
                   </button>
                 </div>
               </div>
@@ -2081,7 +2088,7 @@ export default function ProcessPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-gray-800 border border-gray-600 rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
               <div className="flex items-center justify-between p-6 border-b border-gray-600">
-                <h3 className="text-lg font-semibold text-text-primary">Select Chunks to Analyze</h3>
+                <h3 className="text-lg font-semibold text-text-primary">Select Chunks to Pack</h3>
                 <button
                   onClick={() => setShowChunkModal(false)}
                   className="text-text-muted hover:text-text-primary"
@@ -2182,7 +2189,7 @@ export default function ProcessPage() {
                 >
                   {(paymentLimits && !paymentLimits.canProcess)
                     ? `Insufficient Credits (${paymentLimits.credits_balance})`
-                    : `Analyze Selected (${selectedChunks.size})`
+                    : `Pack Selected (${selectedChunks.size})`
                   }
                 </button>
               </div>
@@ -2195,7 +2202,7 @@ export default function ProcessPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className=" bg-black/90 border border-border-primary rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
               <div className="flex items-center justify-between p-6 border-b border-border-primary">
-                <h3 className="text-lg font-semibold text-text-primary">Select Chunks to Analyze</h3>
+                <h3 className="text-lg font-semibold text-text-primary">Select Chunks to Pack</h3>
                 <button
                   onClick={() => setShowChunkModal(false)}
                   className="text-text-muted hover:text-text-primary"
@@ -2282,7 +2289,7 @@ export default function ProcessPage() {
                 >
                   {(paymentLimits && !paymentLimits.canProcess)
                     ? 'Limit Reached'
-                    : `Analyze Selected (${selectedChunks.size})`
+                    : `Pack Selected (${selectedChunks.size})`
                   }
                 </button>
               </div>
