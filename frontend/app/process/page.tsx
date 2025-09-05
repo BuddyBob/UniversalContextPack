@@ -57,6 +57,8 @@ export default function ProcessPage() {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const paymentLimitsRequestRef = useRef<Promise<any> | null>(null);
+  const extractionPollingRef = useRef<AbortController | null>(null);
+  const isPollingRef = useRef<boolean>(false);
 
   // Payment notifications
   const { 
@@ -291,6 +293,17 @@ export default function ProcessPage() {
       performExtraction();
     }
   }, [user, pendingExtraction, file]);
+
+  // Cleanup polling on component unmount
+  useEffect(() => {
+    return () => {
+      // Cancel any ongoing polling when component unmounts
+      if (extractionPollingRef.current) {
+        extractionPollingRef.current.abort();
+      }
+      isPollingRef.current = false;
+    };
+  }, []);
 
   // Extracted function to perform the actual extraction logic
   const manualCreditVerification = async (stripeSessionId: string) => {
@@ -842,6 +855,23 @@ export default function ProcessPage() {
   };
 
   const startPollingExtractionStatus = (jobId: string) => {
+    // Prevent multiple concurrent polling instances
+    if (isPollingRef.current) {
+      console.log('Extraction polling already in progress, skipping');
+      return;
+    }
+    
+    // Cancel any existing polling
+    if (extractionPollingRef.current) {
+      extractionPollingRef.current.abort();
+    }
+    
+    // Create new abort controller for this polling session
+    extractionPollingRef.current = new AbortController();
+    isPollingRef.current = true;
+    
+    console.log('Starting extraction polling for job:', jobId);
+    
     // Poll for extraction completion with improved error handling
     let consecutiveFailures = 0;
     const maxFailures = 5;
@@ -849,9 +879,17 @@ export default function ProcessPage() {
     const maxPollingDuration = 10 * 60 * 1000; // 10 minutes max for extraction
     
     const poll = async () => {
+      // Check if polling was cancelled
+      if (extractionPollingRef.current?.signal.aborted) {
+        console.log('Extraction polling was cancelled');
+        isPollingRef.current = false;
+        return;
+      }
+      
       // Check if we've been polling too long
       if (Date.now() - startTime > maxPollingDuration) {
         addLog('⚠️ Extraction polling timed out. Please refresh the page to check status.');
+        isPollingRef.current = false;
         return;
       }
       
@@ -880,7 +918,8 @@ export default function ProcessPage() {
         
         // Check if extraction is complete by looking for job results
         const resultsResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/results/${jobId}`, {
-          method: 'GET'
+          method: 'GET',
+          signal: extractionPollingRef.current?.signal
         });
         
         if (!resultsResponse.ok) {
@@ -898,11 +937,16 @@ export default function ProcessPage() {
           if (consecutiveFailures >= maxFailures) {
             setConnectionStatus('disconnected');
             addLog('❌ Too many failed attempts checking extraction. Please refresh the page.');
+            isPollingRef.current = false;
             return;
           }
           
           // Schedule retry with exponential backoff
-          setTimeout(poll, retryDelay);
+          setTimeout(() => {
+            if (!extractionPollingRef.current?.signal.aborted) {
+              poll();
+            }
+          }, retryDelay);
           return;
         }
         
@@ -916,6 +960,10 @@ export default function ProcessPage() {
         const resultsData = await resultsResponse.json();
         
         if (resultsData.extracted) {
+          // Extraction is complete, stop polling
+          isPollingRef.current = false;
+          console.log('Extraction completed, stopping polling');
+          
           // Extraction is complete, get the data
           setExtractionData(resultsData);
           setCostEstimate(resultsData.cost_estimate || { 
@@ -952,16 +1000,28 @@ export default function ProcessPage() {
           }, 1000); // Small delay to show the transition
         } else {
           // Still processing, schedule next poll with normal interval
-          setTimeout(poll, 5000); // 5 second interval for normal polling
+          setTimeout(() => {
+            if (!extractionPollingRef.current?.signal.aborted) {
+              poll();
+            }
+          }, 5000); // 5 second interval for normal polling
         }
         
       } catch (error) {
+        // Check if error is due to cancellation
+        if (extractionPollingRef.current?.signal.aborted) {
+          console.log('Extraction polling request was cancelled');
+          isPollingRef.current = false;
+          return;
+        }
+        
         consecutiveFailures++;
         setConnectionStatus('warning');
         
         // Handle authentication errors more gracefully
         if (error instanceof Error && error.message.includes('Authentication')) {
           addLog('Warning: Authentication error during extraction status check. You may need to refresh the page.');
+          isPollingRef.current = false;
           return; // Stop polling on auth errors
         }
         
@@ -973,10 +1033,15 @@ export default function ProcessPage() {
         if (consecutiveFailures >= maxFailures) {
           setConnectionStatus('disconnected');
           addLog('❌ Too many failed attempts. Please refresh the page.');
+          isPollingRef.current = false;
           return;
         }
         
-        setTimeout(poll, retryDelay);
+        setTimeout(() => {
+          if (!extractionPollingRef.current?.signal.aborted) {
+            poll();
+          }
+        }, retryDelay);
       }
     };
     
@@ -1470,6 +1535,13 @@ export default function ProcessPage() {
   };
 
   const resetProcess = () => {
+    // Cancel any ongoing polling
+    if (extractionPollingRef.current) {
+      extractionPollingRef.current.abort();
+      extractionPollingRef.current = null;
+    }
+    isPollingRef.current = false;
+    
     setFile(null);
     setJobId(null);
     setCurrentJobId(null);

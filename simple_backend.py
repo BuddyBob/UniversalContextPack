@@ -108,11 +108,13 @@ async def timeout_middleware(request: Request, call_next):
     start_time = time.time()
     
     # Set different timeouts based on endpoint
-    if "/api/analyze/" in str(request.url) or "/api/extract" in str(request.url):
+    request_path = str(request.url.path) if hasattr(request.url, 'path') else str(request.url)
+    
+    if "/api/analyze/" in request_path or "/api/extract" in request_path:
         timeout_seconds = 1800  # 30 minutes for analysis/extraction
-    elif "/api/progress-stream/" in str(request.url):
+    elif "/api/progress-stream/" in request_path:
         timeout_seconds = 900   # 15 minutes for streaming endpoints
-    elif "/api/health" in str(request.url) or str(request.url).path == "/":
+    elif "/api/health" in request_path or request_path == "/":
         timeout_seconds = 10    # 10 seconds for health checks
     else:
         timeout_seconds = 120   # 2 minutes for other endpoints
