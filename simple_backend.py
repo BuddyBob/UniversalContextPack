@@ -1606,7 +1606,7 @@ async def get_job_summary(job_id: str, user: AuthenticatedUser = Depends(get_cur
     """Get job summary information."""
     try:
         # Try to get job summary from R2
-        job_summary_content = download_from_r2(f"{user.r2_directory}/{job_id}/job_summary.json")
+        job_summary_content = download_from_r2(f"{user.r2_directory}/{job_id}/job_summary.json", silent_404=True)
         if job_summary_content:
             return json.loads(job_summary_content)
         
@@ -1621,20 +1621,19 @@ async def get_job_summary(job_id: str, user: AuthenticatedUser = Depends(get_cur
         print(f"Error getting job summary for {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error retrieving job summary: {str(e)}")
 
-# Legacy endpoint response format - add a status endpoint to get final results
 @app.get("/api/results/{job_id}")
 async def get_extraction_results(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
     """Get final extraction results after background processing completes."""
     try:
-        # Check if extracted
-        extracted_exists = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt") is not None
+        # Check if extracted (use silent_404=True to avoid error logging)
+        extracted_exists = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt", silent_404=True) is not None
         
         # Check if chunked
-        chunks_metadata = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+        chunks_metadata = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", silent_404=True)
         chunks_exist = chunks_metadata is not None
         
         # Check if completed (analysis done)
-        summary = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json")
+        summary = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json", silent_404=True)
         completed = summary is not None
         
         if completed:
@@ -2695,14 +2694,14 @@ async def get_status(job_id: str, user: AuthenticatedUser = Depends(get_current_
         progress_info = get_job_progress(job_id)
         
         # Check if extracted
-        extracted_exists = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt") is not None
+        extracted_exists = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt", silent_404=True) is not None
         
         # Check if chunked
-        chunks_metadata = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
+        chunks_metadata = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", silent_404=True)
         chunks_exist = chunks_metadata is not None
         
         # Check if completed
-        summary = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json")
+        summary = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json", silent_404=True)
         completed = summary is not None
         
         if completed:
