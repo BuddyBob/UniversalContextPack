@@ -114,3 +114,12 @@ Thumbs.db
 # Backup files
 *.backup
 *.bak
+
+# Test files and development artifacts
+test_*.py
+*_test.py
+extracted_conversation.json
+*.test.json
+
+# Virtual environment
+.venv/
