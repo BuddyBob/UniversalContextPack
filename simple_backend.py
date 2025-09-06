@@ -11,6 +11,7 @@ import io
 import ssl
 import urllib3
 import asyncio
+import traceback
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -1504,7 +1505,13 @@ async def process_chatgpt_url_background(job_id: str, url: str, user: Authentica
         
     except Exception as e:
         print(f"Error in background ChatGPT URL extraction for job {job_id}: {e}")
-        update_job_progress(job_id, "extracting", 0, f"Error: {str(e)}")
+        print(f"Full error traceback: {traceback.format_exc()}")
+        try:
+            await update_job_status_in_db(user, job_id, "failed", error_message=f"ChatGPT extraction failed: {str(e)}")
+            update_job_progress(job_id, "failed", 0, f"Error: ChatGPT extraction failed - {str(e)}")
+        except Exception as db_error:
+            print(f"Failed to update job status in DB: {db_error}")
+            update_job_progress(job_id, "failed", 0, f"Error: ChatGPT extraction failed - {str(e)}")
 
 async def process_extraction_background(job_id: str, file_content: str, filename: str, user: AuthenticatedUser):
     """Background task for processing text extraction with progress updates."""
@@ -1643,6 +1650,33 @@ async def get_job_summary(job_id: str, user: AuthenticatedUser = Depends(get_cur
 async def get_extraction_results(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
     """Get final extraction results after background processing completes."""
     try:
+        # First check database for job status
+        db_job_status = None
+        try:
+            import sqlite3
+            db_path = os.path.join(user.database_path, 'jobs.db')
+            if os.path.exists(db_path):
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                cursor.execute("SELECT status, error_message FROM jobs WHERE job_id = ?", (job_id,))
+                result = cursor.fetchone()
+                if result:
+                    db_job_status = {"status": result[0], "error_message": result[1]}
+                conn.close()
+        except Exception as db_error:
+            print(f"Error checking database for job {job_id}: {db_error}")
+        
+        # If job failed in database, return the error
+        if db_job_status and db_job_status["status"] == "failed":
+            return {
+                "status": "failed",
+                "error": db_job_status.get("error_message", "Unknown error occurred"),
+                "extracted": False,
+                "chunked": False,
+                "analyzed": False,
+                "job_id": job_id
+            }
+        
         # Check if extracted (use silent_404=True to avoid error logging)
         extracted_exists = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt", silent_404=True) is not None
         

@@ -1033,6 +1033,15 @@ export default function ProcessPage() {
         
         const resultsData = await resultsResponse.json();
         
+        // Check if job failed
+        if (resultsData.status === 'failed') {
+          isExtractionPollingRef.current = false;
+          setIsProcessing(false);
+          setCurrentStep('upload'); // Reset to upload state
+          addLog(`❌ Extraction failed: ${resultsData.error || 'Unknown error occurred'}`);
+          return;
+        }
+        
         if (resultsData.extracted) {
           // Extraction is complete, stop polling
           isExtractionPollingRef.current = false;
@@ -1906,9 +1915,6 @@ export default function ProcessPage() {
               <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-4 mt-8">
-                  <div className="w-20 h-20 bg-gray-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                    <Upload className="h-6 w-6 text-white" />
-                  </div>
                   <h1 className="text-2xl font-bold text-white mb-3">Upload Your Data</h1>
                   <p className="text-gray-400 text-lg max-w-2xl mx-auto">
                     Transform your files or ChatGPT conversations into structured context packs
