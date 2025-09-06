@@ -10,12 +10,13 @@ import { analytics } from '@/lib/analytics'
 interface UCPResult {
   ucpId: string
   status: string
-  totalChunks: number
+  total_chunks: number
   completedChunks: number
-  totalInputTokens?: number
-  totalOutputTokens?: number
-  totalCost?: number
+  total_input_tokens?: number
+  total_output_tokens?: number
+  total_cost?: number
   completedAt?: string
+  completed_at?: string
   chunks?: any[]
 }
 
@@ -266,42 +267,42 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
               
               <div className="grid grid-cols-3 gap-3">
                 <button
-                  onClick={canDownloadCompact(result.totalOutputTokens) ? downloadUltraCompact : undefined}
-                  disabled={!canDownloadCompact(result.totalOutputTokens)}
+                  onClick={canDownloadCompact(result.total_output_tokens) ? downloadUltraCompact : undefined}
+                  disabled={!canDownloadCompact(result.total_output_tokens)}
                   className={`p-3 border rounded-lg transition-all text-center group ${
-                    canDownloadCompact(result.totalOutputTokens)
+                    canDownloadCompact(result.total_output_tokens)
                       ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
                       : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
                   }`}
                 >
                   <Download className={`h-4 w-4 mx-auto mb-1 group-hover:scale-110 transition-transform ${
-                    canDownloadCompact(result.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
+                    canDownloadCompact(result.total_output_tokens) ? 'text-gray-600' : 'text-gray-400'
                   }`} />
                   <div className={`text-sm font-medium ${
-                    canDownloadCompact(result.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
+                    canDownloadCompact(result.total_output_tokens) ? 'text-gray-900' : 'text-gray-500'
                   }`}>Compact</div>
                   <div className={`text-xs ${
-                    canDownloadCompact(result.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
+                    canDownloadCompact(result.total_output_tokens) ? 'text-gray-500' : 'text-gray-400'
                   }`}>~50k tokens</div>
                 </button>
                 
                 <button
-                  onClick={canDownloadStandard(result.totalOutputTokens) ? downloadStandard : undefined}
-                  disabled={!canDownloadStandard(result.totalOutputTokens)}
+                  onClick={canDownloadStandard(result.total_output_tokens) ? downloadStandard : undefined}
+                  disabled={!canDownloadStandard(result.total_output_tokens)}
                   className={`p-3 border rounded-lg transition-all text-center group ${
-                    canDownloadStandard(result.totalOutputTokens)
+                    canDownloadStandard(result.total_output_tokens)
                       ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
                       : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
                   }`}
                 >
                   <Download className={`h-4 w-4 mx-auto mb-1 group-hover:scale-110 transition-transform ${
-                    canDownloadStandard(result.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
+                    canDownloadStandard(result.total_output_tokens) ? 'text-gray-600' : 'text-gray-400'
                   }`} />
                   <div className={`text-sm font-medium ${
-                    canDownloadStandard(result.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
+                    canDownloadStandard(result.total_output_tokens) ? 'text-gray-900' : 'text-gray-500'
                   }`}>Standard</div>
                   <div className={`text-xs ${
-                    canDownloadStandard(result.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
+                    canDownloadStandard(result.total_output_tokens) ? 'text-gray-500' : 'text-gray-400'
                   }`}>~100k tokens</div>
                 </button>
                 
@@ -312,8 +313,8 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
                   <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                   <div className="text-sm font-medium text-gray-900">Complete</div>
                   <div className="text-xs text-gray-500">
-                    {result.totalOutputTokens 
-                      ? `~${formatTokenCount(result.totalOutputTokens)}` 
+                    {result.total_output_tokens 
+                      ? `~${formatTokenCount(result.total_output_tokens)}` 
                       : 'All tokens'
                     }
                   </div>
@@ -329,7 +330,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
                 <CheckCircle className="h-5 w-5 text-gray-600" />
               </div>
               <div className="text-lg font-semibold text-gray-900">
-                {result.totalChunks || 0}
+                {result.total_chunks || 0}
               </div>
               <div className="text-sm text-gray-600 font-medium">Chunks</div>
             </div>
@@ -338,7 +339,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
                 <BarChart3 className="h-5 w-5 text-gray-600" />
               </div>
               <div className="text-lg font-semibold text-gray-900">
-                {result.totalInputTokens ? result.totalInputTokens.toLocaleString() : '0'}
+                {result.total_input_tokens ? result.total_input_tokens.toLocaleString() : '0'}
               </div>
               <div className="text-sm text-gray-600 font-medium">Input Tokens</div>
             </div>
@@ -347,7 +348,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
                 <Brain className="h-5 w-5 text-gray-600" />
               </div>
               <div className="text-lg font-semibold text-gray-900">
-                {result.totalOutputTokens ? result.totalOutputTokens.toLocaleString() : '0'}
+                {result.total_output_tokens ? result.total_output_tokens.toLocaleString() : '0'}
               </div>
               <div className="text-sm text-gray-600 font-medium">Output Tokens</div>
             </div>
@@ -356,16 +357,16 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
                 <Clock className="h-5 w-5 text-gray-600" />
               </div>
               <div className="text-lg font-semibold text-gray-900">
-                ${result.totalCost ? result.totalCost.toFixed(3) : '0.000'}
+                ${result.total_cost ? result.total_cost.toFixed(3) : '0.000'}
               </div>
               <div className="text-sm text-gray-600 font-medium">Total Cost</div>
             </div>
           </div>
 
-          {result.completedAt && (
+          {(result.completedAt || result.completed_at) && (
             <div className="text-center text-sm text-gray-500">
               <div className="flex items-center justify-center space-x-4">
-                <span>Completed: {new Date(result.completedAt).toLocaleString()}</span>
+                <span>Completed: {new Date(result.completedAt || result.completed_at!).toLocaleString()}</span>
               </div>
             </div>
           )}
@@ -376,12 +377,12 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
           <div className="bg-white border border-gray-200 p-6 mb-6">
             <div className="flex justify-between text-sm text-gray-600 mb-2">
               <span>Processing Progress</span>
-              <span>{Math.round((result.completedChunks / result.totalChunks) * 100)}%</span>
+              <span>{Math.round((result.completedChunks / result.total_chunks) * 100)}%</span>
             </div>
             <div className="w-full bg-gray-200 h-2">
               <div 
                 className="bg-gray-600 h-2 transition-all duration-500"
-                style={{ width: `${(result.completedChunks / result.totalChunks) * 100}%` }}
+                style={{ width: `${(result.completedChunks / result.total_chunks) * 100}%` }}
               />
             </div>
           </div>

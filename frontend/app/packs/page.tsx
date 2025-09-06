@@ -12,11 +12,12 @@ interface UCPPack {
   ucpId?: string
   id?: string
   status: string
-  totalChunks: number
-  totalInputTokens?: number
-  totalOutputTokens?: number
-  totalCost?: number
+  total_chunks: number
+  total_input_tokens?: number
+  total_output_tokens?: number
+  total_cost?: number
   completedAt: string
+  completed_at?: string
   savedAt: string
 }
 
