@@ -1457,9 +1457,11 @@ async def process_conversation_url_background(job_id: str, url: str, platform: s
         
         update_job_progress(job_id, "extracting", 30, f"Extracting conversation from {platform.title()}...")
         
-        # Extract conversation with better error handling
+        # Extract conversation with better error handling and platform-specific timeouts
         try:
-            result = extract_function(url, timeout=60)
+            # Set timeout based on platform (some are faster than others)
+            timeout = 30 if platform in ['chatgpt', 'claude'] else 20  # Grok/Gemini get shorter timeout
+            result = extract_function(url, timeout=timeout)
             
             if not result or not result.get('messages'):
                 print(f"No messages extracted from URL: {url}")

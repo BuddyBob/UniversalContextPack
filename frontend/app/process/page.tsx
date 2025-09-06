@@ -485,7 +485,9 @@ export default function ProcessPage() {
     try {
       // Detect platform from URL
       const platform = conversationUrl.includes('chatgpt.com/share/') ? 'ChatGPT' : 
-                      conversationUrl.includes('claude.ai/share/') ? 'Claude' : 'Unknown';
+                      conversationUrl.includes('claude.ai/share/') ? 'Claude' :
+                      conversationUrl.includes('grok.com/share/') ? 'Grok' :
+                      conversationUrl.includes('g.co/gemini/share/') ? 'Gemini' : 'Unknown';
       
       addLog(`Starting ${platform} URL extraction...`);
       

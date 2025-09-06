@@ -40,6 +40,9 @@ class ProductionGrokExtractor:
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--disable-plugins')
             chrome_options.add_argument('--disable-images')
+            chrome_options.add_argument('--disable-background-timer-throttling')
+            chrome_options.add_argument('--disable-renderer-backgrounding')
+            chrome_options.add_argument('--disable-backgrounding-occluded-windows')
             chrome_options.add_argument('--window-size=1920,1080')
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -95,9 +98,9 @@ class ProductionGrokExtractor:
                 driver = webdriver.Chrome(options=chrome_options)
                 print("Using default Chrome driver")
             
-            # Set timeouts
-            driver.set_page_load_timeout(self.timeout)
-            driver.implicitly_wait(10)
+            # Set aggressive timeouts for faster processing
+            driver.set_page_load_timeout(15)  # Reduced from default timeout
+            driver.implicitly_wait(3)  # Reduced from 10 seconds
             
             # Set user agent to appear more like a real browser
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -209,11 +212,11 @@ class ProductionGrokExtractor:
                 print("Loading Grok conversation page...")
                 driver.get(url)
                 
-                # Wait for the page to load
-                time.sleep(5)  # Grok might need more time to load
+                # Reduced wait time for faster processing
+                time.sleep(2)  # Reduced from 5 seconds
                 
-                # Wait for conversation content to be present
-                wait = WebDriverWait(driver, self.timeout)
+                # Wait for conversation content to be present with shorter timeout
+                wait = WebDriverWait(driver, 10)  # Reduced from self.timeout
                 
                 # Try multiple selectors for Grok conversation content
                 possible_selectors = [
@@ -270,6 +273,11 @@ class ProductionGrokExtractor:
                     message_elements = [div for div in all_divs if len(div.get_attribute('textContent') or '') > 20]
                 
                 print(f"Found {len(message_elements)} potential message elements")
+                
+                # Fail fast if no message elements found after reasonable attempts
+                if not message_elements:
+                    print("No message elements found - failing fast to avoid hanging")
+                    raise ValueError("No conversation content found on the page - this might not be a valid Grok share link or the page structure has changed")
                 
                 # Extract messages
                 current_role = 'user'  # Start with user
