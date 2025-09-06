@@ -171,6 +171,56 @@ export default function PacksPage() {
     }
   }
 
+  const downloadCompact = async (ucpId: string) => {
+    try {
+      const headers: Record<string, string> = {};
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/download/${ucpId}/ultra-compact`, {
+        headers,
+      })
+      if (!response.ok) throw new Error('Failed to download compact UCP')
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `compact_ucp_${ucpId}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Failed to download compact UCP')
+    }
+  }
+
+  const downloadStandard = async (ucpId: string) => {
+    try {
+      const headers: Record<string, string> = {};
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/download/${ucpId}/standard`, {
+        headers,
+      })
+      if (!response.ok) throw new Error('Failed to download standard UCP')
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `standard_ucp_${ucpId}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Failed to download standard UCP')
+    }
+  }
+
   const downloadPack = async (ucpId: string) => {
     try {
       const headers: Record<string, string> = {};
@@ -295,60 +345,86 @@ export default function PacksPage() {
                       <h3 className="text-lg font-medium text-gray-900">Pack Details</h3>
                       <p className="text-sm text-gray-600 mt-1">UCP ID: {selectedPack.ucpId || selectedPack.id}</p>
                     </div>
-                    <div className="flex space-x-3">
-                      <button
-                        onClick={() => downloadComplete(selectedPack.ucpId || selectedPack.id || '')}
-                        className="bg-gray-600 hover:bg-gray-700 text-  px-4 py-2 text-sm font-medium transition-colors flex items-center space-x-2"
-                      >
-                        <Download className="h-4 w-4" />
-                        <span>Download UCP</span>
-                      </button>
+                  </div>
+
+                  {/* Download Options */}
+                  <div className="mb-6">
+                    <h4 className="text-md font-medium text-gray-900 mb-3">Download Options</h4>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                       <button
                         onClick={() => downloadPack(selectedPack.ucpId || selectedPack.id || '')}
-                        className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 text-sm font-medium transition-colors flex items-center space-x-2"
+                        className="p-3 border border-gray-200 bg-gray-50 hover:border-gray-400 hover:bg-gray-100 rounded-lg transition-all text-center group"
                       >
-                        <Download className="h-4 w-4" />
-                        <span>Download Pack</span>
+                        <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                        <div className="text-sm font-medium text-gray-900">Entire Pack</div>
+                        <div className="text-xs text-gray-500">All formats</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => downloadCompact(selectedPack.ucpId || selectedPack.id || '')}
+                        className="p-3 border border-green-200 bg-green-50 hover:border-green-400 hover:bg-green-100 rounded-lg transition-all text-center group"
+                      >
+                        <Download className="h-4 w-4 text-green-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                        <div className="text-sm font-medium text-green-900">Compact</div>
+                        <div className="text-xs text-green-600">Good for GPT</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => downloadStandard(selectedPack.ucpId || selectedPack.id || '')}
+                        className="p-3 border border-blue-200 bg-blue-50 hover:border-blue-400 hover:bg-blue-100 rounded-lg transition-all text-center group"
+                      >
+                        <Download className="h-4 w-4 text-blue-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                        <div className="text-sm font-medium text-blue-900">Standard</div>
+                        <div className="text-xs text-blue-600">Good for Claude</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => downloadComplete(selectedPack.ucpId || selectedPack.id || '')}
+                        className="p-3 border border-purple-200 bg-purple-50 hover:border-purple-400 hover:bg-purple-100 rounded-lg transition-all text-center group"
+                      >
+                        <Download className="h-4 w-4 text-purple-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                        <div className="text-sm font-medium text-purple-900">Complete</div>
+                        <div className="text-xs text-purple-600">Good for Gemini</div>
                       </button>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-gray-50 p-4 text-center">
+                    <div className="bg-blue-50 border border-blue-200 p-4 text-center rounded-lg">
                       <div className="flex items-center justify-center mb-2">
-                        <FileText className="h-5 w-5 text-gray-600" />
+                        <FileText className="h-5 w-5 text-blue-600" />
                       </div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-lg font-semibold text-blue-900">
                         {selectedPack.totalChunks}
                       </div>
-                      <div className="text-sm text-gray-600">Chunks</div>
+                      <div className="text-sm text-blue-600 font-medium">Chunks</div>
                     </div>
-                    <div className="bg-gray-50  p-4 text-center">
+                    <div className="bg-green-50 border border-green-200 p-4 text-center rounded-lg">
                       <div className="flex items-center justify-center mb-2">
-                        <BarChart3 className="h-5 w-5 text-gray-600" />
+                        <BarChart3 className="h-5 w-5 text-green-600" />
                       </div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-lg font-semibold text-green-900">
                         {selectedPack.totalInputTokens?.toLocaleString() || 'N/A'}
                       </div>
-                      <div className="text-sm text-gray-600">Input Tokens</div>
+                      <div className="text-sm text-green-600 font-medium">Input Tokens</div>
                     </div>
-                    <div className="bg-gray-50  p-4 text-center">
+                    <div className="bg-purple-50 border border-purple-200 p-4 text-center rounded-lg">
                       <div className="flex items-center justify-center mb-2">
-                        <Brain className="h-5 w-5 text-gray-600" />
+                        <Brain className="h-5 w-5 text-purple-600" />
                       </div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-lg font-semibold text-purple-900">
                         {selectedPack.totalOutputTokens?.toLocaleString() || 'N/A'}
                       </div>
-                      <div className="text-sm text-gray-600">Output Tokens</div>
+                      <div className="text-sm text-purple-600 font-medium">Output Tokens</div>
                     </div>
-                    <div className="bg-gray-50 p-4 text-center">
+                    <div className="bg-orange-50 border border-orange-200 p-4 text-center rounded-lg">
                       <div className="flex items-center justify-center mb-2">
-                        <DollarSign className="h-5 w-5 text-gray-600" />
+                        <DollarSign className="h-5 w-5 text-orange-600" />
                       </div>
-                      <div className="text-lg font-semibold text-gray-900">
+                      <div className="text-lg font-semibold text-orange-900">
                         ${selectedPack.totalCost?.toFixed(3) || '0.000'}
                       </div>
-                      <div className="text-sm text-gray-600">Total Cost</div>
+                      <div className="text-sm text-orange-600 font-medium">Total Cost</div>
                     </div>
                   </div>
 

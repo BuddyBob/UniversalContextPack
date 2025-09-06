@@ -248,51 +248,76 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
               <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={downloadUltraCompact}
-                  className="p-4 border border-gray-200 hover:border-green-400 hover:bg-green-50 rounded-lg transition-all text-center"
+                  className="p-4 border border-green-200 bg-green-50 hover:border-green-400 hover:bg-green-100 rounded-lg transition-all text-center group"
                 >
-                  <div className="font-medium text-gray-900">Compact</div>
-                  <div className="text-sm text-gray-500">Good for GPT</div>
+                  <Download className="h-5 w-5 text-green-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <div className="font-medium text-green-900">Compact</div>
+                  <div className="text-sm text-green-600">Good for GPT</div>
                 </button>
                 
                 <button
                   onClick={downloadStandard}
-                  className="p-4 border border-gray-200 hover:border-blue-400 hover:bg-blue-50 rounded-lg transition-all text-center"
+                  className="p-4 border border-blue-200 bg-blue-50 hover:border-blue-400 hover:bg-blue-100 rounded-lg transition-all text-center group"
                 >
-                  <div className="font-medium text-gray-900">Standard</div>
-                  <div className="text-sm text-gray-500">Good for Claude</div>
+                  <Download className="h-5 w-5 text-blue-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <div className="font-medium text-blue-900">Standard</div>
+                  <div className="text-sm text-blue-600">Good for Claude</div>
                 </button>
                 
                 <button
                   onClick={downloadComplete}
-                  className="p-4 border border-gray-200 hover:border-purple-400 hover:bg-purple-50 rounded-lg transition-all text-center"
+                  className="p-4 border border-purple-200 bg-purple-50 hover:border-purple-400 hover:bg-purple-100 rounded-lg transition-all text-center group"
                 >
-                  <div className="font-medium text-gray-900">Complete</div>
-                  <div className="text-sm text-gray-500">Good for Gemini</div>
+                  <Download className="h-5 w-5 text-purple-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
+                  <div className="font-medium text-purple-900">Complete</div>
+                  <div className="text-sm text-purple-600">Good for Gemini</div>
                 </button>
               </div>
             </div>
           )}
 
           {/* Token Stats */}
-          <div className="grid grid-cols-2 gap-4 mt-6">
-            <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
               <div className="flex items-center space-x-3">
-                <BarChart3 className="h-5 w-5 text-gray-500" />
+                <BarChart3 className="h-5 w-5 text-blue-600" />
                 <div>
-                  <div className="text-sm text-gray-500">Input Tokens</div>
-                  <div className="text-lg font-semibold text-gray-900">
+                  <div className="text-sm text-blue-600 font-medium">Input Tokens</div>
+                  <div className="text-lg font-semibold text-blue-900">
                     {result.totalInputTokens?.toLocaleString() || 'N/A'}
                   </div>
                 </div>
               </div>
             </div>
-            <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
               <div className="flex items-center space-x-3">
-                <Brain className="h-5 w-5 text-gray-500" />
+                <Brain className="h-5 w-5 text-green-600" />
                 <div>
-                  <div className="text-sm text-gray-500">Output Tokens</div>
-                  <div className="text-lg font-semibold text-gray-900">
+                  <div className="text-sm text-green-600 font-medium">Output Tokens</div>
+                  <div className="text-lg font-semibold text-green-900">
                     {result.totalOutputTokens?.toLocaleString() || 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <CheckCircle className="h-5 w-5 text-purple-600" />
+                <div>
+                  <div className="text-sm text-purple-600 font-medium">Total Chunks</div>
+                  <div className="text-lg font-semibold text-purple-900">
+                    {result.totalChunks?.toLocaleString() || 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-orange-50 border border-orange-200 p-4 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <Clock className="h-5 w-5 text-orange-600" />
+                <div>
+                  <div className="text-sm text-orange-600 font-medium">Processing Cost</div>
+                  <div className="text-lg font-semibold text-orange-900">
+                    ${result.totalCost?.toFixed(4) || 'N/A'}
                   </div>
                 </div>
               </div>
