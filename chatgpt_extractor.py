@@ -45,7 +45,7 @@ class ProductionChatGPTExtractor:
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             
-            # Try to use system Chrome first, then fall back to ChromeDriverManager
+            # Try to use system Chrome and chromedriver
             try:
                 # Try different Chrome binary locations
                 chrome_binaries = [
@@ -65,7 +65,25 @@ class ProductionChatGPTExtractor:
                     chrome_options.binary_location = chrome_binary
                     print(f"Using Chrome binary: {chrome_binary}")
                 
-                service = Service(ChromeDriverManager().install())
+                # Try system chromedriver first, then fall back to ChromeDriverManager
+                chromedriver_paths = [
+                    '/usr/local/bin/chromedriver',
+                    '/usr/bin/chromedriver'
+                ]
+                
+                chromedriver_path = None
+                for path in chromedriver_paths:
+                    if os.path.exists(path):
+                        chromedriver_path = path
+                        break
+                
+                if chromedriver_path:
+                    print(f"Using system chromedriver: {chromedriver_path}")
+                    service = Service(chromedriver_path)
+                else:
+                    print("Using ChromeDriverManager...")
+                    service = Service(ChromeDriverManager().install())
+                
                 driver = webdriver.Chrome(service=service, options=chrome_options)
                 print("Chrome driver initialized successfully")
             except Exception as e:

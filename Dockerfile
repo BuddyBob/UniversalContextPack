@@ -12,6 +12,13 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
+# Install ChromeDriver using the new method
+RUN wget -O /tmp/chromedriver.zip "https://storage.googleapis.com/chrome-for-testing-public/131.0.6778.85/linux64/chromedriver-linux64.zip" \
+    && unzip /tmp/chromedriver.zip -d /tmp/ \
+    && mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm -rf /tmp/chromedriver.zip /tmp/chromedriver-linux64
+
 WORKDIR /app
 
 COPY requirements.txt .
