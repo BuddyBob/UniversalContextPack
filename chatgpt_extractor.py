@@ -45,7 +45,7 @@ class ProductionChatGPTExtractor:
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             
-            # Try to use system Chrome and chromedriver
+                        # Try to use system Chrome first, then fall back to ChromeDriverManager
             try:
                 # Try different Chrome binary locations
                 chrome_binaries = [
@@ -65,7 +65,7 @@ class ProductionChatGPTExtractor:
                     chrome_options.binary_location = chrome_binary
                     print(f"Using Chrome binary: {chrome_binary}")
                 
-                # Try system chromedriver first, then fall back to ChromeDriverManager
+                # Try system chromedriver first
                 chromedriver_paths = [
                     '/usr/local/bin/chromedriver',
                     '/usr/bin/chromedriver'
@@ -81,14 +81,32 @@ class ProductionChatGPTExtractor:
                     print(f"Using system chromedriver: {chromedriver_path}")
                     service = Service(chromedriver_path)
                 else:
-                    print("Using ChromeDriverManager...")
+                    print("System chromedriver not found, using ChromeDriverManager...")
                     service = Service(ChromeDriverManager().install())
                 
                 driver = webdriver.Chrome(service=service, options=chrome_options)
                 print("Chrome driver initialized successfully")
             except Exception as e:
-                print(f"Chrome setup failed: {e}")
-                raise
+                error_msg = str(e)
+                print(f"Chrome setup failed: {error_msg}")
+                
+                # Check for version mismatch specifically
+                if "This version of ChromeDriver only supports Chrome version" in error_msg:
+                    print("ChromeDriver version mismatch detected!")
+                    print("This is a common issue in production environments.")
+                    
+                # Try fallback with ChromeDriverManager if system chromedriver failed
+                if chromedriver_path and "ChromeDriver only supports Chrome version" in error_msg:
+                    print("Retrying with ChromeDriverManager as fallback...")
+                    try:
+                        service = Service(ChromeDriverManager().install())
+                        driver = webdriver.Chrome(service=service, options=chrome_options)
+                        print("Fallback ChromeDriverManager succeeded")
+                    except Exception as fallback_error:
+                        print(f"Fallback also failed: {fallback_error}")
+                        raise
+                else:
+                    raise
             
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
