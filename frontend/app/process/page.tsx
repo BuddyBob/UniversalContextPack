@@ -1903,36 +1903,104 @@ export default function ProcessPage() {
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
-              <div className="bg-gray-700 border border-gray-600 rounded-lg p-8">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-accent-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <Upload className="h-8 w-8 text-accent-primary" />
+              <div className="max-w-4xl mx-auto">
+                {/* Header */}
+                <div className="text-center mb-8">
+                  <div className="w-20 h-20 bg-gradient-to-br from-accent-primary to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                    <Upload className="h-10 w-10 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Upload Your Data</h3>
-                  <p className="text-gray-400 text-sm">
-                    Upload files or paste a ChatGPT URL
+                  <h1 className="text-3xl font-bold text-white mb-3">Upload Your Data</h1>
+                  <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                    Transform your files or ChatGPT conversations into structured context packs
                   </p>
                 </div>
 
-                {/* Main Upload Area */}
-                <div 
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    isDragOver 
-                      ? 'border-accent-primary bg-accent-primary/5' 
-                      : 'border-gray-600 hover:border-gray-500'
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json,.txt,.html"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  
+                {/* Main Upload Options */}
+                <div className="grid md:grid-cols-2 gap-6 mb-8">
+                  {/* File Upload Card */}
+                  <div 
+                    className={`group bg-gray-800/50 backdrop-blur-sm border-2 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-800/70 hover:border-accent-primary/50 hover:shadow-xl cursor-pointer ${
+                      isDragOver 
+                        ? 'border-accent-primary bg-accent-primary/10 shadow-2xl scale-105' 
+                        : 'border-gray-700'
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json,.txt,.html"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                      <FileText className="h-8 w-8 text-white" />
+                    </div>
+                    
+                    <h3 className="text-xl font-semibold text-white mb-3">Upload Files</h3>
+                    <p className="text-gray-400 mb-6 leading-relaxed">
+                      Drag & drop files here or click to browse
+                    </p>
+                    
+                    <div className="flex flex-wrap gap-2 justify-center mb-4">
+                      <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.json</span>
+                      <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.txt</span>
+                      <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.html</span>
+                    </div>
+                    
+                    <button className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 rounded-xl font-medium transition-all group-hover:shadow-lg">
+                      Choose Files
+                    </button>
+                  </div>
+
+                  {/* ChatGPT URL Card */}
+                  <div className="bg-gray-800/50 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-800/70 hover:border-accent-primary/50 hover:shadow-xl">
+                    <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center mx-auto mb-6">
+                      <ExternalLink className="h-8 w-8 text-white" />
+                    </div>
+                    
+                    <h3 className="text-xl font-semibold text-white mb-3">ChatGPT Conversation</h3>
+                    <p className="text-gray-400 mb-6 leading-relaxed">
+                      Paste a shared ChatGPT conversation URL
+                    </p>
+                    
+                    <div className="space-y-4">
+                      <input
+                        type="url"
+                        value={chatgptUrl}
+                        onChange={(e) => setChatgptUrl(e.target.value)}
+                        placeholder="https://chatgpt.com/share/..."
+                        className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-xl text-white placeholder-gray-500 focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20 transition-all"
+                      />
+                      
+                      <button
+                        onClick={() => processChatGPTUrl(chatgptUrl)}
+                        disabled={!chatgptUrl.trim()}
+                        className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium transition-all disabled:hover:from-green-500 disabled:hover:to-emerald-600"
+                      >
+                        Extract Conversation
+                      </button>
+                      
+                      <p className="text-gray-500 text-sm">
+                        Only publicly shared conversations
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Advanced Options */}
+                <div className="text-center">
+                  <button
+                    onClick={() => folderInputRef.current?.click()}
+                    className="inline-flex items-center space-x-2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <FileText className="h-4 w-4" />
+                    <span className="text-sm">Upload entire folder</span>
+                  </button>
                   <input
                     ref={folderInputRef}
                     type="file"
@@ -1941,175 +2009,166 @@ export default function ProcessPage() {
                     onChange={handleFolderSelect}
                     className="hidden"
                   />
-                  
-                  {/* File Upload Buttons */}
-                  <div className="mb-6">
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-4">
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="bg-accent-primary hover:bg-accent-primary/90 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
-                      >
-                        <Upload className="h-4 w-4" />
-                        <span>Choose File</span>
-                      </button>
-                      
-                      <button
-                        onClick={() => folderInputRef.current?.click()}
-                        className="bg-gray-600 hover:bg-gray-500 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
-                      >
-                        <FileText className="h-4 w-4" />
-                        <span>Upload Folder</span>
-                      </button>
-                    </div>
-                    
-                    <p className="text-gray-400 text-xs">
-                      Support: .json, .txt, .html files
-                    </p>
-                  </div>
-
-                  {/* Divider */}
-                  <div className="flex items-center my-6">
-                    <div className="flex-1 border-t border-gray-600"></div>
-                    <span className="px-3 text-gray-400 text-sm">or</span>
-                    <div className="flex-1 border-t border-gray-600"></div>
-                  </div>
-
-                  {/* ChatGPT URL Input */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-center space-x-2 mb-3">
-                      <ExternalLink className="h-5 w-5 text-accent-primary" />
-                      <span className="text-white font-medium">Paste ChatGPT Share URL</span>
-                    </div>
-                    
-                    <div className="flex gap-2 max-w-2xl mx-auto">
-                      <input
-                        type="url"
-                        value={chatgptUrl}
-                        onChange={(e) => setChatgptUrl(e.target.value)}
-                        placeholder="https://chatgpt.com/share/your-conversation-id"
-                        className="flex-1 px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-accent-primary focus:outline-none text-sm"
-                      />
-                      <button
-                        onClick={() => processChatGPTUrl(chatgptUrl)}
-                        disabled={!chatgptUrl.trim()}
-                        className="bg-accent-primary hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-medium transition-colors"
-                      >
-                        Load
-                      </button>
-                    </div>
-                    
-                    <p className="text-gray-500 text-xs">
-                      Only works with publicly shared ChatGPT conversations
-                    </p>
-                  </div>
                 </div>
               </div>
             )}
 
             {/* File or URL Selected */}
             {(file || chatgptUrl) && currentStep === 'uploaded' && (
-              <div className="bg-gray-800 border border-gray-600 rounded-lg p-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-text-primary">
-                    {chatgptUrl ? 'ChatGPT URL Ready' : 'File Ready'}
-                  </h3>
-                </div>
-                
-                <div className="flex items-center space-x-4 mb-6 p-4 bg-gray-700 rounded-lg">
-                  {chatgptUrl ? (
-                    <ExternalLink className="h-8 w-8 text-accent-primary" />
-                  ) : (
-                    <FileText className="h-8 w-8 text-accent-primary" />
-                  )}
-                  <div className="flex-1">
-                    {chatgptUrl ? (
-                      <>
-                        <p className="font-medium text-text-primary">ChatGPT Conversation</p>
-                        <p className="text-sm text-text-secondary break-all">
-                          {chatgptUrl}
-                        </p>
-                      </>
-                    ) : file ? (
-                      <>
-                        <p className="font-medium text-text-primary">{file.name}</p>
-                        <p className="text-sm text-text-secondary">
-                          {(file.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                      </>
-                    ) : null}
-                    {/* Time Estimates Display */}
-                    <div className="mt-3 space-y-1">
-                      {timeEstimate && (
-                        <div className="flex items-center text-xs text-gray-400">
-                          <span className="w-16">Extract:</span>
-                          <span>{timeEstimate.time_estimates.extraction.formatted}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center text-xs text-gray-400">
-                        <span className="w-16">Pack:</span>
-                        <span>Estimated after extraction</span>
-                      </div>
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-2xl p-8 shadow-xl">
+                  {/* Success Header */}
+                  <div className="flex items-center space-x-4 mb-6">
+                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+                      <CheckCircle className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-white">
+                        {chatgptUrl ? 'ChatGPT Conversation Loaded' : 'File Selected'}
+                      </h3>
+                      <p className="text-gray-400 text-sm">Ready for processing</p>
                     </div>
                   </div>
-                  {chatgptUrl && (
+                  
+                  {/* File/URL Info Card */}
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 mb-6">
+                    <div className="flex items-start space-x-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-accent-primary to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        {chatgptUrl ? (
+                          <ExternalLink className="h-6 w-6 text-white" />
+                        ) : (
+                          <FileText className="h-6 w-6 text-white" />
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        {chatgptUrl ? (
+                          <>
+                            <h4 className="font-medium text-white mb-2">ChatGPT Conversation</h4>
+                            <p className="text-sm text-gray-400 break-all bg-gray-800 px-3 py-2 rounded-lg font-mono">
+                              {chatgptUrl}
+                            </p>
+                          </>
+                        ) : file ? (
+                          <>
+                            <h4 className="font-medium text-white mb-2">{file.name}</h4>
+                            <div className="flex items-center space-x-4 text-sm text-gray-400">
+                              <span>Size: {(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                              <span>Type: {file.type || 'Unknown'}</span>
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                    
+                    {/* Time Estimates */}
+                    {timeEstimate && (
+                      <div className="mt-6 pt-6 border-t border-gray-700">
+                        <h5 className="text-sm font-medium text-gray-300 mb-3">Estimated Processing Time</h5>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="bg-gray-800/50 px-4 py-3 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-400">Extraction</span>
+                              <span className="text-sm font-medium text-white">{timeEstimate.time_estimates.extraction.formatted}</span>
+                            </div>
+                          </div>
+                          {timeEstimate.time_estimates.analysis && (
+                            <div className="bg-gray-800/50 px-4 py-3 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-400">Analysis</span>
+                                <span className="text-sm font-medium text-white">{timeEstimate.time_estimates.analysis.formatted}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <button
+                      onClick={handleExtract}
+                      disabled={isProcessing}
+                      className="flex-1 bg-gradient-to-r from-accent-primary to-blue-600 hover:from-accent-primary/90 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-4 rounded-xl font-medium transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                    >
+                      {isProcessing ? (
+                        <Loader className="h-5 w-5 animate-spin" />
+                      ) : chatgptUrl ? (
+                        <ExternalLink className="h-5 w-5" />
+                      ) : (
+                        <FileText className="h-5 w-5" />
+                      )}
+                      <span>
+                        {isProcessing 
+                          ? 'Processing...' 
+                          : chatgptUrl 
+                            ? 'Extract ChatGPT Conversation' 
+                            : 'Process File'
+                        }
+                      </span>
+                    </button>
+                    
                     <button
                       onClick={() => {
-                        setChatgptUrl('');
+                        if (chatgptUrl) {
+                          setChatgptUrl('');
+                        } else {
+                          setFile(null);
+                        }
                         setCurrentStep('upload');
+                        setTimeEstimate(null);
+                        setCostEstimate(null);
                       }}
-                      className="text-gray-400 hover:text-white p-1"
-                      title="Clear URL"
+                      className="px-6 py-4 border border-gray-600 text-gray-400 hover:text-white hover:border-gray-500 rounded-xl font-medium transition-all flex items-center justify-center space-x-2"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-5 w-5" />
+                      <span>Clear & Start Over</span>
                     </button>
-                  )}
+                  </div>
                 </div>
-
-                <button
-                  onClick={handleExtract}
-                  disabled={isProcessing}
-                  className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
-                >
-                  {chatgptUrl ? <ExternalLink className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                  <span>{chatgptUrl ? 'Extract ChatGPT Conversation' : 'Chunk Content'}</span>
-                </button>
               </div>
             )}
 
             {/* Chunking Progress */}
             {currentStep === 'chunking' && (
-              <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full" />
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-2xl p-8 shadow-xl">
+                  <div className="flex items-center space-x-4 mb-6">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center">
+                      <div className="animate-spin h-6 w-6 border-2 border-white border-t-transparent rounded-full" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-white">Creating Chunks</h3>
+                      <p className="text-gray-400">Breaking your content into semantic chunks for analysis...</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-text-primary">Creating Chunks</h3>
-                    <p className="text-text-secondary text-sm">Breaking your content into semantic chunks for analysis...</p>
+                  
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                      <span className="text-blue-300 font-medium">Optimizing content into 150k token chunks</span>
+                    </div>
                   </div>
-                </div>
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                  <div className="text-sm text-blue-300">⚡ Pack your chunks intooptimized 150k token chunks</div>
                 </div>
               </div>
             )}
 
             {/* Chunk Actions */}
             {['chunked', 'analyzing', 'analyzed'].includes(currentStep) && chunkData && (
-              <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div>
-                    <h3 className="text-lg font-semibold text-text-primary">Create Universal Context Pack</h3>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Your conversation has been segmented into {chunkData.total_chunks} optimized chunks. These need to be analyzed and structured into a Universal Context Pack for AI use.
-                    </p>
-                    
-
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-2xl p-8 shadow-xl">
+                  <div className="flex items-center space-x-4 mb-6">
+                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center">
+                      <Brain className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-white">Create Universal Context Pack</h3>
+                      <p className="text-gray-400">
+                        Your content has been segmented into {chunkData.total_chunks} optimized chunks ready for AI processing
+                      </p>
+                    </div>
                   </div>
-                </div>
 
                 <div className="flex space-x-3">
                   {currentStep === 'chunked' && (
@@ -2156,6 +2215,7 @@ export default function ProcessPage() {
                     <span>{isDownloading ? 'Downloading...' : 'Download Raw Chunks'}</span>
                   </button>
                 </div>
+              </div>
               </div>
             )}
 
