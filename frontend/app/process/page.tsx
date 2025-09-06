@@ -1921,25 +1921,12 @@ export default function ProcessPage() {
               <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-6">
                   <div>
-                    <h3 className="text-lg font-semibold text-text-primary">Ready for UCP Creation</h3>
+                    <h3 className="text-lg font-semibold text-text-primary">Create Universal Context Pack</h3>
                     <p className="text-sm text-gray-400 mt-1">
                       Your conversation has been segmented into {chunkData.total_chunks} optimized chunks. These need to be analyzed and structured into a Universal Context Pack for AI use.
                     </p>
                     
-                    
-                    {/* Simple Options */}
-                    <div className="mt-6 space-y-3">
-                      
-                      <div className="p-4 bg-gray-750 rounded-lg border border-gray-600">
-                        <div className="flex items-center space-x-3">
-                          <Brain className="h-5 w-5 text-blue-400" />
-                          <div>
-                            <div className="font-medium text-white">Create Universal Context Pack</div>
-                            <div className="text-sm text-gray-400">Transform chunks into context format</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+
                   </div>
                 </div>
 

@@ -261,77 +261,112 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
           
           {/* Download Options */}
           {result.status === 'completed' && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Download UCP</h3>
+            <div className="mb-6">
+              <h4 className="text-md font-medium text-gray-900 mb-3">Download Options</h4>
               
               <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={canDownloadCompact(result.totalOutputTokens) ? downloadUltraCompact : undefined}
                   disabled={!canDownloadCompact(result.totalOutputTokens)}
-                  className={`p-4 border rounded-lg transition-all text-center group ${
+                  className={`p-3 border rounded-lg transition-all text-center group ${
                     canDownloadCompact(result.totalOutputTokens)
                       ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
                       : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
                   }`}
                 >
-                  <Download className={`h-5 w-5 mx-auto mb-2 group-hover:scale-110 transition-transform ${
+                  <Download className={`h-4 w-4 mx-auto mb-1 group-hover:scale-110 transition-transform ${
                     canDownloadCompact(result.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
                   }`} />
-                  <div className={`font-medium ${
+                  <div className={`text-sm font-medium ${
                     canDownloadCompact(result.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
                   }`}>Compact</div>
-                  <div className={`text-sm ${
+                  <div className={`text-xs ${
                     canDownloadCompact(result.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
                   }`}>~50k tokens</div>
-                  <div className={`text-xs ${
-                    canDownloadCompact(result.totalOutputTokens) ? 'text-gray-400' : 'text-gray-300'
-                  }`}>Good for GPT</div>
                 </button>
                 
                 <button
                   onClick={canDownloadStandard(result.totalOutputTokens) ? downloadStandard : undefined}
                   disabled={!canDownloadStandard(result.totalOutputTokens)}
-                  className={`p-4 border rounded-lg transition-all text-center group ${
+                  className={`p-3 border rounded-lg transition-all text-center group ${
                     canDownloadStandard(result.totalOutputTokens)
                       ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
                       : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
                   }`}
                 >
-                  <Download className={`h-5 w-5 mx-auto mb-2 group-hover:scale-110 transition-transform ${
+                  <Download className={`h-4 w-4 mx-auto mb-1 group-hover:scale-110 transition-transform ${
                     canDownloadStandard(result.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
                   }`} />
-                  <div className={`font-medium ${
+                  <div className={`text-sm font-medium ${
                     canDownloadStandard(result.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
                   }`}>Standard</div>
-                  <div className={`text-sm ${
+                  <div className={`text-xs ${
                     canDownloadStandard(result.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
                   }`}>~100k tokens</div>
-                  <div className={`text-xs ${
-                    canDownloadStandard(result.totalOutputTokens) ? 'text-gray-400' : 'text-gray-300'
-                  }`}>Good for Claude</div>
                 </button>
                 
                 <button
                   onClick={downloadComplete}
-                  className="p-4 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all text-center group"
+                  className="p-3 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all text-center group"
                 >
-                  <Download className="h-5 w-5 text-gray-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                  <div className="font-medium text-gray-900">Complete</div>
-                  <div className="text-sm text-gray-500">
+                  <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
+                  <div className="text-sm font-medium text-gray-900">Complete</div>
+                  <div className="text-xs text-gray-500">
                     {result.totalOutputTokens 
                       ? `~${formatTokenCount(result.totalOutputTokens)}` 
                       : 'All tokens'
                     }
                   </div>
-                  <div className="text-xs text-gray-400">Good for Gemini</div>
                 </button>
               </div>
             </div>
           )}
 
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-gray-50 border border-gray-200 p-4 text-center rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <CheckCircle className="h-5 w-5 text-gray-600" />
+              </div>
+              <div className="text-lg font-semibold text-gray-900">
+                {result.totalChunks || 0}
+              </div>
+              <div className="text-sm text-gray-600 font-medium">Chunks</div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 p-4 text-center rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <BarChart3 className="h-5 w-5 text-gray-600" />
+              </div>
+              <div className="text-lg font-semibold text-gray-900">
+                {result.totalInputTokens ? result.totalInputTokens.toLocaleString() : '0'}
+              </div>
+              <div className="text-sm text-gray-600 font-medium">Input Tokens</div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 p-4 text-center rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <Brain className="h-5 w-5 text-gray-600" />
+              </div>
+              <div className="text-lg font-semibold text-gray-900">
+                {result.totalOutputTokens ? result.totalOutputTokens.toLocaleString() : '0'}
+              </div>
+              <div className="text-sm text-gray-600 font-medium">Output Tokens</div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 p-4 text-center rounded-lg">
+              <div className="flex items-center justify-center mb-2">
+                <Clock className="h-5 w-5 text-gray-600" />
+              </div>
+              <div className="text-lg font-semibold text-gray-900">
+                ${result.totalCost ? result.totalCost.toFixed(3) : '0.000'}
+              </div>
+              <div className="text-sm text-gray-600 font-medium">Total Cost</div>
+            </div>
+          </div>
+
           {result.completedAt && (
-            <div className="mt-4 text-center text-sm text-gray-500">
-              Completed at {new Date(result.completedAt).toLocaleString()}
+            <div className="text-center text-sm text-gray-500">
+              <div className="flex items-center justify-center space-x-4">
+                <span>Completed: {new Date(result.completedAt).toLocaleString()}</span>
+              </div>
             </div>
           )}
         </div>
