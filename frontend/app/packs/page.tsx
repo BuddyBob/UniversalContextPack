@@ -94,10 +94,10 @@ export default function PacksPage() {
           ucpId: pack.job_id,
           id: pack.job_id,
           status: pack.status,
-          totalChunks: pack.stats?.total_chunks || 0,
-          totalInputTokens: pack.stats?.total_input_tokens || 0,
-          totalOutputTokens: pack.stats?.total_output_tokens || 0,
-          totalCost: pack.stats?.total_cost || 0,
+          total_chunks: pack.stats?.total_chunks || 0,
+          total_input_tokens: pack.stats?.total_input_tokens || 0,
+          total_output_tokens: pack.stats?.total_output_tokens || 0,
+          total_cost: pack.stats?.total_cost || 0,
           completedAt: pack.created_at,
           savedAt: pack.created_at
         }))
@@ -129,10 +129,10 @@ export default function PacksPage() {
               ucpId: job.job_id,
               id: job.job_id,
               status: job.status,
-              totalChunks: job.stats?.total_chunks || 0,
-              totalInputTokens: job.stats?.total_input_tokens || 0,
-              totalOutputTokens: job.stats?.total_output_tokens || 0,
-              totalCost: job.stats?.total_cost || 0,
+              total_chunks: job.stats?.total_chunks || 0,
+              total_input_tokens: job.stats?.total_input_tokens || 0,
+              total_output_tokens: job.stats?.total_output_tokens || 0,
+              total_cost: job.stats?.total_cost || 0,
               completedAt: job.created_at,
               savedAt: job.created_at
             }))
@@ -346,8 +346,8 @@ export default function PacksPage() {
                     </div>
                     
                     <div className="flex justify-between text-xs text-gray-500">
-                      <span>{pack.totalChunks} chunks</span>
-                      <span>${pack.totalCost?.toFixed(3) || '0.000'}</span>
+                      <span>{pack.total_chunks} chunks</span>
+                      <span>${pack.total_cost?.toFixed(3) || '0.000'}</span>
                     </div>
                   </div>
                 ))
@@ -381,42 +381,42 @@ export default function PacksPage() {
                       </button>
                       
                       <button
-                        onClick={canDownloadCompact(selectedPack.totalOutputTokens) ? () => downloadCompact(selectedPack.ucpId || selectedPack.id || '') : undefined}
-                        disabled={!canDownloadCompact(selectedPack.totalOutputTokens)}
+                        onClick={canDownloadCompact(selectedPack.total_output_tokens) ? () => downloadCompact(selectedPack.ucpId || selectedPack.id || '') : undefined}
+                        disabled={!canDownloadCompact(selectedPack.total_output_tokens)}
                         className={`p-3 border rounded-lg transition-all text-center group ${
-                          canDownloadCompact(selectedPack.totalOutputTokens)
+                          canDownloadCompact(selectedPack.total_output_tokens)
                             ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
                             : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
                         }`}
                       >
                         <Download className={`h-4 w-4 mx-auto mb-1 group-hover:scale-110 transition-transform ${
-                          canDownloadCompact(selectedPack.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
+                          canDownloadCompact(selectedPack.total_output_tokens) ? 'text-gray-600' : 'text-gray-400'
                         }`} />
                         <div className={`text-sm font-medium ${
-                          canDownloadCompact(selectedPack.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
+                          canDownloadCompact(selectedPack.total_output_tokens) ? 'text-gray-900' : 'text-gray-500'
                         }`}>Compact</div>
                         <div className={`text-xs ${
-                          canDownloadCompact(selectedPack.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
+                          canDownloadCompact(selectedPack.total_output_tokens) ? 'text-gray-500' : 'text-gray-400'
                         }`}>~50k tokens</div>
                       </button>
                       
                       <button
-                        onClick={canDownloadStandard(selectedPack.totalOutputTokens) ? () => downloadStandard(selectedPack.ucpId || selectedPack.id || '') : undefined}
-                        disabled={!canDownloadStandard(selectedPack.totalOutputTokens)}
+                        onClick={canDownloadStandard(selectedPack.total_output_tokens) ? () => downloadStandard(selectedPack.ucpId || selectedPack.id || '') : undefined}
+                        disabled={!canDownloadStandard(selectedPack.total_output_tokens)}
                         className={`p-3 border rounded-lg transition-all text-center group ${
-                          canDownloadStandard(selectedPack.totalOutputTokens)
+                          canDownloadStandard(selectedPack.total_output_tokens)
                             ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
                             : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
                         }`}
                       >
                         <Download className={`h-4 w-4 mx-auto mb-1 group-hover:scale-110 transition-transform ${
-                          canDownloadStandard(selectedPack.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
+                          canDownloadStandard(selectedPack.total_output_tokens) ? 'text-gray-600' : 'text-gray-400'
                         }`} />
                         <div className={`text-sm font-medium ${
-                          canDownloadStandard(selectedPack.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
+                          canDownloadStandard(selectedPack.total_output_tokens) ? 'text-gray-900' : 'text-gray-500'
                         }`}>Standard</div>
                         <div className={`text-xs ${
-                          canDownloadStandard(selectedPack.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
+                          canDownloadStandard(selectedPack.total_output_tokens) ? 'text-gray-500' : 'text-gray-400'
                         }`}>~100k tokens</div>
                       </button>
                       
@@ -427,8 +427,8 @@ export default function PacksPage() {
                         <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                         <div className="text-sm font-medium text-gray-900">Complete</div>
                         <div className="text-xs text-gray-500">
-                          {selectedPack.totalOutputTokens 
-                            ? `~${formatTokenCount(selectedPack.totalOutputTokens)}` 
+                          {selectedPack.total_output_tokens 
+                            ? `~${formatTokenCount(selectedPack.total_output_tokens)}` 
                             : 'All tokens'
                           }
                         </div>
@@ -442,7 +442,7 @@ export default function PacksPage() {
                         <FileText className="h-5 w-5 text-gray-600" />
                       </div>
                       <div className="text-lg font-semibold text-gray-900">
-                        {selectedPack.totalChunks || 0}
+                        {selectedPack.total_chunks || 0}
                       </div>
                       <div className="text-sm text-gray-600 font-medium">Chunks</div>
                     </div>
@@ -451,7 +451,7 @@ export default function PacksPage() {
                         <BarChart3 className="h-5 w-5 text-gray-600" />
                       </div>
                       <div className="text-lg font-semibold text-gray-900">
-                        {selectedPack.totalInputTokens ? selectedPack.totalInputTokens.toLocaleString() : '0'}
+                        {selectedPack.total_input_tokens ? selectedPack.total_input_tokens.toLocaleString() : '0'}
                       </div>
                       <div className="text-sm text-gray-600 font-medium">Input Tokens</div>
                     </div>
@@ -460,7 +460,7 @@ export default function PacksPage() {
                         <Brain className="h-5 w-5 text-gray-600" />
                       </div>
                       <div className="text-lg font-semibold text-gray-900">
-                        {selectedPack.totalOutputTokens ? selectedPack.totalOutputTokens.toLocaleString() : '0'}
+                        {selectedPack.total_output_tokens ? selectedPack.total_output_tokens.toLocaleString() : '0'}
                       </div>
                       <div className="text-sm text-gray-600 font-medium">Output Tokens</div>
                     </div>
@@ -469,7 +469,7 @@ export default function PacksPage() {
                         <DollarSign className="h-5 w-5 text-gray-600" />
                       </div>
                       <div className="text-lg font-semibold text-gray-900">
-                        ${selectedPack.totalCost ? selectedPack.totalCost.toFixed(3) : '0.000'}
+                        ${selectedPack.total_cost ? selectedPack.total_cost.toFixed(3) : '0.000'}
                       </div>
                       <div className="text-sm text-gray-600 font-medium">Total Cost</div>
                     </div>
