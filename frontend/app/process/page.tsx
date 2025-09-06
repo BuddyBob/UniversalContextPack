@@ -1566,9 +1566,7 @@ export default function ProcessPage() {
   };
 
   const viewResults = () => {
-    if (currentJobId) {
-      router.push(`/results/${currentJobId}`);
-    }
+    router.push('/packs');
   };
 
   return (
