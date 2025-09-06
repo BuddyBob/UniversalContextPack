@@ -1925,9 +1925,9 @@ export default function ProcessPage() {
                 <div className="grid md:grid-cols-2 gap-6 mb-8">
                   {/* File Upload Card */}
                   <div 
-                    className={`group bg-gray-800/50 backdrop-blur-sm border-2 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-800/70 hover:border-gray-600 hover:shadow-xl cursor-pointer ${
+                    className={`group bg-gray-800/60 backdrop-blur-sm border-2 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-800/80 hover:border-gray-500 hover:shadow-xl cursor-pointer ${
                       isDragOver 
-                        ? 'border-gray-500 bg-gray-600/10 shadow-2xl scale-105' 
+                        ? 'border-gray-400 bg-gray-600/20 shadow-2xl scale-105' 
                         : 'border-gray-700'
                     }`}
                     onDragOver={handleDragOver}
@@ -1943,19 +1943,21 @@ export default function ProcessPage() {
                       className="hidden"
                     />
                     
-                    <div className="w-16 h-16 bg-gray-700 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-105 transition-transform">
+                    <div className="w-16 h-16 bg-gray-700/80 border border-gray-600/50 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-105 group-hover:bg-gray-600/80 transition-all">
                       <FileText className="h-8 w-8 text-gray-300" />
                     </div>
                     
               <h3 className="text-xl font-semibold text-white mb-3">Upload Files</h3>
               <p className="text-gray-400 mb-6 leading-relaxed">
                 Select conversations.json file or export folder
-              </p>                    <div className="flex flex-wrap gap-2 justify-center mb-4">
-                      <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.json</span>
-                      <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.txt</span>
-                      <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.html</span>
-                      <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">/</span>
-                    </div>
+              </p>
+              
+              <div className="flex flex-wrap gap-2 justify-center mb-4">
+                <span className="px-3 py-1 bg-gray-700/80 border border-gray-600/30 text-gray-300 rounded-full text-sm">.json</span>
+                <span className="px-3 py-1 bg-gray-700/80 border border-gray-600/30 text-gray-300 rounded-full text-sm">.txt</span>
+                <span className="px-3 py-1 bg-gray-700/80 border border-gray-600/30 text-gray-300 rounded-full text-sm">.html</span>
+                <span className="px-3 py-1 bg-gray-700/80 border border-gray-600/30 text-gray-300 rounded-full text-sm">/</span>
+              </div>
                     
                     <button className="w-full bg-white hover:bg-gray-100 text-gray-900 py-3 rounded-xl font-medium transition-all">
                       Choose Files
@@ -1963,8 +1965,8 @@ export default function ProcessPage() {
                   </div>
 
                   {/* ChatGPT URL Card */}
-                  <div className="bg-gray-800/50 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-800/70 hover:border-gray-600 hover:shadow-xl">
-                    <div className="w-16 h-16 bg-gray-700 rounded-xl flex items-center justify-center mx-auto mb-6">
+                  <div className="bg-gray-800/60 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-800/80 hover:border-gray-500 hover:shadow-xl">
+                    <div className="w-16 h-16 bg-gray-700/80 border border-gray-600/50 rounded-xl flex items-center justify-center mx-auto mb-6 hover:bg-gray-600/80 transition-all">
                       <ExternalLink className="h-8 w-8 text-gray-300" />
                     </div>
                     
@@ -2138,7 +2140,7 @@ export default function ProcessPage() {
             {/* Chunking Progress */}
             {currentStep === 'chunking' && (
               <div className="max-w-4xl mx-auto">
-                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-2xl p-8 shadow-xl">
+                <div className="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-2xl p-8 shadow-xl">
                   <div className="flex items-center space-x-4 mb-6">
                     <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
                       <div className="animate-spin h-6 w-6 border-2 border-white border-t-transparent rounded-full" />
@@ -2162,7 +2164,7 @@ export default function ProcessPage() {
             {/* Chunk Actions */}
             {['chunked', 'analyzing', 'analyzed'].includes(currentStep) && chunkData && (
               <div className="max-w-4xl mx-auto">
-                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-2xl p-8 shadow-xl">
+                <div className="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-2xl p-8 shadow-xl">
                   <div className="flex items-center space-x-4 mb-6">
                     <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
                       <Brain className="h-6 w-6 text-white" />
