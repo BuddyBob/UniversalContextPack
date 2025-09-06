@@ -1352,6 +1352,142 @@ async def extract_text(file: UploadFile = File(...), current_user: Authenticated
             pass
         raise HTTPException(status_code=500, detail=f"Failed to start extraction: {str(e)}")
 
+class ChatGPTURLRequest(BaseModel):
+    url: str
+
+@app.post("/api/extract-chatgpt-url")
+async def extract_chatgpt_url(request: ChatGPTURLRequest, current_user: AuthenticatedUser = Depends(get_current_user)):
+    """Extract ChatGPT conversation from shared URL and process it like a file."""
+    try:
+        job_id = str(uuid.uuid4())
+        
+        print(f"Starting ChatGPT URL extraction for job {job_id} (user: {current_user.email})")
+        print(f"Extracting from URL: {request.url}")
+        
+        # Validate URL format
+        if not request.url or 'chatgpt.com/share/' not in request.url:
+            raise HTTPException(status_code=400, detail="Invalid ChatGPT share URL. Must be a chatgpt.com/share/ URL.")
+        
+        # Create job in database
+        await create_job_in_db(
+            current_user, 
+            job_id, 
+            f"ChatGPT_conversation_{job_id}.json", 
+            0,  # Size unknown until extracted
+            "extracting"
+        )
+        
+        # Initialize progress
+        update_job_progress(job_id, "extracting", 0, "Starting ChatGPT URL extraction...")
+        
+        # Start background processing
+        asyncio.create_task(process_chatgpt_url_background(job_id, request.url, current_user))
+        
+        # Return immediately so frontend can start polling
+        return {
+            "job_id": job_id,
+            "status": "processing",
+            "message": "ChatGPT URL extraction started. Use the job_id to poll for progress."
+        }
+        
+    except Exception as e:
+        print(f"Error starting ChatGPT URL extraction: {e}")
+        # Update job status as failed if created
+        try:
+            await update_job_status_in_db(current_user, job_id, "failed", error_message=str(e))
+        except:
+            pass
+        raise HTTPException(status_code=500, detail=f"Failed to start ChatGPT URL extraction: {str(e)}")
+
+async def process_chatgpt_url_background(job_id: str, url: str, user: AuthenticatedUser):
+    """Background task for processing ChatGPT URL extraction with progress updates."""
+    try:
+        await update_job_status_in_db(user, job_id, "processing", 10, metadata={"step": "extracting_from_url"})
+        update_job_progress(job_id, "extracting", 10, "Setting up browser...")
+        
+        # Import ChatGPT extractor (will need selenium installed)
+        try:
+            import sys
+            import os
+            # Add current directory to path to import chatgpt_extractor
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.append(current_dir)
+            
+            from chatgpt_extractor import extract_chatgpt_conversation
+        except ImportError as e:
+            print(f"ChatGPT extraction dependencies not available: {e}")
+            update_job_progress(job_id, "extracting", 0, "Error: ChatGPT extraction dependencies not installed (selenium, webdriver-manager)")
+            return
+        
+        update_job_progress(job_id, "extracting", 30, "Extracting conversation from ChatGPT...")
+        
+        # Extract conversation
+        result = extract_chatgpt_conversation(url, timeout=60)
+        
+        update_job_progress(job_id, "extracting", 70, f"Extracted {result['message_count']} messages from conversation")
+        
+        # Convert to the format expected by the rest of the pipeline
+        extracted_texts = []
+        for i, message in enumerate(result['messages']):
+            formatted_message = f"[{message['role'].upper()}]: {message['content']}"
+            extracted_texts.append(formatted_message)
+        
+        if not extracted_texts:
+            update_job_progress(job_id, "extracting", 0, "Error: No messages found in ChatGPT conversation")
+            return
+
+        print(f"Extracted {len(extracted_texts)} messages from ChatGPT conversation")
+        update_job_progress(job_id, "extracting", 80, f"Processing {len(extracted_texts)} messages")
+
+        # Save extracted text to R2 (same format as file extraction)
+        update_job_progress(job_id, "extracting", 85, "Saving extracted conversation to storage...")
+        
+        # Create content
+        extracted_content_parts = []
+        total_size = 0
+        max_size = 200 * 1024 * 1024  # 200MB limit
+        
+        for i, text in enumerate(extracted_texts):
+            part = f"{i+1}. {text}"
+            if total_size + len(part) > max_size:
+                break
+            extracted_content_parts.append(part)
+            total_size += len(part)
+        
+        extracted_content = '\n\n'.join(extracted_content_parts)
+        print(f"Created content of {len(extracted_content)} characters from {len(extracted_content_parts)} messages")
+        
+        update_job_progress(job_id, "extracting", 90, "Uploading to storage...")
+        upload_success = upload_to_r2(f"{user.r2_directory}/{job_id}/extracted.txt", extracted_content)
+        
+        if not upload_success:
+            print("Upload failed, setting error status")
+            update_job_progress(job_id, "extracting", 0, "Error: Failed to save extracted conversation to storage")
+            return
+        
+        print("Upload successful, proceeding...")
+        update_job_progress(job_id, "extracted", 100, "ChatGPT conversation extraction completed successfully")
+        
+        # Create job summary
+        job_summary = {
+            "job_id": job_id,
+            "created_at": datetime.utcnow().isoformat(),
+            "status": "extracted",
+            "source_type": "chatgpt_url",
+            "source_url": url,
+            "conversation_id": result.get('conversation_id'),
+            "extracted_count": len(extracted_texts),
+            "message_count": result['message_count'],
+            "content_size": len(extracted_content),
+            "preview": extracted_texts[:3] if len(extracted_texts) > 3 else extracted_texts
+        }
+        upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
+        
+    except Exception as e:
+        print(f"Error in background ChatGPT URL extraction for job {job_id}: {e}")
+        update_job_progress(job_id, "extracting", 0, f"Error: {str(e)}")
+
 async def process_extraction_background(job_id: str, file_content: str, filename: str, user: AuthenticatedUser):
     """Background task for processing text extraction with progress updates."""
     try:

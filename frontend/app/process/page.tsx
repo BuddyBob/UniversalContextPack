@@ -53,6 +53,8 @@ export default function ProcessPage() {
   const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [chatgptUrl, setChatgptUrl] = useState<string>('');
+  const [isUrlInput, setIsUrlInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -86,6 +88,8 @@ export default function ProcessPage() {
         setProgress(session.progress || 0);
         setLogs(session.logs || []);
         setAnalysisStartTime(session.analysisStartTime || null);
+        setChatgptUrl(session.chatgptUrl || '');
+        setIsUrlInput(session.isUrlInput || false);
         if (session.currentJobId) {
           setCurrentJobId(session.currentJobId);
           // If we were in the middle of analysis, start polling
@@ -204,7 +208,9 @@ export default function ProcessPage() {
         logs: logs.slice(-50), // Only keep last 50 logs to reduce storage size
         currentJobId,
         analysisStartTime,
-        sessionId
+        sessionId,
+        chatgptUrl,
+        isUrlInput
       };
       localStorage.setItem('ucp_process_session', JSON.stringify(session));
     }, 1000); // Debounce by 1 second to reduce frequency
@@ -257,14 +263,16 @@ export default function ProcessPage() {
         logs,
         currentJobId,
         analysisStartTime,
-        sessionId
+        sessionId,
+        chatgptUrl,
+        isUrlInput
       };
       localStorage.setItem('ucp_process_session', JSON.stringify(session));
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId]);
+  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId, chatgptUrl, isUrlInput]);
 
   // Utility function to format time estimates (rounds up)
   const formatAnalysisTime = (totalSeconds: number): string => {
@@ -434,7 +442,7 @@ export default function ProcessPage() {
   };
 
   const handleExtract = async () => {
-    if (!file) return;
+    if (!file && !isUrlInput) return;
 
     // Check if user is authenticated - if not, show auth modal
     if (!user) {
@@ -445,7 +453,77 @@ export default function ProcessPage() {
     }
 
     // User is authenticated, proceed with extraction
-    await performExtraction();
+    if (isUrlInput && chatgptUrl) {
+      await performChatGPTExtraction();
+    } else if (file) {
+      await performExtraction();
+    }
+  };
+
+  const performChatGPTExtraction = async () => {
+    if (!chatgptUrl || !user) return;
+
+    // Check payment limits first
+    try {
+      const limitsCheck = await checkPaymentLimits();
+      if (!limitsCheck.canProcess) {
+        addLog('Cannot process: Insufficient credits or subscription required.');
+        showLimitWarning(limitsCheck.credits_balance, 1);
+        return;
+      }
+    } catch (error) {
+      addLog('Error checking payment limits. Please try again.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setCurrentStep('extracting');
+    setProgress(0);
+    
+    // Clear any previous polling
+    if (extractionAbortControllerRef.current) {
+      extractionAbortControllerRef.current.abort();
+    }
+    extractionAbortControllerRef.current = new AbortController();
+
+    try {
+      addLog('Starting ChatGPT URL extraction...');
+      
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const response = await fetch(`${backendUrl}/api/extract-chatgpt-url`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ url: chatgptUrl }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        throw new Error(errorData.detail || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCurrentJobId(data.job_id);
+      addLog(`ChatGPT extraction started with job ID: ${data.job_id}`);
+      
+      // Track extraction start
+      analytics.extractionStart();
+      
+      // Start polling for progress
+      startPollingExtractionStatus(data.job_id);
+    } catch (error) {
+      addLog(`ChatGPT URL extraction failed: ${error}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Check payment limits when user authenticates - removed duplicate check
@@ -1086,6 +1164,8 @@ export default function ProcessPage() {
 
   const processSelectedFile = async (selectedFile: File) => {
     setFile(selectedFile);
+    setIsUrlInput(false);
+    setChatgptUrl('');
     setCurrentStep('uploaded');
     addLog(`File selected: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
     
@@ -1107,6 +1187,58 @@ export default function ProcessPage() {
         }
       }
       // Don't estimate chunks until after extraction
+    });
+    addLog(`Estimated extraction time: ${formatted}`);
+  };
+
+  const validateChatGPTUrl = (url: string): { isValid: boolean; error?: string } => {
+    if (!url.trim()) {
+      return { isValid: false, error: "URL is required" };
+    }
+    
+    if (!url.includes('chatgpt.com/share/')) {
+      return { isValid: false, error: "Must be a ChatGPT share URL (chatgpt.com/share/...)" };
+    }
+    
+    try {
+      const urlObj = new URL(url);
+      const conversationId = urlObj.pathname.split('/').pop();
+      if (!conversationId || conversationId.length < 10) {
+        return { isValid: false, error: "Invalid conversation ID in URL" };
+      }
+      return { isValid: true };
+    } catch {
+      return { isValid: false, error: "Invalid URL format" };
+    }
+  };
+
+  const processChatGPTUrl = async (url: string) => {
+    const validation = validateChatGPTUrl(url);
+    if (!validation.isValid) {
+      addLog(`Error: ${validation.error}`);
+      return;
+    }
+
+    setFile(null);
+    setIsUrlInput(true);
+    setChatgptUrl(url);
+    setCurrentStep('uploaded');
+    addLog(`ChatGPT URL ready: ${url}`);
+    
+    // Track URL input
+    analytics.fileUpload(0); // Size 0 for URL
+    
+    // Estimate extraction time for ChatGPT (usually takes longer due to browser automation)
+    const estimatedExtractionTime = 90; // 1.5 minutes typical for ChatGPT extraction
+    const formatted = `${Math.round(estimatedExtractionTime / 60)}m`;
+    
+    setTimeEstimate({
+      time_estimates: {
+        extraction: {
+          formatted: formatted,
+          estimated_seconds: estimatedExtractionTime
+        }
+      }
     });
     addLog(`Estimated extraction time: ${formatted}`);
   };
@@ -1784,96 +1916,177 @@ export default function ProcessPage() {
                   </div>
                   <h3 className="text-lg font-semibold text-white mb-2">Upload Your Data</h3>
                   <p className="text-gray-400 text-sm">
-                    Select a file or folder to get started
+                    Select a file, folder, or paste a ChatGPT share URL
                   </p>
                 </div>
 
-                {/* Upload Area */}
-                <div 
-                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                    isDragOver 
-                      ? 'border-accent-primary bg-accent-primary/5' 
-                      : 'border-gray-600 hover:border-gray-500'
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json,.txt,.html"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  
-                  <input
-                    ref={folderInputRef}
-                    type="file"
-                    {...({ webkitdirectory: 'true' } as any)}
-                    multiple
-                    onChange={handleFolderSelect}
-                    className="hidden"
-                  />
-                  
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                    <button
-                      onClick={() => {
-                        fileInputRef.current?.click();
-                      }}
-                      className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2 border border-gray-600"
-                    >
-                      <Upload className="h-4 w-4" />
-                      <span>Choose File</span>
-                    </button>
+                {/* Tab Selection */}
+                <div className="flex mb-6 bg-gray-800 rounded-lg p-1">
+                  <button
+                    onClick={() => setIsUrlInput(false)}
+                    className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      !isUrlInput 
+                        ? 'bg-accent-primary text-white' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    File Upload
+                  </button>
+                  <button
+                    onClick={() => setIsUrlInput(true)}
+                    className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      isUrlInput 
+                        ? 'bg-accent-primary text-white' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    ChatGPT URL
+                  </button>
+                </div>
+
+                {!isUrlInput ? (
+                  /* File Upload Area */
+                  <div 
+                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                      isDragOver 
+                        ? 'border-accent-primary bg-accent-primary/5' 
+                        : 'border-gray-600 hover:border-gray-500'
+                    }`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json,.txt,.html"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
                     
-                    <div className="text-gray-500 text-sm font-medium">or</div>
+                    <input
+                      ref={folderInputRef}
+                      type="file"
+                      {...({ webkitdirectory: 'true' } as any)}
+                      multiple
+                      onChange={handleFolderSelect}
+                      className="hidden"
+                    />
                     
-                    <button
-                      onClick={() => {
-                        folderInputRef.current?.click();
-                      }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
-                    >
-                      <FileText className="h-4 w-4" />
-                      <span>Upload Export Folder</span>
-                    </button>
-                  </div>
-                  
-                  <div className="text-center mt-6">
-                    <p className="text-gray-400 text-sm mb-3">
-                      Support: .json, .txt
-                    </p>
-                    <div className="text-xs text-gray-500 bg-gray-800/50 px-3 py-2 rounded-lg inline-block border border-gray-700">
-                      For ChatGPT exports, use folder upload to auto-detect conversations.json
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                      <button
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                        }}
+                        className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2 border border-gray-600"
+                      >
+                        <Upload className="h-4 w-4" />
+                        <span>Choose File</span>
+                      </button>
+                      
+                      <div className="text-gray-500 text-sm font-medium">or</div>
+                      
+                      <button
+                        onClick={() => {
+                          folderInputRef.current?.click();
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center space-x-2"
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span>Upload Export Folder</span>
+                      </button>
+                    </div>
+                    
+                    <div className="text-center mt-6">
+                      <p className="text-gray-400 text-sm mb-3">
+                        Support: .json, .txt
+                      </p>
+                      <div className="text-xs text-gray-500 bg-gray-800/50 px-3 py-2 rounded-lg inline-block border border-gray-700">
+                        For ChatGPT exports, use folder upload to auto-detect conversations.json
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  /* ChatGPT URL Input Area */
+                  <div className="border-2 border-dashed border-gray-600 rounded-lg p-6">
+                    <div className="text-center mb-4">
+                      <ExternalLink className="h-12 w-12 text-accent-primary mx-auto mb-3" />
+                      <h4 className="text-lg font-medium text-white mb-2">ChatGPT Share URL</h4>
+                      <p className="text-gray-400 text-sm">
+                        Paste a ChatGPT shared conversation link to extract the dialogue
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <input
+                          type="url"
+                          value={chatgptUrl}
+                          onChange={(e) => setChatgptUrl(e.target.value)}
+                          placeholder="https://chatgpt.com/share/your-conversation-id"
+                          className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-accent-primary focus:outline-none"
+                        />
+                      </div>
+                      
+                      <button
+                        onClick={() => processChatGPTUrl(chatgptUrl)}
+                        disabled={!chatgptUrl.trim()}
+                        className="w-full bg-accent-primary hover:bg-accent-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center justify-center space-x-2"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        <span>Load ChatGPT Conversation</span>
+                      </button>
+                    </div>
+                    
+                    <div className="text-center mt-6">
+                      <div className="text-xs text-gray-500 bg-gray-800/50 px-3 py-2 rounded-lg inline-block border border-gray-700">
+                        Only works with publicly shared ChatGPT conversations
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* File Selected */}
-            {file && currentStep === 'uploaded' && (
+            {/* File or URL Selected */}
+            {(file || (isUrlInput && chatgptUrl)) && currentStep === 'uploaded' && (
               <div className="bg-gray-800 border border-gray-600 rounded-lg p-6">
                 <div className="flex items-center space-x-3 mb-4">
                   <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-text-primary">File Ready</h3>
+                  <h3 className="text-lg font-semibold text-text-primary">
+                    {isUrlInput ? 'ChatGPT URL Ready' : 'File Ready'}
+                  </h3>
                 </div>
                 
                 <div className="flex items-center space-x-4 mb-6 p-4 bg-gray-700 rounded-lg">
-                  <FileText className="h-8 w-8 text-accent-primary" />
-                  <div>
-                    <p className="font-medium text-text-primary">{file.name}</p>
-                    <p className="text-sm text-text-secondary">
-                      {(file.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                    {/* Simple Time Estimates Display */}
+                  {isUrlInput ? (
+                    <ExternalLink className="h-8 w-8 text-accent-primary" />
+                  ) : (
+                    <FileText className="h-8 w-8 text-accent-primary" />
+                  )}
+                  <div className="flex-1">
+                    {isUrlInput ? (
+                      <>
+                        <p className="font-medium text-text-primary">ChatGPT Conversation</p>
+                        <p className="text-sm text-text-secondary break-all">
+                          {chatgptUrl}
+                        </p>
+                      </>
+                    ) : file ? (
+                      <>
+                        <p className="font-medium text-text-primary">{file.name}</p>
+                        <p className="text-sm text-text-secondary">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </>
+                    ) : null}
+                    {/* Time Estimates Display */}
                     <div className="mt-3 space-y-1">
                       {timeEstimate && (
                         <div className="flex items-center text-xs text-gray-400">
-                          <span className="w-16">Chunk:</span>
+                          <span className="w-16">Extract:</span>
                           <span>{timeEstimate.time_estimates.extraction.formatted}</span>
                         </div>
                       )}
@@ -1883,6 +2096,19 @@ export default function ProcessPage() {
                       </div>
                     </div>
                   </div>
+                  {isUrlInput && (
+                    <button
+                      onClick={() => {
+                        setIsUrlInput(false);
+                        setChatgptUrl('');
+                        setCurrentStep('upload');
+                      }}
+                      className="text-gray-400 hover:text-white p-1"
+                      title="Clear URL"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
 
                 <button
@@ -1890,8 +2116,8 @@ export default function ProcessPage() {
                   disabled={isProcessing}
                   className="bg-gray-700 border border-gray-600 text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-600 hover:border-border-accent transition-colors disabled:opacity-50 flex items-center space-x-2"
                 >
-                  <FileText className="h-4 w-4" />
-                  <span>Chunk Content</span>
+                  {isUrlInput ? <ExternalLink className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                  <span>{isUrlInput ? 'Extract ChatGPT Conversation' : 'Chunk Content'}</span>
                 </button>
               </div>
             )}
