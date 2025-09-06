@@ -1705,7 +1705,17 @@ export default function ProcessPage() {
   };
 
   return (
-    <div className="min-h-screen bg-primary">
+    <div className="min-h-screen bg-primary relative overflow-hidden">
+      {/* Neutral Ambient Lighting Background */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Soft top-left light */}
+        <div className="absolute top-0 left-0 w-96 h-96 bg-gradient-radial from-gray-400/5 via-gray-500/3 to-transparent blur-3xl"></div>
+        {/* Subtle bottom-right ambient glow */}
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-gradient-radial from-gray-300/4 via-gray-400/2 to-transparent blur-2xl"></div>
+        {/* Central soft lighting */}
+        <div className="absolute top-1/3 left-1/2 transform -translate-x-1/2 w-[500px] h-64 bg-gradient-elliptical from-gray-200/3 via-gray-300/2 to-transparent blur-3xl"></div>
+      </div>
+      
       {/* Payment Notification */}
       <PaymentNotification
         show={notification.show}
@@ -1716,8 +1726,8 @@ export default function ProcessPage() {
         autoHide={false}
       />
 
-      
-      <div className="max-w-6xl mx-auto p-6">
+      {/* Main Content */}
+      <div className="relative z-10 max-w-6xl mx-auto p-6">
         {/* Main Content - Always Show Interface */}
         <div className="space-y-6">
           <div className="w-full flex justify-center items-center py-8">
@@ -1783,7 +1793,7 @@ export default function ProcessPage() {
                 {/* Simple Time Overview */}
                 {(timeEstimate || analysisTimeEstimate || ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) && (
                   <div className="mb-6 p-4 bg-gray-800 rounded-lg">
-                    <div className="text-sm font-medium text-gray-300 mb-3">Time Estimates - 10-20 min depending on conversation sizes</div>
+                    <div className="text-sm font-medium text-gray-300 mb-3">Time Estimates</div>
 
                     <div className="grid grid-cols-2 gap-4 text-xs">
                       <div className="text-center">
@@ -1925,9 +1935,9 @@ export default function ProcessPage() {
                 <div className="grid md:grid-cols-2 gap-6 mb-8">
                   {/* File Upload Card */}
                   <div 
-                    className={`group bg-gray-800/60 backdrop-blur-sm border-2 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-800/80 hover:border-gray-500 hover:shadow-xl cursor-pointer ${
+                    className={`group bg-gray-900/80 backdrop-blur-sm border-2 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl cursor-pointer ${
                       isDragOver 
-                        ? 'border-gray-400 bg-gray-600/20 shadow-2xl scale-105' 
+                        ? 'border-gray-400 bg-gray-800/30 shadow-2xl scale-105' 
                         : 'border-gray-700'
                     }`}
                     onDragOver={handleDragOver}
@@ -1943,20 +1953,20 @@ export default function ProcessPage() {
                       className="hidden"
                     />
                     
-                    <div className="w-16 h-16 bg-gray-700/80 border border-gray-600/50 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-105 group-hover:bg-gray-600/80 transition-all">
+                    <div className="w-16 h-16 bg-gray-800/90 border border-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-105 group-hover:bg-gray-700/90 transition-all">
                       <FileText className="h-8 w-8 text-gray-300" />
                     </div>
                     
-              <h3 className="text-xl font-semibold text-white mb-3">Upload Files</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">Upload File or Folder</h3>
               <p className="text-gray-400 mb-6 leading-relaxed">
                 Select conversations.json file or export folder
               </p>
               
               <div className="flex flex-wrap gap-2 justify-center mb-4">
-                <span className="px-3 py-1 bg-gray-700/80 border border-gray-600/30 text-gray-300 rounded-full text-sm">.json</span>
-                <span className="px-3 py-1 bg-gray-700/80 border border-gray-600/30 text-gray-300 rounded-full text-sm">.txt</span>
-                <span className="px-3 py-1 bg-gray-700/80 border border-gray-600/30 text-gray-300 rounded-full text-sm">.html</span>
-                <span className="px-3 py-1 bg-gray-700/80 border border-gray-600/30 text-gray-300 rounded-full text-sm">/</span>
+                <span className="px-3 py-1  border border-gray-700/10 text-gray-300 rounded-full text-sm">.json</span>
+                <span className="px-3 py-1  border border-gray-700/40 text-gray-300 rounded-full text-sm">.txt</span>
+                <span className="px-3 py-1  border border-gray-700/40 text-gray-300 rounded-full text-sm">.html</span>
+                <span className="px-3 py-1  border border-gray-700/40 text-gray-300 rounded-full text-sm">/</span>
               </div>
                     
                     <button className="w-full bg-white hover:bg-gray-100 text-gray-900 py-3 rounded-xl font-medium transition-all">
@@ -1965,13 +1975,13 @@ export default function ProcessPage() {
                   </div>
 
                   {/* ChatGPT URL Card */}
-                  <div className="bg-gray-800/60 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-800/80 hover:border-gray-500 hover:shadow-xl">
-                    <div className="w-16 h-16 bg-gray-700/80 border border-gray-600/50 rounded-xl flex items-center justify-center mx-auto mb-6 hover:bg-gray-600/80 transition-all">
+                  <div className="bg-gray-900/80 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl">
+                    <div className="w-16 h-16 bg-gray-800/90 border border-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-6 hover:bg-gray-700/90 transition-all">
                       <ExternalLink className="h-8 w-8 text-gray-300" />
                     </div>
                     
-                    <h3 className="text-xl font-semibold text-white mb-3">ChatGPT Conversation</h3>
-                    <p className="text-gray-400 mb-6 leading-relaxed">
+                    <h3 className="text-xl font-semibold text-white mb-3">Paste Single Chat</h3>
+                    <p className="text-gray-400 mb-3 leading-relaxed">
                       Paste a shared ChatGPT conversation URL
                     </p>
                     
@@ -1987,14 +1997,11 @@ export default function ProcessPage() {
                       <button
                         onClick={() => processChatGPTUrl(chatgptUrl)}
                         disabled={!chatgptUrl.trim()}
-                        className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-600 disabled:cursor-not-allowed text-gray-900 disabled:text-gray-400 py-3 rounded-xl font-medium transition-all"
+                        className="w-full bg-white hover:bg-gray-100 disabled:bg-purple-900/50 disabled:cursor-not-allowed text-gray-900 disabled:text-gray-400 py-3 rounded-xl font-medium transition-all"
                       >
                         Extract Conversation
                       </button>
                       
-                      <p className="text-gray-500 text-sm">
-                        Only publicly shared conversations
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -2022,8 +2029,8 @@ export default function ProcessPage() {
 
             {/* File or URL Selected */}
             {(file || chatgptUrl) && currentStep === 'uploaded' && (
-              <div className="max-w-4xl mx-auto">
-                <div className="bg-gray-800 border border-gray-700 rounded-2xl p-8 shadow-xl">
+              <div className="max-w-6xl mx-auto">
+                <div className="bg-gray-800 border border-gray-700 rounded-2xl p-9 shadow-xl">
                   {/* Success Header */}
                   <div className="flex items-center space-x-4 mb-6">
                     <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center shadow-lg">
@@ -2038,7 +2045,7 @@ export default function ProcessPage() {
                   </div>
                   
                   {/* File/URL Info Card */}
-                  <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 mb-6">
+                  <div className="bg-gray-900/50 border border-gray-400 rounded-xl p-6 mb-6">
                     <div className="flex items-start space-x-4">
                       <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
                         {chatgptUrl ? (
