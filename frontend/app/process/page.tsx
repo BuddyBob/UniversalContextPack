@@ -1905,11 +1905,11 @@ export default function ProcessPage() {
             {currentStep === 'upload' && (
               <div className="max-w-4xl mx-auto">
                 {/* Header */}
-                <div className="text-center mb-8">
+                <div className="text-center mb-4 mt-8">
                   <div className="w-20 h-20 bg-gray-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                    <Upload className="h-10 w-10 text-white" />
+                    <Upload className="h-6 w-6 text-white" />
                   </div>
-                  <h1 className="text-3xl font-bold text-white mb-3">Upload Your Data</h1>
+                  <h1 className="text-2xl font-bold text-white mb-3">Upload Your Data</h1>
                   <p className="text-gray-400 text-lg max-w-2xl mx-auto">
                     Transform your files or ChatGPT conversations into structured context packs
                   </p>
@@ -1997,7 +1997,7 @@ export default function ProcessPage() {
                     className="inline-flex items-center space-x-2 text-gray-400 hover:text-white transition-colors"
                   >
                     <FileText className="h-4 w-4" />
-                    <span className="text-sm">Upload entire folder</span>
+                    <span className="text-sm">Upload ChatGPT export folder</span>
                   </button>
                   <input
                     ref={folderInputRef}

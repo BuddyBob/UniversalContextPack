@@ -9,6 +9,7 @@ timeouts, and resource management.
 import json
 import time
 import re
+import os
 from urllib.parse import urlparse
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -46,14 +47,30 @@ class ProductionChatGPTExtractor:
             
             # Try to use system Chrome first, then fall back to ChromeDriverManager
             try:
-                # Set Chrome binary path for production
-                chrome_options.binary_location = '/usr/bin/google-chrome'
+                # Try different Chrome binary locations
+                chrome_binaries = [
+                    '/usr/bin/google-chrome-stable',
+                    '/usr/bin/google-chrome',
+                    '/usr/bin/chromium-browser',
+                    '/usr/bin/chromium'
+                ]
+                
+                chrome_binary = None
+                for binary in chrome_binaries:
+                    if os.path.exists(binary):
+                        chrome_binary = binary
+                        break
+                
+                if chrome_binary:
+                    chrome_options.binary_location = chrome_binary
+                    print(f"Using Chrome binary: {chrome_binary}")
+                
                 service = Service(ChromeDriverManager().install())
                 driver = webdriver.Chrome(service=service, options=chrome_options)
-            except Exception:
-                print("System Chrome not found, using default ChromeDriverManager...")
-                service = Service(ChromeDriverManager().install())
-                driver = webdriver.Chrome(service=service, options=chrome_options)
+                print("Chrome driver initialized successfully")
+            except Exception as e:
+                print(f"Chrome setup failed: {e}")
+                raise
             
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
