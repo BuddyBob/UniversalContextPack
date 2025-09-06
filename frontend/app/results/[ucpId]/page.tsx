@@ -272,60 +272,17 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
                 >
                   <Download className="h-5 w-5 text-gray-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
                   <div className="font-medium text-gray-900">Complete</div>
-                  <div className="text-sm text-gray-500">~280k tokens</div>
+                  <div className="text-sm text-gray-500">
+                    {result.totalInputTokens 
+                      ? `~${Math.round(result.totalInputTokens / 1000)}k tokens` 
+                      : 'All tokens'
+                    }
+                  </div>
                   <div className="text-xs text-gray-400">Good for Gemini</div>
                 </button>
               </div>
             </div>
           )}
-
-          {/* Token Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <BarChart3 className="h-5 w-5 text-gray-600" />
-                <div>
-                  <div className="text-sm text-gray-600 font-medium">Input Tokens</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {result.totalInputTokens ? result.totalInputTokens.toLocaleString() : '0'}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <Brain className="h-5 w-5 text-gray-600" />
-                <div>
-                  <div className="text-sm text-gray-600 font-medium">Output Tokens</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {result.totalOutputTokens ? result.totalOutputTokens.toLocaleString() : '0'}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <CheckCircle className="h-5 w-5 text-gray-600" />
-                <div>
-                  <div className="text-sm text-gray-600 font-medium">Total Chunks</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {result.totalChunks ? result.totalChunks.toLocaleString() : '0'}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <Clock className="h-5 w-5 text-gray-600" />
-                <div>
-                  <div className="text-sm text-gray-600 font-medium">Processing Cost</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    ${result.totalCost ? result.totalCost.toFixed(4) : '0.0000'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {result.completedAt && (
             <div className="mt-4 text-center text-sm text-gray-500">

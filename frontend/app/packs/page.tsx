@@ -384,7 +384,12 @@ export default function PacksPage() {
                       >
                         <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                         <div className="text-sm font-medium text-gray-900">Complete</div>
-                        <div className="text-xs text-gray-500">~280k tokens</div>
+                        <div className="text-xs text-gray-500">
+                          {selectedPack.totalInputTokens 
+                            ? `~${Math.round(selectedPack.totalInputTokens / 1000)}k tokens` 
+                            : 'All tokens'
+                          }
+                        </div>
                       </button>
                     </div>
                   </div>
