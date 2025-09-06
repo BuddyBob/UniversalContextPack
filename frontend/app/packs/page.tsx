@@ -27,6 +27,25 @@ export default function PacksPage() {
   const [selectedPack, setSelectedPack] = useState<UCPPack | null>(null)
   const freeCreditsPrompt = useFreeCreditsPrompt()
 
+  // Helper function to format token counts
+  const formatTokenCount = (tokens: number): string => {
+    if (tokens >= 1000000) {
+      return `${Math.round(tokens / 1000000)}M tokens`
+    } else if (tokens >= 1000) {
+      return `${Math.round(tokens / 1000)}k tokens`
+    }
+    return `${tokens} tokens`
+  }
+
+  // Check if download options should be enabled
+  const canDownloadCompact = (outputTokens: number | undefined): boolean => {
+    return !outputTokens || outputTokens >= 50000
+  }
+
+  const canDownloadStandard = (outputTokens: number | undefined): boolean => {
+    return !outputTokens || outputTokens >= 100000
+  }
+
   useEffect(() => {
     if (user && session) {
       loadPacks()
@@ -361,21 +380,43 @@ export default function PacksPage() {
                       </button>
                       
                       <button
-                        onClick={() => downloadCompact(selectedPack.ucpId || selectedPack.id || '')}
-                        className="p-3 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all text-center group"
+                        onClick={canDownloadCompact(selectedPack.totalOutputTokens) ? () => downloadCompact(selectedPack.ucpId || selectedPack.id || '') : undefined}
+                        disabled={!canDownloadCompact(selectedPack.totalOutputTokens)}
+                        className={`p-3 border rounded-lg transition-all text-center group ${
+                          canDownloadCompact(selectedPack.totalOutputTokens)
+                            ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
+                            : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
+                        }`}
                       >
-                        <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                        <div className="text-sm font-medium text-gray-900">Compact</div>
-                        <div className="text-xs text-gray-500">~50k tokens</div>
+                        <Download className={`h-4 w-4 mx-auto mb-1 group-hover:scale-110 transition-transform ${
+                          canDownloadCompact(selectedPack.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
+                        }`} />
+                        <div className={`text-sm font-medium ${
+                          canDownloadCompact(selectedPack.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
+                        }`}>Compact</div>
+                        <div className={`text-xs ${
+                          canDownloadCompact(selectedPack.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
+                        }`}>~50k tokens</div>
                       </button>
                       
                       <button
-                        onClick={() => downloadStandard(selectedPack.ucpId || selectedPack.id || '')}
-                        className="p-3 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all text-center group"
+                        onClick={canDownloadStandard(selectedPack.totalOutputTokens) ? () => downloadStandard(selectedPack.ucpId || selectedPack.id || '') : undefined}
+                        disabled={!canDownloadStandard(selectedPack.totalOutputTokens)}
+                        className={`p-3 border rounded-lg transition-all text-center group ${
+                          canDownloadStandard(selectedPack.totalOutputTokens)
+                            ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
+                            : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
+                        }`}
                       >
-                        <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                        <div className="text-sm font-medium text-gray-900">Standard</div>
-                        <div className="text-xs text-gray-500">~100k tokens</div>
+                        <Download className={`h-4 w-4 mx-auto mb-1 group-hover:scale-110 transition-transform ${
+                          canDownloadStandard(selectedPack.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
+                        }`} />
+                        <div className={`text-sm font-medium ${
+                          canDownloadStandard(selectedPack.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
+                        }`}>Standard</div>
+                        <div className={`text-xs ${
+                          canDownloadStandard(selectedPack.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
+                        }`}>~100k tokens</div>
                       </button>
                       
                       <button
@@ -385,8 +426,8 @@ export default function PacksPage() {
                         <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
                         <div className="text-sm font-medium text-gray-900">Complete</div>
                         <div className="text-xs text-gray-500">
-                          {selectedPack.totalInputTokens 
-                            ? `~${Math.round(selectedPack.totalInputTokens / 1000)}k tokens` 
+                          {selectedPack.totalOutputTokens 
+                            ? `~${formatTokenCount(selectedPack.totalOutputTokens)}` 
                             : 'All tokens'
                           }
                         </div>

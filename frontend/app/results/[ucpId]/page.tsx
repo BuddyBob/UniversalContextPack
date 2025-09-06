@@ -26,6 +26,25 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Helper function to format token counts
+  const formatTokenCount = (tokens: number): string => {
+    if (tokens >= 1000000) {
+      return `${Math.round(tokens / 1000000)}M tokens`
+    } else if (tokens >= 1000) {
+      return `${Math.round(tokens / 1000)}k tokens`
+    }
+    return `${tokens} tokens`
+  }
+
+  // Check if download options should be enabled
+  const canDownloadCompact = (outputTokens: number | undefined): boolean => {
+    return !outputTokens || outputTokens >= 50000
+  }
+
+  const canDownloadStandard = (outputTokens: number | undefined): boolean => {
+    return !outputTokens || outputTokens >= 100000
+  }
+
   useEffect(() => {
     // Check if user is authenticated
     if (!user) {
@@ -247,23 +266,49 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
               
               <div className="grid grid-cols-3 gap-3">
                 <button
-                  onClick={downloadUltraCompact}
-                  className="p-4 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all text-center group"
+                  onClick={canDownloadCompact(result.totalOutputTokens) ? downloadUltraCompact : undefined}
+                  disabled={!canDownloadCompact(result.totalOutputTokens)}
+                  className={`p-4 border rounded-lg transition-all text-center group ${
+                    canDownloadCompact(result.totalOutputTokens)
+                      ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
+                      : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
+                  }`}
                 >
-                  <Download className="h-5 w-5 text-gray-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                  <div className="font-medium text-gray-900">Compact</div>
-                  <div className="text-sm text-gray-500">~50k tokens</div>
-                  <div className="text-xs text-gray-400">Good for GPT</div>
+                  <Download className={`h-5 w-5 mx-auto mb-2 group-hover:scale-110 transition-transform ${
+                    canDownloadCompact(result.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
+                  }`} />
+                  <div className={`font-medium ${
+                    canDownloadCompact(result.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
+                  }`}>Compact</div>
+                  <div className={`text-sm ${
+                    canDownloadCompact(result.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
+                  }`}>~50k tokens</div>
+                  <div className={`text-xs ${
+                    canDownloadCompact(result.totalOutputTokens) ? 'text-gray-400' : 'text-gray-300'
+                  }`}>Good for GPT</div>
                 </button>
                 
                 <button
-                  onClick={downloadStandard}
-                  className="p-4 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all text-center group"
+                  onClick={canDownloadStandard(result.totalOutputTokens) ? downloadStandard : undefined}
+                  disabled={!canDownloadStandard(result.totalOutputTokens)}
+                  className={`p-4 border rounded-lg transition-all text-center group ${
+                    canDownloadStandard(result.totalOutputTokens)
+                      ? 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer'
+                      : 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-50'
+                  }`}
                 >
-                  <Download className="h-5 w-5 text-gray-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
-                  <div className="font-medium text-gray-900">Standard</div>
-                  <div className="text-sm text-gray-500">~100k tokens</div>
-                  <div className="text-xs text-gray-400">Good for Claude</div>
+                  <Download className={`h-5 w-5 mx-auto mb-2 group-hover:scale-110 transition-transform ${
+                    canDownloadStandard(result.totalOutputTokens) ? 'text-gray-600' : 'text-gray-400'
+                  }`} />
+                  <div className={`font-medium ${
+                    canDownloadStandard(result.totalOutputTokens) ? 'text-gray-900' : 'text-gray-500'
+                  }`}>Standard</div>
+                  <div className={`text-sm ${
+                    canDownloadStandard(result.totalOutputTokens) ? 'text-gray-500' : 'text-gray-400'
+                  }`}>~100k tokens</div>
+                  <div className={`text-xs ${
+                    canDownloadStandard(result.totalOutputTokens) ? 'text-gray-400' : 'text-gray-300'
+                  }`}>Good for Claude</div>
                 </button>
                 
                 <button
@@ -273,8 +318,8 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
                   <Download className="h-5 w-5 text-gray-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
                   <div className="font-medium text-gray-900">Complete</div>
                   <div className="text-sm text-gray-500">
-                    {result.totalInputTokens 
-                      ? `~${Math.round(result.totalInputTokens / 1000)}k tokens` 
+                    {result.totalOutputTokens 
+                      ? `~${formatTokenCount(result.totalOutputTokens)}` 
                       : 'All tokens'
                     }
                   </div>
