@@ -2028,9 +2028,6 @@ export default function ProcessPage() {
                     </div>
                     
                     <h3 className="text-xl font-semibold text-white mb-3">Paste Conversation URL</h3>
-                    <p className="text-gray-400 mb-3 leading-relaxed">
-                      Paste a shared conversation URL from ChatGPT, Claude, Grok, or Gemini
-                    </p>
                     
                     <div className="flex flex-wrap gap-2 justify-center mb-4">
                       <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">ChatGPT</span>
@@ -2044,14 +2041,14 @@ export default function ProcessPage() {
                         type="url"
                         value={conversationUrl}
                         onChange={(e) => setConversationUrl(e.target.value)}
-                        placeholder="ChatGPT, Claude, Grok, or Gemini share URL..."
+                        placeholder="ex. https://chatgpt.com/share/..."
                         className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all"
                       />
                       
                       <button
                         onClick={() => processConversationUrl(conversationUrl)}
                         disabled={!conversationUrl.trim()}
-                        className="w-full bg-white hover:bg-gray-100 disabled:bg-purple-900/50 disabled:cursor-not-allowed text-gray-900 disabled:text-gray-400 py-3 rounded-xl font-medium transition-all"
+                        className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-400/10 disabled:cursor-not-allowed text-gray-900 disabled:text-white-900 py-3 rounded-xl font-medium transition-all"
                       >
                         Extract Conversation
                       </button>
@@ -2173,7 +2170,7 @@ export default function ProcessPage() {
                         {isProcessing 
                           ? 'Processing...' 
                           : conversationUrl 
-                            ? `Extract ${conversationUrl.includes('chatgpt.com') ? 'ChatGPT' : 'Claude'} Conversation`
+                            ? `Extract Conversation`
                             : 'Process File'
                         }
                       </span>
