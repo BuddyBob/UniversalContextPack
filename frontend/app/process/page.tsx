@@ -1949,11 +1949,12 @@ export default function ProcessPage() {
                     
               <h3 className="text-xl font-semibold text-white mb-3">Upload Files</h3>
               <p className="text-gray-400 mb-6 leading-relaxed">
-                Drag & drop files here, click to browse, or upload your ChatGPT export folder
+                Select conversations.json file or export folder
               </p>                    <div className="flex flex-wrap gap-2 justify-center mb-4">
                       <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.json</span>
                       <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.txt</span>
                       <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.html</span>
+                      <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">/</span>
                     </div>
                     
                     <button className="w-full bg-white hover:bg-gray-100 text-gray-900 py-3 rounded-xl font-medium transition-all">
