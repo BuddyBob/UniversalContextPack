@@ -1941,12 +1941,10 @@ export default function ProcessPage() {
                       <FileText className="h-8 w-8 text-gray-300" />
                     </div>
                     
-                    <h3 className="text-xl font-semibold text-white mb-3">Upload Files</h3>
-                    <p className="text-gray-400 mb-6 leading-relaxed">
-                      Drag & drop files here or click to browse
-                    </p>
-                    
-                    <div className="flex flex-wrap gap-2 justify-center mb-4">
+              <h3 className="text-xl font-semibold text-white mb-3">Upload Files</h3>
+              <p className="text-gray-400 mb-6 leading-relaxed">
+                Drag & drop files here, click to browse, or upload your ChatGPT export folder
+              </p>                    <div className="flex flex-wrap gap-2 justify-center mb-4">
                       <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.json</span>
                       <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.txt</span>
                       <span className="px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">.html</span>
@@ -2016,7 +2014,7 @@ export default function ProcessPage() {
             {/* File or URL Selected */}
             {(file || chatgptUrl) && currentStep === 'uploaded' && (
               <div className="max-w-4xl mx-auto">
-                <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-2xl p-8 shadow-xl">
+                <div className="bg-gray-800 border border-gray-700 rounded-2xl p-8 shadow-xl">
                   {/* Success Header */}
                   <div className="flex items-center space-x-4 mb-6">
                     <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center shadow-lg">

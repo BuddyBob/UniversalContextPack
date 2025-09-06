@@ -26,25 +26,41 @@ class ProductionChatGPTExtractor:
     
     @contextmanager
     def get_driver(self):
-        """Context manager for WebDriver to ensure cleanup"""
+        """Get a Chrome driver with production-ready options"""
         driver = None
         try:
             chrome_options = Options()
-            if self.headless:
-                chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--headless=new')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--disable-web-security')
+            chrome_options.add_argument('--allow-running-insecure-content')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-plugins')
+            chrome_options.add_argument('--disable-images')
             chrome_options.add_argument('--window-size=1920,1080')
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
+            # Try to use system Chrome first, then fall back to ChromeDriverManager
+            try:
+                # Set Chrome binary path for production
+                chrome_options.binary_location = '/usr/bin/google-chrome'
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+            except Exception:
+                print("System Chrome not found, using default ChromeDriverManager...")
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+            
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
             yield driver
+        except Exception as e:
+            print(f"Error setting up Chrome driver: {e}")
+            raise
         finally:
             if driver:
                 driver.quit()
@@ -52,22 +68,33 @@ class ProductionChatGPTExtractor:
     def extract_conversation_id(self, url):
         """Extract conversation ID from URL"""
         try:
+            print(f"Extracting conversation ID from URL: {url}")
             parsed = urlparse(url)
+            print(f"Parsed URL - scheme: {parsed.scheme}, netloc: {parsed.netloc}, path: {parsed.path}")
+            
             if not parsed.path:
+                print("No path in parsed URL")
                 return None
             
             # Split path and filter out empty parts
             path_parts = [part for part in parsed.path.split('/') if part]
+            print(f"Path parts: {path_parts}")
             
             # For ChatGPT URLs, we expect the pattern: /share/{conversation_id}
             if len(path_parts) >= 2 and path_parts[0] == 'share':
                 conversation_id = path_parts[1]
+                print(f"Found conversation ID: {conversation_id}")
                 # Basic validation - conversation ID should be reasonably long
                 if len(conversation_id) >= 10:
                     return conversation_id
+                else:
+                    print(f"Conversation ID too short: {len(conversation_id)} chars")
+            else:
+                print(f"Invalid path structure. Expected /share/{{id}}, got: {'/'.join(path_parts)}")
             
             return None
-        except Exception:
+        except Exception as e:
+            print(f"Error in extract_conversation_id: {e}")
             return None
     
     def extract_messages(self, driver):
