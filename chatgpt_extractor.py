@@ -53,7 +53,20 @@ class ProductionChatGPTExtractor:
         """Extract conversation ID from URL"""
         try:
             parsed = urlparse(url)
-            return parsed.path.split('/')[-1]
+            if not parsed.path:
+                return None
+            
+            # Split path and filter out empty parts
+            path_parts = [part for part in parsed.path.split('/') if part]
+            
+            # For ChatGPT URLs, we expect the pattern: /share/{conversation_id}
+            if len(path_parts) >= 2 and path_parts[0] == 'share':
+                conversation_id = path_parts[1]
+                # Basic validation - conversation ID should be reasonably long
+                if len(conversation_id) >= 10:
+                    return conversation_id
+            
+            return None
         except Exception:
             return None
     
@@ -160,6 +173,8 @@ class ProductionChatGPTExtractor:
             raise ValueError("Invalid ChatGPT share URL")
         
         conv_id = self.extract_conversation_id(url)
+        if not conv_id:
+            raise ValueError(f"Could not extract conversation ID from URL: {url}")
         
         with self.get_driver() as driver:
             try:
@@ -195,10 +210,20 @@ def validate_chatgpt_url(url):
     
     try:
         parsed = urlparse(url)
-        conv_id = parsed.path.split('/')[-1]
-        if len(conv_id) < 10:
-            return False, "Invalid conversation ID"
-        return True, "Valid URL"
+        if not parsed.path:
+            return False, "Invalid URL format"
+        
+        # Split path and filter out empty parts
+        path_parts = [part for part in parsed.path.split('/') if part]
+        
+        # For ChatGPT URLs, we expect the pattern: /share/{conversation_id}
+        if len(path_parts) >= 2 and path_parts[0] == 'share':
+            conv_id = path_parts[1]
+            # Basic validation - conversation ID should be reasonably long
+            if len(conv_id) >= 10:
+                return True, "Valid URL"
+        
+        return False, "Invalid conversation ID"
     except Exception:
         return False, "Invalid URL format"
 

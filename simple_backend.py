@@ -1422,8 +1422,26 @@ async def process_chatgpt_url_background(job_id: str, url: str, user: Authentica
         
         update_job_progress(job_id, "extracting", 30, "Extracting conversation from ChatGPT...")
         
-        # Extract conversation
-        result = extract_chatgpt_conversation(url, timeout=60)
+        # Extract conversation with better error handling
+        try:
+            result = extract_chatgpt_conversation(url, timeout=60)
+            
+            if not result or not result.get('messages'):
+                print(f"No messages extracted from URL: {url}")
+                await update_job_status_in_db(user, job_id, "failed", error_message="No conversation found at the provided URL")
+                update_job_progress(job_id, "failed", 0, "Error: No conversation found at the provided URL")
+                return
+                
+        except ValueError as e:
+            print(f"URL validation error: {e}")
+            await update_job_status_in_db(user, job_id, "failed", error_message=f"Invalid URL: {str(e)}")
+            update_job_progress(job_id, "failed", 0, f"Error: {str(e)}")
+            return
+        except Exception as e:
+            print(f"ChatGPT extraction failed: {e}")
+            await update_job_status_in_db(user, job_id, "failed", error_message=f"Failed to extract conversation: {str(e)}")
+            update_job_progress(job_id, "failed", 0, f"Error: Failed to extract conversation - {str(e)}")
+            return
         
         update_job_progress(job_id, "extracting", 70, f"Extracted {result['message_count']} messages from conversation")
         
