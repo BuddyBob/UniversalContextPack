@@ -53,7 +53,7 @@ export default function ProcessPage() {
   const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [chatgptUrl, setChatgptUrl] = useState<string>('');
+  const [conversationUrl, setConversationUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -87,7 +87,7 @@ export default function ProcessPage() {
         setProgress(session.progress || 0);
         setLogs(session.logs || []);
         setAnalysisStartTime(session.analysisStartTime || null);
-        setChatgptUrl(session.chatgptUrl || '');
+        setConversationUrl(session.chatgptUrl || '');
         if (session.currentJobId) {
           setCurrentJobId(session.currentJobId);
           // If we were in the middle of analysis, start polling
@@ -207,7 +207,7 @@ export default function ProcessPage() {
         currentJobId,
         analysisStartTime,
         sessionId,
-        chatgptUrl
+        conversationUrl
       };
       localStorage.setItem('ucp_process_session', JSON.stringify(session));
     }, 1000); // Debounce by 1 second to reduce frequency
@@ -261,14 +261,14 @@ export default function ProcessPage() {
         currentJobId,
         analysisStartTime,
         sessionId,
-        chatgptUrl
+        conversationUrl
       };
       localStorage.setItem('ucp_process_session', JSON.stringify(session));
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId, chatgptUrl]);
+  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId, conversationUrl]);
 
   // Utility function to format time estimates (rounds up)
   const formatAnalysisTime = (totalSeconds: number): string => {
@@ -438,7 +438,7 @@ export default function ProcessPage() {
   };
 
   const handleExtract = async () => {
-    if (!file && !chatgptUrl) return;
+    if (!file && !conversationUrl) return;
 
     // Check if user is authenticated - if not, show auth modal
     if (!user) {
@@ -449,7 +449,7 @@ export default function ProcessPage() {
     }
 
     // User is authenticated, proceed with extraction
-    if (chatgptUrl && !file) {
+    if (conversationUrl && !file) {
       await performChatGPTExtraction();
     } else if (file) {
       await performExtraction();
@@ -457,7 +457,7 @@ export default function ProcessPage() {
   };
 
   const performChatGPTExtraction = async () => {
-    if (!chatgptUrl || !user) return;
+    if (!conversationUrl || !user) return;
 
     // Check payment limits first
     try {
@@ -483,7 +483,11 @@ export default function ProcessPage() {
     extractionAbortControllerRef.current = new AbortController();
 
     try {
-      addLog('Starting ChatGPT URL extraction...');
+      // Detect platform from URL
+      const platform = conversationUrl.includes('chatgpt.com/share/') ? 'ChatGPT' : 
+                      conversationUrl.includes('claude.ai/share/') ? 'Claude' : 'Unknown';
+      
+      addLog(`Starting ${platform} URL extraction...`);
       
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       
@@ -495,10 +499,10 @@ export default function ProcessPage() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const response = await fetch(`${backendUrl}/api/extract-chatgpt-url`, {
+      const response = await fetch(`${backendUrl}/api/extract-conversation-url`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ url: chatgptUrl }),
+        body: JSON.stringify({ url: conversationUrl }),
       });
 
       if (!response.ok) {
@@ -508,7 +512,7 @@ export default function ProcessPage() {
 
       const data = await response.json();
       setCurrentJobId(data.job_id);
-      addLog(`ChatGPT extraction started with job ID: ${data.job_id}`);
+      addLog(`${platform} extraction started with job ID: ${data.job_id}`);
       
       // Track extraction start
       analytics.extractionStart();
@@ -516,7 +520,7 @@ export default function ProcessPage() {
       // Start polling for progress
       startPollingExtractionStatus(data.job_id);
     } catch (error) {
-      addLog(`ChatGPT URL extraction failed: ${error}`);
+      addLog(`Conversation URL extraction failed: ${error}`);
     } finally {
       setIsProcessing(false);
     }
@@ -1169,7 +1173,7 @@ export default function ProcessPage() {
 
   const processSelectedFile = async (selectedFile: File) => {
     setFile(selectedFile);
-    setChatgptUrl(''); // Clear URL when file is selected
+    setConversationUrl(''); // Clear URL when file is selected
     setCurrentStep('uploaded');
     addLog(`File selected: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
     
@@ -1195,44 +1199,87 @@ export default function ProcessPage() {
     addLog(`Estimated extraction time: ${formatted}`);
   };
 
-  const validateChatGPTUrl = (url: string): { isValid: boolean; error?: string } => {
+  const validateConversationUrl = (url: string): { isValid: boolean; error?: string; platform?: string } => {
     if (!url.trim()) {
       return { isValid: false, error: "URL is required" };
     }
     
-    if (!url.includes('chatgpt.com/share/')) {
-      return { isValid: false, error: "Must be a ChatGPT share URL (chatgpt.com/share/...)" };
+    // Check for ChatGPT URL
+    if (url.includes('chatgpt.com/share/')) {
+      try {
+        const urlObj = new URL(url);
+        const conversationId = urlObj.pathname.split('/').pop();
+        if (!conversationId || conversationId.length < 10) {
+          return { isValid: false, error: "Invalid ChatGPT conversation ID in URL" };
+        }
+        return { isValid: true, platform: 'ChatGPT' };
+      } catch {
+        return { isValid: false, error: "Invalid ChatGPT URL format" };
+      }
     }
     
-    try {
-      const urlObj = new URL(url);
-      const conversationId = urlObj.pathname.split('/').pop();
-      if (!conversationId || conversationId.length < 10) {
-        return { isValid: false, error: "Invalid conversation ID in URL" };
+    // Check for Claude URL
+    if (url.includes('claude.ai/share/')) {
+      try {
+        const urlObj = new URL(url);
+        const conversationId = urlObj.pathname.split('/').pop();
+        if (!conversationId || conversationId.length < 10) {
+          return { isValid: false, error: "Invalid Claude conversation ID in URL" };
+        }
+        return { isValid: true, platform: 'Claude' };
+      } catch {
+        return { isValid: false, error: "Invalid Claude URL format" };
       }
-      return { isValid: true };
-    } catch {
-      return { isValid: false, error: "Invalid URL format" };
     }
+    
+    // Check for Grok URL
+    if (url.includes('grok.com/share/')) {
+      try {
+        const urlObj = new URL(url);
+        const conversationId = urlObj.pathname.split('/').pop();
+        if (!conversationId || conversationId.length < 10) {
+          return { isValid: false, error: "Invalid Grok conversation ID in URL" };
+        }
+        return { isValid: true, platform: 'Grok' };
+      } catch {
+        return { isValid: false, error: "Invalid Grok URL format" };
+      }
+    }
+    
+    // Check for Gemini URL
+    if (url.includes('g.co/gemini/share/')) {
+      try {
+        const urlObj = new URL(url);
+        const conversationId = urlObj.pathname.split('/').pop();
+        if (!conversationId || conversationId.length < 10) {
+          return { isValid: false, error: "Invalid Gemini conversation ID in URL" };
+        }
+        return { isValid: true, platform: 'Gemini' };
+      } catch {
+        return { isValid: false, error: "Invalid Gemini URL format" };
+      }
+    }
+    
+    return { isValid: false, error: "Must be a ChatGPT, Claude, Grok, or Gemini share URL" };
   };
 
-  const processChatGPTUrl = async (url: string) => {
-    const validation = validateChatGPTUrl(url);
+  const processConversationUrl = async (url: string) => {
+    const validation = validateConversationUrl(url);
     if (!validation.isValid) {
       addLog(`Error: ${validation.error}`);
       return;
     }
 
     setFile(null); // Clear file when URL is selected
-    setChatgptUrl(url);
+    setConversationUrl(url);
     setCurrentStep('uploaded');
-    addLog(`ChatGPT URL ready: ${url}`);
+    addLog(`${validation.platform} URL ready: ${url}`);
     
     // Track URL input
     analytics.fileUpload(0); // Size 0 for URL
     
-    // Estimate extraction time for ChatGPT (usually takes longer due to browser automation)
-    const estimatedExtractionTime = 90; // 1.5 minutes typical for ChatGPT extraction
+    // Estimate extraction time (usually takes longer due to browser automation)
+    const estimatedExtractionTime = validation.platform === 'Claude' ? 120 : 90; // Claude might take a bit longer
     const formatted = `${Math.round(estimatedExtractionTime / 60)}m`;
     
     setTimeEstimate({
@@ -1974,29 +2021,36 @@ export default function ProcessPage() {
                     </button>
                   </div>
 
-                  {/* ChatGPT URL Card */}
+                  {/* Conversation URL Card */}
                   <div className="bg-gray-900/80 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl">
                     <div className="w-16 h-16 bg-gray-800/90 border border-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-6 hover:bg-gray-700/90 transition-all">
                       <ExternalLink className="h-8 w-8 text-gray-300" />
                     </div>
                     
-                    <h3 className="text-xl font-semibold text-white mb-3">Paste Single Chat</h3>
+                    <h3 className="text-xl font-semibold text-white mb-3">Paste Conversation URL</h3>
                     <p className="text-gray-400 mb-3 leading-relaxed">
-                      Paste a shared ChatGPT conversation URL
+                      Paste a shared conversation URL from ChatGPT, Claude, Grok, or Gemini
                     </p>
+                    
+                    <div className="flex flex-wrap gap-2 justify-center mb-4">
+                      <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">ChatGPT</span>
+                      <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">Claude</span>
+                      <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">Grok</span>
+                      <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">Gemini</span>
+                    </div>
                     
                     <div className="space-y-4">
                       <input
                         type="url"
-                        value={chatgptUrl}
-                        onChange={(e) => setChatgptUrl(e.target.value)}
-                        placeholder="https://chatgpt.com/share/..."
+                        value={conversationUrl}
+                        onChange={(e) => setConversationUrl(e.target.value)}
+                        placeholder="ChatGPT, Claude, Grok, or Gemini share URL..."
                         className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all"
                       />
                       
                       <button
-                        onClick={() => processChatGPTUrl(chatgptUrl)}
-                        disabled={!chatgptUrl.trim()}
+                        onClick={() => processConversationUrl(conversationUrl)}
+                        disabled={!conversationUrl.trim()}
                         className="w-full bg-white hover:bg-gray-100 disabled:bg-purple-900/50 disabled:cursor-not-allowed text-gray-900 disabled:text-gray-400 py-3 rounded-xl font-medium transition-all"
                       >
                         Extract Conversation
@@ -2028,7 +2082,7 @@ export default function ProcessPage() {
             )}
 
             {/* File or URL Selected */}
-            {(file || chatgptUrl) && currentStep === 'uploaded' && (
+            {(file || conversationUrl) && currentStep === 'uploaded' && (
               <div className="max-w-6xl mx-auto">
                 <div className="bg-gray-800 border border-gray-700 rounded-2xl p-9 shadow-xl">
                   {/* Success Header */}
@@ -2038,7 +2092,7 @@ export default function ProcessPage() {
                     </div>
                     <div>
                       <h3 className="text-xl font-semibold text-white">
-                        {chatgptUrl ? 'ChatGPT Conversation Loaded' : 'File Selected'}
+                        {conversationUrl ? 'Conversation URL Loaded' : 'File Selected'}
                       </h3>
                       <p className="text-gray-400 text-sm">Ready for processing</p>
                     </div>
@@ -2048,7 +2102,7 @@ export default function ProcessPage() {
                   <div className="bg-gray-900/50 border border-gray-400 rounded-xl p-6 mb-6">
                     <div className="flex items-start space-x-4">
                       <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
-                        {chatgptUrl ? (
+                        {conversationUrl ? (
                           <ExternalLink className="h-6 w-6 text-white" />
                         ) : (
                           <FileText className="h-6 w-6 text-white" />
@@ -2056,11 +2110,13 @@ export default function ProcessPage() {
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        {chatgptUrl ? (
+                        {conversationUrl ? (
                           <>
-                            <h4 className="font-medium text-white mb-2">ChatGPT Conversation</h4>
+                            <h4 className="font-medium text-white mb-2">
+                              {conversationUrl.includes('chatgpt.com') ? 'ChatGPT' : 'Claude'} Conversation
+                            </h4>
                             <p className="text-sm text-gray-400 break-all bg-gray-800 px-3 py-2 rounded-lg font-mono">
-                              {chatgptUrl}
+                              {conversationUrl}
                             </p>
                           </>
                         ) : file ? (
@@ -2108,7 +2164,7 @@ export default function ProcessPage() {
                     >
                       {isProcessing ? (
                         <Loader className="h-5 w-5 animate-spin" />
-                      ) : chatgptUrl ? (
+                      ) : conversationUrl ? (
                         <ExternalLink className="h-5 w-5" />
                       ) : (
                         <FileText className="h-5 w-5" />
@@ -2116,8 +2172,8 @@ export default function ProcessPage() {
                       <span>
                         {isProcessing 
                           ? 'Processing...' 
-                          : chatgptUrl 
-                            ? 'Extract ChatGPT Conversation' 
+                          : conversationUrl 
+                            ? `Extract ${conversationUrl.includes('chatgpt.com') ? 'ChatGPT' : 'Claude'} Conversation`
                             : 'Process File'
                         }
                       </span>
@@ -2125,8 +2181,8 @@ export default function ProcessPage() {
                     
                     <button
                       onClick={() => {
-                        if (chatgptUrl) {
-                          setChatgptUrl('');
+                        if (conversationUrl) {
+                          setConversationUrl('');
                         } else {
                           setFile(null);
                         }

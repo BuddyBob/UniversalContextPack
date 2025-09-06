@@ -1353,79 +1353,113 @@ async def extract_text(file: UploadFile = File(...), current_user: Authenticated
             pass
         raise HTTPException(status_code=500, detail=f"Failed to start extraction: {str(e)}")
 
-class ChatGPTURLRequest(BaseModel):
+class ConversationURLRequest(BaseModel):
     url: str
 
-@app.post("/api/extract-chatgpt-url")
-async def extract_chatgpt_url(request: ChatGPTURLRequest, current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Extract ChatGPT conversation from shared URL and process it like a file."""
+@app.post("/api/extract-conversation-url")
+async def extract_conversation_url(request: ConversationURLRequest, current_user: AuthenticatedUser = Depends(get_current_user)):
+    """Extract conversation from shared URL (supports ChatGPT and Claude) and process it like a file."""
     try:
         job_id = str(uuid.uuid4())
         
-        print(f"Starting ChatGPT URL extraction for job {job_id} (user: {current_user.email})")
+        print(f"Starting conversation URL extraction for job {job_id} (user: {current_user.email})")
         print(f"Extracting from URL: {request.url}")
         
-        # Validate URL format
-        if not request.url or 'chatgpt.com/share/' not in request.url:
-            raise HTTPException(status_code=400, detail="Invalid ChatGPT share URL. Must be a chatgpt.com/share/ URL.")
+        # Determine the platform based on URL
+        platform = None
+        if 'chatgpt.com/share/' in request.url:
+            platform = 'chatgpt'
+        elif 'claude.ai/share/' in request.url:
+            platform = 'claude'
+        elif 'grok.com/share/' in request.url:
+            platform = 'grok'
+        elif 'g.co/gemini/share/' in request.url:
+            platform = 'gemini'
+        else:
+            raise HTTPException(status_code=400, detail="Invalid conversation share URL. Must be a ChatGPT (chatgpt.com/share/), Claude (claude.ai/share/), Grok (grok.com/share/), or Gemini (g.co/gemini/share/) URL.")
         
         # Create job in database
         await create_job_in_db(
             current_user, 
             job_id, 
-            f"ChatGPT_conversation_{job_id}.json", 
+            f"{platform.title()}_conversation_{job_id}.json", 
             0,  # Size unknown until extracted
             "extracting"
         )
         
         # Initialize progress
-        update_job_progress(job_id, "extracting", 0, "Starting ChatGPT URL extraction...")
+        update_job_progress(job_id, "extracting", 0, f"Starting {platform.title()} URL extraction...")
         
         # Start background processing
-        asyncio.create_task(process_chatgpt_url_background(job_id, request.url, current_user))
+        asyncio.create_task(process_conversation_url_background(job_id, request.url, platform, current_user))
         
         # Return immediately so frontend can start polling
         return {
             "job_id": job_id,
             "status": "processing",
-            "message": "ChatGPT URL extraction started. Use the job_id to poll for progress."
+            "message": f"{platform.title()} URL extraction started. Use the job_id to poll for progress."
         }
         
     except Exception as e:
-        print(f"Error starting ChatGPT URL extraction: {e}")
+        print(f"Error starting conversation URL extraction: {e}")
         # Update job status as failed if created
         try:
             await update_job_status_in_db(current_user, job_id, "failed", error_message=str(e))
         except:
             pass
-        raise HTTPException(status_code=500, detail=f"Failed to start ChatGPT URL extraction: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start conversation URL extraction: {str(e)}")
 
-async def process_chatgpt_url_background(job_id: str, url: str, user: AuthenticatedUser):
-    """Background task for processing ChatGPT URL extraction with progress updates."""
+# Keep the old ChatGPT endpoint for backward compatibility
+class ChatGPTURLRequest(BaseModel):
+    url: str
+
+@app.post("/api/extract-chatgpt-url")
+async def extract_chatgpt_url(request: ChatGPTURLRequest, current_user: AuthenticatedUser = Depends(get_current_user)):
+    """Extract ChatGPT conversation from shared URL and process it like a file. (Legacy endpoint - use /api/extract-conversation-url instead)"""
+    # Redirect to the new unified endpoint
+    conv_request = ConversationURLRequest(url=request.url)
+    return await extract_conversation_url(conv_request, current_user)
+
+async def process_conversation_url_background(job_id: str, url: str, platform: str, user: AuthenticatedUser):
+    """Background task for processing conversation URL extraction with progress updates (supports ChatGPT and Claude)."""
     try:
         await update_job_status_in_db(user, job_id, "processing", 10, metadata={"step": "extracting_from_url"})
         update_job_progress(job_id, "extracting", 10, "Setting up browser...")
         
-        # Import ChatGPT extractor (will need selenium installed)
+        # Import the appropriate extractor
         try:
             import sys
             import os
-            # Add current directory to path to import chatgpt_extractor
+            # Add current directory to path to import extractors
             current_dir = os.path.dirname(os.path.abspath(__file__))
             if current_dir not in sys.path:
                 sys.path.append(current_dir)
             
-            from chatgpt_extractor import extract_chatgpt_conversation
+            if platform == 'chatgpt':
+                from chatgpt_extractor import extract_chatgpt_conversation
+                extract_function = extract_chatgpt_conversation
+            elif platform == 'claude':
+                from claude_extractor import extract_claude_conversation
+                extract_function = extract_claude_conversation
+            elif platform == 'grok':
+                from grok_extractor import extract_grok_conversation
+                extract_function = extract_grok_conversation
+            elif platform == 'gemini':
+                from gemini_extractor import extract_gemini_conversation
+                extract_function = extract_gemini_conversation
+            else:
+                raise ValueError(f"Unsupported platform: {platform}")
+                
         except ImportError as e:
-            print(f"ChatGPT extraction dependencies not available: {e}")
-            update_job_progress(job_id, "extracting", 0, "Error: ChatGPT extraction dependencies not installed (selenium, webdriver-manager)")
+            print(f"Conversation extraction dependencies not available: {e}")
+            update_job_progress(job_id, "extracting", 0, f"Error: {platform.title()} extraction dependencies not installed (selenium, webdriver-manager)")
             return
         
-        update_job_progress(job_id, "extracting", 30, "Extracting conversation from ChatGPT...")
+        update_job_progress(job_id, "extracting", 30, f"Extracting conversation from {platform.title()}...")
         
         # Extract conversation with better error handling
         try:
-            result = extract_chatgpt_conversation(url, timeout=60)
+            result = extract_function(url, timeout=60)
             
             if not result or not result.get('messages'):
                 print(f"No messages extracted from URL: {url}")
@@ -1439,12 +1473,13 @@ async def process_chatgpt_url_background(job_id: str, url: str, user: Authentica
             update_job_progress(job_id, "failed", 0, f"Error: {str(e)}")
             return
         except Exception as e:
-            print(f"ChatGPT extraction failed: {e}")
+            print(f"{platform.title()} extraction failed: {e}")
             await update_job_status_in_db(user, job_id, "failed", error_message=f"Failed to extract conversation: {str(e)}")
             update_job_progress(job_id, "failed", 0, f"Error: Failed to extract conversation - {str(e)}")
             return
         
-        update_job_progress(job_id, "extracting", 70, f"Extracted {result['message_count']} messages from conversation")
+        message_count = len(result['messages'])
+        update_job_progress(job_id, "extracting", 70, f"Extracted {message_count} messages from conversation")
         
         # Convert to the format expected by the rest of the pipeline
         extracted_texts = []
@@ -1453,10 +1488,10 @@ async def process_chatgpt_url_background(job_id: str, url: str, user: Authentica
             extracted_texts.append(formatted_message)
         
         if not extracted_texts:
-            update_job_progress(job_id, "extracting", 0, "Error: No messages found in ChatGPT conversation")
+            update_job_progress(job_id, "extracting", 0, f"Error: No messages found in {platform.title()} conversation")
             return
 
-        print(f"Extracted {len(extracted_texts)} messages from ChatGPT conversation")
+        print(f"Extracted {len(extracted_texts)} messages from {platform.title()} conversation")
         update_job_progress(job_id, "extracting", 80, f"Processing {len(extracted_texts)} messages")
 
         # Save extracted text to R2 (same format as file extraction)
@@ -1486,32 +1521,42 @@ async def process_chatgpt_url_background(job_id: str, url: str, user: Authentica
             return
         
         print("Upload successful, proceeding...")
-        update_job_progress(job_id, "extracted", 100, "ChatGPT conversation extraction completed successfully")
+        update_job_progress(job_id, "extracted", 100, f"{platform.title()} conversation extraction completed successfully")
         
         # Create job summary
         job_summary = {
             "job_id": job_id,
             "created_at": datetime.utcnow().isoformat(),
             "status": "extracted",
-            "source_type": "chatgpt_url",
+            "source_type": f"{platform}_url",
             "source_url": url,
             "conversation_id": result.get('conversation_id'),
             "extracted_count": len(extracted_texts),
-            "message_count": result['message_count'],
-            "content_size": len(extracted_content),
-            "preview": extracted_texts[:3] if len(extracted_texts) > 3 else extracted_texts
+            "message_count": message_count,
+            "platform": platform,
+            "file_size": len(extracted_content),
+            "content_preview": extracted_content[:500] + "..." if len(extracted_content) > 500 else extracted_content
         }
-        upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
+        
+        # Store job summary
+        await update_job_status_in_db(user, job_id, "extracted", 100, metadata=job_summary)
+        
+        print(f"Background processing completed successfully for job {job_id}")
         
     except Exception as e:
-        print(f"Error in background ChatGPT URL extraction for job {job_id}: {e}")
-        print(f"Full error traceback: {traceback.format_exc()}")
+        print(f"Error in background processing for job {job_id}: {e}")
+        traceback.print_exc()
+        
         try:
-            await update_job_status_in_db(user, job_id, "failed", error_message=f"ChatGPT extraction failed: {str(e)}")
-            update_job_progress(job_id, "failed", 0, f"Error: ChatGPT extraction failed - {str(e)}")
-        except Exception as db_error:
-            print(f"Failed to update job status in DB: {db_error}")
-            update_job_progress(job_id, "failed", 0, f"Error: ChatGPT extraction failed - {str(e)}")
+            await update_job_status_in_db(user, job_id, "failed", error_message=str(e))
+            update_job_progress(job_id, "failed", 0, f"Error: {str(e)}")
+        except Exception as update_error:
+            print(f"Failed to update job status: {update_error}")
+
+# Keep the old ChatGPT background function for any existing references
+async def process_chatgpt_url_background(job_id: str, url: str, user: AuthenticatedUser):
+    """Legacy background task for ChatGPT URL processing - redirects to unified function."""
+    return await process_conversation_url_background(job_id, url, 'chatgpt', user)
 
 async def process_extraction_background(job_id: str, file_content: str, filename: str, user: AuthenticatedUser):
     """Background task for processing text extraction with progress updates."""
