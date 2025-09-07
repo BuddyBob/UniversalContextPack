@@ -1280,8 +1280,8 @@ export default function ProcessPage() {
     // Track URL input
     analytics.fileUpload(0); // Size 0 for URL
     
-    // Estimate extraction time (usually takes longer due to browser automation)
-    const estimatedExtractionTime = validation.platform === 'Claude' ? 120 : 90; // Claude might take a bit longer
+    // Estimate extraction time (much faster with optimizations)
+    const estimatedExtractionTime = validation.platform === 'ChatGPT' ? 30 : 15; // ChatGPT takes a bit longer, others are fast
     const formatted = `${Math.round(estimatedExtractionTime / 60)}m`;
     
     setTimeEstimate({
@@ -1981,10 +1981,10 @@ export default function ProcessPage() {
                 </div>
 
                 {/* Main Upload Options */}
-                <div className="grid md:grid-cols-2 gap-6 mb-8">
+                <div className="flex flex-col md:flex-row items-center gap-6 mb-8">
                   {/* File Upload Card */}
                   <div 
-                    className={`group bg-gray-900/80 backdrop-blur-sm border-2 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl cursor-pointer ${
+                    className={`flex-1 group bg-gray-900/80 backdrop-blur-sm border-2 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl cursor-pointer ${
                       isDragOver 
                         ? 'border-gray-400 bg-gray-800/30 shadow-2xl scale-105' 
                         : 'border-gray-700'
@@ -2023,8 +2023,26 @@ export default function ProcessPage() {
                     </button>
                   </div>
 
+                  {/* Vertical Divider with OR */}
+                  <div className="hidden md:flex flex-col items-center">
+                    <div className="w-px h-20 bg-gradient-to-b from-transparent via-gray-600 to-transparent"></div>
+                    <div className="bg-gray-800 border border-gray-600 rounded-full px-3 py-1 my-2">
+                      <span className="text-gray-400 text-sm font-medium">OR</span>
+                    </div>
+                    <div className="w-px h-20 bg-gradient-to-b from-transparent via-gray-600 to-transparent"></div>
+                  </div>
+
+                  {/* Mobile Horizontal Divider with OR */}
+                  <div className="md:hidden flex items-center w-full">
+                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+                    <div className="bg-gray-800 border border-gray-600 rounded-full px-3 py-1 mx-4">
+                      <span className="text-gray-400 text-sm font-medium">OR</span>
+                    </div>
+                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+                  </div>
+
                   {/* Conversation URL Card */}
-                  <div className="bg-gray-900/80 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl">
+                  <div className="flex-1 bg-gray-900/80 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl">
                     <div className="w-16 h-16 bg-gray-800/90 border border-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-6 hover:bg-gray-700/90 transition-all">
                       <ExternalLink className="h-8 w-8 text-gray-300" />
                     </div>

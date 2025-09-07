@@ -1439,8 +1439,9 @@ async def process_conversation_url_background(job_id: str, url: str, platform: s
                 from chatgpt_extractor import extract_chatgpt_conversation
                 extract_function = extract_chatgpt_conversation
             elif platform == 'claude':
-                from claude_extractor import extract_claude_conversation
-                extract_function = extract_claude_conversation
+                # Use the fast extractor for Claude to prevent hanging
+                from claude_extractor_fast import extract_claude_conversation_fast
+                extract_function = extract_claude_conversation_fast
             elif platform == 'grok':
                 from grok_extractor import extract_grok_conversation
                 extract_function = extract_grok_conversation
@@ -1457,10 +1458,11 @@ async def process_conversation_url_background(job_id: str, url: str, platform: s
         
         update_job_progress(job_id, "extracting", 30, f"Extracting conversation from {platform.title()}...")
         
-        # Extract conversation with better error handling and platform-specific timeouts
+        # Extract conversation with better error handling and very short timeouts
         try:
-            # Set timeout based on platform (some are faster than others)
-            timeout = 30 if platform in ['chatgpt', 'claude'] else 20  # Grok/Gemini get shorter timeout
+            # Set very short timeout for all platforms to prevent hanging
+            timeout = 15  # Maximum 15 seconds for any platform
+            print(f"Starting {platform} extraction with {timeout}s timeout...")
             result = extract_function(url, timeout=timeout)
             
             if not result or not result.get('messages'):
