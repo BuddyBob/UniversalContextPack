@@ -89,7 +89,20 @@ def extract_claude_conversation_fast(url, timeout=30):
     
     driver = None
     try:
-        service = Service(ChromeDriverManager().install())
+        # Try to install ChromeDriver with better error handling
+        try:
+            service = Service(ChromeDriverManager().install())
+        except Exception as driver_error:
+            print(f"ChromeDriver installation failed: {driver_error}")
+            # Try alternative approach - let selenium find system chromedriver
+            try:
+                service = Service()  # Use system chromedriver if available
+            except:
+                return {
+                    'success': False,
+                    'error': f'ChromeDriver setup failed: {str(driver_error)}. Please ensure Chrome/Chromium is installed and ChromeDriver is available.'
+                }
+        
         driver = webdriver.Chrome(service=service, options=options)
         
         # Additional stealth
@@ -127,7 +140,14 @@ def extract_claude_conversation_fast(url, timeout=30):
             options_js.add_experimental_option("excludeSwitches", ["enable-automation"])
             options_js.add_experimental_option('useAutomationExtension', False)
             
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options_js)
+            try:
+                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options_js)
+            except Exception as retry_error:
+                print(f"Retry with JS failed: {retry_error}")
+                return {
+                    'success': False,
+                    'error': f'ChromeDriver retry failed: {str(retry_error)}. Server environment may not support Chrome automation.'
+                }
             
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             driver.get(url)
