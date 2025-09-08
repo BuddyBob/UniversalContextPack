@@ -1,6 +1,12 @@
-import json
+#!/usr/bin/env python3
+"""
+Claude Conversation Extractor
+
+Simple, reliable extraction from Claude share URLs.
+Uses the proven two-step approach: requests first, then selenium.
+"""
+
 import time
-from urllib.parse import urlparse
 import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -9,7 +15,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-
 
 def try_requests_first(url):
     """Try simple requests first - sometimes works without triggering Cloudflare"""
@@ -27,6 +32,7 @@ def try_requests_first(url):
             # Quick check if we got actual content
             if 'conversation' in response.text.lower() or 'message' in response.text.lower():
                 try:
+                    # Try to use BeautifulSoup if available
                     from bs4 import BeautifulSoup
                     soup = BeautifulSoup(response.text, 'html.parser')
                     # Remove scripts and styles
@@ -35,39 +41,25 @@ def try_requests_first(url):
                     text = soup.get_text()
                     return {'success': True, 'text': text, 'length': len(text), 'method': 'requests'}
                 except ImportError:
-                    # If BeautifulSoup not available, just return raw text
+                    # Fallback to raw text if BeautifulSoup not available
                     return {'success': True, 'text': response.text, 'length': len(response.text), 'method': 'requests_raw'}
     except Exception:
         pass
     return None
 
-def extract_claude_conversation_fast(url, timeout=30):
-    """
-    Extract conversation from Claude shared link with improved method
-    """
+def extract_claude_conversation(url):
+    """Main function to extract Claude conversation"""
+    
     # Validate URL format
     if 'claude.ai/share/' not in url:
         return {'success': False, 'error': 'Invalid Claude share URL'}
     
-    print(f"Loading URL: {url}")
-    
     # Try requests first (faster and less likely to trigger Cloudflare)
     print("Trying simple HTTP request first...")
     result = try_requests_first(url)
-    if result and result['success']:
+    if result:
         print("✅ Got content with simple request!")
-        text = result['text']
-        messages = parse_text_to_messages(text)
-        
-        if messages:
-            conversation_id = url.split('/')[-1]
-            return {
-                'success': True,
-                'conversation_id': conversation_id,
-                'source': 'claude',
-                'messages': messages,
-                'extraction_method': 'requests'
-            }
+        return format_result(url, result['text'], 'requests')
     
     print("Simple request failed, trying with browser...")
     
@@ -87,11 +79,12 @@ def extract_claude_conversation_fast(url, timeout=30):
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
-    driver = None
+    driver = webdriver.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=options
+    )
+    
     try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        
         # Additional stealth
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
@@ -101,7 +94,7 @@ def extract_claude_conversation_fast(url, timeout=30):
         driver.get(url)
         
         # Wait for body
-        WebDriverWait(driver, timeout).until(
+        WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
         
@@ -127,11 +120,14 @@ def extract_claude_conversation_fast(url, timeout=30):
             options_js.add_experimental_option("excludeSwitches", ["enable-automation"])
             options_js.add_experimental_option('useAutomationExtension', False)
             
-            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options_js)
+            driver = webdriver.Chrome(
+                service=Service(ChromeDriverManager().install()),
+                options=options_js
+            )
             
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             driver.get(url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
             time.sleep(10)  # Wait longer for JS to load
             
             body = driver.find_element(By.TAG_NAME, "body")
@@ -141,47 +137,43 @@ def extract_claude_conversation_fast(url, timeout=30):
         if 'Verify you are human' in text or 'cloudflare' in text.lower():
             return {
                 'success': False,
-                'error': 'Cloudflare protection detected - conversation may be private or require authentication'
+                'error': 'Cloudflare protection detected - conversation may be private or require authentication',
+                'raw_text': text[:1000] + '...' if len(text) > 1000 else text
             }
         
         if len(text) < 100:
             return {
                 'success': False,
-                'error': 'Very little content found - URL may be invalid or private'
+                'error': 'Very little content found - URL may be invalid or private',
+                'raw_text': text
             }
         
-        # Parse the text into messages
-        messages = parse_text_to_messages(text)
-        
-        if not messages:
-            return {'success': False, 'error': 'No messages found in conversation'}
-        
-        # Extract conversation ID from URL
-        conversation_id = url.split('/')[-1]
-        
-        print(f"Successfully extracted {len(messages)} messages")
-        
-        return {
-            'success': True,
-            'conversation_id': conversation_id,
-            'source': 'claude',
-            'messages': messages,
-            'extraction_method': 'selenium'
-        }
+        return format_result(url, text, 'selenium')
         
     except Exception as e:
-        print(f"Error during extraction: {e}")
         return {
             'success': False,
-            'error': f'Extraction failed: {str(e)}'
+            'error': str(e)
         }
-    
     finally:
-        if driver:
-            driver.quit()
+        driver.quit()
+
+def format_result(url, text, method):
+    """Format the extracted text into the expected result structure"""
+    conversation_id = url.split('/')[-1]
+    messages = parse_text_to_messages(text)
+    
+    return {
+        'success': True,
+        'conversation_id': conversation_id,
+        'source': 'claude',
+        'messages': messages,
+        'extraction_method': method,
+        'raw_text': text
+    }
 
 def parse_text_to_messages(text):
-    """Parse extracted text into conversation messages - simple approach"""
+    """Parse extracted text into conversation messages"""
     messages = []
     
     # Clean up the text
@@ -199,11 +191,12 @@ def parse_text_to_messages(text):
             continue
         
         # Keep substantial content
-        if len(line) > 15:  # Higher threshold for better content
+        if len(line) > 15:  # Slightly higher threshold
             content_lines.append(line)
     
-    # Create messages from content - simple chunking
+    # Create messages from content
     if content_lines:
+        # Simple chunking approach
         current_message = ""
         message_count = 0
         
@@ -237,83 +230,35 @@ def parse_text_to_messages(text):
     
     return messages
 
-def validate_claude_url(url):
-    """Validate if URL is a proper Claude share URL"""
-    try:
-        if not url or not isinstance(url, str):
-            return False, "URL must be a non-empty string"
-        
-        url = url.strip()
-        
-        if 'claude.ai/share/' not in url:
-            return False, "Must be a Claude share URL"
-        
-        parsed = urlparse(url)
-        path_parts = [part for part in parsed.path.split('/') if part]
-        
-        if len(path_parts) >= 2 and path_parts[0] == 'share':
-            conversation_id = path_parts[1]
-            if len(conversation_id) >= 10:  # Basic length check
-                return True, "Valid Claude share URL"
-        
-        return False, "Invalid Claude share URL format"
-        
-    except Exception as e:
-        return False, f"Error validating URL: {e}"
-
-
-if __name__ == "__main__":
-    # Test both URLs like the working example
-    urls = [
-        "https://chatgpt.com/share/68bba00f-f950-8004-ae26-3cd8e1f21f2d",
-        "https://claude.ai/share/74f51402-c8be-41a4-8a7d-1c7dd343aa12"
-    ]
-    
-    for url in urls:
-        if 'claude.ai/share/' not in url:
-            continue  # Skip non-Claude URLs in this extractor
-            
-        platform = "Claude"
-        print(f"\nExtracting {platform} conversation...")
-        result = extract_claude_conversation_fast(url)
-        
-        if result['success']:
-            print(f"✅ Success! Got {len(result['messages'])} messages")
-            print(f"Extraction method: {result.get('extraction_method', 'unknown')}")
-            if result['messages']:
-                first_msg = result['messages'][0]
-                preview = first_msg['content'][:200] + "..." if len(first_msg['content']) > 200 else first_msg['content']
-                print(f"First message preview: {preview}")
-        else:
-            print(f"❌ Error: {result['error']}")
+# Test function
+def test_extractor():
+    """Test the extractor with a sample URL"""
     test_url = "https://claude.ai/share/74f51402-c8be-41a4-8a7d-1c7dd343aa12"
     
-    print("🚀 Claude Conversation Extractor")
+    print("🤖 Claude Conversation Extractor Test")
     print("=" * 50)
     print(f"Testing URL: {test_url}")
     print()
     
-    # Test validation
-    is_valid, message = validate_claude_url(test_url)
-    print(f"Validation: {is_valid} - {message}")
+    result = extract_claude_conversation(test_url)
     
-    if is_valid:
-        print("Extracting conversation...")
-        result = extract_claude_conversation_fast(test_url)
+    if result['success']:
+        print(f"✅ Success!")
+        print(f"   Method: {result['extraction_method']}")
+        print(f"   Conversation ID: {result['conversation_id']}")
+        print(f"   Messages found: {len(result['messages'])}")
         
-        if result['success']:
-            print(f"✅ Success!")
-            print(f"   Conversation ID: {result['conversation_id']}")
-            print(f"   Messages: {len(result['messages'])}")
-            print(f"   Source: {result['source']}")
+        if result['messages']:
+            first_msg = result['messages'][0]
+            preview = first_msg['content'][:400] + "..." if len(first_msg['content']) > 400 else first_msg['content']
+            print(f"   First message preview:\n   {preview}")
+        
+        print(f"   Raw text length: {len(result.get('raw_text', ''))} characters")
             
-            # Show first message preview
-            if result['messages']:
-                first_msg = result['messages'][0]
-                preview = first_msg['content'] + "..." if len(first_msg['content']) > 200 else first_msg['content']
-                print(f"   First message: {preview}")
-            
-        else:
-            print(f"❌ Failed: {result['error']}")
-    
-    print("\n💡 Integration: Use extract_claude_conversation_fast(url) in your backend")
+    else:
+        print(f"❌ Error: {result['error']}")
+        if 'raw_text' in result:
+            print(f"Raw text preview: {result['raw_text'][:300]}...")
+
+if __name__ == "__main__":
+    test_extractor()
