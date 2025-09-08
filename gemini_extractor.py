@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 """
-Production Gemini Extractor
-
-Optimized for web applications with better error handling,
-timeouts, and resource management for Gemini conversation shares.
+Simple Gemini Extractor - Robust text extraction from Gemini conversations
 """
 
 import json
 import time
 import re
-import os
 from urllib.parse import urlparse, unquote
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -20,302 +16,65 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from contextlib import contextmanager
 
-class ProductionGeminiExtractor:
+class GeminiTextExtractor:
+    """Simple text extractor for Gemini conversations"""
+    
     def __init__(self, headless=True, timeout=30):
         self.headless = headless
         self.timeout = timeout
     
     @contextmanager
     def get_driver(self):
-        """Get a Chrome driver with production-ready options"""
+        """Get configured Chrome WebDriver"""
         driver = None
         try:
-            chrome_options = Options()
-            chrome_options.add_argument('--headless=new')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--disable-web-security')
-            chrome_options.add_argument('--allow-running-insecure-content')
-            chrome_options.add_argument('--disable-extensions')
-            chrome_options.add_argument('--disable-plugins')
-            chrome_options.add_argument('--disable-images')
-            chrome_options.add_argument('--disable-background-timer-throttling')
-            chrome_options.add_argument('--disable-renderer-backgrounding')
-            chrome_options.add_argument('--disable-backgrounding-occluded-windows')
-            chrome_options.add_argument('--window-size=1920,1080')
-            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
+            options = Options()
+            if self.headless:
+                options.add_argument('--headless=new')
             
-            # Try to use system Chrome first, then fall back to ChromeDriverManager
-            try:
-                # Try different Chrome binary locations
-                chrome_paths = [
-                    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                    '/usr/bin/google-chrome',
-                    '/usr/bin/google-chrome-stable',
-                    '/usr/bin/chromium-browser',
-                    '/snap/bin/chromium'
-                ]
-                
-                chrome_binary = None
-                for path in chrome_paths:
-                    if os.path.exists(path):
-                        chrome_binary = path
-                        print(f"Found Chrome binary at: {path}")
-                        break
-                
-                if chrome_binary:
-                    chrome_options.binary_location = chrome_binary
-                
-                # Try to find ChromeDriver
-                chromedriver_paths = [
-                    '/usr/bin/chromedriver',
-                    '/usr/local/bin/chromedriver'
-                ]
-                
-                chromedriver_path = None
-                for path in chromedriver_paths:
-                    if os.path.exists(path):
-                        chromedriver_path = path
-                        print(f"Found ChromeDriver at: {path}")
-                        break
-                
-                if chromedriver_path:
-                    service = Service(chromedriver_path)
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
-                    print("Using system ChromeDriver")
-                else:
-                    # Fall back to ChromeDriverManager
-                    service = Service(ChromeDriverManager().install())
-                    driver = webdriver.Chrome(service=service, options=chrome_options)
-                    print("Using ChromeDriverManager")
-                    
-            except Exception as e:
-                print(f"Error setting up Chrome driver: {e}")
-                # Final fallback
-                driver = webdriver.Chrome(options=chrome_options)
-                print("Using default Chrome driver")
+            # Standard options for better compatibility
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')
+            options.add_argument('--window-size=1920,1080')
+            options.add_argument('--disable-blink-features=AutomationControlled')
+            options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
             
-            # Set aggressive timeouts for faster processing
-            driver.set_page_load_timeout(15)  # Reduced from default timeout
-            driver.implicitly_wait(3)  # Reduced from 10 seconds
+            # Hide automation
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option('useAutomationExtension', False)
             
-            # Set user agent to appear more like a real browser
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+            
+            # Additional stealth
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
             yield driver
-        
-        except Exception as e:
-            print(f"Failed to create Chrome driver: {e}")
-            raise
         finally:
             if driver:
-                try:
-                    driver.quit()
-                    print("Chrome driver closed")
-                except Exception as e:
-                    print(f"Error closing driver: {e}")
-    
-    def extract_conversation_id(self, url):
-        """Extract conversation ID from Gemini share URL"""
-        try:
-            print(f"Extracting conversation ID from Gemini URL: {url}")
-            parsed = urlparse(url)
-            print(f"Parsed URL - scheme: {parsed.scheme}, netloc: {parsed.netloc}, path: {parsed.path}")
-            
-            if not parsed.path:
-                print("No path in parsed URL")
-                return None
-            
-            # Split path and filter out empty parts
-            path_parts = [part for part in parsed.path.split('/') if part]
-            print(f"Path parts: {path_parts}")
-            
-            # For Gemini URLs, we expect the pattern: /gemini/share/{conversation_id}
-            if len(path_parts) >= 3 and path_parts[0] == 'gemini' and path_parts[1] == 'share':
-                conversation_id = path_parts[2]
-                print(f"Found conversation ID: {conversation_id}")
-                # Basic validation - conversation ID should be reasonably long
-                if len(conversation_id) >= 10:
-                    return conversation_id
-                else:
-                    print(f"Conversation ID too short: {len(conversation_id)} chars")
-            else:
-                print(f"Invalid path structure. Expected /gemini/share/{{id}}, got: {'/'.join(path_parts)}")
-            
-            return None
-        except Exception as e:
-            print(f"Error in extract_conversation_id: {e}")
-            return None
-    
-    def clean_message_text(self, text):
-        """Clean and format message text"""
-        if not text:
-            return ""
-        
-        # Remove extra whitespace and normalize
-        text = re.sub(r'\s+', ' ', text).strip()
-        
-        # Remove common artifacts
-        text = re.sub(r'\n+', '\n', text)
-        text = re.sub(r'[ \t]+', ' ', text)
-        
-        return text
-    
-    def detect_message_role(self, element):
-        """Detect if a message is from user or Gemini"""
-        text = element.get_attribute('textContent') or ""
-        text_lower = text.lower()
-        
-        # Look for role indicators in the element's attributes or content
-        try:
-            # Check for common Gemini indicators
-            if any(indicator in text_lower for indicator in ['gemini:', 'assistant:', 'ai:', 'bard:']):
-                return 'assistant'
-            
-            # Check for user indicators
-            if any(indicator in text_lower for indicator in ['user:', 'human:', 'you:']):
-                return 'user'
-            
-            # Check parent elements or data attributes that might indicate role
-            parent = element.find_element(By.XPATH, '..')
-            if parent:
-                parent_classes = parent.get_attribute('class') or ""
-                if 'assistant' in parent_classes.lower() or 'gemini' in parent_classes.lower() or 'bard' in parent_classes.lower():
-                    return 'assistant'
-                elif 'user' in parent_classes.lower() or 'human' in parent_classes.lower():
-                    return 'user'
-        
-        except Exception as e:
-            print(f"Error detecting message role: {e}")
-        
-        # Default to alternating pattern if we can't determine
-        return 'unknown'
+                driver.quit()
     
     def extract_conversation(self, url):
-        """Extract conversation from Gemini share URL"""
-        print(f"Starting Gemini conversation extraction from: {url}")
+        """
+        Extract conversation from Gemini URL and format for UCP backend
         
-        if not url or 'g.co/gemini/share/' not in url:
-            raise ValueError("Invalid Gemini share URL")
-        
-        conv_id = self.extract_conversation_id(url)
-        if not conv_id:
-            raise ValueError(f"Could not extract conversation ID from URL: {url}")
-        
-        messages = []
-        
-        with self.get_driver() as driver:
-            try:
-                print("Loading Gemini conversation page...")
-                driver.get(url)
+        Args:
+            url (str): Gemini share URL
+            
+        Returns:
+            dict: UCP-compatible format with messages array
+        """
+        try:
+            # Validate URL
+            conv_id = self._parse_gemini_url(url)
+            
+            # Extract text
+            with self.get_driver() as driver:
+                text_data = self._get_page_text(driver, url)
                 
-                # Reduced wait time for faster processing
-                time.sleep(2)  # Reduced from 5 seconds
-                
-                # Wait for conversation content to be present with shorter timeout
-                wait = WebDriverWait(driver, 10)  # Reduced from self.timeout
-                
-                # Try multiple selectors for Gemini conversation content
-                possible_selectors = [
-                    '[data-testid="conversation"]',
-                    '.conversation',
-                    '[role="main"]',
-                    '.messages',
-                    '.chat-messages',
-                    '.message-container',
-                    '.conversation-turn',
-                    'main'
-                ]
-                
-                conversation_container = None
-                for selector in possible_selectors:
-                    try:
-                        conversation_container = wait.until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                        )
-                        print(f"Found conversation container with selector: {selector}")
-                        break
-                    except Exception:
-                        continue
-                
-                if not conversation_container:
-                    print("Could not find conversation container, trying to extract from body")
-                    conversation_container = driver.find_element(By.TAG_NAME, 'body')
-                
-                # Look for message elements
-                message_selectors = [
-                    '[data-testid="message"]',
-                    '.message',
-                    '.chat-message',
-                    '.conversation-turn',
-                    'div[class*="message"]',
-                    'div[class*="chat"]',
-                    'div[class*="turn"]',
-                    'div[role="listitem"]'
-                ]
-                
-                message_elements = []
-                for selector in message_selectors:
-                    try:
-                        elements = conversation_container.find_elements(By.CSS_SELECTOR, selector)
-                        if elements:
-                            message_elements = elements
-                            print(f"Found {len(elements)} message elements with selector: {selector}")
-                            break
-                    except Exception:
-                        continue
-                
-                if not message_elements:
-                    # Fallback: look for any div elements that might contain messages
-                    print("No specific message elements found, trying generic approach")
-                    all_divs = conversation_container.find_elements(By.TAG_NAME, 'div')
-                    # Filter divs that likely contain conversation content
-                    message_elements = [div for div in all_divs if len(div.get_attribute('textContent') or '') > 20]
-                
-                print(f"Found {len(message_elements)} potential message elements")
-                
-                # Fail fast if no message elements found after reasonable attempts
-                if not message_elements:
-                    print("No message elements found - failing fast to avoid hanging")
-                    raise ValueError("No conversation content found on the page - this might not be a valid Gemini share link or the page structure has changed")
-                
-                # Extract messages
-                current_role = 'user'  # Start with user
-                for i, element in enumerate(message_elements):
-                    try:
-                        text_content = element.get_attribute('textContent') or ""
-                        text_content = self.clean_message_text(text_content)
-                        
-                        if len(text_content.strip()) < 10:  # Skip very short messages
-                            continue
-                        
-                        # Detect role or alternate
-                        detected_role = self.detect_message_role(element)
-                        if detected_role != 'unknown':
-                            role = detected_role
-                        else:
-                            # Alternate between user and assistant
-                            role = 'user' if i % 2 == 0 else 'assistant'
-                        
-                        messages.append({
-                            'role': role,
-                            'content': text_content,
-                            'timestamp': None  # Gemini shares don't typically include timestamps
-                        })
-                        
-                        print(f"Extracted message {len(messages)}: {role} - {text_content[:100]}...")
-                    
-                    except Exception as e:
-                        print(f"Error processing message element {i}: {e}")
-                        continue
-                
-                if not messages:
-                    raise ValueError("No messages found in the conversation")
-                
-                print(f"Successfully extracted {len(messages)} messages from Gemini conversation")
+                # Parse into messages format
+                messages = self._parse_text_to_messages(text_data['text'])
                 
                 return {
                     'success': True,
@@ -323,16 +82,111 @@ class ProductionGeminiExtractor:
                     'title': f"Gemini Conversation {conv_id}",
                     'messages': messages,
                     'source': 'gemini_share',
-                    'url': url
+                    'url': url,
+                    'extraction_time': time.time()
                 }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'url': url,
+                'extraction_time': time.time()
+            }
+    
+    def _parse_gemini_url(self, url):
+        """Parse and validate Gemini URL"""
+        if not url:
+            raise ValueError("URL is required")
+        
+        url = url.strip()
+        
+        if 'g.co/gemini/share/' not in url:
+            raise ValueError("Must be a Gemini share URL")
+        
+        try:
+            parsed = urlparse(url)
+            path_parts = [part for part in parsed.path.split('/') if part]
             
-            except Exception as e:
-                print(f"Error during Gemini extraction: {e}")
-                raise
+            if len(path_parts) >= 3 and path_parts[0] == 'gemini' and path_parts[1] == 'share':
+                conversation_id = path_parts[2]
+                if len(conversation_id) >= 5:
+                    return conversation_id
+            
+            raise ValueError("Invalid Gemini share URL format")
+        except Exception:
+            raise ValueError("Invalid URL format")
+    
+    def _get_page_text(self, driver, url):
+        """Get all text from the Gemini page"""
+        print(f"Loading Gemini conversation...")
+        driver.set_page_load_timeout(15)
+        driver.get(url)
+        
+        # Wait for page load
+        WebDriverWait(driver, self.timeout).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        
+        # Wait for content to load
+        time.sleep(8)
+        
+        # Get all text
+        body = driver.find_element(By.TAG_NAME, "body")
+        all_text = body.text
+        
+        # Check for common blocking patterns
+        if any(keyword in all_text.lower() for keyword in [
+            'access denied', 'not found', 'error', 'blocked',
+            'sign in', 'login required', 'private conversation'
+        ]):
+            raise ValueError("Conversation appears to be private or inaccessible")
+        
+        # Basic validation
+        if not all_text or len(all_text) < 50:
+            raise ValueError("No substantial content found - conversation may be private")
+        
+        return {
+            'text': self._clean_text(all_text)
+        }
+    
+    def _clean_text(self, text):
+        """Basic text cleaning"""
+        if not text:
+            return ""
+        
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        return '\n'.join(lines)
+    
+    def _parse_text_to_messages(self, text):
+        """Parse text into message format"""
+        messages = []
+        
+        # Simple parsing - split into chunks
+        chunks = text.split('\n\n')
+        chunks = [chunk.strip() for chunk in chunks if chunk.strip() and len(chunk.strip()) > 20]
+        
+        for i, chunk in enumerate(chunks):
+            role = 'user' if i % 2 == 0 else 'assistant'
+            messages.append({
+                'role': role,
+                'content': chunk,
+                'timestamp': None
+            })
+        
+        if not messages:
+            # Fallback: treat all text as one message
+            messages = [{
+                'role': 'assistant',
+                'content': text,
+                'timestamp': None
+            }]
+        
+        return messages
 
 def extract_gemini_conversation(url, timeout=30):
     """Extract conversation from Gemini URL"""
-    extractor = ProductionGeminiExtractor(timeout=timeout)
+    extractor = GeminiTextExtractor(timeout=timeout)
     return extractor.extract_conversation(url)
 
 def validate_gemini_url(url):
@@ -343,19 +197,16 @@ def validate_gemini_url(url):
     if 'g.co/gemini/share/' not in url:
         return False, "Must be a Gemini share URL"
     
-    # Additional validation
     try:
         parsed = urlparse(url)
         path_parts = [part for part in parsed.path.split('/') if part]
         
-        # For Gemini URLs, we expect the pattern: /gemini/share/{conversation_id}
         if len(path_parts) >= 3 and path_parts[0] == 'gemini' and path_parts[1] == 'share':
             conversation_id = path_parts[2]
-            if len(conversation_id) >= 10:
+            if len(conversation_id) >= 5:
                 return True, "Valid Gemini share URL"
         
         return False, "Invalid Gemini share URL format"
-    
     except Exception as e:
         return False, f"Error validating URL: {e}"
 
@@ -364,15 +215,16 @@ if __name__ == "__main__":
     test_url = "https://g.co/gemini/share/fcf4f4ece92f"
     
     try:
-        print(f"Testing Gemini URL validation: {test_url}")
-        is_valid, message = validate_gemini_url(test_url)
-        print(f"Validation result: {is_valid} - {message}")
+        print("Testing Gemini extraction...")
+        result = extract_gemini_conversation(test_url)
         
-        if is_valid:
-            print("Starting extraction...")
-            result = extract_gemini_conversation(test_url)
-            print(f"Extraction successful! Found {len(result['messages'])} messages")
-            print(json.dumps(result, indent=2))
-        
+        if result['success']:
+            print(f"Success! Messages: {len(result['messages'])}")
+            if result['messages']:
+                first_msg = result['messages'][0]
+                preview = first_msg['content'][:200] + "..." if len(first_msg['content']) > 200 else first_msg['content']
+                print(f"First message preview: {preview}")
+        else:
+            print(f"Failed: {result['error']}")
     except Exception as e:
-        print(f"Test failed: {e}")
+        print(f"Error: {e}")
