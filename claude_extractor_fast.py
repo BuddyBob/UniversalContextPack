@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Production-Ready Claude Text Extractor
-
-Simple, robust extractor that just gets all visible text from Claude conversation URLs.
-Perfect for integration into larger web applications.
-"""
-
 import json
 import time
 from urllib.parse import urlparse
@@ -16,258 +8,184 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from contextlib import contextmanager
 
-class ClaudeTextExtractor:
-    """Simple text extractor for Claude conversations"""
+
+def extract_claude_conversation_fast(url):
+    """
+    Extract conversation from Claude shared link with selenium
+    """
+    # Validate URL format
+    if 'claude.ai/share/' not in url:
+        return {'success': False, 'error': 'Invalid Claude share URL'}
     
-    def __init__(self, headless=True, timeout=45):
-        self.headless = headless
-        self.timeout = timeout
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--window-size=1920,1080')
     
-    @contextmanager
-    def get_driver(self):
-        """Get configured Chrome WebDriver"""
-        driver = None
-        try:
-            options = Options()
-            if self.headless:
-                options.add_argument('--headless')
-            
-            # Standard options for better compatibility
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--disable-gpu')
-            options.add_argument('--window-size=1920,1080')
-            options.add_argument('--disable-blink-features=AutomationControlled')
-            options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-            
-            # Hide automation
-            options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            options.add_experimental_option('useAutomationExtension', False)
-            
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
-            
-            # Additional stealth
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            yield driver
-        finally:
-            if driver:
-                driver.quit()
-    
-    def extract_conversation(self, url):
-        """
-        Extract conversation text from Claude URL and format for UCP backend
+    driver = None
+    try:
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
         
-        Args:
-            url (str): Claude share URL
-            
-        Returns:
-            dict: UCP-compatible format with messages array
-        """
+        print(f"Loading URL: {url}")
+        driver.get(url)
+        
+        # Wait for page to load
+        wait = WebDriverWait(driver, 10)
+        
+        # Wait for content to load
+        time.sleep(3)
+        
+        # Try to find conversation container
         try:
-            # Validate URL
-            conv_id = self._parse_claude_url(url)
+            conversation_container = wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, '[data-testid="conversation"]'))
+            )
+            print("Found conversation container")
+        except:
+            # Fallback: look for messages directly
+            print("Conversation container not found, looking for messages...")
+            time.sleep(2)
+        
+        # Look for message elements with different possible selectors
+        message_selectors = [
+            '[data-is-streaming="false"]',
+            '[role="presentation"]',
+            '.font-claude-message',
+            '[data-testid*="message"]',
+            '.prose'
+        ]
+        
+        messages = []
+        message_elements = []
+        
+        for selector in message_selectors:
+            try:
+                elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                if elements:
+                    print(f"Found {len(elements)} elements with selector: {selector}")
+                    message_elements = elements
+                    break
+            except Exception as e:
+                print(f"Selector {selector} failed: {e}")
+                continue
+        
+        if not message_elements:
+            # Last resort: get all text content
+            print("No specific message elements found, extracting all text...")
+            body = driver.find_element(By.TAG_NAME, "body")
+            all_text = body.text
             
-            # Extract text
-            with self.get_driver() as driver:
-                text_data = self._get_page_text(driver, url)
+            if all_text and len(all_text.strip()) > 100:
+                # Try to split into logical parts
+                parts = [p.strip() for p in all_text.split('\n\n') if p.strip() and len(p.strip()) > 10]
                 
-                # Parse into messages format
-                messages = self._parse_text_to_messages(text_data['text'])
+                for i, part in enumerate(parts[:20]):  # Limit to first 20 parts
+                    role = "human" if i % 2 == 0 else "assistant"
+                    messages.append({
+                        'role': role,
+                        'content': part
+                    })
                 
-                return {
-                    'success': True,
-                    'conversation_id': conv_id,
-                    'title': f"Claude Conversation {conv_id}",
-                    'messages': messages,
-                    'source': 'claude_share',
-                    'url': url,
-                    'extraction_time': time.time(),
-                    'cloudflare_detected': text_data.get('cloudflare_detected', False)
-                }
+                if messages:
+                    conversation_id = url.split('/')[-1]
+                    return {
+                        'success': True,
+                        'conversation_id': conversation_id,
+                        'source': 'claude',
+                        'messages': messages,
+                        'extraction_method': 'full_text_fallback'
+                    }
+            
+            return {'success': False, 'error': 'No readable content found on page'}
+        
+        # Process found message elements
+        for i, element in enumerate(message_elements):
+            try:
+                text_content = element.text.strip()
                 
-        except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'url': url,
-                'extraction_time': time.time()
-            }
+                if text_content and len(text_content) > 10:
+                    # Determine role based on position or content
+                    role = "human" if i % 2 == 0 else "assistant"
+                    
+                    # Look for role indicators in the content or surrounding elements
+                    if "Human:" in text_content or element.get_attribute('data-author') == 'human':
+                        role = "human"
+                        text_content = text_content.replace("Human:", "").strip()
+                    elif "Assistant:" in text_content or element.get_attribute('data-author') == 'assistant':
+                        role = "assistant"
+                        text_content = text_content.replace("Assistant:", "").strip()
+                    
+                    messages.append({
+                        'role': role,
+                        'content': text_content
+                    })
+                    
+            except Exception as e:
+                print(f"Error processing message element {i}: {e}")
+                continue
+        
+        if not messages:
+            return {'success': False, 'error': 'No messages found in conversation'}
+        
+        # Extract conversation ID from URL
+        conversation_id = url.split('/')[-1]
+        
+        print(f"Successfully extracted {len(messages)} messages")
+        
+        return {
+            'success': True,
+            'conversation_id': conversation_id,
+            'source': 'claude',
+            'messages': messages,
+            'extraction_method': 'selenium_elements'
+        }
+        
+    except Exception as e:
+        print(f"Error during extraction: {e}")
+        return {
+            'success': False,
+            'error': f'Extraction failed: {str(e)}'
+        }
     
-    def _parse_claude_url(self, url):
-        """Parse and validate Claude URL"""
-        if not url:
-            raise ValueError("URL is required")
+    finally:
+        if driver:
+            driver.quit()
+
+def validate_claude_url(url):
+    """Validate if URL is a proper Claude share URL"""
+    try:
+        if not url or not isinstance(url, str):
+            return False, "URL must be a non-empty string"
         
         url = url.strip()
         
         if 'claude.ai/share/' not in url:
-            raise ValueError("Must be a Claude share URL")
+            return False, "Must be a Claude share URL"
         
-        try:
-            parsed = urlparse(url)
-            conv_id = parsed.path.split('/')[-1]
-            if len(conv_id) < 10:
-                raise ValueError("Invalid conversation ID")
-            return conv_id
-        except Exception:
-            raise ValueError("Invalid Claude URL format")
-    
-    def _get_page_text(self, driver, url):
-        """Get all text from the Claude page"""
-        print(f"Loading Claude conversation...")
-        driver.get(url)
-        
-        # Wait for page load
-        WebDriverWait(driver, self.timeout).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        
-        # Claude needs more time to load content
-        time.sleep(10)
-        
-        # Get all text
-        body = driver.find_element(By.TAG_NAME, "body")
-        all_text = body.text
-        
-        # Check for Cloudflare or security verification
-        security_detected = any(keyword in all_text.lower() for keyword in [
-            'cloudflare', 'verify you are human', 'ray id:', 
-            'security check', 'checking your browser', 'access denied',
-            'please verify', 'waiting for claude.ai'
-        ])
-        
-        if security_detected:
-            raise ValueError("This Claude share URL shows a security verification page or is private. Claude conversations may require authentication for automated access. Please try: 1) Ensure the URL is publicly accessible, 2) Use a different conversation, or 3) Export manually from Claude.")
-        
-        # Basic validation
-        if not all_text or len(all_text) < 50:
-            raise ValueError("No substantial content found on Claude page")
-        
-        return {
-            'text': self._clean_text(all_text),
-            'cloudflare_detected': security_detected
-        }
-    
-    def _clean_text(self, text):
-        """Basic text cleaning"""
-        if not text:
-            return ""
-        
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        return '\n'.join(lines)
-    
-    def _parse_text_to_messages(self, text):
-        """Parse raw text into conversation messages"""
-        messages = []
-        
-        # Try to identify conversation patterns
-        lines = text.split('\n')
-        current_message = ""
-        current_role = "user"
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            # Look for role indicators
-            if any(indicator in line.lower() for indicator in ['human:', 'user:', 'you:']):
-                if current_message:
-                    messages.append({
-                        'role': current_role,
-                        'content': current_message.strip(),
-                        'timestamp': None
-                    })
-                current_message = line
-                current_role = "user"
-            elif any(indicator in line.lower() for indicator in ['assistant:', 'claude:', 'ai:']):
-                if current_message:
-                    messages.append({
-                        'role': current_role,
-                        'content': current_message.strip(),
-                        'timestamp': None
-                    })
-                current_message = line
-                current_role = "assistant"
-            else:
-                current_message += "\n" + line
-        
-        # Add final message
-        if current_message:
-            messages.append({
-                'role': current_role,
-                'content': current_message.strip(),
-                'timestamp': None
-            })
-        
-        # If no clear structure found, create chunks
-        if not messages:
-            # Split into reasonable chunks
-            chunk_size = 2000
-            for i in range(0, len(text), chunk_size):
-                chunk = text[i:i+chunk_size].strip()
-                if chunk:
-                    role = 'user' if len(messages) % 2 == 0 else 'assistant'
-                    messages.append({
-                        'role': role,
-                        'content': chunk,
-                        'timestamp': None
-                    })
-        
-        return messages
-
-# API functions for backend integration
-def extract_claude_conversation_fast(url, timeout=45):
-    """
-    Extract Claude conversation for UCP backend
-    
-    Args:
-        url (str): Claude share URL
-        timeout (int): Timeout in seconds
-        
-    Returns:
-        dict: UCP-compatible result with messages array
-    """
-    extractor = ClaudeTextExtractor(timeout=timeout)
-    return extractor.extract_conversation(url)
-
-def validate_claude_url(url):
-    """
-    Validate Claude share URL
-    
-    Args:
-        url (str): URL to validate
-        
-    Returns:
-        tuple: (is_valid: bool, message: str)
-    """
-    if not url:
-        return False, "URL is required"
-    
-    url = url.strip()
-    
-    if 'claude.ai/share/' not in url:
-        return False, "Must be a Claude share URL"
-    
-    try:
         parsed = urlparse(url)
         path_parts = [part for part in parsed.path.split('/') if part]
         
         if len(path_parts) >= 2 and path_parts[0] == 'share':
             conversation_id = path_parts[1]
-            if len(conversation_id) >= 10:
+            if len(conversation_id) >= 10:  # Basic length check
                 return True, "Valid Claude share URL"
         
         return False, "Invalid Claude share URL format"
+        
     except Exception as e:
         return False, f"Error validating URL: {e}"
 
-# Test functionality
+
 if __name__ == "__main__":
+    # Test the extractor
+    test_url = "https://claude.ai/share/example-id"
+    print("Testing Claude extractor...")
+    result = extract_claude_conversation_fast(test_url)
+    print(json.dumps(result, indent=2))
     test_url = "https://claude.ai/share/74f51402-c8be-41a4-8a7d-1c7dd343aa12"
     
     print("🚀 Claude Conversation Extractor")

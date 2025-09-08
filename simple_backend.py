@@ -1703,7 +1703,9 @@ async def get_extraction_results(job_id: str, user: AuthenticatedUser = Depends(
         db_job_status = None
         try:
             import sqlite3
-            db_path = os.path.join(user.database_path, 'jobs.db')
+            # Create database path based on user directory
+            user_dir = user.r2_directory.replace('/', '_')
+            db_path = f'jobs_{user_dir}.db'
             if os.path.exists(db_path):
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
