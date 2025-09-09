@@ -4343,11 +4343,11 @@ def calculate_credit_price(credits: int) -> float:
     if credits == -1:
         return 20.00
     
-    base_price = 0.02  # $0.02 per credit (85% cheaper!)
+    base_price = 0.10  # $0.10 per credit
     
     if credits >= 250:
-        # 25% off for 250+ credits
-        return round(credits * base_price * 0.75, 2)
+        # 20% off for 250+ credits
+        return round(credits * base_price * 0.8, 2)
     elif credits >= 100:
         # 15% off for 100+ credits  
         return round(credits * base_price * 0.85, 2)

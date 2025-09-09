@@ -44,23 +44,23 @@ export default function PricingPageClient() {
     }
   }, [searchParams])
 
-  // Calculate pricing with much lower prices
+  // Calculate pricing with updated rates
   const calculatePrice = (credits: number) => {
     if (isUnlimitedSelected) return 20.00 // Unlimited for $20
     
-    let basePrice = 0.02 // Base price per credit ($0.02 - 5x cheaper!)
+    let basePrice = 0.10 // Base price per credit ($0.10)
     
     // Volume discounts
-    if (credits >= 250) basePrice = 0.015     // 25% off for 250+
-    else if (credits >= 100) basePrice = 0.017 // 15% off for 100+
-    else if (credits >= 50) basePrice = 0.018  // 10% off for 50+
+    if (credits >= 250) basePrice = 0.08     // 20% off for 250+
+    else if (credits >= 100) basePrice = 0.085 // 15% off for 100+
+    else if (credits >= 50) basePrice = 0.09  // 10% off for 50+
     
     return Number((credits * basePrice).toFixed(2))
   }
 
   const getDiscountPercent = (credits: number) => {
     if (isUnlimitedSelected) return 0
-    if (credits >= 250) return 25
+    if (credits >= 250) return 20
     if (credits >= 100) return 15
     if (credits >= 50) return 10
     return 0
@@ -278,9 +278,9 @@ export default function PricingPageClient() {
                   {!isUnlimitedSelected && (
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { amount: 25, price: '$0.50' },
-                        { amount: 50, price: '$0.90', popular: true },
-                        { amount: 100, price: '$1.70' }
+                        { amount: 25, price: '$2.50' },
+                        { amount: 50, price: '$4.50', popular: true },
+                        { amount: 100, price: '$8.50' }
                       ].map(({ amount, price, popular }) => (
                         <button
                           key={amount}
