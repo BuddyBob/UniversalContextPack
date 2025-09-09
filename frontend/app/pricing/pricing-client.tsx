@@ -46,7 +46,7 @@ export default function PricingPageClient() {
 
   // Calculate pricing with updated rates
   const calculatePrice = (credits: number) => {
-    if (isUnlimitedSelected) return 12.99 // Unlimited for $12.99
+    if (isUnlimitedSelected) return 10.99 // Unlimited for $10.99
     
     let basePrice = 0.10 // Base price per credit ($0.10)
     
@@ -149,81 +149,246 @@ export default function PricingPageClient() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-primary flex items-center justify-center">
-        <div className="text-text-primary">Loading pricing information...</div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-gray-600">Loading pricing information...</div>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="bg-gray-50 border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 py-6">
+      {/* Clean Header */}
+      <div className="border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-8">
           <button
             onClick={() => router.back()}
-            className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            className="inline-flex items-center text-gray-500 hover:text-gray-700 mb-6 text-sm font-medium"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </button>
           
           <div className="text-center">
-            <div className="flex justify-center mb-4">
-              <Image
-                src="/Logo.png"
-                alt="Universal Context Pack"
-                width={64}
-                height={64}
-                className="rounded-lg"
-              />
-            </div>
-            <h1 className="text-h1 text-gray-900 mb-2">
-              Professional AI Analysis
+            <h1 className="text-3xl font-semibold text-gray-900 mb-3">
+              Pricing
             </h1>
-            <p className="text-body text-gray-600 max-w-2xl mx-auto">
-              Enterprise-grade conversation analysis with transparent, pay-as-you-go pricing.
+            <p className="text-lg text-gray-600 max-w-xl mx-auto">
+              Simple, transparent pricing for AI conversation analysis
             </p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-12">
+      <div className="max-w-4xl mx-auto px-6 py-16">
         {/* Current Balance */}
         {paymentStatus && (
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center bg-blue-50 border border-blue-200 rounded-xl px-6 py-4">
-              <CreditCard className="h-5 w-5 text-blue-600 mr-3" />
-              <span className="text-gray-700 mr-2 font-medium">Available Credits:</span>
-              <span className="text-2xl font-bold text-blue-600">
-                {paymentStatus.credits_balance || 0}
-              </span>
+          <div className="mb-12 p-6 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center mr-4">
+                  <CreditCard className="h-5 w-5 text-gray-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Current balance</p>
+                  <p className="text-sm text-gray-600">Available for immediate use</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-semibold text-gray-900">
+                  {paymentStatus.credits_balance || 0}
+                </p>
+                <p className="text-sm text-gray-600">credits</p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Trust Indicators */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="text-center">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Shield className="h-6 w-6 text-green-600" />
+        {/* Clean Plan Selection */}
+        <div className="space-y-8">
+          {/* Plan Toggle */}
+          <div className="flex justify-center">
+            <div className="inline-flex border border-gray-200 rounded-lg p-1 bg-gray-50">
+              <button
+                onClick={() => {
+                  setIsUnlimitedSelected(false)
+                  setCustomCredits(25)
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  !isUnlimitedSelected
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Pay per use
+              </button>
+              <button
+                onClick={() => {
+                  setIsUnlimitedSelected(true)
+                  setCustomCredits(1000)
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  isUnlimitedSelected
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Unlimited
+              </button>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Secure & Encrypted</h3>
-            <p className="text-sm text-gray-600">Enterprise-grade security with end-to-end encryption</p>
           </div>
-          <div className="text-center">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Zap className="h-6 w-6 text-purple-600" />
+
+          {/* Content based on selection */}
+          {isUnlimitedSelected ? (
+            /* Unlimited Plan */
+            <div className="max-w-md mx-auto">
+              <div className="border border-gray-200 rounded-lg p-8 text-center bg-white">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Unlimited Access</h3>
+                <p className="text-gray-600 mb-6 text-sm">
+                  Process unlimited conversations with priority support
+                </p>
+                <div className="mb-8">
+                  <span className="text-4xl font-semibold text-gray-900">$10.99</span>
+                  <span className="text-gray-600 ml-2">one-time</span>
+                </div>
+                <button
+                  onClick={handlePurchase}
+                  disabled={processingPurchase}
+                  className="w-full bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+                >
+                  {processingPurchase ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    'Get unlimited access'
+                  )}
+                </button>
+              </div>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Fast Processing</h3>
-            <p className="text-sm text-gray-600">Advanced AI models deliver results in minutes</p>
-          </div>
-          <div className="text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Star className="h-6 w-6 text-blue-600" />
+          ) : (
+            /* Pay Per Use */
+            <div className="max-w-lg mx-auto space-y-6">
+              {/* Credit Options */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                  { amount: 5, price: '$0.50' },
+                  { amount: 25, price: '$2.50' },
+                  { amount: 50, price: '$4.50' },
+                  { amount: 100, price: '$8.50' }
+                ].map(({ amount, price }) => (
+                  <button
+                    key={amount}
+                    onClick={() => {
+                      setCustomCredits(amount)
+                      setCustomCreditsInput(amount.toString())
+                    }}
+                    className={`p-4 text-center border rounded-lg transition-all ${
+                      customCredits === amount
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-900 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="text-lg font-semibold">{amount}</div>
+                    <div className="text-sm opacity-80">{price}</div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Amount */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Custom amount
+                  </label>
+                  <div className="flex">
+                    <input
+                      type="number"
+                      min="5"
+                      max="10000"
+                      value={customCreditsInput}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setCustomCreditsInput(value)
+                        const credits = parseInt(value) || 0
+                        if (credits >= 5 && credits <= 10000) {
+                          setCustomCredits(credits)
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                      placeholder="25"
+                    />
+                    <div className="px-3 py-2 bg-gray-50 border border-l-0 border-gray-300 rounded-r-lg text-sm text-gray-600">
+                      credits
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Minimum 5 credits. Volume discounts automatically applied.
+                  </p>
+                </div>
+
+                {/* Price Display */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Total</span>
+                    <span className="text-lg font-semibold text-gray-900">
+                      ${calculatePrice(customCredits)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-xs text-gray-500">Per credit</span>
+                    <span className="text-xs text-gray-500">
+                      ${getPricePerCredit(customCredits)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Purchase Button */}
+                <button
+                  onClick={handlePurchase}
+                  disabled={processingPurchase || customCredits < 5}
+                  className="w-full bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+                >
+                  {processingPurchase ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      {customCredits < 5 
+                        ? 'Minimum 5 credits required' 
+                        : `Purchase ${customCredits} credits`
+                      }
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-            <h3 className="font-semibold text-gray-900 mb-2">Professional Quality</h3>
-            <p className="text-sm text-gray-600">Trusted by professionals and enterprises</p>
+          )}
+
+          {!user && (
+            <div className="max-w-md mx-auto text-center p-8 border border-gray-200 rounded-lg bg-gray-50">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Sign in required</h3>
+              <p className="text-gray-600 mb-4 text-sm">
+                Create an account to purchase credits and get started
+              </p>
+              <button 
+                onClick={() => router.push('/auth')}
+                className="bg-gray-900 hover:bg-gray-800 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+              >
+                Sign in
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Security Notice */}
+        <div className="text-center mt-8 pt-8 border-t border-gray-200">
+          <div className="flex items-center justify-center text-sm text-gray-500">
+            <Shield className="h-4 w-4 mr-2" />
+            Payments secured by Stripe
           </div>
         </div>
 
