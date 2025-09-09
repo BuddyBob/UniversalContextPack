@@ -23,7 +23,8 @@ export default function PricingPageClient() {
   const [loading, setLoading] = useState(true)
   const [processingPurchase, setProcessingPurchase] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [customCredits, setCustomCredits] = useState(50)
+  const [customCredits, setCustomCredits] = useState(25)
+  const [customCreditsInput, setCustomCreditsInput] = useState('25')
   const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -36,7 +37,9 @@ export default function PricingPageClient() {
     if (creditsParam) {
       const credits = parseInt(creditsParam)
       if (credits > 0 && credits <= 10000) {
-        setCustomCredits(credits)
+        const finalCredits = Math.max(25, credits) // Ensure minimum 25
+        setCustomCredits(finalCredits)
+        setCustomCreditsInput(finalCredits.toString())
       }
     }
   }, [searchParams])
@@ -275,13 +278,16 @@ export default function PricingPageClient() {
                   {!isUnlimitedSelected && (
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { amount: 50, price: '$1.00' },
-                        { amount: 100, price: '$1.70', popular: true },
-                        { amount: 250, price: '$3.75' }
+                        { amount: 25, price: '$0.50' },
+                        { amount: 50, price: '$0.90', popular: true },
+                        { amount: 100, price: '$1.70' }
                       ].map(({ amount, price, popular }) => (
                         <button
                           key={amount}
-                          onClick={() => setCustomCredits(amount)}
+                          onClick={() => {
+                            setCustomCredits(amount)
+                            setCustomCreditsInput(amount.toString())
+                          }}
                           className={`relative p-4 rounded-lg border transition-all text-center ${
                             customCredits === amount
                               ? 'border-gray-400 bg-gray-700'
@@ -311,20 +317,36 @@ export default function PricingPageClient() {
                       <div className="flex items-center space-x-3">
                         <input
                           type="number"
-                          min="1"
+                          min="25"
                           max="10000"
-                          value={customCredits}
+                          value={customCreditsInput}
                           onChange={(e) => {
-                            const value = parseInt(e.target.value) || 1;
-                            setCustomCredits(Math.max(1, Math.min(10000, value)));
+                            const value = e.target.value;
+                            setCustomCreditsInput(value);
+                            
+                            if (value === '') {
+                              setCustomCredits(0); // Allow empty for validation
+                            } else {
+                              const credits = parseInt(value);
+                              if (!isNaN(credits)) {
+                                setCustomCredits(Math.min(10000, Math.max(0, credits)));
+                              }
+                            }
+                          }}
+                          onBlur={() => {
+                            // If empty or less than 25, reset to 25
+                            if (customCreditsInput === '' || customCredits < 25) {
+                              setCustomCredits(25);
+                              setCustomCreditsInput('25');
+                            }
                           }}
                           className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all text-center text-lg font-medium"
-                          placeholder="Enter credits"
+                          placeholder="Enter credits (min 25)"
                         />
                         <span className="text-gray-400 text-sm">credits</span>
                       </div>
                       <div className="text-center text-xs text-gray-500">
-                        Recommended: 50-250 credits for most conversations
+                        Minimum: 25 credits ($0.50) • Recommended: 50-250 credits for most conversations
                       </div>
                     </div>
                   )}
@@ -342,7 +364,7 @@ export default function PricingPageClient() {
                   {/* Purchase Button */}
                   <button
                     onClick={handlePurchase}
-                    disabled={processingPurchase}
+                    disabled={processingPurchase || (!isUnlimitedSelected && customCredits < 25)}
                     className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-600 text-gray-900 disabled:text-gray-400 py-3 rounded-lg font-medium transition-colors flex items-center justify-center"
                   >
                     {processingPurchase ? (
@@ -353,7 +375,10 @@ export default function PricingPageClient() {
                     ) : (
                       <>
                         <CreditCard className="h-4 w-4 mr-2" />
-                        Continue to Payment - ${calculatePrice(customCredits)}
+                        {(!isUnlimitedSelected && customCredits < 25) ? 
+                          'Minimum 25 credits required' : 
+                          `Continue to Payment - ${isUnlimitedSelected ? '$20.00' : '$' + calculatePrice(customCredits)}`
+                        }
                       </>
                     )}
                   </button>

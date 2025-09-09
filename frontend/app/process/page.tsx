@@ -2255,7 +2255,7 @@ export default function ProcessPage() {
 
             {/* Chunk Actions */}
             {['chunked', 'analyzing', 'analyzed'].includes(currentStep) && chunkData && (
-              <div className="max-w-4xl mx-auto">
+              <div className="max-w-5xl mx-auto">
                 <div className="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-2xl p-8 shadow-xl">
                   <div className="flex items-center space-x-4 mb-6">
                     <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
@@ -2280,47 +2280,63 @@ export default function ProcessPage() {
                     </div>
                   </div>
 
-                <div className="flex space-x-3">
-                  {currentStep === 'chunked' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {currentStep === 'chunked' && (
+                      <button
+                        onClick={() => {
+                          if (isProcessing) return; // Prevent double-clicks
+                          
+                          if (selectedChunks.size === 0) {
+                            // Limit selection to available credits
+                            const maxChunks = paymentLimits ? Math.min(paymentLimits.credits_balance, availableChunks.length) : availableChunks.length;
+                            const limitedChunkIds = new Set(Array.from({ length: maxChunks }, (_, index) => index));
+                            setSelectedChunks(limitedChunkIds);
+                            setIsProcessing(true); // Set immediately
+                            setTimeout(() => handleAnalyze(), 100);
+                          } else {
+                            setIsProcessing(true); // Set immediately
+                            handleAnalyze();
+                          }
+                        }}
+                        disabled={isProcessing || Boolean(paymentLimits && !paymentLimits.canProcess)}
+                        className="flex-1 py-3 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:bg-gray-600 disabled:text-gray-400 flex items-center justify-center space-x-2 font-medium shadow-lg text-sm sm:text-base"
+                      >
+                        <Brain className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span className="truncate">
+                          {(paymentLimits && !paymentLimits.canProcess)
+                            ? 'Credits Required for UCP Creation'
+                            : (() => {
+                                const totalChunks = availableChunks.length;
+                                const availableCredits = paymentLimits ? paymentLimits.credits_balance : totalChunks;
+                                const chunksToProcess = Math.min(availableCredits, totalChunks);
+                                
+                                // If user has more chunks than credits, show "Processing X out of Y"
+                                if (totalChunks > availableCredits) {
+                                  return `Create UCP (Processing ${chunksToProcess} out of ${totalChunks} chunks)`;
+                                }
+                                // Otherwise, show normal "Create UCP (X chunks)"
+                                return `Create UCP (${chunksToProcess} chunks)`;
+                              })()
+                          }
+                        </span>
+                      </button>
+                    )}
+
                     <button
-                      onClick={() => {
-                        if (isProcessing) return; // Prevent double-clicks
-                        
-                        if (selectedChunks.size === 0) {
-                          // Limit selection to available credits
-                          const maxChunks = paymentLimits ? Math.min(paymentLimits.credits_balance, availableChunks.length) : availableChunks.length;
-                          const limitedChunkIds = new Set(Array.from({ length: maxChunks }, (_, index) => index));
-                          setSelectedChunks(limitedChunkIds);
-                          setIsProcessing(true); // Set immediately
-                          setTimeout(() => handleAnalyze(), 100);
-                        } else {
-                          setIsProcessing(true); // Set immediately
-                          handleAnalyze();
-                        }
-                      }}
-                      disabled={isProcessing || Boolean(paymentLimits && !paymentLimits.canProcess)}
-                      className="flex-1 py-4 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:bg-gray-600 disabled:text-gray-400 flex items-center justify-center space-x-2 font-medium shadow-lg"
+                      onClick={downloadChunks}
+                      disabled={isDownloading}
+                      className="py-3 px-4 border border-gray-600 rounded-lg text-gray-400 hover:text-gray-300 hover:border-gray-500 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm whitespace-nowrap"
+                      title="Download Raw Chunks"
                     >
-                      <Brain className="h-5 w-5" />
-                      <span>
-                        {(paymentLimits && !paymentLimits.canProcess)
-                          ? 'Credits Required for UCP Creation'
-                          : (() => {
-                              const totalChunks = availableChunks.length;
-                              const availableCredits = paymentLimits ? paymentLimits.credits_balance : totalChunks;
-                              const chunksToProcess = Math.min(availableCredits, totalChunks);
-                              
-                              // If user has more chunks than credits, show "Processing X out of Y"
-                              if (totalChunks > availableCredits) {
-                                return `Create UCP (Processing ${chunksToProcess} out of ${totalChunks} chunks)`;
-                              }
-                              // Otherwise, show normal "Create UCP (X chunks)"
-                              return `Create UCP (${chunksToProcess} chunks)`;
-                            })()
-                        }
-                      </span>
+                      {isDownloading ? (
+                        <Loader className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4" />
+                      )}
+                      <span>{isDownloading ? 'Downloading...' : 'Download Raw Chunks'}</span>
                     </button>
-                  )}
+                  </div>
 
                   {/* Subtle Upgrade Button - only show when user has fewer credits than chunks */}
                   {currentStep === 'chunked' && paymentLimits && availableChunks.length > paymentLimits.credits_balance && (
@@ -2329,26 +2345,12 @@ export default function ProcessPage() {
                         const creditsNeeded = availableChunks.length - paymentLimits.credits_balance;
                         router.push(`/pricing?credits=${creditsNeeded}&upgrade=true`);
                       }}
-                      className="py-4 px-6 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 rounded-lg transition-all flex items-center justify-center space-x-2 text-sm font-medium hover:border-blue-400/50"
+                      className="w-full py-3 px-4 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 rounded-lg transition-all flex items-center justify-center space-x-2 text-sm font-medium hover:border-blue-400/50"
                     >
                       <CreditCard className="h-4 w-4" />
                       <span>Upgrade to Process All {availableChunks.length} Chunks</span>
                     </button>
                   )}
-
-                  <button
-                    onClick={downloadChunks}
-                    disabled={isDownloading}
-                    className="py-3 px-4 border border-gray-600 rounded-lg text-gray-400 hover:text-gray-300 hover:border-gray-500 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                    title="Download Raw Chunks"
-                  >
-                    {isDownloading ? (
-                      <Loader className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="h-4 w-4" />
-                    )}
-                    <span>{isDownloading ? 'Downloading...' : 'Download Raw Chunks'}</span>
-                  </button>
                 </div>
               </div>
               </div>
