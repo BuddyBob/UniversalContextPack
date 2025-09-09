@@ -46,7 +46,7 @@ export default function PricingPageClient() {
 
   // Calculate pricing with updated rates
   const calculatePrice = (credits: number) => {
-    if (isUnlimitedSelected) return 10.99 // Unlimited for $10.99
+    if (isUnlimitedSelected) return 12.99 // Unlimited for $12.99
     
     let basePrice = 0.10 // Base price per credit ($0.10)
     
@@ -303,8 +303,8 @@ export default function PricingPageClient() {
                       • Priority processing
                     </div>
                     <div className="mt-3">
-                      <span className="text-2xl font-bold text-purple-600">$10.99</span>
-                      <span className="text-sm text-gray-500 ml-1">once</span>
+                      <span className="text-2xl font-bold text-purple-600">$12.99</span>
+                      <span className="text-sm text-gray-500 ml-1">One Time</span>
                     </div>
                   </div>
                 </button>
@@ -408,7 +408,7 @@ export default function PricingPageClient() {
                     <CreditCard className="h-5 w-5 mr-3" />
                     {(!isUnlimitedSelected && customCredits < 5) ? 
                       'Minimum 5 credits required' : 
-                      `Continue to Payment - ${isUnlimitedSelected ? '$10.99' : '$' + calculatePrice(customCredits)}`
+                      `Continue to Payment - ${isUnlimitedSelected ? '$12.99' : '$' + calculatePrice(customCredits)}`
                     }
                   </>
                 )}
