@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/components/AuthProvider'
 import { CreditCard, ArrowLeft, Calculator, Sparkles, Zap, Shield, Star } from 'lucide-react'
@@ -26,8 +26,20 @@ export default function PricingPageClient() {
   const [customCredits, setCustomCredits] = useState(50)
   const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
   const { user, session, loading: authLoading } = useAuth()
+
+  // Handle URL parameters for pre-filling credits
+  useEffect(() => {
+    const creditsParam = searchParams?.get('credits')
+    if (creditsParam) {
+      const credits = parseInt(creditsParam)
+      if (credits > 0 && credits <= 10000) {
+        setCustomCredits(credits)
+      }
+    }
+  }, [searchParams])
 
   // Calculate pricing with much lower prices
   const calculatePrice = (credits: number) => {
@@ -187,6 +199,21 @@ export default function PricingPageClient() {
           </div>
         )}
 
+        {/* Upgrade Message */}
+        {searchParams?.get('upgrade') === 'true' && searchParams?.get('credits') && (
+          <div className="text-center mb-8">
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 max-w-md mx-auto">
+              <div className="flex items-center justify-center space-x-2 text-blue-400 mb-2">
+                <Zap className="h-5 w-5" />
+                <span className="font-medium">Almost there!</span>
+              </div>
+              <p className="text-gray-300 text-sm">
+                You need {searchParams.get('credits')} more credits to process all your chunks.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Business Credit Calculator */}
         <div className="max-w-2xl mx-auto">
           <div className="bg-gray-800 border border-gray-600 rounded-xl overflow-hidden">
@@ -272,6 +299,33 @@ export default function PricingPageClient() {
                           <div className="text-green-400 font-medium">{price}</div>
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Custom Credits Input */}
+                  {!isUnlimitedSelected && (
+                    <div className="space-y-3">
+                      <div className="text-center">
+                        <span className="text-gray-400 text-sm">Or enter a custom amount:</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="number"
+                          min="1"
+                          max="10000"
+                          value={customCredits}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 1;
+                            setCustomCredits(Math.max(1, Math.min(10000, value)));
+                          }}
+                          className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all text-center text-lg font-medium"
+                          placeholder="Enter credits"
+                        />
+                        <span className="text-gray-400 text-sm">credits</span>
+                      </div>
+                      <div className="text-center text-xs text-gray-500">
+                        Recommended: 50-250 credits for most conversations
+                      </div>
                     </div>
                   )}
 

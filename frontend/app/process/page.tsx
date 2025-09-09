@@ -2049,6 +2049,18 @@ export default function ProcessPage() {
                     
                     <h3 className="text-xl font-semibold text-white mb-3">Paste Conversation URL</h3>
                     
+                    {/* Warning Message */}
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4">
+                      <div className="flex items-center space-x-2 text-red-400">
+                        <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-sm font-medium">
+                          Conversation URLs don't work for Grok, Gemini, and Claude right now
+                        </span>
+                      </div>
+                    </div>
+                    
                     <div className="flex flex-wrap gap-2 justify-center mb-4">
                       <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">ChatGPT</span>
                       <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">Claude</span>
@@ -2252,7 +2264,18 @@ export default function ProcessPage() {
                     <div>
                       <h3 className="text-xl font-semibold text-white">Create Universal Context Pack</h3>
                       <p className="text-gray-400">
-                        Your content has been segmented into {chunkData.total_chunks} optimized chunks ready for AI processing
+                        {(() => {
+                          const totalChunks = chunkData.total_chunks;
+                          const availableCredits = paymentLimits ? paymentLimits.credits_balance : totalChunks;
+                          const chunksToProcess = Math.min(availableCredits, totalChunks);
+                          
+                          // If user has more chunks than credits, show partial processing message
+                          if (totalChunks > availableCredits) {
+                            return `Your content has been segmented into ${totalChunks} optimized chunks. You can process ${chunksToProcess} chunks with your current credits.`;
+                          }
+                          // Otherwise, show normal message
+                          return `Your content has been segmented into ${totalChunks} optimized chunks ready for AI processing`;
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -2282,9 +2305,34 @@ export default function ProcessPage() {
                       <span>
                         {(paymentLimits && !paymentLimits.canProcess)
                           ? 'Credits Required for UCP Creation'
-                          : `Create UCP (${paymentLimits ? Math.min(paymentLimits.credits_balance, availableChunks.length) : availableChunks.length} chunks)`
+                          : (() => {
+                              const totalChunks = availableChunks.length;
+                              const availableCredits = paymentLimits ? paymentLimits.credits_balance : totalChunks;
+                              const chunksToProcess = Math.min(availableCredits, totalChunks);
+                              
+                              // If user has more chunks than credits, show "Processing X out of Y"
+                              if (totalChunks > availableCredits) {
+                                return `Create UCP (Processing ${chunksToProcess} out of ${totalChunks} chunks)`;
+                              }
+                              // Otherwise, show normal "Create UCP (X chunks)"
+                              return `Create UCP (${chunksToProcess} chunks)`;
+                            })()
                         }
                       </span>
+                    </button>
+                  )}
+
+                  {/* Subtle Upgrade Button - only show when user has fewer credits than chunks */}
+                  {currentStep === 'chunked' && paymentLimits && availableChunks.length > paymentLimits.credits_balance && (
+                    <button
+                      onClick={() => {
+                        const creditsNeeded = availableChunks.length - paymentLimits.credits_balance;
+                        router.push(`/pricing?credits=${creditsNeeded}&upgrade=true`);
+                      }}
+                      className="py-4 px-6 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 rounded-lg transition-all flex items-center justify-center space-x-2 text-sm font-medium hover:border-blue-400/50"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      <span>Upgrade to Process All {availableChunks.length} Chunks</span>
                     </button>
                   )}
 
