@@ -470,7 +470,7 @@ async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: 
         
         # Extract processed_chunks from metadata for the enhanced function
         processed_chunks = None
-        if metadata and status == "analyzed":
+        if metadata and (status == "analyzed" or status == "extracted"):
             processed_chunks = metadata.get("processed_chunks", 0)
         
         # Use enhanced backend function to update job status (with processed_chunks)
@@ -1542,7 +1542,8 @@ async def process_conversation_url_background(job_id: str, url: str, platform: s
             "content_preview": extracted_content[:500] + "..." if len(extracted_content) > 500 else extracted_content
         }
         
-        # Store job summary
+        # Store job summary and pass extracted_count as processed_chunks for database tracking
+        job_summary["processed_chunks"] = len(extracted_texts)  # Add to metadata for consistency
         await update_job_status_in_db(user, job_id, "extracted", 100, metadata=job_summary)
         
         print(f"Background processing completed successfully for job {job_id}")
@@ -1666,9 +1667,13 @@ async def process_extraction_background(job_id: str, file_content: str, filename
             "status": "extracted",
             "extracted_count": len(extracted_texts),
             "content_size": len(extracted_content),
-            "preview": extracted_texts[:3] if len(extracted_texts) > 3 else extracted_texts
+            "preview": extracted_texts[:3] if len(extracted_texts) > 3 else extracted_texts,
+            "processed_chunks": len(extracted_texts)  # Add for database consistency
         }
         upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
+        
+        # Store job summary and update database with extraction stats
+        await update_job_status_in_db(user, job_id, "extracted", 100, metadata=job_summary)
         
         
     except Exception as e:
@@ -3224,15 +3229,29 @@ async def download_chunks_only(job_id: str, user: AuthenticatedUser = Depends(ge
                 print(f"Looking for chunk metadata at: {metadata_path}")
                 chunk_metadata_content = download_from_r2_with_fallback(metadata_path, job_id, "chunks_metadata.json")
                 
+                # Get processed chunks count from summary (like pack download does)
+                summary_content = download_from_r2_with_fallback(f"{user.r2_directory}/{job_id}/summary.json", job_id, "summary.json")
+                processed_chunks = 0
+                if summary_content:
+                    try:
+                        summary = json.loads(summary_content)
+                        processed_chunks = summary.get("processed_chunks", 0)
+                        print(f"Found summary with {processed_chunks} processed chunks")
+                    except (json.JSONDecodeError, KeyError):
+                        print("Failed to parse summary.json, falling back to all chunks")
+                
                 if chunk_metadata_content:
                     zipf.writestr("chunks_metadata.json", chunk_metadata_content)
                     chunk_metadata = json.loads(chunk_metadata_content)
                     total_chunks = chunk_metadata.get("total_chunks", 0)
-                    print(f"Found {total_chunks} chunks in metadata")
                     
-                    # Add all chunk files
+                    # Use processed_chunks if available, otherwise fall back to total_chunks
+                    chunks_to_download = processed_chunks if processed_chunks > 0 else total_chunks
+                    print(f"Found {total_chunks} total chunks, will download {chunks_to_download} processed chunks")
+                    
+                    # Add only the processed chunk files
                     chunks_added = 0
-                    for i in range(1, total_chunks + 1):
+                    for i in range(1, chunks_to_download + 1):
                         chunk_filename = f"chunk_{i:03d}.txt"
                         chunk_path = f"{user.r2_directory}/{job_id}/{chunk_filename}"
                         print(f"Looking for chunk {i} at: {chunk_path}")
@@ -3244,7 +3263,7 @@ async def download_chunks_only(job_id: str, user: AuthenticatedUser = Depends(ge
                         else:
                             print(f"❌ Chunk {i} not found")
                     
-                    print(f"Successfully added {chunks_added}/{total_chunks} chunks to ZIP")
+                    print(f"Successfully added {chunks_added}/{chunks_to_download} processed chunks to ZIP")
                     
                     if chunks_added == 0:
                         raise HTTPException(

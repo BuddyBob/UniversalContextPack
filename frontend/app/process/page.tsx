@@ -1534,7 +1534,7 @@ export default function ProcessPage() {
     }
     
     if (chunksToAnalyze.length !== selectedChunks.size) {
-      addLog(`Processing ${chunksToAnalyze.length} chunks (limited by available credits)`);
+      addLog(`Process ${chunksToAnalyze.length} chunks (limited by available credits)`);
     }
     
     setCurrentStep('analyzing');
@@ -2255,7 +2255,7 @@ export default function ProcessPage() {
 
             {/* Chunk Actions */}
             {['chunked', 'analyzing', 'analyzed'].includes(currentStep) && chunkData && (
-              <div className="max-w-5xl mx-auto">
+              <div className="max-w-6xl mx-auto">
                 <div className="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-2xl p-8 shadow-xl">
                   <div className="flex items-center space-x-4 mb-6">
                     <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
@@ -2345,7 +2345,7 @@ export default function ProcessPage() {
                         const creditsNeeded = availableChunks.length - paymentLimits.credits_balance;
                         router.push(`/pricing?credits=${creditsNeeded}&upgrade=true`);
                       }}
-                      className="w-full py-3 px-4 border border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 rounded-lg transition-all flex items-center justify-center space-x-2 text-sm font-medium hover:border-blue-400/50"
+                      className="w-full py-3 px-4 border border-blue-500/40 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 rounded-lg transition-all flex items-center justify-center space-x-2 text-sm font-medium hover:border-blue-400/50"
                     >
                       <CreditCard className="h-4 w-4" />
                       <span>Upgrade to Process All {availableChunks.length} Chunks</span>
