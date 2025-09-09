@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader } from 'lucide-react';
+import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader, Lock } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
@@ -2082,10 +2082,18 @@ export default function ProcessPage() {
                         disabled={!conversationUrl.trim()}
                         className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-400/10 disabled:cursor-not-allowed text-gray-900 disabled:text-white-900 py-3 rounded-xl font-medium transition-all"
                       >
-                        Extract Conversation
+                        Start Extraction
                       </button>
                       
                     </div>
+                  </div>
+                </div>
+
+                {/* Security Notice */}
+                <div className="max-w-4xl mx-auto mb-6">
+                  <div className="flex items-center justify-center space-x-3 text-gray-400 text-sm bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-6 py-4">
+                    <Lock className="h-4 w-4 text-green-400" />
+                    <span>256-bit TLS encryption • Files encrypted at rest • Enterprise-grade security</span>
                   </div>
                 </div>
 
@@ -2202,7 +2210,7 @@ export default function ProcessPage() {
                         {isProcessing 
                           ? 'Processing...' 
                           : conversationUrl 
-                            ? `Extract Conversation`
+                            ? `Start Extraction`
                             : 'Process File'
                         }
                       </span>
@@ -2224,6 +2232,38 @@ export default function ProcessPage() {
                       <X className="h-5 w-5" />
                       <span>Clear & Start Over</span>
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Extracting Progress */}
+            {currentStep === 'extracting' && (
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-2xl p-8 shadow-xl">
+                  <div className="flex items-center space-x-4 mb-6">
+                    <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center">
+                      <div className="animate-spin h-6 w-6 border-2 border-white border-t-transparent rounded-full" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-white">Extracting Content</h3>
+                      <p className="text-gray-400">Processing your conversations and extracting meaningful content...</p>
+                    </div>
+                  </div>
+                  
+                  {/* Loading Skeleton */}
+                  <div className="space-y-4">
+                    <div className="bg-gray-700/20 border border-gray-600/50 rounded-xl p-4">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                        <span className="text-purple-300 font-medium">Processing conversation data</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-3 bg-gray-600 rounded skeleton"></div>
+                        <div className="h-3 bg-gray-600 rounded w-3/4 skeleton"></div>
+                        <div className="h-3 bg-gray-600 rounded w-1/2 skeleton"></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2271,10 +2311,10 @@ export default function ProcessPage() {
                           
                           // If user has more chunks than credits, show partial processing message
                           if (totalChunks > availableCredits) {
-                            return `Your content has been segmented into ${totalChunks} optimized chunks. You can process ${chunksToProcess} chunks with your current credits.`;
+                            return `${totalChunks} chunks. You can process ${chunksToProcess} chunks with your current credits.`;
                           }
                           // Otherwise, show normal message
-                          return `Your content has been segmented into ${totalChunks} optimized chunks ready for AI processing`;
+                          return `${totalChunks} chunks ready for AI processing`;
                         })()}
                       </p>
                     </div>

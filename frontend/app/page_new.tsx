@@ -112,7 +112,7 @@ export default function HomePage() {
               </div>
               
               <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto leading-relaxed">
-                Store your conversations with AI | Move your conversations across different AI's 
+                Store your conversations with AIs. Move your conversations across different AIs
               </p>
 
               <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">

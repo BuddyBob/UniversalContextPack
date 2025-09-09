@@ -37,7 +37,7 @@ export default function PricingPageClient() {
     if (creditsParam) {
       const credits = parseInt(creditsParam)
       if (credits > 0 && credits <= 10000) {
-        const finalCredits = Math.max(25, credits) // Ensure minimum 25
+        const finalCredits = Math.max(5, credits) // Ensure minimum 5
         setCustomCredits(finalCredits)
         setCustomCreditsInput(finalCredits.toString())
       }
@@ -177,10 +177,10 @@ export default function PricingPageClient() {
               className="rounded-lg shadow-lg"
             />
           </div>
-          <h1 className="text-3xl font-semibold text-white mb-4">
+          <h1 className="text-h1 text-white mb-4">
             Analysis Credits
           </h1>
-          <p className="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
+          <p className="text-body-lg text-gray-400 mb-8 max-w-2xl mx-auto">
             Professional conversation analysis powered by advanced AI. Pay only for what you use.
           </p>
           <div className="inline-flex items-center bg-gray-800 border border-gray-600 rounded-lg px-4 py-2">
@@ -235,16 +235,16 @@ export default function PricingPageClient() {
             </div>
 
             {/* Credit Selection Interface */}
-            <div className="p-8">
+            <div className="card-padding-lg">
               <div className="space-y-6">
                   {/* Plan Selection */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid-12">
                     <button
                       onClick={() => {
                         setIsUnlimitedSelected(false)
                         setCustomCredits(50)
                       }}
-                      className={`p-4 rounded-lg border transition-all text-left ${
+                      className={`col-span-12 md:col-span-6 card-padding rounded-lg border transition-all text-left ${
                         !isUnlimitedSelected
                           ? 'border-gray-400 bg-gray-700'
                           : 'border-gray-600 bg-gray-800 hover:border-gray-500'
@@ -259,7 +259,7 @@ export default function PricingPageClient() {
                         setIsUnlimitedSelected(true)
                         setCustomCredits(1000)
                       }}
-                      className={`relative p-4 rounded-lg border transition-all text-left ${
+                      className={`col-span-12 md:col-span-6 relative card-padding rounded-lg border transition-all text-left ${
                         isUnlimitedSelected
                           ? 'border-gray-400 bg-gray-700'
                           : 'border-gray-600 bg-gray-800 hover:border-gray-500'
@@ -276,8 +276,9 @@ export default function PricingPageClient() {
                   </div>
 
                   {!isUnlimitedSelected && (
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid-12">
                       {[
+                        { amount: 5, price: '$0.50' },
                         { amount: 25, price: '$2.50' },
                         { amount: 50, price: '$4.50', popular: true },
                         { amount: 100, price: '$8.50' }
@@ -288,7 +289,7 @@ export default function PricingPageClient() {
                             setCustomCredits(amount)
                             setCustomCreditsInput(amount.toString())
                           }}
-                          className={`relative p-4 rounded-lg border transition-all text-center ${
+                          className={`col-span-4 lg:col-span-3 relative card-padding rounded-lg border transition-all text-center ${
                             customCredits === amount
                               ? 'border-gray-400 bg-gray-700'
                               : 'border-gray-600 bg-gray-800 hover:border-gray-500'
@@ -317,7 +318,7 @@ export default function PricingPageClient() {
                       <div className="flex items-center space-x-3">
                         <input
                           type="number"
-                          min="25"
+                          min="5"
                           max="10000"
                           value={customCreditsInput}
                           onChange={(e) => {
@@ -334,19 +335,19 @@ export default function PricingPageClient() {
                             }
                           }}
                           onBlur={() => {
-                            // If empty or less than 25, reset to 25
-                            if (customCreditsInput === '' || customCredits < 25) {
-                              setCustomCredits(25);
-                              setCustomCreditsInput('25');
+                            // If empty or less than 5, reset to 5
+                            if (customCreditsInput === '' || customCredits < 5) {
+                              setCustomCredits(5);
+                              setCustomCreditsInput('5');
                             }
                           }}
                           className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all text-center text-lg font-medium"
-                          placeholder="Enter credits (min 25)"
+                          placeholder="Enter credits (min 5)"
                         />
                         <span className="text-gray-400 text-sm">credits</span>
                       </div>
                       <div className="text-center text-xs text-gray-500">
-                        Minimum: 25 credits ($0.50) • Recommended: 50-250 credits for most conversations
+                        Minimum: 5 credits ($0.50) • Recommended: 25-250 credits for most conversations
                       </div>
                     </div>
                   )}
@@ -364,7 +365,7 @@ export default function PricingPageClient() {
                   {/* Purchase Button */}
                   <button
                     onClick={handlePurchase}
-                    disabled={processingPurchase || (!isUnlimitedSelected && customCredits < 25)}
+                    disabled={processingPurchase || (!isUnlimitedSelected && customCredits < 5)}
                     className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-600 text-gray-900 disabled:text-gray-400 py-3 rounded-lg font-medium transition-colors flex items-center justify-center"
                   >
                     {processingPurchase ? (
@@ -375,8 +376,8 @@ export default function PricingPageClient() {
                     ) : (
                       <>
                         <CreditCard className="h-4 w-4 mr-2" />
-                        {(!isUnlimitedSelected && customCredits < 25) ? 
-                          'Minimum 25 credits required' : 
+                        {(!isUnlimitedSelected && customCredits < 5) ? 
+                          'Minimum 5 credits required' : 
                           `Continue to Payment - ${isUnlimitedSelected ? '$20.00' : '$' + calculatePrice(customCredits)}`
                         }
                       </>

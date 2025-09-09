@@ -4,7 +4,7 @@ export default function Footer() {
   return (
     <footer className="bg-secondary border-t border-primary mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
           {/* Brand Section */}
           <div className="md:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
@@ -45,6 +45,11 @@ export default function Footer() {
             <h3 className="text-sm font-medium text-primary mb-4">Legal</h3>
             <ul className="space-y-2">
               <li>
+                <Link href="/security" className="text-sm text-secondary hover:text-primary transition-colors">
+                  Security
+                </Link>
+              </li>
+              <li>
                 <Link href="/privacy-policy" className="text-sm text-secondary hover:text-primary transition-colors">
                   Privacy Policy
                 </Link>
@@ -56,14 +61,37 @@ export default function Footer() {
               </li>
             </ul>
           </div>
+
+          {/* Company Info */}
+          <div>
+            <h3 className="text-sm font-medium text-primary mb-4">Company</h3>
+            <div className="space-y-2 text-sm text-secondary">
+              <p>Universal Context Pack, LLC</p>
+              <p>
+                <a href="mailto:contact@universalcontextpack.com" className="hover:text-primary transition-colors">
+                  contact@universalcontextpack.com
+                </a>
+              </p>
+              <p>San Francisco, CA</p>
+            </div>
+          </div>
         </div>
 
         {/* Bottom Section */}
         <div className="border-t border-primary mt-8 pt-6 flex flex-col sm:flex-row justify-between items-center">
-          <p className="text-sm text-muted">
-            © {new Date().getFullYear()} Universal Context Pack. All rights reserved.
-          </p>
+          <div className="flex items-center space-x-4">
+            <p className="text-sm text-muted">
+              © {new Date().getFullYear()} Universal Context Pack, LLC. All rights reserved.
+            </p>
+            <Link href="/status" className="flex items-center space-x-2 text-sm text-muted hover:text-secondary transition-colors">
+              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+              <span>All Systems Operational</span>
+            </Link>
+          </div>
           <div className="flex space-x-6 mt-4 sm:mt-0">
+            <Link href="/security" className="text-sm text-muted hover:text-secondary transition-colors">
+              Security
+            </Link>
             <Link href="/privacy-policy" className="text-sm text-muted hover:text-secondary transition-colors">
               Privacy
             </Link>

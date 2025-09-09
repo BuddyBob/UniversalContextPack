@@ -6,7 +6,7 @@ import AuthModal from './AuthModal'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { Settings, User, LogOut, Sun, Moon, Menu, X } from 'lucide-react'
+import { Settings, User, LogOut, Sun, Moon, Menu, X, Dot } from 'lucide-react'
 
 export default function Navigation() {
   const { user, userProfile, signOut, loading, session, makeAuthenticatedRequest } = useAuth()
@@ -108,6 +108,11 @@ export default function Navigation() {
 
             {/* Right Side Navigation */}
             <div className="nav-right-section">
+              {/* Status Indicator - Just a dot */}
+              <Link href="/status" className="flex items-center text-sm hover:opacity-80 transition-opacity" title="System Status">
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+              </Link>
+
               {/* Theme Toggle */}
               <div className="nav-theme-toggle">
                 <button

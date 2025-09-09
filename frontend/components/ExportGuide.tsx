@@ -108,27 +108,34 @@ const ExportGuide = () => {
       <div className="relative z-10">
         {/* Hero Section */}
         <section className="min-h-screen flex items-center justify-center px-6 relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-800 transform skew-y-1"></div>
+          <div className="absolute inset-0 hero-gradient transform skew-y-1"></div>
           
           <div className="max-w-6xl mx-auto text-center relative z-10">
-            <div className="mb-8">
+            <div className="mb-6">
               <div className="text-sm text-blue-400 font-mono mb-4">~/universal-context-pack</div>
-              <h1 className="text-7xl font-light text-white mb-6 leading-tight tracking-tight">
+              <h1 className="text-h1-lg text-white mb-4">
                 Your AI
                 <br />
                 <span className="text-white font-medium">
                   Memory
                 </span>
                 <br />
-                <span className="text-gray-400 text-5xl">Everywhere</span>
+                <span className="text-gray-400 text-h1">Everywhere</span>
               </h1>
             </div>
             
-            <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto leading-relaxed">
-              Store your conversations with AI | Move your conversations across different AI's 
+            <p className="text-body-lg text-gray-300 mb-8 max-w-3xl mx-auto">
+              Store your conversations with AIs. Move your conversations across different AIs
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
+            {/* Status Message - Green Info Box */}
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 mb-8 max-w-md mx-auto">
+              <p className="text-green-400 text-sm">
+                Currently supported: ChatGPT | Grok | Claude
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <button 
                 onClick={() => {
                   document.getElementById('export')?.scrollIntoView({ behavior: 'smooth' })
@@ -140,10 +147,10 @@ const ExportGuide = () => {
               
               <a 
                 href="/process"
-                className="text-gray-400 hover:text-white transition-colors duration-300 flex items-center gap-2 group border border-gray-600 hover:border-purple-500 px-6 py-3 rounded-lg"
+                className="text-purple-400 hover:text-white transition-colors duration-300 flex items-center gap-2 group border border-purple-500 hover:border-purple-400 hover:bg-purple-600 px-6 py-4 rounded-lg"
               >
                 <span>Skip to Upload</span>
-                <div className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-300">→</div>
+                <div className="w-4 h-6 transform group-hover:translate-x-1 transition-transform duration-300">→</div>
               </a>
             </div>
           </div>
@@ -154,31 +161,31 @@ const ExportGuide = () => {
           <div className="max-w-6xl mx-auto relative">
             <div className="text-center mb-16">
               <div className="text-purple-300 text-lg font-bold mb-4 tracking-wider uppercase">Step 1</div>
-              <h2 className="text-4xl font-light text-white mb-6">
+              <h2 className="text-h2-lg text-white mb-6">
                 Export Your <span className="text-white font-medium">AI Conversations</span>
               </h2>
-              <p className="text-gray-300 text-lg max-w-2xl mx-auto">
+              <p className="text-body-lg text-gray-300 max-w-2xl mx-auto">
                 Get your conversation history from these AI platforms to create your Universal Context Pack
               </p>
             </div>
 
             {/* Platform Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
+            <div className="grid-12 mb-16">
               {exportSteps.map((step, index) => {
                 const Icon = step.icon
                 return (
                   <div 
                     key={step.platform} 
-                    className="bg-gray-800/30 backdrop-blur-xl rounded-2xl overflow-hidden border border-gray-600 hover:border-gray-500 transition-all duration-300"
+                    className="col-span-12 lg:col-span-6 bg-gray-800/30 backdrop-blur-xl rounded-2xl overflow-hidden border border-gray-600 hover:border-gray-500 transition-all duration-300"
                   >
                     {/* Platform Header */}
-                    <div className="bg-gray-800/50 p-6 border-b border-gray-700">
+                    <div className="bg-gray-800/50 card-padding border-b border-gray-700">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                           <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center">
                             <Icon className="h-6 w-6 text-white" />
                           </div>
-                          <h3 className="text-2xl font-medium text-white">{step.platform}</h3>
+                          <h3 className="text-h2 text-white">{step.platform}</h3>
                         </div>
                         <a 
                           href={step.url}
@@ -193,7 +200,7 @@ const ExportGuide = () => {
                     </div>
 
                     {/* Steps */}
-                    <div className="p-6 space-y-6">
+                    <div className="card-padding space-y-6">
                       {/* Step 1 */}
                       <div className="flex items-start space-x-4">
                         <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
@@ -229,13 +236,13 @@ const ExportGuide = () => {
 
                       {/* Step 4 */}
                       <div className="flex items-start space-x-4">
-                        <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
+                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
                           4
                         </div>
                         <div>
                           <p className="text-white font-medium mb-2">Upload to Process</p>
                           <p className="text-gray-400 text-sm">
-                            <a href="/process" className="text-gray-300 hover:text-white transition-colors underline decoration-gray-500">
+                            <a href="/process" className="text-purple-400 hover:text-purple-300 transition-colors underline decoration-purple-500">
                               Go to the Process page
                             </a>
                             {" "}and upload your downloaded folder to create your Universal Context Pack
@@ -245,7 +252,7 @@ const ExportGuide = () => {
 
                       {/* Step 5 */}
                       <div className="flex items-start space-x-4">
-                        <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
+                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
                           5
                         </div>
                         <div>
@@ -264,11 +271,11 @@ const ExportGuide = () => {
         </section>
 
         {/* Social Proof Section - Real User Problems */}
-        <section className=" px-6 relative">
+        <section className="px-6 relative">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
               <div className="text-gray-400 text-sm mb-3">Live from r/ChatGPT</div>
-              <h2 className="text-2xl font-medium text-white mb-4">
+              <h2 className="text-h2 text-white mb-4">
                 People are struggling with this right now
               </h2>
             </div>
