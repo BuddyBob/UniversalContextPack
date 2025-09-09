@@ -77,11 +77,32 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
-      { url: '/icon.png', type: 'image/png' },
+      { url: '/icon.png', type: 'image/png', sizes: '32x32' },
+      { url: '/icon.png', type: 'image/png', sizes: '16x16' },
+      { url: '/icon.png', type: 'image/png', sizes: '48x48' },
     ],
-    apple: '/apple-icon.png',
+    apple: [
+      { url: '/apple-icon.png', sizes: '180x180' }
+    ],
     shortcut: '/favicon.ico',
+    other: [
+      {
+        rel: 'mask-icon',
+        url: '/icon.png',
+        color: '#6639d0'
+      }
+    ]
   },
+  other: {
+    'theme-color': '#6639d0',
+    'msapplication-TileColor': '#6639d0',
+    'msapplication-TileImage': '/icon.png',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'default',
+    'apple-mobile-web-app-title': 'Universal Context Pack',
+    'format-detection': 'telephone=no',
+  },
+  manifest: '/manifest.json',
 }
 
 export default function RootLayout({

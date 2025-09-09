@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Download, FileText, Brain, BarChart3, Calendar, DollarSign, ExternalLink } from 'lucide-react'
+import { Download, FileText, Brain, BarChart3, Calendar, DollarSign, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import AuthModal from '@/components/AuthModal'
 import FreeCreditsPrompt from '@/components/FreeCreditsPrompt'
@@ -27,6 +27,10 @@ export default function PacksPage() {
   const [loading, setLoading] = useState(true)
   const [selectedPack, setSelectedPack] = useState<UCPPack | null>(null)
   const freeCreditsPrompt = useFreeCreditsPrompt()
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0)
+  const PACKS_PER_PAGE = 10
 
   // Helper function to format token counts
   const formatTokenCount = (tokens: number): string => {
@@ -45,6 +49,24 @@ export default function PacksPage() {
 
   const canDownloadStandard = (outputTokens: number | undefined): boolean => {
     return !outputTokens || outputTokens >= 100000
+  }
+
+  // Pagination calculations
+  const totalPages = Math.ceil(packs.length / PACKS_PER_PAGE)
+  const startIndex = currentPage * PACKS_PER_PAGE
+  const endIndex = startIndex + PACKS_PER_PAGE
+  const currentPacks = packs.slice(startIndex, endIndex)
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      setCurrentPage(currentPage + 1)
+    }
+  }
+
+  const goToPreviousPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage(currentPage - 1)
+    }
   }
 
   useEffect(() => {
@@ -290,7 +312,38 @@ export default function PacksPage() {
         <div className="grid gap-6 lg:grid-cols-4">
           {/* Packs List */}
           <div className="lg:col-span-1">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Packs</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Recent Packs</h2>
+              {packs.length > PACKS_PER_PAGE && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={goToPreviousPage}
+                    disabled={currentPage === 0}
+                    className={`p-1 rounded-full transition-colors ${
+                      currentPage === 0 
+                        ? 'text-gray-300 cursor-not-allowed' 
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="text-sm text-gray-500">
+                    {currentPage + 1} of {totalPages}
+                  </span>
+                  <button
+                    onClick={goToNextPage}
+                    disabled={currentPage >= totalPages - 1}
+                    className={`p-1 rounded-full transition-colors ${
+                      currentPage >= totalPages - 1 
+                        ? 'text-gray-300 cursor-not-allowed' 
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="space-y-3">
               {!user ? (
                 <div className="bg-white border border-gray-200 p-6 text-center">
@@ -322,11 +375,11 @@ export default function PacksPage() {
                   </a>
                 </div>
               ) : (
-                packs.map(pack => (
+                currentPacks.map(pack => (
                   <div
                     key={pack.ucpId}
                     onClick={() => setSelectedPack(pack)}
-                    className={`bg-white  p-4 cursor-pointer transition-all ${
+                    className={`bg-white border p-4 cursor-pointer transition-all ${
                       selectedPack && (selectedPack.ucpId || selectedPack.id) === (pack.ucpId || pack.id) 
                         ? 'border-gray-400 shadow-sm' 
                         : 'border-gray-200 hover:border-gray-300'
