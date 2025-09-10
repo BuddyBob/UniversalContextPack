@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader, Lock } from 'lucide-react';
+import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader, Lock, Info } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
@@ -53,6 +53,7 @@ export default function ProcessPage() {
   const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showFileTypes, setShowFileTypes] = useState(false);
   const [conversationUrl, setConversationUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -1162,8 +1163,7 @@ export default function ProcessPage() {
         await processSelectedFile(conversationsFile);
       } else {
         addLog('Error: No conversations.json file found in the uploaded folder. Please make sure you\'re uploading a ChatGPT data export folder.');
-        // Show user-friendly error
-        alert('No conversations.json file found in the uploaded folder.\n\nPlease make sure you\'re uploading a ChatGPT data export folder that contains a conversations.json file.');
+        alert('No conversations.json found in folder. Upload exported AI folder');
       }
       
       // Reset the file input
@@ -1172,6 +1172,7 @@ export default function ProcessPage() {
       }
     }
   };
+
 
   const processSelectedFile = async (selectedFile: File) => {
     setFile(selectedFile);
@@ -1297,29 +1298,75 @@ export default function ProcessPage() {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragOver(false);
+    e.stopPropagation();
+    // Only set to false if we're actually leaving the drop zone
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     
+    const droppedItems = e.dataTransfer.items;
     const droppedFiles = Array.from(e.dataTransfer.files);
+    
+    console.log('Dropped items:', droppedItems.length, 'Dropped files:', droppedFiles.length);
+    
+    // Check if we're dropping a folder (DataTransferItem with kind 'file' and webkitGetAsEntry)
+    if (droppedItems && droppedItems.length > 0) {
+      const firstItem = droppedItems[0];
+      if (firstItem.webkitGetAsEntry) {
+        const entry = firstItem.webkitGetAsEntry();
+        if (entry && entry.isDirectory) {
+          addLog('Folder detected via drag and drop. Please use the "Choose Export Folder" button for folder uploads.');
+          alert('Folder upload detected!\n\nFor folder uploads, please use the "Choose Export Folder" button below for the best experience.');
+          return;
+        }
+      }
+    }
     
     // First, check if there's a conversations.json file among the dropped files
     const conversationsFile = droppedFiles.find(file => 
-      file.name === 'conversations.json'
+      file.name === 'conversations.json' || file.webkitRelativePath?.endsWith('/conversations.json')
     );
     
     if (conversationsFile) {
       addLog(`Found conversations.json in dropped files`);
       processSelectedFile(conversationsFile);
       return;
+    }
+    
+    // If multiple files were dropped (likely from a folder), search through them for conversations.json
+    if (droppedFiles.length > 1) {
+      addLog('Multiple files detected - searching for conversations.json...');
+      const foundConversationsFile = droppedFiles.find(file => 
+        file.name.toLowerCase() === 'conversations.json' || 
+        file.webkitRelativePath?.toLowerCase().includes('conversations.json')
+      );
+      
+      if (foundConversationsFile) {
+        addLog(`Found conversations.json in export folder!`);
+        processSelectedFile(foundConversationsFile);
+        return;
+      } else {
+        addLog('No conversations.json file found in the dropped files.');
+        alert('No conversations.json file found in the dropped files.\n\nFor ChatGPT export folders, please use the "Choose Export Folder" button, or make sure your export contains a conversations.json file.');
+        return;
+      }
     }
     
     // Otherwise, look for any valid individual file
@@ -1333,6 +1380,7 @@ export default function ProcessPage() {
       processSelectedFile(validFile);
     } else {
       addLog('Please drop a valid file: conversations.json, .json, .txt, .csv, .zip, or .html');
+      alert('Invalid file type!\n\nSupported formats:\n• conversations.json (ChatGPT export)\n• .txt, .html, .csv (text documents)\n• .zip archives\n\nFor ChatGPT export folders, use the "Choose Export Folder" button.');
     }
   };
 
@@ -1971,141 +2019,26 @@ export default function ProcessPage() {
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
-              <div className="max-w-4xl mx-auto">
+              <div className="max-w-3xl mx-auto">
                 {/* Header */}
-                <div className="text-center mb-4 mt-8">
-                  <h1 className="text-2xl font-bold text-white mb-3">Upload Your Data</h1>
-                  <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-                    Transform your files or ChatGPT conversations into structured context packs
+                <div className="text-center mb-6">
+                  <h1 className="text-2xl font-bold text-white mb-2">Import files</h1>
+                  <p className="text-gray-400">
+                    Drag files or a folder into the box below, or choose an option.
                   </p>
                 </div>
 
-                {/* Main Upload Options */}
-                <div className="flex flex-col md:flex-row items-center gap-6 mb-8">
-                  {/* File Upload Card */}
-                  <div 
-                    className={`flex-1 group bg-gray-900/80 backdrop-blur-sm border-2 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl cursor-pointer ${
-                      isDragOver 
-                        ? 'border-gray-400 bg-gray-800/30 shadow-2xl scale-105' 
-                        : 'border-gray-700'
-                    }`}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".json,.txt,.html"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                    
-                    <div className="w-16 h-16 bg-gray-800/90 border border-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-105 group-hover:bg-gray-700/90 transition-all">
-                      <FileText className="h-8 w-8 text-gray-300" />
-                    </div>
-                    
-              <h3 className="text-xl font-semibold text-white mb-3">Upload File or Folder</h3>
-              <p className="text-gray-400 mb-6 leading-relaxed">
-                Select conversations.json file or export folder
-              </p>
-              
-              <div className="flex flex-wrap gap-2 justify-center mb-4">
-                <span className="px-3 py-1  border border-gray-700/10 text-gray-300 rounded-full text-sm">.json</span>
-                <span className="px-3 py-1  border border-gray-700/40 text-gray-300 rounded-full text-sm">.txt</span>
-                <span className="px-3 py-1  border border-gray-700/40 text-gray-300 rounded-full text-sm">.html</span>
-                <span className="px-3 py-1  border border-gray-700/40 text-gray-300 rounded-full text-sm">/</span>
-              </div>
-                    
-                    <button className="w-full bg-white hover:bg-gray-100 text-gray-900 py-3 rounded-xl font-medium transition-all">
-                      Choose Files
-                    </button>
-                  </div>
-
-                  {/* Vertical Divider with OR */}
-                  <div className="hidden md:flex flex-col items-center">
-                    <div className="w-px h-20 bg-gradient-to-b from-transparent via-gray-600 to-transparent"></div>
-                    <div className="bg-gray-800 border border-gray-600 rounded-full px-3 py-1 my-2">
-                      <span className="text-gray-400 text-sm font-medium">OR</span>
-                    </div>
-                    <div className="w-px h-20 bg-gradient-to-b from-transparent via-gray-600 to-transparent"></div>
-                  </div>
-
-                  {/* Mobile Horizontal Divider with OR */}
-                  <div className="md:hidden flex items-center w-full">
-                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
-                    <div className="bg-gray-800 border border-gray-600 rounded-full px-3 py-1 mx-4">
-                      <span className="text-gray-400 text-sm font-medium">OR</span>
-                    </div>
-                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
-                  </div>
-
-                  {/* Conversation URL Card */}
-                  <div className="flex-1 bg-gray-900/80 backdrop-blur-sm border-2 border-gray-700 rounded-2xl p-8 text-center transition-all duration-300 hover:bg-gray-900/90 hover:border-gray-500 hover:shadow-xl">
-                    <div className="w-16 h-16 bg-gray-800/90 border border-gray-700/50 rounded-xl flex items-center justify-center mx-auto mb-6 hover:bg-gray-700/90 transition-all">
-                      <ExternalLink className="h-8 w-8 text-gray-300" />
-                    </div>
-                    
-                    <h3 className="text-xl font-semibold text-white mb-3">Paste Conversation URL</h3>
-                    
-                    {/* Warning Message */}
-                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4">
-                      <div className="flex items-center space-x-2 text-red-400">
-                        <svg className="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                        <span className="text-sm font-medium">
-                          Conversation URLs don't work for Grok, Gemini, and Claude right now
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 justify-center mb-4">
-                      <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">ChatGPT</span>
-                      <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">Claude</span>
-                      <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">Grok</span>
-                      <span className="px-3 py-1 bg-gray-800/90 border border-gray-700/40 text-gray-300 rounded-full text-sm">Gemini</span>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <input
-                        type="url"
-                        value={conversationUrl}
-                        onChange={(e) => setConversationUrl(e.target.value)}
-                        placeholder="ex. https://chatgpt.com/share/..."
-                        className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500/20 transition-all"
-                      />
-                      
-                      <button
-                        onClick={() => processConversationUrl(conversationUrl)}
-                        disabled={!conversationUrl.trim()}
-                        className="w-full bg-white hover:bg-gray-100 disabled:bg-gray-400/10 disabled:cursor-not-allowed text-gray-900 disabled:text-white-900 py-3 rounded-xl font-medium transition-all"
-                      >
-                        Start Extraction
-                      </button>
-                      
-                    </div>
-                  </div>
-                </div>
-
-                {/* Security Notice */}
-                <div className="max-w-4xl mx-auto mb-6">
-                  <div className="flex items-center justify-center space-x-3 text-gray-400 text-sm bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 rounded-xl px-6 py-4">
-                    <Lock className="h-4 w-4 text-green-400" />
-                    <span>256-bit TLS encryption • Files encrypted at rest • Enterprise-grade security</span>
-                  </div>
-                </div>
-
-                {/* Advanced Options */}
-                <div className="text-center">
-                  <button
-                    onClick={() => folderInputRef.current?.click()}
-                    className="inline-flex items-center space-x-2 text-gray-400 hover:text-white transition-colors"
-                  >
-                    <FileText className="h-4 w-4" />
-                    <span className="text-sm">Upload ChatGPT export folder</span>
-                  </button>
+                {/* Main Upload Card */}
+                <div className="bg-gray-900/80 backdrop-blur-sm border-2 border-dashed border-gray-600 rounded-2xl p-8 text-center transition-all duration-300 hover:border-gray-500 hover:bg-gray-900/90 mb-6">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,.txt,.html,.csv,.zip"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  
+                  {/* Hidden folder input */}
                   <input
                     ref={folderInputRef}
                     type="file"
@@ -2114,6 +2047,91 @@ export default function ProcessPage() {
                     onChange={handleFolderSelect}
                     className="hidden"
                   />
+                  
+                  {/* Dropzone */}
+                  <div 
+                    className={`transition-all duration-300 ${isDragOver ? 'scale-105' : ''}`}
+                    onDragOver={handleDragOver}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    <div className={`w-12 h-12 ${isDragOver ? 'bg-blue-600' : 'bg-gray-700'} rounded-xl flex items-center justify-center mx-auto mb-4 transition-all`}>
+                      <Upload className={`h-6 w-6 ${isDragOver ? 'text-white' : 'text-gray-300'}`} />
+                    </div>
+                    
+                    <h3 className="text-lg font-medium text-white mb-8">
+                      {isDragOver ? 'Drop here' : 'Upload here'}
+                    </h3>
+                    
+                    {/* Action Buttons */}
+                    <div className="space-y-4 mb-8">
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-full bg-white hover:bg-gray-100 text-gray-900 py-3 px-6 rounded-xl font-medium transition-all"
+                      >
+                        Select files
+                      </button>
+                      
+                      <button
+                        onClick={() => folderInputRef.current?.click()}
+                        className="w-full border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white hover:bg-gray-800/50 py-3 px-6 rounded-xl font-medium transition-all"
+                      >
+                        Upload export folder
+                      </button>
+                    </div>
+                    
+                    {/* File Types */}
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-300 rounded-full text-sm">conversations.json</span>
+                      <span className="text-gray-500">·</span>
+                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-300 rounded-full text-sm">TXT</span>
+                      <span className="text-gray-500">·</span>
+                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-300 rounded-full text-sm">HTML</span>
+                      <span className="text-gray-500">·</span>
+                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-300 rounded-full text-sm">CSV</span>
+                    </div>
+                    
+                    {/* Helper Note */}
+                    <p className="text-xs text-gray-500">
+                      You can upload a ChatGPT export folder to import everything at once.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Alternative: Conversation URL */}
+                <div className="text-center mt-4">
+                  <div className="inline-flex items-center space-x-2 text-gray-400 text-sm mb-4">
+                    <div className="h-px bg-gray-600 w-16"></div>
+                    <span>or</span>
+                    <div className="h-px bg-gray-600 w-16"></div>
+                  </div>
+                  
+                  <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 max-w-md mx-auto">
+                    <h3 className="text-white font-medium mb-3">Paste GPT conversation URL</h3>
+                    
+                    <div className="space-y-3">
+                      <input
+                        type="url"
+                        value={conversationUrl}
+                        onChange={(e) => setConversationUrl(e.target.value)}
+                        placeholder="https://chatgpt.com/share/..."
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 text-sm focus:border-gray-500 focus:outline-none transition-all"
+                      />
+                      
+                      <button
+                        onClick={() => processConversationUrl(conversationUrl)}
+                        disabled={!conversationUrl.trim()}
+                        className="w-full bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg text-sm font-medium transition-all"
+                      >
+                        Start extraction
+                      </button>
+                      
+                      <p className="text-xs text-gray-500">
+                        Works with ChatGPT shared links
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

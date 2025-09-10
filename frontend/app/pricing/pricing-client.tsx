@@ -25,7 +25,7 @@ export default function PricingPageClient() {
   const [error, setError] = useState<string | null>(null)
   const [customCredits, setCustomCredits] = useState(25)
   const [customCreditsInput, setCustomCreditsInput] = useState('25')
-  const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(false)
+  const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(true) // Default to unlimited
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
@@ -236,20 +236,20 @@ export default function PricingPageClient() {
                 }}
                 className={`px-5 py-2 rounded-md text-sm font-medium transition-all relative ${
                   isUnlimitedSelected
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-700 hover:text-gray-900'
+                    ? 'bg-gray-900 text-white shadow-sm'
+                    : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
                 <div className="flex items-center">
                   <span className="font-semibold">Unlimited</span>
                 </div>
-                <div className="text-xs mt-0.5 text-gray-600">One-time $9.99</div>
+                <div className={`text-xs mt-0.5 ${isUnlimitedSelected ? 'text-gray-300' : 'text-gray-600'}`}>One-time $9.99</div>
               </button>
             </div>
           </div>
 
-          {/* Social proof, minimal */}
-          <div className="text-center text-sm text-gray-500">34+ users chose Unlimited</div>
+          {/* Social proof */}
+          <div className="text-center text-sm text-gray-500">113 users choose Unlimited</div>
 
           {/* Content based on selection */}
           {isUnlimitedSelected ? (
