@@ -130,30 +130,6 @@ export default function PaymentNotification({
                 </div>
               )}
               
-              {/* Action Buttons */}
-              <div className="mt-3 flex gap-2">
-                {onUpgrade && (type === 'warning' || type === 'limit_reached') && (
-                  <button
-                    onClick={onUpgrade}
-                    className={`
-                      text-white text-xs px-3 py-1.5 rounded-md font-medium
-                      transition-colors duration-150
-                      ${styles.button}
-                    `}
-                  >
-                    Upgrade to Pro - $4.99
-                  </button>
-                )}
-                
-                <button
-                  onClick={handleClose}
-                  className="text-xs px-3 py-1.5 rounded-md font-medium
-                           bg-white bg-opacity-20 hover:bg-opacity-30
-                           transition-all duration-150"
-                >
-                  {type === 'upgrade_success' ? 'Thanks!' : 'Dismiss'}
-                </button>
-              </div>
             </div>
             
             {/* Close Button */}

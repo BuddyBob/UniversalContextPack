@@ -3995,11 +3995,11 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
         payment_status = await get_user_payment_status(current_user.user_id)
         
         # Get user's packs
-        packs_result = supabase.table('context_packs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).execute()
+        packs_result = supabase.table('packs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).execute()
         packs = packs_result.data if packs_result.data else []
         
         # Get user's jobs
-        jobs_result = supabase.table('user_jobs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(20).execute()
+        jobs_result = supabase.table('jobs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(20).execute()
         jobs = jobs_result.data if jobs_result.data else []
         
         return {
