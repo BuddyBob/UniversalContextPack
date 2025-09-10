@@ -2764,7 +2764,9 @@ export default function ProcessPage() {
             `${paymentLimits.credits_balance} credits available` 
             : paymentLimitsError 
               ? 'Error loading credits - Click to retry'
-              : 'Loading...'}
+              : !user 
+                ? '5 credits'
+                : 'Loading...'}
         </span>
       </button>
     </div>
