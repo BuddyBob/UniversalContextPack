@@ -453,12 +453,12 @@ export default function ProcessPage() {
       if (showResetSuggestion) {
         showNotification(
           'warning',
-          'Server connection issue detected. Try clicking the Reset button and starting over.'
+          'Connection issue. Try using Reset to restart.'
         );
       } else {
         showNotification(
           'warning',
-          'File extraction failed to start. Please try uploading the file again.'
+          'Upload failed. Please try again.'
         );
       }
       
@@ -574,12 +574,12 @@ export default function ProcessPage() {
       if (showResetSuggestion) {
         showNotification(
           'warning',
-          'Server connection issue detected. Try clicking the Reset button and starting over.'
+          'Connection issue. Try using Reset to restart.'
         );
       } else {
         showNotification(
           'warning',
-          'Extraction failed to start. Please check the URL and try again.'
+          'Extraction failed. Please check the URL.'
         );
       }
       
@@ -1709,12 +1709,12 @@ export default function ProcessPage() {
       if (showResetSuggestion) {
         showNotification(
           'warning',
-          'Server connection issue detected. Try clicking the Reset button and starting over.'
+          'Connection issue. Try using Reset to restart.'
         );
       } else {
         showNotification(
           'warning',
-          'Analysis failed to start. Please try again in a moment.'
+          'Analysis failed. Please try again.'
         );
       }
       

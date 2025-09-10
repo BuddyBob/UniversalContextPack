@@ -867,68 +867,79 @@ def count_tokens(text: str) -> int:
 
 import re
 
+# Pre-compile regex patterns for better performance
+_UUID_PATTERN = re.compile(r'^[a-f0-9\-]{8,}$', re.IGNORECASE)
+_NUMBERS_PATTERN = re.compile(r'^[\d\-\s\.]+$')
+_LETTERS_PATTERN = re.compile(r'[a-zA-Z]')
+
+# Pre-define technical patterns set for faster lookup
+_TECHNICAL_PATTERNS = {
+    'http://', 'https://', '.com', '.org', '.net', '.json', '.txt', '.py',
+    'client-created', 'message_type', 'model_slug', 'gpt-', 'claude-',
+    'request_id', 'timestamp_', 'content_type', 'conversation_id',
+    'finished_successfully', 'absolute', 'metadata', 'system',
+    'user_editable_context', 'is_visually_hidden', 'role:', 'author:',
+    'create_time', 'update_time', 'parent_id', 'children', 'mapping',
+    'finish_details', 'stop_tokens', 'citations', 'content_references', 'file-service://'
+}
+
+# Pre-define common JSON elements set
+_JSON_ELEMENTS = {'true', 'false', 'null', 'user', 'assistant', 'system', 'all'}
+
 def is_meaningful_text(text: str) -> bool:
-    """Check if text is meaningful conversation content - enhanced version from universal_text_extractor.py"""
+    """OPTIMIZED: Check if text is meaningful conversation content"""
     if not isinstance(text, str):
         return False
     
-    # Clean and normalize
+    # Clean and normalize - single strip operation
     text = text.strip()
     
     # Skip if too short or empty
     if len(text) < 3:
         return False
     
-    # Skip if it's mostly/all numbers, UUIDs, timestamps, or technical strings
-    if re.match(r'^[\d\-\s\.]+$', text):  # Just numbers, dashes, spaces, dots
+    # OPTIMIZED: Use pre-compiled patterns
+    if _NUMBERS_PATTERN.match(text) or _UUID_PATTERN.match(text):
         return False
     
-    if re.match(r'^[a-f0-9\-]{8,}$', text, re.IGNORECASE):  # UUIDs or hex
+    # OPTIMIZED: Use set lookup instead of list iteration
+    text_lower = text.lower()
+    if any(pattern in text_lower for pattern in _TECHNICAL_PATTERNS):
         return False
     
-    # Skip URLs, file paths, technical identifiers
-    technical_patterns = [
-        'http://', 'https://', '.com', '.org', '.net', '.json', '.txt', '.py',
-        'client-created', 'message_type', 'model_slug', 'gpt-', 'claude-',
-        'request_id', 'timestamp_', 'content_type', 'conversation_id',
-        'finished_successfully', 'absolute', 'metadata', 'system',
-        'user_editable_context', 'is_visually_hidden', 'role:', 'author:',
-        'create_time', 'update_time', 'parent_id', 'children', 'mapping',
-        'finish_details', 'stop_tokens', 'citations', 'content_references', 'file-service://'
-    ]
-    
-    if any(pattern in text.lower() for pattern in technical_patterns):
-        return False
-    
-    # Must contain some actual letters (not just symbols/numbers)
-    if not re.search(r'[a-zA-Z]', text):
+    # OPTIMIZED: Single regex check for letters
+    if not _LETTERS_PATTERN.search(text):
         return False
     
     # Skip very short single words unless they're meaningful
     if len(text.split()) == 1 and len(text) < 8:
         return False
     
-    # Skip common JSON structural elements
-    if text.lower() in ['true', 'false', 'null', 'user', 'assistant', 'system', 'all']:
+    # OPTIMIZED: Set lookup instead of list check
+    if text_lower in _JSON_ELEMENTS:
         return False
     
     return True
 
+# Pre-compile commonly used regex patterns for performance
+_WHITESPACE_PATTERN = re.compile(r'\s+')
+_TIMESTAMP_PATTERN = re.compile(r'^\[\d{4}-\d{2}-\d{2}.*?\]')
+_TIME_PATTERN = re.compile(r'^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?', re.IGNORECASE)
+_USERNAME_PATTERN = re.compile(r'^[A-Za-z]+:')
+
 def clean_text(text: str) -> str:
-    """Clean and normalize text content"""
+    """OPTIMIZED: Clean and normalize text content"""
     if not text:
         return ""
     
     # Decode HTML entities
     text = html.unescape(text)
     
-    # Remove excessive whitespace
-    text = re.sub(r'\s+', ' ', text)
+    # OPTIMIZED: Single regex operation for whitespace
+    text = _WHITESPACE_PATTERN.sub(' ', text)
     
     # Strip leading/trailing whitespace
-    text = text.strip()
-    
-    return text
+    return text.strip()
 
 class ChatHTMLParser(HTMLParser):
     """HTML parser specifically designed for ChatGPT HTML exports"""
@@ -1051,15 +1062,18 @@ def extract_from_html_content(file_content: str) -> List[str]:
         # Fallback to basic text extraction
         return extract_from_text_content(re.sub(r'<[^>]+>', ' ', file_content))
 
-def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progress_callback=None, total_items=None, current_item=None, seen_objects=None) -> List[str]:
-    """Recursively extract meaningful text from any data structure - enhanced version from universal_text_extractor.py"""
+def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progress_callback=None, total_items=None, current_item=None, seen_objects=None, text_set=None) -> List[str]:
+    """Recursively extract meaningful text from any data structure - OPTIMIZED for speed"""
     if extracted_texts is None:
         extracted_texts = []
+        text_set = set()  # Use set for O(1) duplicate checking
+    elif text_set is None:
+        text_set = set(extracted_texts)  # Convert existing list to set for speed
     
     if seen_objects is None:
         seen_objects = set()
     
-    # Prevent infinite recursion - more aggressive limit
+    # Prevent infinite recursion - keep aggressive limit
     if depth > 50:
         return extracted_texts
     
@@ -1074,56 +1088,64 @@ def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progres
     
     try:
         if isinstance(obj, dict):
-            # Look for common text-containing keys first
+            # Look for common text-containing keys first (prioritized extraction)
             text_keys = ['parts', 'content', 'text', 'message', 'body', 'data', 'value', 'title', 'response']
             for key in text_keys:
                 if key in obj:
-                    extract_text_from_structure(obj[key], extracted_texts, depth + 1, progress_callback, total_items, current_item, seen_objects)
+                    extract_text_from_structure(obj[key], extracted_texts, depth + 1, progress_callback, total_items, current_item, seen_objects, text_set)
             
-            # Then check all other keys (increased limit for comprehensive extraction)
+            # Then check all other keys with improved batching
             processed = 0
             for key, value in obj.items():
-                if key not in text_keys and processed < 500:  # Increased from 100 to 500
-                    extract_text_from_structure(value, extracted_texts, depth + 1, progress_callback, total_items, current_item, seen_objects)
+                if key not in text_keys and processed < 500:  # Keep comprehensive limit
+                    extract_text_from_structure(value, extracted_texts, depth + 1, progress_callback, total_items, current_item, seen_objects, text_set)
                     processed += 1
                     
         elif isinstance(obj, list):
-            # Increased list processing for comprehensive extraction
-            for i, item in enumerate(obj[:5000]):  # Increased from 1000 to 5000 items
-                if progress_callback and len(obj) > 100:  # Report progress for any large list, not just depth 0
-                    # Update progress every 50 items or at milestones to reduce logging
-                    if i % 50 == 0 or i == len(obj) - 1 or i == 0:
-                        progress = (i + 1) / min(len(obj), 5000) * 100
-                        progress_callback(f"Processing item {i+1}/{min(len(obj), 5000)} ({progress:.1f}%)")
-                extract_text_from_structure(item, extracted_texts, depth + 1, progress_callback, total_items, current_item, seen_objects)
+            # OPTIMIZED: Reduce progress callback frequency dramatically
+            list_len = min(len(obj), 5000)
+            progress_interval = max(200, list_len // 20)  # Report progress every 200 items OR 5% chunks
+            
+            for i, item in enumerate(obj[:5000]):
+                # OPTIMIZED: Much less frequent progress updates (10x reduction)
+                if progress_callback and len(obj) > 500 and i % progress_interval == 0:
+                    progress = (i + 1) / list_len * 100
+                    progress_callback(f"Processing item {i+1}/{list_len} ({progress:.1f}%)")
+                
+                extract_text_from_structure(item, extracted_texts, depth + 1, progress_callback, total_items, current_item, seen_objects, text_set)
                 
         elif isinstance(obj, str):
-            if is_meaningful_text(obj):
-                # Handle unicode escapes and surrogates more safely
-                cleaned_text = obj
-                try:
-                    # Only decode if it actually contains unicode escape sequences
-                    if '\\u' in obj:
-                        cleaned_text = obj.encode('utf-8').decode('unicode_escape')
-                except:
-                    # If unicode decoding fails, just use the original text
-                    cleaned_text = obj
-                
-                # Clean up whitespace and handle encoding issues more aggressively
-                try:
+            # OPTIMIZED: Pre-filter before expensive operations
+            if len(obj) >= 3 and obj.strip():  # Quick length and whitespace check first
+                if is_meaningful_text(obj):
+                    # OPTIMIZED: Streamlined text cleaning
+                    cleaned_text = obj.strip()
+                    
+                    # Only do unicode processing if needed
+                    if '\\u' in cleaned_text:
+                        try:
+                            cleaned_text = cleaned_text.encode('utf-8').decode('unicode_escape')
+                        except:
+                            pass  # Keep original if decode fails
+                    
+                    # Single regex operation for whitespace normalization
                     cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
-                    # Remove surrogate characters that cause encoding issues
-                    import unicodedata
-                    cleaned_text = ''.join(char for char in cleaned_text if unicodedata.category(char) != 'Cs')
-                    # Test if we can encode this text safely
-                    cleaned_text.encode('utf-8')
-                except (UnicodeEncodeError, UnicodeDecodeError):
-                    # If there are encoding issues, clean the text more aggressively
-                    cleaned_text = ''.join(char for char in cleaned_text if ord(char) < 65536 and ord(char) not in range(0xD800, 0xE000))
-                    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
-                
-                if cleaned_text not in extracted_texts and is_meaningful_text(cleaned_text):
-                    extracted_texts.append(cleaned_text)
+                    
+                    # OPTIMIZED: Use set for O(1) duplicate checking instead of O(n) list search
+                    if cleaned_text and cleaned_text not in text_set:
+                        # Only do expensive unicode validation if we're going to add it
+                        try:
+                            cleaned_text.encode('utf-8')  # Quick encoding test
+                            extracted_texts.append(cleaned_text)
+                            text_set.add(cleaned_text)
+                        except UnicodeEncodeError:
+                            # Fallback: aggressive cleaning only when needed
+                            import unicodedata
+                            safe_text = ''.join(char for char in cleaned_text 
+                                              if ord(char) < 65536 and unicodedata.category(char) != 'Cs')
+                            if safe_text and safe_text not in text_set:
+                                extracted_texts.append(safe_text)
+                                text_set.add(safe_text)
     
     finally:
         # Remove from seen objects when done (for dict/list only)
@@ -1133,34 +1155,42 @@ def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progres
     return extracted_texts
 
 def extract_from_text_content(file_content: str) -> List[str]:
-    """Extract meaningful text from plain text content - enhanced version from universal_text_extractor.py"""
+    """OPTIMIZED: Extract meaningful text from plain text content"""
     extracted_texts = []
+    text_set = set()  # Use set for O(1) duplicate checking
     
     try:
         # Try to detect if it's actually structured data in text format
-        if file_content.strip().startswith('{') or file_content.strip().startswith('['):
+        content_stripped = file_content.strip()
+        if content_stripped.startswith(('{', '[')):
             try:
                 data = json.loads(file_content)
                 return extract_text_from_structure(data)
             except:
                 pass  # Continue with text processing
         
-        # Split by common delimiters and patterns
+        # OPTIMIZED: Split by common delimiters and patterns in one operation
         chunks = re.split(r'\n\s*\n|\r\n\s*\r\n|\.{3,}|---+|\*{3,}', file_content)
         
         for chunk in chunks:
             lines = chunk.strip().split('\n')
             for line in lines:
                 cleaned_line = line.strip()
-                # Remove common prefixes like timestamps, usernames, etc.
-                cleaned_line = re.sub(r'^\[\d{4}-\d{2}-\d{2}.*?\]', '', cleaned_line)
-                cleaned_line = re.sub(r'^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?', '', cleaned_line, re.IGNORECASE)
-                cleaned_line = re.sub(r'^[A-Za-z]+:', '', cleaned_line)  # Remove "User:", "Assistant:", etc.
+                
+                # OPTIMIZED: Use pre-compiled patterns and early filtering
+                if len(cleaned_line) < 3:  # Quick length check first
+                    continue
+                    
+                # Remove common prefixes using pre-compiled patterns
+                cleaned_line = _TIMESTAMP_PATTERN.sub('', cleaned_line)
+                cleaned_line = _TIME_PATTERN.sub('', cleaned_line)
+                cleaned_line = _USERNAME_PATTERN.sub('', cleaned_line)
                 cleaned_line = cleaned_line.strip()
                 
-                if is_meaningful_text(cleaned_line):
-                    if cleaned_line not in extracted_texts:
-                        extracted_texts.append(cleaned_line)
+                # OPTIMIZED: Check meaningful text and duplicates efficiently
+                if is_meaningful_text(cleaned_line) and cleaned_line not in text_set:
+                    extracted_texts.append(cleaned_line)
+                    text_set.add(cleaned_line)
     
     except Exception as e:
         print(f"Error processing text content: {e}")
@@ -1583,32 +1613,36 @@ async def process_extraction_background(job_id: str, file_content: str, filename
                 update_job_progress(job_id, "extracting", 20, "Processing JSON data structure...")
                 
                 def progress_callback(message):
-                    # Parse progress from message like "Processing item 500/1000 (50.0%)"
+                    # OPTIMIZED: Significantly reduced progress update frequency
                     if "Processing item" in message and "%" in message:
                         try:
                             percent_part = message.split("(")[1].split("%")[0]
                             percent = float(percent_part)
-                            # Get current item number for batch updates
                             item_part = message.split("Processing item ")[1].split("/")[0]
                             item_num = int(item_part)
                             
-                            # Send update every 100 items OR every 5% progress OR at major milestones
-                            # This significantly reduces the logging frequency
-                            if (item_num % 100 == 0 or 
-                                int(percent) % 5 == 0 and int(percent) != int(getattr(progress_callback, 'last_percent', 0)) or 
-                                percent >= 99.0 or 
-                                item_num == 1):
+                            # OPTIMIZED: Only send updates every 500 items OR every 10% progress (much less frequent)
+                            last_percent = getattr(progress_callback, 'last_percent', 0)
+                            last_item = getattr(progress_callback, 'last_item', 0)
+                            
+                            should_update = (
+                                item_num % 500 == 0 or  # Every 500 items instead of 100
+                                int(percent) >= int(last_percent) + 10 or  # Every 10% instead of 5%
+                                percent >= 99.0 or  # Final completion
+                                item_num == 1 or  # First item
+                                item_num - last_item >= 1000  # Fallback: every 1000 items minimum
+                            )
+                            
+                            if should_update:
                                 # Scale from 20% to 80% (extraction phase)
                                 scaled_progress = 20 + (percent * 0.6)
                                 update_job_progress(job_id, "extracting", scaled_progress, message)
                                 progress_callback.last_percent = percent
-                        except Exception as e:
-                            # Fallback for any parsing errors - no verbose logging
-                            update_job_progress(job_id, "extracting", 50, message)
-                    else:
-                        # Non-item progress messages - only log important ones
-                        if any(keyword in message.lower() for keyword in ['completed', 'finished', 'error', 'failed']):
-                            update_job_progress(job_id, "extracting", 50, message)
+                                progress_callback.last_item = item_num
+                        except Exception:
+                            # Silently skip progress parsing errors to avoid slowdown
+                            pass
+                    # Remove other progress message logging to reduce overhead
                 
                 extracted_texts = extract_text_from_structure(json_data, progress_callback=progress_callback)
             except json.JSONDecodeError:
@@ -1633,17 +1667,25 @@ async def process_extraction_background(job_id: str, file_content: str, filename
         max_texts = 100000  # Increased from 50,000
         limited_texts = extracted_texts[:max_texts]
         
-        # Create content with larger size limits for comprehensive extraction
+        # OPTIMIZED: Create content with early size checking to avoid processing too much
         extracted_content_parts = []
         total_size = 0
-        max_size = 200 * 1024 * 1024  # Increased to 200MB limit
+        max_size = 200 * 1024 * 1024  # 200MB limit
+        max_texts = min(100000, len(limited_texts))  # Don't process more than needed
         
-        for i, text in enumerate(limited_texts):
-            part = f"{i+1}. {text[:8000]}"  # Increased from 2000 to 8000 chars per text
-            if total_size + len(part) > max_size:
+        for i, text in enumerate(limited_texts[:max_texts]):
+            # OPTIMIZED: Early size check to avoid string operations on oversized content
+            if total_size > max_size * 0.9:  # Stop at 90% to leave room for formatting
+                print(f"Content size limit reached at {i+1} texts, stopping processing")
                 break
-            extracted_content_parts.append(part)
-            total_size += len(part)
+                
+            part = f"{i+1}. {text[:8000]}"  # Keep increased char limit for comprehensiveness
+            if total_size + len(part) <= max_size:
+                extracted_content_parts.append(part)
+                total_size += len(part)
+            else:
+                print(f"Size limit would be exceeded, stopping at {i+1} texts")
+                break
         
         extracted_content = '\n\n'.join(extracted_content_parts)
         print(f"Created content of {len(extracted_content)} characters from {len(extracted_content_parts)} texts")
