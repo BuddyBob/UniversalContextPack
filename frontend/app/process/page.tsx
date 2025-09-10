@@ -432,7 +432,37 @@ export default function ProcessPage() {
       // Start polling for extraction completion
       startPollingExtractionStatus(data.job_id);
     } catch (error) {
-      addLog(`Extraction failed: ${error}`);
+      console.error('File extraction failed:', error);
+      
+      let errorMessage = 'File extraction failed';
+      let showResetSuggestion = false;
+      
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        errorMessage = 'Connection failed: Unable to reach the extraction server. Please check your internet connection and try again.';
+        showResetSuggestion = true;
+        addLog(`Network error during file extraction: ${error.message}`);
+      } else if (error instanceof Error) {
+        errorMessage = `Extraction failed: ${error.message}`;
+        if (error.message.includes('HTTP') || error.message.includes('server')) {
+          showResetSuggestion = true;
+        }
+      }
+      
+      addLog(errorMessage);
+      
+      if (showResetSuggestion) {
+        showNotification(
+          'warning',
+          'Server connection issue detected. Try clicking the Reset button and starting over.'
+        );
+      } else {
+        showNotification(
+          'warning',
+          'File extraction failed to start. Please try uploading the file again.'
+        );
+      }
+      
+      setCurrentStep('upload'); // Return to upload state so user can retry
     } finally {
       setIsProcessing(false);
     }
@@ -523,7 +553,37 @@ export default function ProcessPage() {
       // Start polling for progress
       startPollingExtractionStatus(data.job_id);
     } catch (error) {
-      addLog(`Conversation URL extraction failed: ${error}`);
+      console.error('Conversation URL extraction failed:', error);
+      
+      let errorMessage = 'Conversation URL extraction failed';
+      let showResetSuggestion = false;
+      
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        errorMessage = 'Connection failed: Unable to reach the extraction server. Please check your internet connection and try again.';
+        showResetSuggestion = true;
+        addLog(`Network error during extraction: ${error.message}`);
+      } else if (error instanceof Error) {
+        errorMessage = `Extraction failed: ${error.message}`;
+        if (error.message.includes('HTTP') || error.message.includes('server')) {
+          showResetSuggestion = true;
+        }
+      }
+      
+      addLog(errorMessage);
+      
+      if (showResetSuggestion) {
+        showNotification(
+          'warning',
+          'Server connection issue detected. Try clicking the Reset button and starting over.'
+        );
+      } else {
+        showNotification(
+          'warning',
+          'Extraction failed to start. Please check the URL and try again.'
+        );
+      }
+      
+      setCurrentStep('upload'); // Return to upload state so user can retry
     } finally {
       setIsProcessing(false);
     }
@@ -1620,8 +1680,46 @@ export default function ProcessPage() {
       // Start polling for status
       startPollingAnalysisStatus(data.job_id);
     } catch (error) {
-      addLog(`Analysis failed to start: ${error}`);
+      console.error('Analysis failed to start:', error);
+      
+      // Enhanced error handling for different types of failures
+      let errorMessage = 'Analysis failed to start';
+      let showResetSuggestion = false;
+      
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        // This is likely a CORS or network connectivity issue
+        errorMessage = 'Connection failed: Unable to reach the analysis server. This may be a temporary issue with our backend service.';
+        showResetSuggestion = true;
+        addLog(`Network error - likely CORS or server connectivity issue: ${error.message}`);
+        
+        // Check if this is specifically a CORS issue
+        if (window.location.origin.includes('vercel.app')) {
+          addLog('CORS Error detected: Frontend and backend domains may not be properly configured');
+        }
+      } else if (error instanceof Error && error.message.includes('HTTP error')) {
+        errorMessage = `Server error: ${error.message}`;
+        showResetSuggestion = true;
+      } else {
+        errorMessage = `Analysis failed: ${error}`;
+      }
+      
+      addLog(errorMessage);
+      
+      // Show user-friendly notification with reset suggestion for server issues
+      if (showResetSuggestion) {
+        showNotification(
+          'warning',
+          'Server connection issue detected. Try clicking the Reset button and starting over.'
+        );
+      } else {
+        showNotification(
+          'warning',
+          'Analysis failed to start. Please try again in a moment.'
+        );
+      }
+      
       setIsProcessing(false); // Reset on error
+      setCurrentStep('chunked'); // Return to chunked state so user can retry
     }
   };
 
