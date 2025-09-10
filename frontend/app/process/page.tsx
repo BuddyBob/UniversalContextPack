@@ -2173,7 +2173,7 @@ export default function ProcessPage() {
                       
                       <button
                         onClick={() => folderInputRef.current?.click()}
-                        className="w-full border border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white hover:bg-gray-800/50 py-3 px-6 rounded-xl font-medium transition-all"
+                        className="w-full bg-gray-800 border border-purple-900 hover:border-gray-900 text-gray-300 hover:text-white hover:bg-gray-800 py-3 px-6 rounded-xl font-medium transition-all"
                       >
                         Upload export folder
                       </button>
