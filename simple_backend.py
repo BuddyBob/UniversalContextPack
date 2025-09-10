@@ -12,6 +12,8 @@ import ssl
 import urllib3
 import asyncio
 import traceback
+import time
+import threading
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -112,13 +114,13 @@ async def timeout_middleware(request: Request, call_next):
     request_path = str(request.url.path) if hasattr(request.url, 'path') else str(request.url)
     
     if "/api/analyze/" in request_path or "/api/extract" in request_path:
-        timeout_seconds = 1800  # 30 minutes for analysis/extraction
+        timeout_seconds = 3600  # 60 minutes for analysis/extraction (increased from 30)
     elif "/api/progress-stream/" in request_path:
-        timeout_seconds = 900   # 15 minutes for streaming endpoints
+        timeout_seconds = 1800   # 30 minutes for streaming endpoints (increased from 15)
     elif "/api/health" in request_path or request_path == "/":
         timeout_seconds = 10    # 10 seconds for health checks
     else:
-        timeout_seconds = 120   # 2 minutes for other endpoints
+        timeout_seconds = 300   # 5 minutes for other endpoints (increased from 2)
     
     try:
         # Execute request with timeout
@@ -135,12 +137,21 @@ async def timeout_middleware(request: Request, call_next):
         
     except asyncio.TimeoutError:
         print(f"Request timeout after {timeout_seconds}s for {request.url}")
+        # More user-friendly timeout messages based on endpoint
+        if "/api/analyze/" in request_path:
+            detail_msg = f"Analysis timeout after {timeout_seconds//60} minutes. This may happen with very large files or during high server load. Please try again or contact support."
+        elif "/api/extract" in request_path:
+            detail_msg = f"Text extraction timeout after {timeout_seconds//60} minutes. Please try with a smaller file or contact support."
+        else:
+            detail_msg = f"Request timeout after {timeout_seconds} seconds. Please try again."
+            
         return JSONResponse(
             status_code=408,
             content={
-                "detail": f"Request timeout after {timeout_seconds} seconds",
-                "timeout": timeout_seconds,
-                "endpoint": str(request.url)
+                "detail": detail_msg,
+                "timeout_seconds": timeout_seconds,
+                "endpoint": str(request.url),
+                "suggestion": "Try refreshing the page and starting the process again. For large files, consider splitting them into smaller chunks."
             }
         )
     except Exception as e:
@@ -564,6 +575,32 @@ def get_openai_client(api_key: str = None) -> OpenAI:
     except Exception as e:
         print(f"❌ Error creating OpenAI client: {e}")
         raise HTTPException(status_code=500, detail="Failed to initialize OpenAI client")
+
+def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
+    """
+    Make OpenAI API calls with retry logic for connection issues
+    """
+    import time
+    from openai import OpenAI
+    
+    for attempt in range(max_retries):
+        try:
+            response = openai_client.chat.completions.create(**kwargs)
+            return response
+        except Exception as e:
+            error_str = str(e).lower()
+            if attempt < max_retries - 1 and any(term in error_str for term in [
+                'connection', 'timeout', 'network', 'ssl', 'socket', 'read timed out'
+            ]):
+                wait_time = (attempt + 1) * 2  # Exponential backoff: 2, 4, 6 seconds
+                print(f"🔄 OpenAI API connection issue (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            else:
+                # Re-raise the exception if it's not a connection issue or we've exceeded retries
+                raise e
+    
+    raise Exception(f"OpenAI API failed after {max_retries} attempts")
 
 # R2 client configuration - let's try with requests directly to avoid boto3 SSL issues
 import requests
@@ -1258,9 +1295,6 @@ async def health_check():
 @app.get("/api/health")
 async def detailed_health_check():
     """Comprehensive health check endpoint"""
-    import time
-    import psutil
-    import threading
     
     try:
         start_time = time.time()
@@ -1269,16 +1303,15 @@ async def detailed_health_check():
         db_healthy = True
         db_latency = 0
         try:
-            db_start = time.time()
-            result = supabase.table('user_profiles').select('id').limit(1).execute()
-            db_latency = round((time.time() - db_start) * 1000, 2)
+            if supabase:
+                db_start = time.time()
+                result = supabase.table('user_profiles').select('id').limit(1).execute()
+                db_latency = round((time.time() - db_start) * 1000, 2)
+            else:
+                print("⚠️ Database connection not configured (legacy mode)")
         except Exception as e:
             db_healthy = False
             print(f"Database health check failed: {e}")
-        
-        # Check system resources
-        memory_usage = psutil.virtual_memory()
-        cpu_usage = psutil.cpu_percent(interval=0.1)
         
         # Check active threads and connections
         active_threads = threading.active_count()
@@ -1298,9 +1331,6 @@ async def detailed_health_check():
                 "latency_ms": db_latency
             },
             "system": {
-                "memory_used_percent": memory_usage.percent,
-                "memory_available_gb": round(memory_usage.available / (1024**3), 2),
-                "cpu_percent": cpu_usage,
                 "active_threads": active_threads
             },
             "job_queue": {
@@ -2372,7 +2402,8 @@ The conversation data you will analyze follows this message. Provide your compre
                 
                 # Process with OpenAI using optimized prompt structure for caching
                 print(f"🤖 Sending chunk {chunk_num} to OpenAI (model: gpt-5-nano-2025-08-07)")
-                ai_response = openai_client.chat.completions.create(
+                ai_response = openai_call_with_retry(
+                    openai_client,
                     model="gpt-5-nano-2025-08-07",
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -2437,12 +2468,16 @@ The conversation data you will analyze follows this message. Provide your compre
             
             print(f"🚀 Processing batch {batch_start//batch_size + 1}: chunks {batch_chunks}")
             
-            # Update progress for this batch
+            # Update progress for this batch with keep-alive signal
             batch_progress = int((batch_start / total_chunks_count) * 100)
             update_job_progress(job_id, "analyzing", 
                               batch_progress, 
                               f"Processing batch {batch_start//batch_size + 1}: chunks {batch_chunks}", 
                               current_chunk=batch_start+1, total_chunks=total_chunks_count)
+            
+            # Send a keep-alive signal every 30 seconds during processing
+            import time
+            last_keepalive = time.time()
             
             # Create tasks for parallel processing
             tasks = []
@@ -2451,8 +2486,22 @@ The conversation data you will analyze follows this message. Provide your compre
                 task = asyncio.create_task(process_single_chunk(chunk_num, global_idx, total_chunks_count))
                 tasks.append(task)
             
-            # Wait for all chunks in this batch to complete
-            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Wait for all chunks in this batch to complete with periodic keep-alive
+            batch_results = []
+            for task in asyncio.as_completed(tasks):
+                result = await task
+                batch_results.append(result)
+                
+                # Send keep-alive progress update every 30 seconds
+                current_time = time.time()
+                if current_time - last_keepalive > 30:
+                    completed_in_batch = len(batch_results)
+                    keep_alive_progress = int(((batch_start + completed_in_batch) / total_chunks_count) * 100)
+                    update_job_progress(job_id, "analyzing", 
+                                      keep_alive_progress, 
+                                      f"Still processing... {len(all_results) + completed_in_batch}/{total_chunks_count} chunks completed", 
+                                      current_chunk=len(all_results) + completed_in_batch, total_chunks=total_chunks_count)
+                    last_keepalive = current_time
             
             # Process batch results
             for result in batch_results:
@@ -2519,23 +2568,7 @@ The conversation data you will analyze follows this message. Provide your compre
             for r in results if r.get('content')
         ])
         
-        # Add note about upgrade if not all chunks were processed
-        if len(actual_chunks_to_process) < len(selected_chunks):
-            remaining_chunks = len(selected_chunks) - len(actual_chunks_to_process)
-            upgrade_note = f"""
-
-{"="*100}
-# UPGRADE TO ANALYZE REMAINING CHUNKS
-
-You have {remaining_chunks} more selected chunks that can be analyzed with more credits.
-
-Processed: {len(actual_chunks_to_process)}/{len(selected_chunks)} selected chunks
-Remaining: {remaining_chunks} chunks
-
-Purchase more credits to unlock your complete Universal Context Pack!
-{"="*100}
-"""
-            aggregated_content += upgrade_note
+        # Note: Removed upgrade prompts per user request - focus on successful analysis
         
         upload_to_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt", aggregated_content)
 
@@ -2593,7 +2626,8 @@ Original UCP to compress:
 
 Provide the ultra-compact UCP:"""
 
-                ultra_response = openai_client.chat.completions.create(
+                ultra_response = openai_call_with_retry(
+                    openai_client,
                     model="gpt-5-nano-2025-08-07",
                     messages=[
                         {"role": "user", "content": ultra_compact_prompt}
@@ -2637,7 +2671,8 @@ Original UCP to optimize:
 
 Provide the standard UCP:"""
 
-                standard_response = openai_client.chat.completions.create(
+                standard_response = openai_call_with_retry(
+                    openai_client,
                     model="gpt-5-nano-2025-08-07", 
                     messages=[
                         {"role": "user", "content": standard_prompt}
@@ -2817,7 +2852,7 @@ Your Universal Context Pack has been split into {len(chunks)} manageable parts:
         
         result_data = {
             "job_id": job_id,
-            "status": "completed" if chunks_to_process == total_chunks else "partial",
+            "status": "completed",  # Always show as completed when analysis finishes
             "total_chunks": total_chunks,
             "processed_chunks": len(results),
             "chunks_to_process": chunks_to_process,
@@ -2825,12 +2860,9 @@ Your Universal Context Pack has been split into {len(chunks)} manageable parts:
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
             "total_cost": total_cost,
-            "payment_plan": payment_status["plan"],
-            "upgrade_required": chunks_to_process < total_chunks
+            "payment_plan": payment_status["plan"]
+            # Removed upgrade_required and upgrade_message per user request
         }
-        
-        if chunks_to_process < total_chunks:
-            result_data["upgrade_message"] = f"Upgrade to Pro plan to analyze remaining {total_chunks - chunks_to_process} chunks"
         
         print(f"Processing complete! Total cost: ${total_cost:.3f}")
         print(f"Results stored in R2 bucket: {R2_BUCKET}")
@@ -3927,23 +3959,75 @@ async def list_jobs(user: AuthenticatedUser = Depends(get_current_user)):
 
 @app.get("/api/profile")
 async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Get the current user's profile information"""
+    """Get the current user's profile information including payment status and packs"""
     try:
-        
         if not supabase:
-            raise HTTPException(status_code=500, detail="Database not available")
+            # Legacy mode - return basic info
+            return {
+                "profile": {
+                    "user_id": current_user.user_id,
+                    "email": current_user.email,
+                    "r2_user_directory": current_user.r2_directory,
+                    "plan": "legacy",
+                    "chunks_used": 0,
+                    "chunks_allowed": 999,
+                    "can_process": True
+                },
+                "packs": [],
+                "jobs": []
+            }
         
-        result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": current_user.user_id}).execute()
+        # Get user profile
+        profile_result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": current_user.user_id}).execute()
         
-        if result.data:
-            # Return profile data (no need to filter API key since it's not stored anymore)
-            return {"profile": result.data}
+        if not profile_result.data:
+            # Create profile if it doesn't exist
+            create_result = supabase.rpc("create_user_profile_for_backend", {
+                "user_uuid": current_user.user_id,
+                "user_email": current_user.email,
+                "r2_dir": current_user.r2_directory
+            }).execute()
+            profile_data = create_result.data if create_result.data else {}
         else:
-            raise HTTPException(status_code=404, detail="User profile not found")
+            profile_data = profile_result.data
+        
+        # Get payment status
+        payment_status = await get_user_payment_status(current_user.user_id)
+        
+        # Get user's packs
+        packs_result = supabase.table('context_packs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).execute()
+        packs = packs_result.data if packs_result.data else []
+        
+        # Get user's jobs
+        jobs_result = supabase.table('user_jobs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(20).execute()
+        jobs = jobs_result.data if jobs_result.data else []
+        
+        return {
+            "profile": {
+                **profile_data,
+                **payment_status
+            },
+            "packs": packs,
+            "jobs": jobs
+        }
             
     except Exception as e:
         print(f"Error getting user profile: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get profile: {str(e)}")
+        # Return basic fallback data instead of failing
+        return {
+            "profile": {
+                "user_id": current_user.user_id,
+                "email": current_user.email,
+                "r2_user_directory": current_user.r2_directory,
+                "plan": "free",
+                "chunks_used": 0,
+                "chunks_allowed": 5,
+                "can_process": True,
+                "error": f"Profile load error: {str(e)}"
+            },
+            "packs": [],
+            "jobs": []
+        }
 
 # ================================
 # STRIPE PAYMENT ENDPOINTS
