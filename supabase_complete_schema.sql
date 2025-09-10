@@ -24,9 +24,9 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   r2_user_directory TEXT NOT NULL, -- Unique R2 directory for this user
   
   -- Payment and usage tracking
-  payment_plan TEXT DEFAULT 'credits' CHECK (payment_plan IN ('credits')),
+  payment_plan TEXT DEFAULT 'credits' CHECK (payment_plan IN ('credits', 'unlimited')),
   chunks_analyzed INTEGER DEFAULT 0, -- Total chunks analyzed by this user (legacy only)
-  credits_balance INTEGER DEFAULT 5, -- Credits available for analysis
+  credits_balance INTEGER DEFAULT 5, -- Credits available for analysis (999999 for unlimited)
   subscription_id TEXT, -- Stripe subscription ID (for future use)
   subscription_status TEXT, -- active, canceled, past_due, etc.
   plan_start_date TIMESTAMP WITH TIME ZONE,
@@ -248,23 +248,40 @@ $$ LANGUAGE plpgsql;
 -- Function to update credits when a job completes
 CREATE OR REPLACE FUNCTION public.handle_chunk_usage_update()
 RETURNS TRIGGER AS $$
+DECLARE
+  user_plan TEXT;
 BEGIN
-  -- When job is completed, deduct credits
+  -- When job is completed, deduct credits (unless user has unlimited plan)
   IF NEW.status = 'analyzed' AND NEW.processed_chunks > 0 AND 
      (OLD.status IS NULL OR OLD.status != 'analyzed') THEN
     
-    -- Deduct credits and log transaction
-    UPDATE public.user_profiles 
-    SET credits_balance = GREATEST(0, credits_balance - NEW.processed_chunks),
-        updated_at = NOW()
+    -- Check if user has unlimited plan
+    SELECT payment_plan INTO user_plan 
+    FROM public.user_profiles 
     WHERE id = NEW.user_id;
     
-    -- Log the usage transaction
-    INSERT INTO public.credit_transactions (user_id, transaction_type, credits, job_id, description)
-    VALUES (NEW.user_id, 'usage', -NEW.processed_chunks, NEW.job_id, 
-            'Credits used for analysis of ' || NEW.processed_chunks || ' chunks');
-    
-    RAISE NOTICE 'Deducted % credits for user %', NEW.processed_chunks, NEW.user_id;
+    -- Only deduct credits for non-unlimited users
+    IF user_plan != 'unlimited' THEN
+      -- Deduct credits and log transaction
+      UPDATE public.user_profiles 
+      SET credits_balance = GREATEST(0, credits_balance - NEW.processed_chunks),
+          updated_at = NOW()
+      WHERE id = NEW.user_id;
+      
+      -- Log the usage transaction
+      INSERT INTO public.credit_transactions (user_id, transaction_type, credits, job_id, description)
+      VALUES (NEW.user_id, 'usage', -NEW.processed_chunks, NEW.job_id, 
+              'Credits used for analysis of ' || NEW.processed_chunks || ' chunks');
+      
+      RAISE NOTICE 'Deducted % credits for user %', NEW.processed_chunks, NEW.user_id;
+    ELSE
+      -- Log unlimited usage for tracking (no credit deduction)
+      INSERT INTO public.credit_transactions (user_id, transaction_type, credits, job_id, description)
+      VALUES (NEW.user_id, 'unlimited_usage', 0, NEW.job_id, 
+              'Unlimited plan usage - analyzed ' || NEW.processed_chunks || ' chunks (no credits deducted)');
+      
+      RAISE NOTICE 'Unlimited user % analyzed % chunks - no credits deducted', NEW.user_id, NEW.processed_chunks;
+    END IF;
   END IF;
   
   RETURN NEW;
@@ -808,6 +825,56 @@ GRANT EXECUTE ON FUNCTION public.add_credits_to_user(TEXT, INTEGER, TEXT) TO aut
 -- Grant execute permissions to service role for credit functions
 GRANT EXECUTE ON FUNCTION public.add_credits_to_user(UUID, INTEGER, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION public.add_credits_to_user(TEXT, INTEGER, TEXT) TO service_role;
+
+-- Function to grant unlimited access to a user
+CREATE OR REPLACE FUNCTION public.grant_unlimited_access(
+  user_uuid UUID,
+  amount_paid DECIMAL DEFAULT 0,
+  stripe_payment_id TEXT DEFAULT 'manual'
+)
+RETURNS INTEGER AS $$
+DECLARE
+  new_balance INTEGER;
+BEGIN
+  -- Update user to unlimited plan with very high credit balance
+  UPDATE public.user_profiles 
+  SET payment_plan = 'unlimited',
+      credits_balance = 999999, -- High number to represent unlimited
+      subscription_status = 'active',
+      plan_start_date = NOW(),
+      updated_at = NOW()
+  WHERE id = user_uuid
+  RETURNING credits_balance INTO new_balance;
+  
+  -- Log the transaction
+  INSERT INTO public.credit_transactions (
+    user_id, 
+    transaction_type, 
+    credits, 
+    amount, 
+    stripe_payment_id,
+    description
+  )
+  VALUES (
+    user_uuid, 
+    'unlimited_purchase', 
+    999999, 
+    amount_paid, 
+    stripe_payment_id,
+    'Unlimited access purchase - no credit limits'
+  );
+  
+  RETURN new_balance;
+  
+  EXCEPTION WHEN OTHERS THEN
+    RAISE LOG 'Error in grant_unlimited_access: %', SQLERRM;
+    RETURN -1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant execute permissions for unlimited access function
+GRANT EXECUTE ON FUNCTION public.grant_unlimited_access(UUID, DECIMAL, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.grant_unlimited_access(UUID, DECIMAL, TEXT) TO service_role;
 
 -- ============================================================================
 -- BACKEND SECURITY DEFINER FUNCTIONS

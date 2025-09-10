@@ -2149,8 +2149,9 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         total_chunks = chunk_metadata["total_chunks"]
         print(f"📊 Total chunks available: {total_chunks}")
         
-        # Credit-based system only: check available credits
+        # Credit-based system: check available credits and payment plan
         available_credits = payment_status.get("credits_balance", 0)
+        payment_plan = payment_status.get("plan", "credits")
         
         # Process only selected chunks (if specified) and within credit limits
         # Frontend sends 0-based indices, but chunk files are 1-based (chunk_001.txt, chunk_002.txt, etc.)
@@ -2158,28 +2159,35 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
             selected_chunks = [chunk_idx + 1 for chunk_idx in request.selected_chunks]  # Convert 0-based to 1-based
         else:
             selected_chunks = list(range(1, total_chunks + 1))  # All chunks, 1-based
-            
-        chunks_to_process = min(available_credits, len(selected_chunks))
         
-        # Respect user's available credits - no artificial limits for paid users
-        # Only limit free users to prevent abuse
-        if payment_status.get("plan") == "free":
-            MAX_CHUNKS_FREE = 5  # Free users limited to 5 chunks per job
-            if chunks_to_process > MAX_CHUNKS_FREE:
-                chunks_to_process = MAX_CHUNKS_FREE
-                print(f"⚠️  Free plan limited to {MAX_CHUNKS_FREE} chunks per job")
+        # Determine how many chunks to process based on plan type
+        if payment_plan == "unlimited":
+            # Unlimited plan: process all selected chunks without credit limits
+            chunks_to_process = len(selected_chunks)
+            print(f"🌟 Unlimited plan - processing all {chunks_to_process} selected chunks")
         else:
-            # Paid users can process up to their available credits (no artificial limit)
-            print(f"✅ Paid plan - processing up to {chunks_to_process} chunks based on available credits")
+            # Credit-based plan: limit by available credits
+            chunks_to_process = min(available_credits, len(selected_chunks))
+            
+            # Respect user's available credits - no artificial limits for paid users
+            # Only limit free users to prevent abuse
+            if payment_status.get("plan") == "free":
+                MAX_CHUNKS_FREE = 5  # Free users limited to 5 chunks per job
+                if chunks_to_process > MAX_CHUNKS_FREE:
+                    chunks_to_process = MAX_CHUNKS_FREE
+                    print(f"⚠️  Free plan limited to {MAX_CHUNKS_FREE} chunks per job")
+            else:
+                # Paid users can process up to their available credits (no artificial limit)
+                print(f"✅ Credit plan - processing up to {chunks_to_process} chunks based on available credits")
         
         actual_chunks_to_process = selected_chunks[:chunks_to_process]  # Take only what we can afford
         
-        print(f"💳 Available credits: {available_credits}")
+        print(f"💳 Available credits: {available_credits if payment_plan != 'unlimited' else '∞ (unlimited)'}")
         print(f"📋 Frontend selected indices (0-based): {request.selected_chunks}")
         print(f"📋 Converted to chunk numbers (1-based): {selected_chunks}")
         print(f"🎯 Will process chunks: {actual_chunks_to_process}")
         
-        if chunks_to_process <= 0:
+        if chunks_to_process <= 0 and payment_plan != "unlimited":
             return {
                 "job_id": job_id,
                 "status": "limit_reached", 
