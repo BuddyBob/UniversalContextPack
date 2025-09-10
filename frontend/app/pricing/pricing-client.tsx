@@ -242,9 +242,6 @@ export default function PricingPageClient() {
               >
                 <div className="flex items-center">
                   <span className="font-semibold">Unlimited</span>
-                  <span className="ml-2 text-[10px] uppercase tracking-wide bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full border border-gray-200">
-                    Recommended
-                  </span>
                 </div>
                 <div className="text-xs mt-0.5 text-gray-600">One-time $9.99</div>
               </button>
