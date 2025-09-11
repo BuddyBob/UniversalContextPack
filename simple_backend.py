@@ -4471,8 +4471,24 @@ async def emergency_fix_jobs():
             
             # 2. Create pack record in Supabase if missing
             if supabase:
+                # First, ensure job record exists
+                existing_job = supabase.table("jobs").select("*").eq("job_id", job_id).execute()
+                if not existing_job.data:
+                    # Create job record first
+                    job_data = {
+                        "user_id": user_id,
+                        "job_id": job_id,
+                        "status": "analyzed",
+                        "file_name": f"upload_{job_id[:8]}.txt",
+                        "file_size": 1000000,  # Default size
+                        "r2_path": f"{r2_directory}/{job_id}/"
+                    }
+                    job_result = supabase.table("jobs").insert(job_data).execute()
+                    if job_result.data:
+                        print(f"✅ Created job record for {job_id}")
+                
                 # Check if pack already exists
-                existing_pack = supabase.table("packs").select("*").eq("pack_job_id", job_id).execute()
+                existing_pack = supabase.table("packs").select("*").eq("job_id", job_id).execute()
                 if not existing_pack.data:
                     # Get analysis stats
                     analysis_stats = {}
@@ -4504,15 +4520,14 @@ async def emergency_fix_jobs():
                         except:
                             pass
                     
-                    # Create pack record
+                    # Create pack record (matching the schema exactly)
                     pack_data = {
-                        "pack_user_id": user_id,
-                        "pack_job_id": job_id,
-                        "pack_name_out": f"UCP-{job_id[:8]}",
-                        "pack_r2_path": f"{r2_directory}/{job_id}/",
-                        "pack_extraction_stats": extraction_stats,
-                        "pack_analysis_stats": analysis_stats,
-                        "pack_created_at": "2024-12-30T00:00:00.000Z"  # Default timestamp
+                        "user_id": user_id,
+                        "job_id": job_id,
+                        "pack_name": f"UCP-{job_id[:8]}",
+                        "r2_pack_path": f"{r2_directory}/{job_id}/",
+                        "extraction_stats": extraction_stats,
+                        "analysis_stats": analysis_stats
                     }
                     
                     pack_result = supabase.table("packs").insert(pack_data).execute()
