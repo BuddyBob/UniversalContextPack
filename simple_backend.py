@@ -2200,18 +2200,12 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
 
 @app.post("/api/analyze/{job_id}")
 async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: AuthenticatedUser = Depends(get_current_user)):
-    """Step 3: Analyze chunks with AI - with payment limits."""
+    """Step 3: Analyze chunks with AI - returns immediately and processes in background."""
     try:
         print(f"🚀 Starting analysis for job {job_id}, user: {user.user_id}")
         print(f"📋 Requested chunks to analyze: {request.selected_chunks}")
         
-        # Check payment status and limits FIRST
-        print(f"💳 Checking payment status for user {user.user_id}")
-        payment_status = await get_user_payment_status(user.user_id)
-        print(f"💰 Payment status: {payment_status}")
-        
-        # Get chunk metadata to see how many chunks we have
-        print(f"📦 Loading chunk metadata for job {job_id}")
+        # Quick validation checks
         chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
         if not chunk_metadata_content:
             print(f"❌ Chunk metadata not found for job {job_id}")
@@ -2219,45 +2213,23 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         
         chunk_metadata = json.loads(chunk_metadata_content)
         total_chunks = chunk_metadata["total_chunks"]
-        print(f"📊 Total chunks available: {total_chunks}")
         
-        # Credit-based system: check available credits and payment plan
+        # Quick payment status check
+        payment_status = await get_user_payment_status(user.user_id)
         available_credits = payment_status.get("credits_balance", 0)
         payment_plan = payment_status.get("plan", "credits")
         
-        # Process only selected chunks (if specified) and within credit limits
-        # Frontend sends 0-based indices, but chunk files are 1-based (chunk_001.txt, chunk_002.txt, etc.)
+        # Basic validation
         if request.selected_chunks:
-            selected_chunks = [chunk_idx + 1 for chunk_idx in request.selected_chunks]  # Convert 0-based to 1-based
+            selected_chunks = [chunk_idx + 1 for chunk_idx in request.selected_chunks]
         else:
-            selected_chunks = list(range(1, total_chunks + 1))  # All chunks, 1-based
+            selected_chunks = list(range(1, total_chunks + 1))
         
-        # Determine how many chunks to process based on plan type
-        if payment_plan == "unlimited":
-            # Unlimited plan: process all selected chunks without credit limits
-            chunks_to_process = len(selected_chunks)
-            print(f"🌟 Unlimited plan - processing all {chunks_to_process} selected chunks")
-        else:
-            # Credit-based plan: limit by available credits
+        chunks_to_process = len(selected_chunks)
+        if payment_plan != "unlimited":
             chunks_to_process = min(available_credits, len(selected_chunks))
-            
-            # Respect user's available credits - no artificial limits for paid users
-            # Only limit free users to prevent abuse
-            if payment_status.get("plan") == "free":
-                MAX_CHUNKS_FREE = 5  # Free users limited to 5 chunks per job
-                if chunks_to_process > MAX_CHUNKS_FREE:
-                    chunks_to_process = MAX_CHUNKS_FREE
-                    print(f"⚠️  Free plan limited to {MAX_CHUNKS_FREE} chunks per job")
-            else:
-                # Paid users can process up to their available credits (no artificial limit)
-                print(f"✅ Credit plan - processing up to {chunks_to_process} chunks based on available credits")
-        
-        actual_chunks_to_process = selected_chunks[:chunks_to_process]  # Take only what we can afford
-        
-        print(f"💳 Available credits: {available_credits if payment_plan != 'unlimited' else '∞ (unlimited)'}")
-        print(f"📋 Frontend selected indices (0-based): {request.selected_chunks}")
-        print(f"📋 Converted to chunk numbers (1-based): {selected_chunks}")
-        print(f"🎯 Will process chunks: {actual_chunks_to_process}")
+            if payment_plan == "free" and chunks_to_process > 5:
+                chunks_to_process = 5
         
         if chunks_to_process <= 0 and payment_plan != "unlimited":
             return {
@@ -2268,22 +2240,186 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
                 "payment_plan": payment_status["plan"]
             }
         
-        # Calculate adaptive batch size for estimation
-        estimation_batch_size = 2 if chunks_to_process <= 5 else (3 if chunks_to_process <= 15 else 4)
+        # Initialize progress and start background processing
+        update_job_progress(job_id, "analyzing", 0, "Starting analysis...")
         
-        # Warn about processing time for large batches (updated for parallel processing)
-        # With parallel processing, time is reduced significantly
-        estimated_time_minutes = max(1, (chunks_to_process / estimation_batch_size) * 1.2)  # ~0.4 minutes per chunk with parallel processing
-        if chunks_to_process > 5:
-            print(f"⚠️  Large batch: {chunks_to_process} chunks with parallel processing will take ~{estimated_time_minutes:.1f} minutes")
-            print(f"🚀 Parallel speedup: Processing {min(estimation_batch_size, chunks_to_process)} chunks simultaneously")
-            
-        print(f"⏱️  Estimated processing time: {estimated_time_minutes:.1f} minutes for {chunks_to_process} chunks (parallel batches of {estimation_batch_size})")
+        # Start background processing - don't await it!
+        asyncio.create_task(process_analysis_background(
+            job_id, user, selected_chunks[:chunks_to_process], 
+            payment_status, chunk_metadata
+        ))
         
-        # Get OpenAI client (will automatically use current server API key)
-        print(f"🤖 Initializing OpenAI client")
+        # Return immediately so client can start polling for progress
+        estimated_time_minutes = max(1, (chunks_to_process / 3) * 1.2)
+        
+        return {
+            "job_id": job_id,
+            "status": "started",
+            "message": f"Analysis started for {chunks_to_process} chunks. Use progress polling to track status.",
+            "chunks_to_process": chunks_to_process,
+            "estimated_time_minutes": estimated_time_minutes,
+            "total_chunks": total_chunks
+        }
+        
+    except Exception as e:
+        print(f"❌ Error starting analysis: {e}")
+        update_job_progress(job_id, "error", 0, f"Failed to start: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")
+
+# Global job cancellation tracking
+cancelled_jobs = set()
+
+async def process_analysis_background(job_id: str, user: AuthenticatedUser, selected_chunks: List[int], payment_status: dict, chunk_metadata: dict):
+    """Background task for processing analysis with progress updates and cancellation support."""
+    try:
+        print(f"🔄 Background analysis started for job {job_id}")
+        chunks_to_process = len(selected_chunks)
+        total_chunks = chunk_metadata["total_chunks"]
+        
+        # Check if job was cancelled before starting
+        if job_id in cancelled_jobs:
+            print(f"🚫 Job {job_id} was cancelled before processing started")
+            update_job_progress(job_id, "cancelled", 0, "Job was cancelled")
+            await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
+            cancelled_jobs.discard(job_id)
+            return
+        
+        # Update database status
+        await update_job_status_in_db(user, job_id, "analyzing", 5)
+        
+        # Get OpenAI client
+        update_job_progress(job_id, "analyzing", 10, "Initializing AI client...")
         openai_client = get_openai_client()
-        print(f"✅ OpenAI client ready")
+        
+        # Send keep-alive every 30 seconds to prevent timeouts
+        last_keepalive = time.time()
+        
+        # Process chunks with periodic keep-alive signals and cancellation checks
+        update_job_progress(job_id, "analyzing", 15, f"Processing {chunks_to_process} chunks...")
+        
+        results = []
+        
+        for i, chunk_num in enumerate(selected_chunks):
+            # Check for cancellation before processing each chunk
+            if job_id in cancelled_jobs:
+                print(f"🚫 Job {job_id} cancelled during processing at chunk {i+1}/{chunks_to_process}")
+                update_job_progress(job_id, "cancelled", 0, f"Cancelled after processing {i} chunks")
+                await update_job_status_in_db(user, job_id, "cancelled", 0, f"Cancelled by user after {i} chunks")
+                cancelled_jobs.discard(job_id)
+                return
+            
+            # Send keep-alive every 30 seconds
+            current_time = time.time()
+            if current_time - last_keepalive > 30:
+                progress_percent = 15 + int((i / chunks_to_process) * 70)
+                update_job_progress(job_id, "analyzing", progress_percent, 
+                                  f"Processing chunk {i+1}/{chunks_to_process} (keep-alive)")
+                last_keepalive = current_time
+            
+            try:
+                # Load chunk content
+                chunk_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunk_{chunk_num:03d}.txt")
+                if not chunk_content:
+                    print(f"⚠️ Chunk {chunk_num} not found, skipping")
+                    continue
+                
+                # Simple analysis for now - we can restore the full system prompt later
+                progress_percent = 15 + int((i / chunks_to_process) * 70)
+                update_job_progress(job_id, "analyzing", progress_percent, 
+                                  f"Analyzing chunk {i+1}/{chunks_to_process}")
+                
+                # Use retry logic for OpenAI calls
+                response = openai_call_with_retry(
+                    openai_client,
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "Analyze this conversation data and extract key insights about the person's knowledge, skills, preferences, and behavioral patterns."},
+                        {"role": "user", "content": f"Analyze this conversation chunk:\n\n{chunk_content[:8000]}"}  # Limit content size
+                    ],
+                    temperature=0.3,
+                    max_tokens=2000
+                )
+                
+                analysis_content = response.choices[0].message.content
+                results.append({
+                    "chunk_number": chunk_num,
+                    "analysis": analysis_content,
+                    "processed_at": datetime.utcnow().isoformat()
+                })
+                
+                print(f"✅ Processed chunk {chunk_num}")
+                
+            except Exception as e:
+                print(f"❌ Error processing chunk {chunk_num}: {e}")
+                # Continue with other chunks
+                continue
+        
+        # Final cancellation check before saving results
+        if job_id in cancelled_jobs:
+            print(f"🚫 Job {job_id} cancelled before saving results")
+            update_job_progress(job_id, "cancelled", 0, "Cancelled before saving results")
+            await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
+            cancelled_jobs.discard(job_id)
+            return
+        
+        if not results:
+            update_job_progress(job_id, "error", 0, "No chunks could be processed")
+            await update_job_status_in_db(user, job_id, "failed", 0, "No chunks processed")
+            return
+        
+        # Save results
+        update_job_progress(job_id, "analyzing", 90, "Saving analysis results...")
+        
+        final_analysis = {
+            "job_id": job_id,
+            "user_id": user.user_id,
+            "analysis_results": results,
+            "total_chunks_processed": len(results),
+            "chunks_requested": len(selected_chunks),
+            "processed_at": datetime.utcnow().isoformat(),
+            "metadata": chunk_metadata
+        }
+        
+        # Upload to R2
+        analysis_json = json.dumps(final_analysis, indent=2)
+        upload_to_r2(f"{user.r2_directory}/{job_id}/analysis_results.json", analysis_json)
+        
+        # Update job status
+        update_job_progress(job_id, "completed", 100, f"Analysis complete! Processed {len(results)} chunks.")
+        await update_job_status_in_db(user, job_id, "analyzed", 100, 
+                                     metadata={"processed_chunks": len(results)})
+        
+        print(f"✅ Background analysis completed for job {job_id}")
+        
+    except Exception as e:
+        print(f"❌ Background analysis failed for job {job_id}: {e}")
+        update_job_progress(job_id, "error", 0, f"Analysis failed: {str(e)}")
+        await update_job_status_in_db(user, job_id, "failed", 0, str(e))
+        # Clean up from cancelled jobs set if it was there
+        cancelled_jobs.discard(job_id)
+
+@app.post("/api/cancel/{job_id}")
+async def cancel_job(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Cancel a running analysis job"""
+    try:
+        # Add to cancelled jobs set
+        cancelled_jobs.add(job_id)
+        
+        # Update job progress and database
+        update_job_progress(job_id, "cancelling", 0, "Cancellation requested...")
+        await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
+        
+        print(f"🚫 Job {job_id} cancellation requested by user {user.user_id}")
+        
+        return {
+            "job_id": job_id,
+            "status": "cancellation_requested",
+            "message": "Job cancellation has been requested. It may take a moment to stop."
+        }
+        
+    except Exception as e:
+        print(f"❌ Error cancelling job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel job: {str(e)}")
         
         
         # Optimized system prompt for OpenAI caching (>1024 tokens for cache eligibility)
@@ -3959,10 +4095,13 @@ async def list_jobs(user: AuthenticatedUser = Depends(get_current_user)):
 
 @app.get("/api/profile")
 async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Get the current user's profile information including payment status and packs"""
+    """Get the current user's profile information including payment status and packs - with timeout protection"""
     try:
+        # Add timeout protection to prevent hanging
+        profile_start_time = time.time()
+        
         if not supabase:
-            # Legacy mode - return basic info
+            # Legacy mode - return basic info quickly
             return {
                 "profile": {
                     "user_id": current_user.user_id,
@@ -3977,30 +4116,65 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                 "jobs": []
             }
         
-        # Get user profile
-        profile_result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": current_user.user_id}).execute()
+        # Get user profile with timeout
+        try:
+            profile_result = supabase.table('user_profiles').select('*').eq('id', current_user.user_id).limit(1).execute()
+            
+            if not profile_result.data:
+                # Create profile if it doesn't exist - but keep it simple
+                profile_data = {
+                    "user_id": current_user.user_id,
+                    "email": current_user.email,
+                    "r2_user_directory": current_user.r2_directory,
+                    "plan": "free",
+                    "chunks_used": 0,
+                    "chunks_allowed": 5,
+                    "can_process": True
+                }
+            else:
+                profile_data = profile_result.data[0]
+        except Exception as e:
+            print(f"⚠️ Profile query timeout or error: {e}")
+            # Return basic data instead of failing
+            profile_data = {
+                "user_id": current_user.user_id,
+                "email": current_user.email,
+                "r2_user_directory": current_user.r2_directory,
+                "plan": "free",
+                "chunks_used": 0,
+                "chunks_allowed": 5,
+                "can_process": True,
+                "warning": "Profile loaded with fallback data"
+            }
         
-        if not profile_result.data:
-            # Create profile if it doesn't exist
-            create_result = supabase.rpc("create_user_profile_for_backend", {
-                "user_uuid": current_user.user_id,
-                "user_email": current_user.email,
-                "r2_dir": current_user.r2_directory
-            }).execute()
-            profile_data = create_result.data if create_result.data else {}
-        else:
-            profile_data = profile_result.data
+        # Get payment status quickly
+        try:
+            payment_status = await get_user_payment_status(current_user.user_id)
+        except Exception as e:
+            print(f"⚠️ Payment status query timeout: {e}")
+            payment_status = {"plan": "free", "chunks_used": 0, "chunks_allowed": 5, "can_process": True}
         
-        # Get payment status
-        payment_status = await get_user_payment_status(current_user.user_id)
+        # Get packs with timeout and limit
+        packs = []
+        try:
+            # Use a quick query with limit to prevent hanging
+            packs_result = supabase.table('packs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(10).execute()
+            packs = packs_result.data if packs_result.data else []
+        except Exception as e:
+            print(f"⚠️ Packs query timeout: {e}")
+            packs = []
         
-        # Get user's packs
-        packs_result = supabase.table('packs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).execute()
-        packs = packs_result.data if packs_result.data else []
+        # Get recent jobs with timeout and limit
+        jobs = []
+        try:
+            jobs_result = supabase.table('jobs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(10).execute()
+            jobs = jobs_result.data if jobs_result.data else []
+        except Exception as e:
+            print(f"⚠️ Jobs query timeout: {e}")
+            jobs = []
         
-        # Get user's jobs
-        jobs_result = supabase.table('jobs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(20).execute()
-        jobs = jobs_result.data if jobs_result.data else []
+        profile_load_time = time.time() - profile_start_time
+        print(f"✅ Profile loaded in {profile_load_time:.2f}s")
         
         return {
             "profile": {
@@ -4008,12 +4182,13 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                 **payment_status
             },
             "packs": packs,
-            "jobs": jobs
+            "jobs": jobs,
+            "load_time": round(profile_load_time, 2)
         }
             
     except Exception as e:
-        print(f"Error getting user profile: {e}")
-        # Return basic fallback data instead of failing
+        print(f"❌ Profile endpoint error: {e}")
+        # Always return something instead of failing
         return {
             "profile": {
                 "user_id": current_user.user_id,

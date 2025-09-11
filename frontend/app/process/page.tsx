@@ -55,6 +55,7 @@ export default function ProcessPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showFileTypes, setShowFileTypes] = useState(false);
   const [conversationUrl, setConversationUrl] = useState<string>('');
+  const [isCancelling, setIsCancelling] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -1723,6 +1724,47 @@ export default function ProcessPage() {
     }
   };
 
+  const handleCancel = async () => {
+    if (!currentJobId || isCancelling) return;
+    
+    setIsCancelling(true);
+    addLog('Requesting job cancellation...');
+    
+    try {
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/cancel/${currentJobId}`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        addLog('Cancellation requested. Stopping analysis...');
+        
+        // Stop polling
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+        
+        // Reset state
+        setIsProcessing(false);
+        setCurrentStep('chunked');
+        setProgress(0);
+        setAnalysisStartTime(null);
+        setIsCancelling(false);
+        
+        addLog('Analysis cancelled successfully');
+        showNotification('info', 'Analysis has been cancelled');
+      } else {
+        throw new Error('Failed to cancel job');
+      }
+    } catch (error) {
+      console.error('Cancel failed:', error);
+      addLog(`Cancel failed: ${error}`);
+      setIsCancelling(false);
+      showNotification('warning', 'Failed to cancel. The job may still be running.');
+    }
+  };
+
   const handleChunkToggle = (index: number) => {
     setSelectedChunks(prev => {
       const newSet = new Set(prev);
@@ -2515,8 +2557,15 @@ export default function ProcessPage() {
             {/* UCP Creation Progress */}
             {currentStep === 'analyzing' && (
               <div className="bg-bg-card border border-border-primary rounded-lg p-6">
-                <div className="flex items-center space-x-3 mb-4">
+                <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-text-primary">Creating Universal Context Pack</h3>
+                  <button
+                    onClick={handleCancel}
+                    disabled={isCancelling}
+                    className="px-3 py-1 text-sm border border-red-600 text-red-400 rounded hover:bg-red-600/10 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCancelling ? 'Cancelling...' : 'Cancel'}
+                  </button>
                 </div>
                 
                 <div className="space-y-3">
