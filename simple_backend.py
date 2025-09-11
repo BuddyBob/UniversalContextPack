@@ -795,7 +795,7 @@ def download_from_r2(key: str, silent_404: bool = False) -> str:
         
         print(f"R2 response status: {response.status_code}")
         if response.status_code == 200:
-            print(f"✅ Successfully downloaded from R2 with SSL verification: {key} ({len(response.text)} chars)")
+            # Removed success message - too verbose
             return response.text
         elif response.status_code == 404 and silent_404:
             # Silently return None for expected 404s (like new process.log files)
@@ -2379,7 +2379,7 @@ The conversation data you will analyze follows this message. Provide your compre
                         {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}  # Full content, no truncation
                     ],
                     temperature=0.3,  # Consistent analysis
-                    max_tokens=15000,  # Allow comprehensive analysis
+                    max_completion_tokens=15000,  # Allow comprehensive analysis
                     timeout=120  # 2 minute timeout per chunk
                 )
                 chunk_duration = time.time() - chunk_start_time
