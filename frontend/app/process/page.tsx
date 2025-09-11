@@ -827,8 +827,8 @@ export default function ProcessPage() {
           setConnectionStatus('connecting');
           try {
             // Use longer timeout during analysis periods to account for server load
-            const healthTimeout = currentStep === 'analyzing' ? 85000 : 20000; // 45s during analysis, 20s otherwise
-            
+            const healthTimeout = currentStep === 'analyzing' ? 85000 : 20000; // 85s during analysis, 20s otherwise
+
             const healthResponse = await fetch(
               `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/health`,
               {

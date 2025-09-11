@@ -2334,11 +2334,11 @@ The conversation data you will analyze follows this message. Provide your compre
         
         # Adaptive batch size for optimal performance and rate limit compliance
         if chunks_to_process <= 5:
-            batch_size = 2  # Conservative for small jobs
+            batch_size = 1  # Sequential processing to prevent Railway server overload
         elif chunks_to_process <= 15:
-            batch_size = 3  # Optimal for medium jobs  
+            batch_size = 1  # Sequential processing to prevent Railway server overload  
         else:
-            batch_size = 4  # Larger batches for big jobs (stay under OpenAI rate limits)
+            batch_size = 1  # Sequential processing to prevent Railway server overload
         
         print(f"🚀 Using parallel processing with batch size {batch_size} for {chunks_to_process} chunks")
         
@@ -2468,7 +2468,9 @@ The conversation data you will analyze follows this message. Provide your compre
             batch_chunks = selected_chunks[batch_start:batch_end]
             batch_num = batch_start//batch_size + 1
             
-            print(f"🔄 STARTING BATCH {batch_num}/{total_batches}: Processing chunks {batch_chunks}")
+            print(f"� ===== STARTING BATCH {batch_num}/{total_batches} =====")
+            print(f"�🔄 STARTING BATCH {batch_num}/{total_batches}: Processing chunks {batch_chunks}")
+            print(f"🚀 ===== BATCH {batch_num} INITIATED =====")
             update_job_progress(job_id, "analyzing", 15 + int((batch_start / chunks_to_process) * 70), 
                               f"Batch {batch_num}/{total_batches}: Starting chunks {batch_chunks}")
             
@@ -2490,6 +2492,7 @@ The conversation data you will analyze follows this message. Provide your compre
                     timeout=300  # 5 minute timeout per batch
                 )
                 batch_duration = time.time() - batch_start_time
+                print(f"🎉 ===== BATCH {batch_num}/{total_batches} COMPLETED ===== Duration: {batch_duration:.1f}s =====")
                 print(f"✅ Batch {batch_num} completed in {batch_duration:.1f} seconds")
             except asyncio.TimeoutError:
                 batch_duration = time.time() - batch_start_time
@@ -2537,7 +2540,9 @@ The conversation data you will analyze follows this message. Provide your compre
                         if "cost" in result:
                             total_cost += result["cost"]
             
+            print(f"🎯 ===== BATCH {batch_num} SUMMARY =====")
             print(f"📊 Batch {batch_num} summary: {successful_in_batch} successful, {failed_in_batch} failed")
+            print(f"🎯 ===== END BATCH {batch_num} SUMMARY =====")
             
             # Update progress after each batch
             progress_percent = 15 + int((batch_end / chunks_to_process) * 70)
