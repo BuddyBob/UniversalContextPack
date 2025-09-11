@@ -46,7 +46,7 @@ export default function PricingPageClient() {
 
   // Calculate pricing with updated rates
   const calculatePrice = (credits: number) => {
-    if (isUnlimitedSelected) return 9.99 // Unlimited for $9.99
+    if (isUnlimitedSelected) return 4.99 // Unlimited for $4.99
     
     let basePrice = 0.10 // Base price per credit ($0.10)
     
@@ -243,7 +243,7 @@ export default function PricingPageClient() {
                 <div className="flex items-center">
                   <span className="font-semibold">Unlimited</span>
                 </div>
-                <div className={`text-xs mt-0.5 ${isUnlimitedSelected ? 'text-gray-300' : 'text-gray-600'}`}>One-time $9.99</div>
+                <div className={`text-xs mt-0.5 ${isUnlimitedSelected ? 'text-gray-300' : 'text-gray-600'}`}>One-time $4.99</div>
               </button>
             </div>
           </div>
@@ -266,7 +266,7 @@ export default function PricingPageClient() {
                   Process unlimited conversations with priority support
                 </p>
                 <div className="mb-8">
-                  <span className="text-4xl font-semibold text-gray-900">$9.99</span>
+                  <span className="text-4xl font-semibold text-gray-900">$4.99</span>
                   <span className="text-gray-600 ml-2">one-time</span>
                 </div>
                 <button
