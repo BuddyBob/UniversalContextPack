@@ -578,7 +578,7 @@ def get_openai_client(api_key: str = None) -> OpenAI:
 
 def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
     """
-    Make OpenAI API calls with retry logic for connection issues
+    Make OpenAI API calls with retry logic for connection issues and quota handling
     """
     import time
     from openai import OpenAI
@@ -589,11 +589,16 @@ def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
             return response
         except Exception as e:
             error_str = str(e).lower()
+            
+            # Don't retry quota/billing errors - fail immediately
+            if any(term in error_str for term in ['quota', 'insufficient_quota', 'billing', 'plan']):
+                raise e
+            
+            # Retry connection/network errors
             if attempt < max_retries - 1 and any(term in error_str for term in [
                 'connection', 'timeout', 'network', 'ssl', 'socket', 'read timed out'
             ]):
                 wait_time = (attempt + 1) * 2  # Exponential backoff: 2, 4, 6 seconds
-                print(f"🔄 OpenAI API connection issue (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
                 time.sleep(wait_time)
                 continue
             else:
@@ -2272,13 +2277,11 @@ cancelled_jobs = set()
 async def process_analysis_background(job_id: str, user: AuthenticatedUser, selected_chunks: List[int], payment_status: dict, chunk_metadata: dict):
     """Background task for processing analysis with optimized parallel processing and caching."""
     try:
-        print(f"🔄 Background analysis started for job {job_id}")
         chunks_to_process = len(selected_chunks)
         total_chunks = chunk_metadata["total_chunks"]
         
         # Check if job was cancelled before starting
         if job_id in cancelled_jobs:
-            print(f"🚫 Job {job_id} was cancelled before processing started")
             update_job_progress(job_id, "cancelled", 0, "Job was cancelled")
             await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
             cancelled_jobs.discard(job_id)
@@ -2433,8 +2436,13 @@ The conversation data you will analyze follows this message. Provide your compre
                 
             except Exception as e:
                 print(f"❌ Error processing chunk {chunk_num}: {e}")
-                import traceback
-                traceback.print_exc()
+                # Handle OpenAI quota errors specifically
+                if "quota" in str(e).lower() or "429" in str(e) or "insufficient_quota" in str(e):
+                    return {
+                        "error": "quota_exceeded", 
+                        "chunk_num": chunk_num,
+                        "message": "OpenAI API quota exceeded. Please check your billing."
+                    }
                 return {"error": str(e), "chunk_num": chunk_num}
         
         # Process chunks in optimized parallel batches
@@ -2444,12 +2452,11 @@ The conversation data you will analyze follows this message. Provide your compre
         for batch_start in range(0, chunks_to_process, batch_size):
             # Check for cancellation before each batch
             if job_id in cancelled_jobs:
-                print(f"🚫 Job {job_id} cancelled during batch processing")
                 update_job_progress(job_id, "cancelled", 0, "Analysis cancelled by user")
                 await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
                 cancelled_jobs.discard(job_id)
                 return
-            
+                
             batch_end = min(batch_start + batch_size, chunks_to_process)
             batch_chunks = selected_chunks[batch_start:batch_end]
             
@@ -2484,10 +2491,13 @@ The conversation data you will analyze follows this message. Provide your compre
                 
                 if isinstance(result, dict):
                     if result.get("cancelled"):
-                        print(f"🚫 Chunk {result['chunk_num']} cancelled")
+                        return
+                    elif result.get("error") == "quota_exceeded":
+                        # Immediately stop processing on quota error
+                        update_job_progress(job_id, "error", 0, "OpenAI API quota exceeded. Please check your billing.")
+                        await update_job_status_in_db(user, job_id, "failed", 0, "API quota exceeded")
                         return
                     elif result.get("error"):
-                        print(f"❌ Chunk {result['chunk_num']} failed: {result['error']}")
                         failed_chunks.append(result)
                     else:
                         results.append(result)

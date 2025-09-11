@@ -1765,6 +1765,35 @@ export default function ProcessPage() {
     }
   };
 
+  const handleReset = async () => {
+    // Cancel any ongoing AI processing first
+    if (currentJobId && !isCancelling) {
+      await handleCancel();
+    }
+    
+    // Stop any polling
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+    
+    // Reset all state
+    if (conversationUrl) {
+      setConversationUrl('');
+    } else {
+      setFile(null);
+    }
+    setCurrentStep('upload');
+    setTimeEstimate(null);
+    setCostEstimate(null);
+    setIsProcessing(false);
+    setProgress(0);
+    setAnalysisStartTime(null);
+    setCurrentJobId(null);
+    
+    addLog('Reset complete - all processing cancelled');
+  };
+
   const handleChunkToggle = (index: number) => {
     setSelectedChunks(prev => {
       const newSet = new Set(prev);
@@ -2375,16 +2404,7 @@ export default function ProcessPage() {
                     </button>
                     
                     <button
-                      onClick={() => {
-                        if (conversationUrl) {
-                          setConversationUrl('');
-                        } else {
-                          setFile(null);
-                        }
-                        setCurrentStep('upload');
-                        setTimeEstimate(null);
-                        setCostEstimate(null);
-                      }}
+                      onClick={handleReset}
                       className="px-6 py-4 border border-gray-600 text-gray-400 hover:text-white hover:border-gray-500 rounded-xl font-medium transition-all flex items-center justify-center space-x-2"
                     >
                       <X className="h-5 w-5" />
