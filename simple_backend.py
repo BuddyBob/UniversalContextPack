@@ -2617,6 +2617,29 @@ The conversation data you will analyze follows this message. Provide your compre
         await update_job_status_in_db(user, job_id, "analyzed", 100, 
                                      metadata={"processed_chunks": len(results)})
         
+        # Create pack record in Supabase so it shows up in /api/packs
+        try:
+            pack_name = f"UCP-{job_id[:8]}"
+            pack_record = await create_pack_in_db(
+                user=user,
+                job_id=job_id,
+                pack_name=pack_name,
+                r2_pack_path=f"{user.r2_directory}/{job_id}/",
+                extraction_stats=chunk_metadata,
+                analysis_stats={
+                    "total_input_tokens": total_input_tokens,
+                    "total_output_tokens": total_output_tokens,
+                    "total_cost": total_cost,
+                    "processed_chunks": len(results),
+                    "success_rate": success_rate,
+                    "cache_hit_rate": cache_hit_rate
+                }
+            )
+            print(f"📦 Pack record created in Supabase for job {job_id}")
+        except Exception as pack_error:
+            print(f"⚠️ Failed to create pack record for job {job_id}: {pack_error}")
+            # Don't fail the entire analysis if pack creation fails
+        
         print(f"✅ Optimized background analysis completed for job {job_id}")
         print(f"📊 Performance: {len(results)}/{chunks_to_process} chunks ({success_rate:.1f}% success)")
         print(f"💰 Cost: ${total_cost:.4f} with {cache_hit_rate:.1f}% cache hit rate (${cost_savings:.4f} saved)")
@@ -4416,6 +4439,133 @@ async def get_cache_performance(job_id: str, user: AuthenticatedUser = Depends(g
 async def stripe_webhook_alias(request: Request):
     """Alias endpoint for Stripe webhooks (matches Stripe dashboard configuration)"""
     return await stripe_webhook(request)
+
+@app.post("/api/migrate-missing-packs")
+async def migrate_missing_packs(user: AuthenticatedUser = Depends(get_current_user)):
+    """Migration endpoint to create pack records for completed jobs that don't have them"""
+    try:
+        migrated_jobs = []
+        failed_jobs = []
+        
+        # Check for completed jobs in R2 that have analysis_results.json or summary.json
+        try:
+            # Use R2 API to list objects in the user's directory
+            import boto3
+            from botocore.config import Config
+            
+            # Initialize R2 client
+            session = boto3.Session()
+            r2_client = session.client(
+                's3',
+                endpoint_url=R2_ENDPOINT,
+                aws_access_key_id=R2_ACCESS_KEY,
+                aws_secret_access_key=R2_SECRET_KEY,
+                config=Config(signature_version='s3v4')
+            )
+            
+            # List objects with user's directory prefix
+            prefix = f"{user.r2_directory.lstrip('/')}/"
+            response = r2_client.list_objects_v2(
+                Bucket=R2_BUCKET,
+                Prefix=prefix
+            )
+            
+            if 'Contents' not in response:
+                return {"message": "No objects found in user directory", "migrated": [], "failed": []}
+            
+            # Group files by job_id
+            jobs = {}
+            for obj in response['Contents']:
+                key = obj['Key']
+                # Extract job_id from path: user_xxx/job_id/file.json
+                path_parts = key.split('/')
+                if len(path_parts) >= 3:
+                    job_id = path_parts[-2]  # Second to last part is job_id
+                    filename = path_parts[-1]  # Last part is filename
+                    
+                    if job_id not in jobs:
+                        jobs[job_id] = []
+                    jobs[job_id].append(filename)
+            
+            # Check each job for completion and missing pack record
+            for job_id, files in jobs.items():
+                # Skip if not a completed job (must have analysis_results.json or summary.json)
+                if not ('analysis_results.json' in files or 'summary.json' in files):
+                    continue
+                
+                try:
+                    # Check if pack record already exists in Supabase
+                    if supabase:
+                        existing_pack = supabase.table("packs").select("*").eq("pack_job_id", job_id).execute()
+                        if existing_pack.data:
+                            continue  # Pack record already exists, skip
+                    
+                    # Try to get analysis data
+                    analysis_stats = {}
+                    extraction_stats = {}
+                    
+                    # Try to load analysis results or summary
+                    analysis_content = download_from_r2(f"{user.r2_directory}/{job_id}/analysis_results.json", silent_404=True)
+                    if not analysis_content:
+                        analysis_content = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json", silent_404=True)
+                    
+                    if analysis_content:
+                        try:
+                            analysis_data = json.loads(analysis_content)
+                            performance_metrics = analysis_data.get("performance_metrics", {})
+                            analysis_stats = {
+                                "total_input_tokens": performance_metrics.get("total_input_tokens", 0),
+                                "total_output_tokens": performance_metrics.get("total_output_tokens", 0),
+                                "total_cost": performance_metrics.get("total_cost", 0),
+                                "processed_chunks": len(analysis_data.get("results", [])),
+                                "cache_hit_rate": performance_metrics.get("cache_hit_rate", 0)
+                            }
+                        except:
+                            pass
+                    
+                    # Try to load chunk metadata
+                    chunks_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", silent_404=True)
+                    if chunks_content:
+                        try:
+                            chunks_data = json.loads(chunks_content)
+                            extraction_stats = {
+                                "total_chunks": chunks_data.get("total_chunks", 0),
+                                "processed_chunks": len(chunks_data.get("chunks", []))
+                            }
+                        except:
+                            pass
+                    
+                    # Create pack record
+                    pack_name = f"UCP-{job_id[:8]}"
+                    pack_record = await create_pack_in_db(
+                        user=user,
+                        job_id=job_id,
+                        pack_name=pack_name,
+                        r2_pack_path=f"{user.r2_directory}/{job_id}/",
+                        extraction_stats=extraction_stats,
+                        analysis_stats=analysis_stats
+                    )
+                    
+                    if pack_record:
+                        migrated_jobs.append(job_id)
+                        print(f"✅ Created pack record for job {job_id}")
+                    
+                except Exception as e:
+                    failed_jobs.append({"job_id": job_id, "error": str(e)})
+                    print(f"❌ Failed to create pack record for job {job_id}: {e}")
+        
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to list R2 objects: {str(e)}")
+        
+        return {
+            "message": f"Pack migration completed. {len(migrated_jobs)} pack records created, {len(failed_jobs)} failed.",
+            "migrated": migrated_jobs,
+            "failed": failed_jobs
+        }
+        
+    except Exception as e:
+        print(f"Pack migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Pack migration failed: {str(e)}")
 
 @app.post("/api/migrate-missing-summaries")
 async def migrate_missing_summaries(user: AuthenticatedUser = Depends(get_current_user)):
