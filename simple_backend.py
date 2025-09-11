@@ -2270,7 +2270,7 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
 cancelled_jobs = set()
 
 async def process_analysis_background(job_id: str, user: AuthenticatedUser, selected_chunks: List[int], payment_status: dict, chunk_metadata: dict):
-    """Background task for processing analysis with progress updates and cancellation support."""
+    """Background task for processing analysis with optimized parallel processing and caching."""
     try:
         print(f"🔄 Background analysis started for job {job_id}")
         chunks_to_process = len(selected_chunks)
@@ -2291,68 +2291,231 @@ async def process_analysis_background(job_id: str, user: AuthenticatedUser, sele
         update_job_progress(job_id, "analyzing", 10, "Initializing AI client...")
         openai_client = get_openai_client()
         
+        # Optimized system prompt for caching (>1024 tokens for cache eligibility)
+        system_prompt = """You are an expert data analyst specializing in building Universal Context Packs (UCPs) from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
+
+ANALYSIS FRAMEWORK:
+Provide extremely detailed analysis in these six primary categories:
+
+1. PERSONAL PROFILE ANALYSIS
+   - Demographics, preferences, goals, values, life context, personality traits, health
+
+2. BEHAVIORAL PATTERNS DISCOVERY  
+   - Communication style, problem-solving approach, learning patterns, decision-making, stress response, work habits
+
+3. KNOWLEDGE DOMAINS MAPPING
+   - Technical skills, professional expertise, academic background, hobby knowledge, soft skills
+
+4. PROJECT PATTERNS IDENTIFICATION
+   - Workflow preferences, tool usage, collaboration style, quality standards, resource management
+
+5. TIMELINE EVOLUTION TRACKING
+   - Skill development, career milestones, interest evolution, goal achievement over time
+
+6. INTERACTION INSIGHTS ANALYSIS
+   - Communication preferences, response styles, engagement patterns, feedback reception
+
+EXTRACTION REQUIREMENTS:
+- Extract EVERY unique fact, preference, skill, and behavioral pattern with meticulous attention to detail
+- Cross-reference information across categories for comprehensive understanding
+- Preserve temporal context and evolution indicators
+- Look for recurring themes and developmental patterns
+- Identify unique characteristics that distinguish this individual
+
+OUTPUT FORMAT:
+Structure your analysis clearly with detailed subsections for each category. Use bullet points for discrete facts and longer paragraphs for complex patterns. Always cite specific examples from the conversation data to support your analysis.
+
+The conversation data you will analyze follows this message. Provide your comprehensive Universal Context Pack analysis."""
+        
+        # Adaptive batch size for optimal performance and rate limit compliance
+        if chunks_to_process <= 5:
+            batch_size = 2  # Conservative for small jobs
+        elif chunks_to_process <= 15:
+            batch_size = 3  # Optimal for medium jobs  
+        else:
+            batch_size = 4  # Larger batches for big jobs (stay under OpenAI rate limits)
+        
+        print(f"🚀 Using parallel processing with batch size {batch_size} for {chunks_to_process} chunks")
+        
         # Send keep-alive every 30 seconds to prevent timeouts
         last_keepalive = time.time()
         
-        # Process chunks with periodic keep-alive signals and cancellation checks
-        update_job_progress(job_id, "analyzing", 15, f"Processing {chunks_to_process} chunks...")
-        
         results = []
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cached_tokens = 0
+        total_cost = 0.0
+        failed_chunks = []
         
-        for i, chunk_num in enumerate(selected_chunks):
-            # Check for cancellation before processing each chunk
+        async def process_single_chunk(chunk_num: int, idx: int, total_chunks: int):
+            """Process a single chunk with full error handling and performance optimization"""
+            try:
+                # Check for cancellation before processing each chunk
+                if job_id in cancelled_jobs:
+                    return {"cancelled": True, "chunk_num": chunk_num}
+                
+                print(f"🔄 Processing chunk {chunk_num} ({idx+1}/{total_chunks}) for job {job_id}")
+                chunk_key = f"{user.r2_directory}/{job_id}/chunk_{chunk_num:03d}.txt"
+                
+                chunk_content = download_from_r2(chunk_key)
+                
+                if not chunk_content:
+                    print(f"❌ Chunk {chunk_num} content not found at {chunk_key}")
+                    return {"error": f"Chunk {chunk_num} not found", "chunk_num": chunk_num}
+                
+                print(f"✅ Chunk {chunk_num} loaded, size: {len(chunk_content)} chars")
+                
+                # Process with OpenAI using full content (no truncation) and optimized parameters
+                print(f"🤖 Sending chunk {chunk_num} to OpenAI (model: gpt-4o-mini)")
+                ai_response = openai_call_with_retry(
+                    openai_client,
+                    model="gpt-4o-mini",  # Reliable and cost-effective
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}  # Full content, no truncation
+                    ],
+                    temperature=0.3,  # Consistent analysis
+                    max_tokens=15000,  # Allow comprehensive analysis
+                    timeout=120  # 2 minute timeout per chunk
+                )
+                
+                print(f"✅ OpenAI response received for chunk {chunk_num}")
+                
+                # Extract usage data for performance tracking
+                usage = ai_response.usage
+                input_tokens = usage.prompt_tokens
+                output_tokens = usage.completion_tokens
+                
+                # Try to get cached token info (may not be available in all models)
+                cached_tokens = 0
+                try:
+                    if hasattr(usage, 'prompt_tokens_details') and hasattr(usage.prompt_tokens_details, 'cached_tokens'):
+                        cached_tokens = usage.prompt_tokens_details.cached_tokens
+                except:
+                    pass
+                
+                cache_hit_rate = (cached_tokens / input_tokens * 100) if input_tokens > 0 else 0
+                
+                print(f"📊 Chunk {chunk_num} - Tokens: {output_tokens} output, {input_tokens} input")
+                if cached_tokens > 0:
+                    print(f"🚀 Cache hit! {cached_tokens}/{input_tokens} tokens cached ({cache_hit_rate:.1f}%)")
+                else:
+                    print(f"💾 No cache hit for chunk {chunk_num}")
+                
+                # Calculate cost (gpt-4o-mini pricing)
+                non_cached_input_tokens = input_tokens - cached_tokens
+                input_cost = (non_cached_input_tokens / 1_000_000) * 0.150  # $0.150 per 1M input tokens
+                cached_cost = (cached_tokens / 1_000_000) * 0.0375  # 75% discount on cached tokens
+                output_cost = (output_tokens / 1_000_000) * 0.600  # $0.600 per 1M output tokens
+                chunk_cost = input_cost + cached_cost + output_cost
+                
+                # Save individual chunk result to R2 for debugging and caching
+                chunk_result = {
+                    "chunk_number": chunk_num,
+                    "analysis": ai_response.choices[0].message.content,
+                    "tokens": {
+                        "input": input_tokens,
+                        "output": output_tokens,
+                        "cached": cached_tokens,
+                        "cache_hit_rate": round(cache_hit_rate, 1)
+                    },
+                    "cost": round(chunk_cost, 6),
+                    "processed_at": datetime.utcnow().isoformat()
+                }
+                
+                # Save individual result to R2 for incremental progress
+                result_key = f"{user.r2_directory}/{job_id}/result_{chunk_num:03d}.json"
+                upload_to_r2(result_key, json.dumps(chunk_result, indent=2))
+                print(f"💾 Saving result for chunk {chunk_num} to R2")
+                
+                print(f"✅ Chunk {chunk_num} processing complete")
+                return chunk_result
+                
+            except Exception as e:
+                print(f"❌ Error processing chunk {chunk_num}: {e}")
+                import traceback
+                traceback.print_exc()
+                return {"error": str(e), "chunk_num": chunk_num}
+        
+        # Process chunks in optimized parallel batches
+        update_job_progress(job_id, "analyzing", 15, f"Processing {chunks_to_process} chunks in parallel batches of {batch_size}...")
+        
+        # Split chunks into batches for parallel processing
+        for batch_start in range(0, chunks_to_process, batch_size):
+            # Check for cancellation before each batch
             if job_id in cancelled_jobs:
-                print(f"🚫 Job {job_id} cancelled during processing at chunk {i+1}/{chunks_to_process}")
-                update_job_progress(job_id, "cancelled", 0, f"Cancelled after processing {i} chunks")
-                await update_job_status_in_db(user, job_id, "cancelled", 0, f"Cancelled by user after {i} chunks")
+                print(f"🚫 Job {job_id} cancelled during batch processing")
+                update_job_progress(job_id, "cancelled", 0, "Analysis cancelled by user")
+                await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
                 cancelled_jobs.discard(job_id)
                 return
+            
+            batch_end = min(batch_start + batch_size, chunks_to_process)
+            batch_chunks = selected_chunks[batch_start:batch_end]
+            
+            print(f"🔄 Processing batch {batch_start//batch_size + 1}/{(chunks_to_process + batch_size - 1)//batch_size}: chunks {batch_chunks}")
+            
+            # Create tasks for parallel processing of this batch
+            tasks = []
+            for i, chunk_num in enumerate(batch_chunks):
+                global_idx = batch_start + i
+                task = asyncio.create_task(process_single_chunk(chunk_num, global_idx, chunks_to_process))
+                tasks.append(task)
+            
+            # Wait for all tasks in this batch to complete with timeout
+            try:
+                batch_results = await asyncio.wait_for(
+                    asyncio.gather(*tasks, return_exceptions=True),
+                    timeout=300  # 5 minute timeout per batch
+                )
+            except asyncio.TimeoutError:
+                print(f"❌ Batch {batch_start//batch_size + 1} timed out")
+                for task in tasks:
+                    task.cancel()
+                failed_chunks.extend([{"error": "Batch timeout", "chunk_num": chunk} for chunk in batch_chunks])
+                continue
+            
+            # Process batch results
+            for result in batch_results:
+                if isinstance(result, Exception):
+                    print(f"❌ Batch task failed: {result}")
+                    failed_chunks.append({"error": str(result)})
+                    continue
+                
+                if isinstance(result, dict):
+                    if result.get("cancelled"):
+                        print(f"🚫 Chunk {result['chunk_num']} cancelled")
+                        return
+                    elif result.get("error"):
+                        print(f"❌ Chunk {result['chunk_num']} failed: {result['error']}")
+                        failed_chunks.append(result)
+                    else:
+                        results.append(result)
+                        # Update performance counters
+                        if "tokens" in result:
+                            total_input_tokens += result["tokens"]["input"]
+                            total_output_tokens += result["tokens"]["output"]
+                            total_cached_tokens += result["tokens"]["cached"]
+                        if "cost" in result:
+                            total_cost += result["cost"]
+            
+            # Update progress after each batch
+            progress_percent = 15 + int((batch_end / chunks_to_process) * 70)
+            success_rate = len(results) / (len(results) + len(failed_chunks)) * 100 if (results or failed_chunks) else 100
+            update_job_progress(job_id, "analyzing", progress_percent, 
+                              f"Batch {batch_start//batch_size + 1} complete - {len(results)}/{chunks_to_process} chunks processed ({success_rate:.1f}% success)")
             
             # Send keep-alive every 30 seconds
             current_time = time.time()
             if current_time - last_keepalive > 30:
-                progress_percent = 15 + int((i / chunks_to_process) * 70)
+                cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
                 update_job_progress(job_id, "analyzing", progress_percent, 
-                                  f"Processing chunk {i+1}/{chunks_to_process} (keep-alive)")
+                                  f"Keep-alive: {len(results)}/{chunks_to_process} processed, {cache_hit_rate:.1f}% cache hit rate")
                 last_keepalive = current_time
             
-            try:
-                # Load chunk content
-                chunk_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunk_{chunk_num:03d}.txt")
-                if not chunk_content:
-                    print(f"⚠️ Chunk {chunk_num} not found, skipping")
-                    continue
-                
-                # Simple analysis for now - we can restore the full system prompt later
-                progress_percent = 15 + int((i / chunks_to_process) * 70)
-                update_job_progress(job_id, "analyzing", progress_percent, 
-                                  f"Analyzing chunk {i+1}/{chunks_to_process}")
-                
-                # Use retry logic for OpenAI calls
-                response = openai_call_with_retry(
-                    openai_client,
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "Analyze this conversation data and extract key insights about the person's knowledge, skills, preferences, and behavioral patterns."},
-                        {"role": "user", "content": f"Analyze this conversation chunk:\n\n{chunk_content[:8000]}"}  # Limit content size
-                    ],
-                    temperature=0.3,
-                    max_tokens=2000
-                )
-                
-                analysis_content = response.choices[0].message.content
-                results.append({
-                    "chunk_number": chunk_num,
-                    "analysis": analysis_content,
-                    "processed_at": datetime.utcnow().isoformat()
-                })
-                
-                print(f"✅ Processed chunk {chunk_num}")
-                
-            except Exception as e:
-                print(f"❌ Error processing chunk {chunk_num}: {e}")
-                # Continue with other chunks
-                continue
+            # Small delay between batches to respect rate limits and allow for cancellation
+            if batch_end < chunks_to_process:
+                await asyncio.sleep(2)  # 2 second delay between batches
         
         # Final cancellation check before saving results
         if job_id in cancelled_jobs:
@@ -2363,12 +2526,17 @@ async def process_analysis_background(job_id: str, user: AuthenticatedUser, sele
             return
         
         if not results:
-            update_job_progress(job_id, "error", 0, "No chunks could be processed")
-            await update_job_status_in_db(user, job_id, "failed", 0, "No chunks processed")
+            update_job_progress(job_id, "error", 0, "No chunks could be processed successfully")
+            await update_job_status_in_db(user, job_id, "failed", 0, "All chunks failed to process")
             return
         
-        # Save results
-        update_job_progress(job_id, "analyzing", 90, "Saving analysis results...")
+        # Save comprehensive final analysis with performance metrics
+        update_job_progress(job_id, "analyzing", 90, "Saving comprehensive analysis results...")
+        
+        # Calculate performance metrics
+        cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
+        cost_savings = (total_cached_tokens / 1_000_000) * 0.1125  # 75% discount savings
+        success_rate = len(results) / chunks_to_process * 100
         
         final_analysis = {
             "job_id": job_id,
@@ -2376,23 +2544,43 @@ async def process_analysis_background(job_id: str, user: AuthenticatedUser, sele
             "analysis_results": results,
             "total_chunks_processed": len(results),
             "chunks_requested": len(selected_chunks),
+            "failed_chunks": failed_chunks,
+            "performance_metrics": {
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens,
+                "total_cached_tokens": total_cached_tokens,
+                "cache_hit_rate": round(cache_hit_rate, 1),
+                "cost_savings_from_cache": round(cost_savings, 4),
+                "total_cost": round(total_cost, 4),
+                "success_rate": round(success_rate, 1),
+                "batch_size_used": batch_size,
+                "parallel_processing": True,
+                "processing_time_seconds": int(time.time() - last_keepalive)
+            },
             "processed_at": datetime.utcnow().isoformat(),
             "metadata": chunk_metadata
         }
         
-        # Upload to R2
+        # Upload comprehensive analysis to R2
         analysis_json = json.dumps(final_analysis, indent=2)
         upload_to_r2(f"{user.r2_directory}/{job_id}/analysis_results.json", analysis_json)
         
-        # Update job status
-        update_job_progress(job_id, "completed", 100, f"Analysis complete! Processed {len(results)} chunks.")
+        # Update job status with completion
+        cache_msg = f"with {cache_hit_rate:.1f}% cache hit rate" if cache_hit_rate > 0 else ""
+        update_job_progress(job_id, "completed", 100, 
+                          f"Analysis complete! Processed {len(results)}/{chunks_to_process} chunks {cache_msg}. Cost: ${total_cost:.4f}")
         await update_job_status_in_db(user, job_id, "analyzed", 100, 
                                      metadata={"processed_chunks": len(results)})
         
-        print(f"✅ Background analysis completed for job {job_id}")
+        print(f"✅ Optimized background analysis completed for job {job_id}")
+        print(f"📊 Performance: {len(results)}/{chunks_to_process} chunks ({success_rate:.1f}% success)")
+        print(f"💰 Cost: ${total_cost:.4f} with {cache_hit_rate:.1f}% cache hit rate (${cost_savings:.4f} saved)")
+        print(f"🚀 Parallel processing with batch size {batch_size} used")
         
     except Exception as e:
         print(f"❌ Background analysis failed for job {job_id}: {e}")
+        import traceback
+        traceback.print_exc()
         update_job_progress(job_id, "error", 0, f"Analysis failed: {str(e)}")
         await update_job_status_in_db(user, job_id, "failed", 0, str(e))
         # Clean up from cancelled jobs set if it was there
