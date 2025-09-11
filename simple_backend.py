@@ -2607,6 +2607,9 @@ The conversation data you will analyze follows this message. Provide your compre
         analysis_json = json.dumps(final_analysis, indent=2)
         upload_to_r2(f"{user.r2_directory}/{job_id}/analysis_results.json", analysis_json)
         
+        # ALSO create summary.json for the results endpoint to find
+        upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", analysis_json)
+        
         # Update job status with completion
         cache_msg = f"with {cache_hit_rate:.1f}% cache hit rate" if cache_hit_rate > 0 else ""
         update_job_progress(job_id, "completed", 100, 
@@ -4413,6 +4416,81 @@ async def get_cache_performance(job_id: str, user: AuthenticatedUser = Depends(g
 async def stripe_webhook_alias(request: Request):
     """Alias endpoint for Stripe webhooks (matches Stripe dashboard configuration)"""
     return await stripe_webhook(request)
+
+@app.post("/api/migrate-missing-summaries")
+async def migrate_missing_summaries(user: AuthenticatedUser = Depends(get_current_user)):
+    """Migration endpoint to fix jobs that have analysis_results.json but missing summary.json"""
+    try:
+        migrated_jobs = []
+        failed_jobs = []
+        
+        # List all files in user's R2 directory
+        try:
+            # Use R2 API to list objects in the user's directory
+            import boto3
+            from botocore.config import Config
+            
+            # Initialize R2 client
+            session = boto3.Session()
+            r2_client = session.client(
+                's3',
+                endpoint_url=R2_ENDPOINT,
+                aws_access_key_id=R2_ACCESS_KEY,
+                aws_secret_access_key=R2_SECRET_KEY,
+                config=Config(signature_version='s3v4')
+            )
+            
+            # List objects with user's directory prefix
+            prefix = f"{user.r2_directory.lstrip('/')}/"
+            response = r2_client.list_objects_v2(
+                Bucket=R2_BUCKET,
+                Prefix=prefix
+            )
+            
+            if 'Contents' not in response:
+                return {"message": "No objects found in user directory", "migrated": [], "failed": []}
+            
+            # Group files by job_id
+            jobs = {}
+            for obj in response['Contents']:
+                key = obj['Key']
+                # Extract job_id from path: user_xxx/job_id/file.json
+                path_parts = key.split('/')
+                if len(path_parts) >= 3:
+                    job_id = path_parts[-2]  # Second to last part is job_id
+                    filename = path_parts[-1]  # Last part is filename
+                    
+                    if job_id not in jobs:
+                        jobs[job_id] = []
+                    jobs[job_id].append(filename)
+            
+            # Check each job for analysis_results.json but missing summary.json
+            for job_id, files in jobs.items():
+                if 'analysis_results.json' in files and 'summary.json' not in files:
+                    try:
+                        # Download analysis_results.json
+                        analysis_content = download_from_r2(f"{user.r2_directory}/{job_id}/analysis_results.json", silent_404=True)
+                        if analysis_content:
+                            # Upload as summary.json
+                            upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", analysis_content)
+                            migrated_jobs.append(job_id)
+                            print(f"✅ Migrated job {job_id}: Created summary.json from analysis_results.json")
+                    except Exception as e:
+                        failed_jobs.append({"job_id": job_id, "error": str(e)})
+                        print(f"❌ Failed to migrate job {job_id}: {e}")
+        
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to list R2 objects: {str(e)}")
+        
+        return {
+            "message": f"Migration completed. {len(migrated_jobs)} jobs migrated, {len(failed_jobs)} failed.",
+            "migrated": migrated_jobs,
+            "failed": failed_jobs
+        }
+        
+    except Exception as e:
+        print(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 if __name__ == "__main__":
     print(" Starting Simple UCP Backend with R2 Storage - 3 Step Process...")
