@@ -2295,10 +2295,10 @@ async def process_analysis_background(job_id: str, user: AuthenticatedUser, sele
         openai_client = get_openai_client()
         
         # Optimized system prompt for caching (>1024 tokens for cache eligibility)
-        system_prompt = """You are an expert data analyst specializing in building Universal Context Packs (UCPs) from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
+        system_prompt = """You are an expert data analyst specializing create context about people, their activities, interests, projects, studies and more from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
 
 ANALYSIS FRAMEWORK:
-Provide extremely detailed analysis in these six primary categories:
+Provide detailed analysis in these six primary categories:
 
 1. PERSONAL PROFILE ANALYSIS
    - Demographics, preferences, goals, values, life context, personality traits, health
@@ -2369,10 +2369,11 @@ The conversation data you will analyze follows this message. Provide your compre
                 print(f"✅ Chunk {chunk_num} loaded, size: {len(chunk_content)} chars")
                 
                 # Process with OpenAI using full content (no truncation) and optimized parameters
-                print(f"🤖 Sending chunk {chunk_num} to OpenAI (model: gpt-4o-mini)")
+                print(f"🤖 SENDING chunk {chunk_num} to OpenAI (model: gpt-5-nano-2025-08-07) - Starting API call...")
+                chunk_start_time = time.time()
                 ai_response = openai_call_with_retry(
                     openai_client,
-                    model="gpt-4o-mini",  # Reliable and cost-effective
+                    model="gpt-5-nano-2025-08-07",  # Primary model for UCP analysis
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}  # Full content, no truncation
@@ -2381,8 +2382,9 @@ The conversation data you will analyze follows this message. Provide your compre
                     max_tokens=15000,  # Allow comprehensive analysis
                     timeout=120  # 2 minute timeout per chunk
                 )
+                chunk_duration = time.time() - chunk_start_time
                 
-                print(f"✅ OpenAI response received for chunk {chunk_num}")
+                print(f"✅ OpenAI response received for chunk {chunk_num} after {chunk_duration:.1f} seconds")
                 
                 # Extract usage data for performance tracking
                 usage = ai_response.usage
@@ -2405,11 +2407,11 @@ The conversation data you will analyze follows this message. Provide your compre
                 else:
                     print(f"💾 No cache hit for chunk {chunk_num}")
                 
-                # Calculate cost (gpt-4o-mini pricing)
+                # Calculate cost (gpt-5-nano-2025-08-07 pricing)
                 non_cached_input_tokens = input_tokens - cached_tokens
-                input_cost = (non_cached_input_tokens / 1_000_000) * 0.150  # $0.150 per 1M input tokens
-                cached_cost = (cached_tokens / 1_000_000) * 0.0375  # 75% discount on cached tokens
-                output_cost = (output_tokens / 1_000_000) * 0.600  # $0.600 per 1M output tokens
+                input_cost = (non_cached_input_tokens / 1_000_000) * 0.050  # $0.050 per 1M input tokens
+                cached_cost = (cached_tokens / 1_000_000) * 0.0125  # 75% discount on cached tokens
+                output_cost = (output_tokens / 1_000_000) * 0.400  # $0.400 per 1M output tokens
                 chunk_cost = input_cost + cached_cost + output_cost
                 
                 # Save individual chunk result to R2 for debugging and caching
@@ -2449,6 +2451,9 @@ The conversation data you will analyze follows this message. Provide your compre
         update_job_progress(job_id, "analyzing", 15, f"Processing {chunks_to_process} chunks in parallel batches of {batch_size}...")
         
         # Split chunks into batches for parallel processing
+        total_batches = (chunks_to_process + batch_size - 1) // batch_size
+        print(f"🚀 Starting batch processing: {total_batches} batches of {batch_size} chunks each")
+        
         for batch_start in range(0, chunks_to_process, batch_size):
             # Check for cancellation before each batch
             if job_id in cancelled_jobs:
@@ -2459,15 +2464,22 @@ The conversation data you will analyze follows this message. Provide your compre
                 
             batch_end = min(batch_start + batch_size, chunks_to_process)
             batch_chunks = selected_chunks[batch_start:batch_end]
+            batch_num = batch_start//batch_size + 1
             
-            print(f"🔄 Processing batch {batch_start//batch_size + 1}/{(chunks_to_process + batch_size - 1)//batch_size}: chunks {batch_chunks}")
+            print(f"🔄 STARTING BATCH {batch_num}/{total_batches}: Processing chunks {batch_chunks}")
+            update_job_progress(job_id, "analyzing", 15 + int((batch_start / chunks_to_process) * 70), 
+                              f"Batch {batch_num}/{total_batches}: Starting chunks {batch_chunks}")
             
             # Create tasks for parallel processing of this batch
             tasks = []
             for i, chunk_num in enumerate(batch_chunks):
                 global_idx = batch_start + i
+                print(f"📤 Creating task for chunk {chunk_num} (task {i+1}/{len(batch_chunks)} in batch {batch_num})")
                 task = asyncio.create_task(process_single_chunk(chunk_num, global_idx, chunks_to_process))
                 tasks.append(task)
+            
+            print(f"⏳ Waiting for batch {batch_num} with {len(tasks)} parallel tasks to complete...")
+            batch_start_time = time.time()
             
             # Wait for all tasks in this batch to complete with timeout
             try:
@@ -2475,32 +2487,46 @@ The conversation data you will analyze follows this message. Provide your compre
                     asyncio.gather(*tasks, return_exceptions=True),
                     timeout=300  # 5 minute timeout per batch
                 )
+                batch_duration = time.time() - batch_start_time
+                print(f"✅ Batch {batch_num} completed in {batch_duration:.1f} seconds")
             except asyncio.TimeoutError:
-                print(f"❌ Batch {batch_start//batch_size + 1} timed out")
+                batch_duration = time.time() - batch_start_time
+                print(f"❌ Batch {batch_num} timed out after {batch_duration:.1f} seconds")
                 for task in tasks:
                     task.cancel()
                 failed_chunks.extend([{"error": "Batch timeout", "chunk_num": chunk} for chunk in batch_chunks])
                 continue
             
             # Process batch results
-            for result in batch_results:
+            successful_in_batch = 0
+            failed_in_batch = 0
+            for i, result in enumerate(batch_results):
+                chunk_num = batch_chunks[i] if i < len(batch_chunks) else "unknown"
+                
                 if isinstance(result, Exception):
-                    print(f"❌ Batch task failed: {result}")
-                    failed_chunks.append({"error": str(result)})
+                    print(f"❌ Batch {batch_num} - Chunk {chunk_num} failed with exception: {result}")
+                    failed_chunks.append({"error": str(result), "chunk_num": chunk_num})
+                    failed_in_batch += 1
                     continue
                 
                 if isinstance(result, dict):
                     if result.get("cancelled"):
+                        print(f"🚫 Batch {batch_num} - Chunk {chunk_num} was cancelled")
                         return
                     elif result.get("error") == "quota_exceeded":
+                        print(f"💳 OpenAI quota exceeded during batch {batch_num}, chunk {chunk_num} - stopping analysis")
                         # Immediately stop processing on quota error
                         update_job_progress(job_id, "error", 0, "OpenAI API quota exceeded. Please check your billing.")
                         await update_job_status_in_db(user, job_id, "failed", 0, "API quota exceeded")
                         return
                     elif result.get("error"):
+                        print(f"❌ Batch {batch_num} - Chunk {chunk_num} failed: {result.get('error')}")
                         failed_chunks.append(result)
+                        failed_in_batch += 1
                     else:
+                        print(f"✅ Batch {batch_num} - Chunk {chunk_num} completed successfully (tokens: {result.get('tokens', {}).get('output', 0)})")
                         results.append(result)
+                        successful_in_batch += 1
                         # Update performance counters
                         if "tokens" in result:
                             total_input_tokens += result["tokens"]["input"]
@@ -2509,22 +2535,28 @@ The conversation data you will analyze follows this message. Provide your compre
                         if "cost" in result:
                             total_cost += result["cost"]
             
+            print(f"📊 Batch {batch_num} summary: {successful_in_batch} successful, {failed_in_batch} failed")
+            
             # Update progress after each batch
             progress_percent = 15 + int((batch_end / chunks_to_process) * 70)
             success_rate = len(results) / (len(results) + len(failed_chunks)) * 100 if (results or failed_chunks) else 100
             update_job_progress(job_id, "analyzing", progress_percent, 
-                              f"Batch {batch_start//batch_size + 1} complete - {len(results)}/{chunks_to_process} chunks processed ({success_rate:.1f}% success)")
+                              f"Batch {batch_num}/{total_batches} complete - {len(results)}/{chunks_to_process} chunks processed ({success_rate:.1f}% success)")
+            
+            print(f"📈 Overall progress: {len(results)}/{chunks_to_process} chunks completed ({progress_percent}%)")
             
             # Send keep-alive every 30 seconds
             current_time = time.time()
             if current_time - last_keepalive > 30:
                 cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
+                print(f"💓 Keep-alive: {len(results)}/{chunks_to_process} processed, cache hit rate: {cache_hit_rate:.1f}%")
                 update_job_progress(job_id, "analyzing", progress_percent, 
                                   f"Keep-alive: {len(results)}/{chunks_to_process} processed, {cache_hit_rate:.1f}% cache hit rate")
                 last_keepalive = current_time
             
             # Small delay between batches to respect rate limits and allow for cancellation
             if batch_end < chunks_to_process:
+                print(f"⏸️  Waiting 2 seconds before starting batch {batch_num + 1}...")
                 await asyncio.sleep(2)  # 2 second delay between batches
         
         # Final cancellation check before saving results
@@ -2618,597 +2650,7 @@ async def cancel_job(job_id: str, user: AuthenticatedUser = Depends(get_current_
     except Exception as e:
         print(f"❌ Error cancelling job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to cancel job: {str(e)}")
-        
-        
-        # Optimized system prompt for OpenAI caching (>1024 tokens for cache eligibility)
-        system_prompt = """You are an expert data analyst specializing in building Universal Context Packs (UCPs) from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
 
-ANALYSIS FRAMEWORK:
-Provide extremely detailed analysis in these six primary categories, ensuring comprehensive coverage and depth:
-
-1. PERSONAL PROFILE ANALYSIS
-   - Demographics: Age indicators, location references, cultural background, family structure
-   - Preferences: Personal likes/dislikes, lifestyle choices, values alignment, aesthetic preferences
-   - Goals & Aspirations: Short-term objectives, long-term vision, career ambitions, personal growth targets
-   - Values & Beliefs: Core principles, ethical stances, philosophical viewpoints, spiritual beliefs
-   - Life Context: Family situation, education background, social environment, geographic influences
-   - Personality Traits: Introversion/extroversion, openness, conscientiousness, emotional patterns
-   - Health & Wellness: Physical health mentions, mental health awareness, fitness preferences, dietary choices
-
-2. BEHAVIORAL PATTERNS DISCOVERY
-   - Communication Style: Formal vs casual, directness level, emotional expression, humor usage
-   - Problem-Solving Approach: Analytical vs intuitive, systematic vs creative, research methods
-   - Learning Patterns: Visual vs auditory, hands-on vs theoretical, pace preferences, retention methods
-   - Decision-Making: Risk tolerance, consultation patterns, timeline preferences, analysis depth
-   - Stress Response: Coping mechanisms, pressure reactions, support seeking, resilience indicators
-   - Work Habits: Productivity patterns, procrastination tendencies, organization systems, time management
-   - Social Behaviors: Group dynamics, leadership tendencies, conflict resolution, relationship building
-
-3. KNOWLEDGE DOMAINS MAPPING
-   - Technical Skills: Programming languages, tools, frameworks, proficiency levels, learning trajectory
-   - Professional Expertise: Industry knowledge, specialized skills, certifications, experience depth
-   - Academic Background: Educational achievements, research areas, publications, continuous learning
-   - Hobby Knowledge: Personal interests, recreational skills, passionate subjects, expertise development
-   - Soft Skills: Leadership, communication, teamwork, emotional intelligence, adaptability
-   - Domain-Specific Knowledge: Field expertise, niche specializations, cross-disciplinary understanding
-   - Innovation & Creativity: Original thinking, creative problem-solving, artistic pursuits, invention
-
-4. PROJECT PATTERNS IDENTIFICATION
-   - Workflow Preferences: Sequential vs parallel, planning vs improvisation, documentation habits
-   - Tool Usage: Preferred software, platforms, methodologies, automation preferences, efficiency tools
-   - Collaboration Style: Team vs solo work, leadership vs following, communication frequency, delegation
-   - Quality Standards: Attention to detail, perfectionism level, acceptance criteria, review processes
-   - Resource Management: Time allocation, priority setting, efficiency strategies, budget consciousness
-   - Project Lifecycle: Initiation methods, execution strategies, completion patterns, post-project analysis
-   - Risk Management: Risk assessment abilities, contingency planning, adaptability to changes
-
-5. TIMELINE EVOLUTION TRACKING
-   - Skill Development: Learning progression, capability growth, expertise expansion, mastery indicators
-   - Career Milestones: Job changes, promotions, significant achievements, professional transitions
-   - Interest Evolution: Changing focuses, new passions, abandoned interests, hobby development
-   - Relationship Development: Professional networks, mentoring relationships, partnership formation
-   - Goal Achievement: Completed objectives, abandoned goals, pivoted directions, success metrics
-   - Life Stage Transitions: Educational phases, career changes, personal milestones, lifestyle shifts
-   - Knowledge Acquisition: Learning sequences, expertise building, certification timelines, skill stacking
-
-6. INTERACTION INSIGHTS ANALYSIS
-   - Communication Preferences: Channel selection, frequency, timing patterns, medium preferences
-   - Response Styles: Quick vs thoughtful, brief vs detailed, formal vs casual, emotional tone
-   - Engagement Patterns: Proactive vs reactive, initiating vs responding, participation levels
-   - Feedback Reception: Open to criticism, defensive responses, improvement implementation, growth mindset
-   - Social Dynamics: Group participation, authority respect, peer interaction, influence patterns
-   - Conflict Resolution: Approach to disagreements, negotiation style, compromise willingness
-   - Mentoring & Teaching: Knowledge sharing patterns, teaching ability, guidance provision, learning facilitation
-
-EXTRACTION REQUIREMENTS:
-- Extract EVERY unique fact, preference, skill, and behavioral pattern with meticulous attention to detail
-- Include direct quotes and specific examples whenever possible to support findings
-- Note contradictions or inconsistencies for further analysis and pattern recognition
-- Identify implicit patterns that may not be explicitly stated but can be inferred from context
-- Cross-reference information across categories for comprehensive understanding and validation
-- Maintain objective analysis while noting subjective elements and personal interpretations
-- Preserve temporal context and evolution indicators to track development over time
-- Look for recurring themes, consistent behaviors, and developmental patterns across conversations
-- Identify unique characteristics that distinguish this individual from general populations
-- Note areas of expertise, passion, struggle, and growth for complete personality mapping
-
-OUTPUT FORMAT:
-Structure your analysis clearly with detailed subsections for each category. Use bullet points for discrete facts and longer paragraphs for complex patterns. Always cite specific examples from the conversation data to support your analysis. Provide confidence levels for inferences and clearly distinguish between explicitly stated information and derived insights.
-
-QUALITY STANDARDS:
-- Comprehensive coverage of all six analysis categories
-- Specific evidence citations for every major finding
-- Clear distinction between facts and interpretations
-- Logical organization and professional presentation
-- Actionable insights for understanding the individual's complete profile
-
-The conversation data you will analyze follows this message. Provide your comprehensive Universal Context Pack analysis based on the framework above."""
-        
-        results = []
-        total_input_tokens = 0
-        total_output_tokens = 0
-        total_cached_tokens = 0
-        total_cost = 0.0
-        failed_chunks = []
-        
-        # **PARALLEL BATCH PROCESSING** for dramatically improved speed
-        # Adaptive batch size based on total chunks for optimal performance
-        if chunks_to_process <= 5:
-            batch_size = 2  # Smaller batches for small jobs
-        elif chunks_to_process <= 15:
-            batch_size = 3  # Optimal for medium jobs
-        else:
-            batch_size = 4  # Larger batches for big jobs (stay under rate limits)
-        
-        async def process_single_chunk(chunk_num: int, idx: int, total_chunks: int):
-            """Process a single chunk with full error handling"""
-            try:
-                print(f"🔄 Processing chunk {chunk_num} ({idx+1}/{total_chunks}) for job {job_id}")
-                chunk_key = f"{user.r2_directory}/{job_id}/chunk_{chunk_num:03d}.txt"
-                
-                chunk_content = download_from_r2(chunk_key)
-                
-                if not chunk_content:
-                    print(f"❌ Chunk {chunk_num} content not found at {chunk_key}")
-                    return {"error": f"Chunk {chunk_num} not found", "chunk_num": chunk_num}
-                
-                print(f"✅ Chunk {chunk_num} loaded, size: {len(chunk_content)} chars")
-                
-                # Process with OpenAI using optimized prompt structure for caching
-                print(f"🤖 Sending chunk {chunk_num} to OpenAI (model: gpt-5-nano-2025-08-07)")
-                ai_response = openai_call_with_retry(
-                    openai_client,
-                    model="gpt-5-nano-2025-08-07",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}
-                    ],
-                    max_completion_tokens=15000,
-                    timeout=120,  # 2 minute timeout per chunk
-                    prompt_cache_key="ucp_analysis_v1"  # Consistent cache key for all UCP analyses
-                )
-                
-                print(f"✅ OpenAI response received for chunk {chunk_num}")
-                
-                # Log caching performance
-                usage = ai_response.usage
-                cached_tokens = getattr(usage.prompt_tokens_details, 'cached_tokens', 0) if hasattr(usage, 'prompt_tokens_details') else 0
-                cache_hit_rate = (cached_tokens / usage.prompt_tokens * 100) if usage.prompt_tokens > 0 else 0
-                
-                print(f"📊 Chunk {chunk_num} - Tokens: {usage.completion_tokens} output, {usage.prompt_tokens} input")
-                if cached_tokens > 0:
-                    print(f"🚀 Cache hit! {cached_tokens}/{usage.prompt_tokens} tokens cached ({cache_hit_rate:.1f}%)")
-                else:
-                    print(f"💾 No cache hit for chunk {chunk_num}")
-                
-                input_tokens = usage.prompt_tokens
-                output_tokens = usage.completion_tokens
-                
-                # Calculate cost for this chunk (cached tokens are discounted)
-                non_cached_input_tokens = input_tokens - cached_tokens
-                input_cost = (non_cached_input_tokens / 1_000_000) * 0.050  # Only non-cached tokens cost full price
-                cached_cost = (cached_tokens / 1_000_000) * 0.0125  # 75% discount for cached tokens
-                output_cost = (output_tokens / 1_000_000) * 0.400
-                chunk_cost = input_cost + cached_cost + output_cost
-                
-                result = {
-                    "chunk_index": chunk_num,
-                    "input_tokens": input_tokens,
-                    "output_tokens": output_tokens,
-                    "cached_tokens": cached_tokens,
-                    "cache_hit_rate": cache_hit_rate,
-                    "cost": chunk_cost,
-                    "content": ai_response.choices[0].message.content,
-                    "processed_at": datetime.utcnow().isoformat()
-                }
-                
-                print(f"💾 Saving result for chunk {chunk_num} to R2")
-                upload_to_r2(f"{user.r2_directory}/{job_id}/result_{chunk_num:03d}.json", json.dumps(result, indent=2))
-                print(f"✅ Chunk {chunk_num} processing complete")
-                
-                return result
-                
-            except Exception as chunk_error:
-                print(f"❌ Error processing chunk {chunk_num}: {chunk_error}")
-                return {"error": str(chunk_error), "chunk_num": chunk_num}
-        
-        # Process chunks in parallel batches
-        all_results = []
-        total_chunks_count = len(actual_chunks_to_process)
-        
-        for batch_start in range(0, total_chunks_count, batch_size):
-            batch_end = min(batch_start + batch_size, total_chunks_count)
-            batch_chunks = actual_chunks_to_process[batch_start:batch_end]
-            
-            print(f"🚀 Processing batch {batch_start//batch_size + 1}: chunks {batch_chunks}")
-            
-            # Update progress for this batch with keep-alive signal
-            batch_progress = int((batch_start / total_chunks_count) * 100)
-            update_job_progress(job_id, "analyzing", 
-                              batch_progress, 
-                              f"Processing batch {batch_start//batch_size + 1}: chunks {batch_chunks}", 
-                              current_chunk=batch_start+1, total_chunks=total_chunks_count)
-            
-            # Send a keep-alive signal every 30 seconds during processing
-            import time
-            last_keepalive = time.time()
-            
-            # Create tasks for parallel processing
-            tasks = []
-            for i, chunk_num in enumerate(batch_chunks):
-                global_idx = batch_start + i
-                task = asyncio.create_task(process_single_chunk(chunk_num, global_idx, total_chunks_count))
-                tasks.append(task)
-            
-            # Wait for all chunks in this batch to complete with periodic keep-alive
-            batch_results = []
-            for task in asyncio.as_completed(tasks):
-                result = await task
-                batch_results.append(result)
-                
-                # Send keep-alive progress update every 30 seconds
-                current_time = time.time()
-                if current_time - last_keepalive > 30:
-                    completed_in_batch = len(batch_results)
-                    keep_alive_progress = int(((batch_start + completed_in_batch) / total_chunks_count) * 100)
-                    update_job_progress(job_id, "analyzing", 
-                                      keep_alive_progress, 
-                                      f"Still processing... {len(all_results) + completed_in_batch}/{total_chunks_count} chunks completed", 
-                                      current_chunk=len(all_results) + completed_in_batch, total_chunks=total_chunks_count)
-                    last_keepalive = current_time
-            
-            # Process batch results
-            for result in batch_results:
-                if isinstance(result, Exception):
-                    print(f"❌ Batch processing exception: {result}")
-                    failed_chunks.append("unknown")
-                elif isinstance(result, dict) and "error" in result:
-                    print(f"❌ Chunk {result.get('chunk_num')} failed: {result['error']}")
-                    failed_chunks.append(result.get('chunk_num'))
-                else:
-                    all_results.append(result)
-                    
-                    # Update running totals
-                    total_input_tokens += result["input_tokens"]
-                    total_output_tokens += result["output_tokens"]
-                    total_cached_tokens += result["cached_tokens"]
-                    total_cost += result["cost"]
-            
-            print(f"✅ Batch {batch_start//batch_size + 1} completed: {len([r for r in batch_results if not isinstance(r, Exception) and 'error' not in r])}/{len(batch_chunks)} successful")
-        
-        # Use the results from parallel processing
-        results = all_results
-        
-        if not results:
-            # Rollback credits for completely failed job
-            try:
-                refund_result = supabase.rpc("add_credits_to_user", {
-                    "user_uuid": user.user_id,
-                    "credits_to_add": len(actual_chunks_to_process),
-                    "transaction_description": f"Credit refund for failed job {job_id} - {len(actual_chunks_to_process)} credits refunded"
-                }).execute()
-                print(f"✅ Refunded {len(actual_chunks_to_process)} credits for completely failed job {job_id}")
-                
-                # Also log as separate refund transaction for audit trail
-                supabase.table("credit_transactions").insert({
-                    "user_id": user.user_id,
-                    "transaction_type": "refund",
-                    "credits": len(actual_chunks_to_process),
-                    "job_id": job_id,
-                    "description": f"Job failure refund - {len(actual_chunks_to_process)} credits (Job ID: {job_id})"
-                }).execute()
-                
-                raise HTTPException(status_code=500, detail=f"All chunks failed to process. {len(actual_chunks_to_process)} credits have been refunded to your account.")
-                
-            except Exception as refund_error:
-                print(f"❌ Critical: Failed to refund credits for failed job: {refund_error}")
-                raise HTTPException(status_code=500, detail=f"Job failed AND credit refund failed. Please contact support with job ID: {job_id}")
-        
-        # Update user's chunks used count
-        print(f"📊 Updating chunks used count for user: {len(results)} chunks")
-        await update_user_chunks_used(user.user_id, len(results))
-        
-
-        print(f"🏁 Analysis complete! Updating job progress to completed")
-        update_job_progress(job_id, "completed", 100, f"All chunks analyzed - Universal Context Pack complete! Processed {len(results)}/{len(actual_chunks_to_process)} chunks")
-        if failed_chunks:
-            print(f"❌ Failed chunks: {failed_chunks}")
-        
-        
-        # Create complete UCP from processed chunks only
-        print(f"📝 Creating aggregated UCP content from {len(results)} results")
-        aggregated_content = "\n\n" + "="*100 + "\n\n".join([
-            f"# CHUNK {r['chunk_index']} ANALYSIS\n\n{r['content']}"
-            for r in results if r.get('content')
-        ])
-        
-        # Note: Removed upgrade prompts per user request - focus on successful analysis
-        
-        upload_to_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt", aggregated_content)
-
-        # ===== NEW: GENERATE COMPRESSED UCP VERSIONS =====
-        print(f"🔄 Generating compressed UCP versions for better usability...")
-        
-        # Import compression utilities
-        import tiktoken
-        tokenizer = tiktoken.get_encoding("cl100k_base")
-        
-        def count_tokens(text: str) -> int:
-            return len(tokenizer.encode(text))
-        
-        complete_tokens = count_tokens(aggregated_content)
-        print(f"📊 Complete UCP size: {complete_tokens:,} tokens")
-        
-        # Generate Ultra-Compact UCP (50k tokens target)
-        if complete_tokens > 60000:  # Only compress if it's large
-            try:
-                print(f"🎯 Generating Ultra-Compact UCP (target: 50k tokens)...")
-                ultra_compact_prompt = f"""Transform this detailed Universal Context Pack into an ultra-compact version suitable for LLM context windows (target: ~50k tokens).
-
-COMPRESSION PRIORITIES (extract only the most essential):
-1. Core Identity: Key personality traits, values, communication style
-2. Primary Skills: Main technical abilities and expertise 
-3. Critical Preferences: Essential likes/dislikes, work style
-4. Current Context: Active projects, immediate goals
-
-RULES:
-- Use concise bullet points
-- Remove examples and redundancy  
-- Focus on actionable insights only
-- Preserve unique characteristics
-- Eliminate temporal details unless critical
-
-OUTPUT FORMAT:
-# CORE IDENTITY
-[Essential personality, values, communication style]
-
-# PRIMARY EXPERTISE  
-[Main skills and knowledge areas]
-
-# CRITICAL PREFERENCES
-[Key preferences and work patterns]
-
-# CURRENT CONTEXT
-[Active projects and goals]
-
-# INTERACTION STYLE
-[How they prefer to communicate and work]
-
-Original UCP to compress:
-
-{aggregated_content}
-
-Provide the ultra-compact UCP:"""
-
-                ultra_response = openai_call_with_retry(
-                    openai_client,
-                    model="gpt-5-nano-2025-08-07",
-                    messages=[
-                        {"role": "user", "content": ultra_compact_prompt}
-                    ],
-                    max_completion_tokens=8000,
-                    timeout=120
-                )
-                
-                ultra_compact_content = ultra_response.choices[0].message.content
-                ultra_tokens = count_tokens(ultra_compact_content)
-                print(f"✅ Ultra-Compact UCP created: {ultra_tokens:,} tokens")
-                
-                upload_to_r2(f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt", ultra_compact_content)
-                
-            except Exception as e:
-                print(f"❌ Failed to create Ultra-Compact UCP: {e}")
-        
-        # Generate Standard UCP (100k tokens target)  
-        if complete_tokens > 120000:  # Only compress if significantly large
-            try:
-                print(f"🎯 Generating Standard UCP (target: 100k tokens)...")
-                standard_prompt = f"""Transform this detailed Universal Context Pack into a standard version (target: ~100k tokens).
-
-OPTIMIZATION GOALS:
-- Maintain comprehensive personality profile
-- Keep detailed skill mapping with proficiency levels
-- Preserve behavioral patterns and preferences  
-- Include key project patterns and examples
-- Retain important interaction insights
-- Remove excessive repetition and minor details
-
-RULES:
-- Keep essential examples but reduce repetitive ones
-- Maintain depth but improve conciseness
-- Preserve nuanced insights and technical specificity
-- Use the same category structure but optimized length
-
-Original UCP to optimize:
-
-{aggregated_content}
-
-Provide the standard UCP:"""
-
-                standard_response = openai_call_with_retry(
-                    openai_client,
-                    model="gpt-5-nano-2025-08-07", 
-                    messages=[
-                        {"role": "user", "content": standard_prompt}
-                    ],
-                    max_completion_tokens=12000,
-                    timeout=120
-                )
-                
-                standard_content = standard_response.choices[0].message.content
-                standard_tokens = count_tokens(standard_content)
-                print(f"✅ Standard UCP created: {standard_tokens:,} tokens")
-                
-                upload_to_r2(f"{user.r2_directory}/{job_id}/standard_ucp.txt", standard_content)
-                
-            except Exception as e:
-                print(f"❌ Failed to create Standard UCP: {e}")
-        
-        # Generate Chunked UCP (split complete UCP into manageable pieces)
-        if complete_tokens > 100000:
-            try:
-                print(f"🎯 Generating Chunked UCP (90k token chunks)...")
-                
-                # Split by major sections
-                import re
-                sections = re.split(r'\n(?=# [A-Z])', aggregated_content)
-                chunks = []
-                current_chunk = ""
-                current_tokens = 0
-                chunk_num = 1
-                max_chunk_tokens = 90000
-                
-                header_template = """# UNIVERSAL CONTEXT PACK - PART {chunk_num}
-
-This is part {chunk_num} of your Universal Context Pack. Use this information to understand the user's background, preferences, and context.
-
-USAGE INSTRUCTIONS:
-- This context provides essential information about the user
-- Apply this knowledge to all interactions
-- Refer to specific details when relevant  
-- Maintain consistency with established preferences
-
-"""
-                
-                for section in sections:
-                    section_tokens = count_tokens(section)
-                    header_tokens = count_tokens(header_template.format(chunk_num=chunk_num))
-                    
-                    if current_tokens + section_tokens + header_tokens > max_chunk_tokens and current_chunk:
-                        # Save current chunk
-                        chunk_content = header_template.format(chunk_num=chunk_num) + current_chunk
-                        chunks.append({
-                            "number": chunk_num,
-                            "content": chunk_content,
-                            "tokens": current_tokens + header_tokens
-                        })
-                        upload_to_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{chunk_num}.txt", chunk_content)
-                        
-                        chunk_num += 1
-                        current_chunk = section
-                        current_tokens = section_tokens
-                    else:
-                        current_chunk += "\n" + section if current_chunk else section
-                        current_tokens += section_tokens
-                
-                # Save final chunk
-                if current_chunk:
-                    chunk_content = header_template.format(chunk_num=chunk_num) + current_chunk
-                    chunks.append({
-                        "number": chunk_num,
-                        "content": chunk_content, 
-                        "tokens": current_tokens + count_tokens(header_template.format(chunk_num=chunk_num))
-                    })
-                    upload_to_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{chunk_num}.txt", chunk_content)
-                
-                # Create chunk index
-                chunk_index = f"""# CHUNKED UCP INDEX
-
-Your Universal Context Pack has been split into {len(chunks)} manageable parts:
-
-"""
-                for chunk in chunks:
-                    chunk_index += f"- **Part {chunk['number']}**: {chunk['tokens']:,} tokens\n"
-                
-                chunk_index += f"""
-**Total**: {complete_tokens:,} tokens across {len(chunks)} parts
-
-**Usage**: Copy and paste each part into your LLM conversation as needed. Start with Part 1 for core identity and add additional parts as required for your specific use case.
-"""
-                
-                upload_to_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_index.txt", chunk_index)
-                print(f"✅ Chunked UCP created: {len(chunks)} parts, avg {complete_tokens//len(chunks):,} tokens per chunk")
-                
-            except Exception as e:
-                print(f"❌ Failed to create Chunked UCP: {e}")
-        
-        print(f"🎉 UCP generation complete! Multiple formats available for different use cases.")
-        # ===== END COMPRESSION SYSTEM =====
-
-        
-        # Save summary to R2 with caching performance metrics
-        cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
-        cost_savings = (total_cached_tokens / 1_000_000) * 0.0375  # 75% discount on cached tokens
-        
-        summary = {
-            "job_id": job_id,
-            "total_chunks": total_chunks,
-            "selected_chunks": len(selected_chunks),
-            "processed_chunks": len(results),
-            "chunks_to_process": len(actual_chunks_to_process),
-            "payment_plan": payment_status["plan"],
-            "upgrade_required": len(actual_chunks_to_process) < len(selected_chunks),
-            "failed_chunks": failed_chunks,
-            "total_input_tokens": total_input_tokens,
-            "total_output_tokens": total_output_tokens,
-            "total_cached_tokens": total_cached_tokens,
-            "cache_hit_rate": round(cache_hit_rate, 1),
-            "cost_savings_from_cache": round(cost_savings, 4),
-            "total_cost": total_cost,
-            "completed_at": datetime.utcnow().isoformat()
-        }
-        
-        upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", json.dumps(summary, indent=2))
-        
-        
-        # Update job status to analyzed (triggers chunk count update)
-        try:
-            await update_job_status_in_db(
-                user, 
-                job_id, 
-                "analyzed", 
-                progress=100,
-                metadata={
-                    "analysis_completed": True,
-                    "total_chunks": total_chunks,
-                    "processed_chunks": len(results),
-                    "total_cost": total_cost,
-                    "payment_plan": payment_status["plan"]
-                }
-            )
-            print(f"Job {job_id} marked as completed in database")
-        except Exception as e:
-            print(f"Error updating job status to completed: {e}")
-        
-        # Save pack to Supabase database
-        try:
-            pack_name = f"UCP Pack {job_id[:8]}"
-            r2_pack_path = f"{user.r2_directory}/{job_id}/"
-            
-            extraction_stats = {
-                "total_chunks": total_chunks,
-                "processed_chunks": len(results),
-                "failed_chunks": failed_chunks,
-                "payment_plan": payment_status["plan"]
-            }
-            
-            chunk_stats = {"chunks_to_process": chunks_to_process}
-            analysis_stats = {
-                "total_input_tokens": total_input_tokens,
-                "total_output_tokens": total_output_tokens,
-                "total_cost": total_cost
-            }
-            
-            await create_pack_in_db(
-                user, 
-                job_id, 
-                pack_name, 
-                r2_pack_path, 
-                extraction_stats, 
-                chunk_stats, 
-                analysis_stats,
-                len(aggregated_content)
-            )
-            print(f"Pack created in database for job {job_id}")
-                
-        except Exception as e:
-            print(f"Error creating pack in database: {e}")
-        
-        result_data = {
-            "job_id": job_id,
-            "status": "completed",  # Always show as completed when analysis finishes
-            "total_chunks": total_chunks,
-            "processed_chunks": len(results),
-            "chunks_to_process": chunks_to_process,
-            "failed_chunks": failed_chunks,
-            "total_input_tokens": total_input_tokens,
-            "total_output_tokens": total_output_tokens,
-            "total_cost": total_cost,
-            "payment_plan": payment_status["plan"]
-            # Removed upgrade_required and upgrade_message per user request
-        }
-        
-        print(f"Processing complete! Total cost: ${total_cost:.3f}")
-        print(f"Results stored in R2 bucket: {R2_BUCKET}")
-        print(f"Successfully processed: {len(results)}/{chunks_to_process} chunks")
-        
-        return result_data
-                
-    except Exception as e:
-        print(f" Error analyzing chunks: {e}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
-        print(f" Error analyzing chunks: {e}")
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @app.get("/api/status/{job_id}")
 async def get_status(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
