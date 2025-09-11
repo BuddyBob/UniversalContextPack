@@ -191,6 +191,7 @@ def check_rate_limit(user_id: str, limit_type: str = "payment", max_attempts: in
 # Request models
 class AnalyzeRequest(BaseModel):
     selected_chunks: List[int] = []  # List of chunk indices to analyze
+    max_chunks: Optional[int] = None  # Maximum number of chunks to analyze (limits the selection)
 
 class ChunkRequest(BaseModel):
     chunk_size: Optional[int] = 600000  # Default to 600k characters (~150k tokens) - safe margin below GPT's limit
@@ -795,12 +796,12 @@ def download_from_r2(key: str, silent_404: bool = False) -> str:
                     print(f"Error downloading from local storage: {local_error}")
                 return None
         
-        print(f"R2 response status: {response.status_code}")
         if response.status_code == 200:
             # Removed success message - too verbose
             return response.text
         elif response.status_code == 404 and silent_404:
             # Silently return None for expected 404s (like new process.log files)
+            print(f"R2 response status: {response.status_code}")
             return None
         else:
             if not silent_404:
@@ -2211,6 +2212,8 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
     try:
         print(f"🚀 Starting analysis for job {job_id}, user: {user.user_id}")
         print(f"📋 Requested chunks to analyze: {request.selected_chunks}")
+        if request.max_chunks:
+            print(f"🔢 Maximum chunks limit: {request.max_chunks}")
         
         # Quick validation checks
         chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
@@ -2226,11 +2229,17 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         available_credits = payment_status.get("credits_balance", 0)
         payment_plan = payment_status.get("plan", "credits")
         
-        # Basic validation
+        # Determine which chunks to analyze
         if request.selected_chunks:
             selected_chunks = [chunk_idx + 1 for chunk_idx in request.selected_chunks]
         else:
             selected_chunks = list(range(1, total_chunks + 1))
+        
+        # Apply max_chunks limit if specified
+        if request.max_chunks and request.max_chunks > 0:
+            if len(selected_chunks) > request.max_chunks:
+                selected_chunks = selected_chunks[:request.max_chunks]
+                print(f"🔢 Limited to first {request.max_chunks} chunks: {selected_chunks}")
         
         chunks_to_process = len(selected_chunks)
         if payment_plan != "unlimited":
@@ -2332,13 +2341,14 @@ Structure your analysis clearly with detailed subsections for each category. Use
 
 The conversation data you will analyze follows this message. Provide your comprehensive Universal Context Pack analysis."""
         
-        # Adaptive batch size for optimal performance and rate limit compliance
+        # Adaptive batch size for optimal performance and Railway resource limits
+        # Start with 2 parallel chunks and monitor for failures
         if chunks_to_process <= 5:
-            batch_size = 1  # Sequential processing to prevent Railway server overload
+            batch_size = 2  # Small jobs can handle 2 parallel chunks
         elif chunks_to_process <= 15:
-            batch_size = 1  # Sequential processing to prevent Railway server overload  
+            batch_size = 2  # Medium jobs - conservative 2 parallel to avoid Railway limits  
         else:
-            batch_size = 1  # Sequential processing to prevent Railway server overload
+            batch_size = 2  # Large jobs - keep it safe but faster than sequential
         
         print(f"🚀 Using parallel processing with batch size {batch_size} for {chunks_to_process} chunks")
         
@@ -2359,7 +2369,7 @@ The conversation data you will analyze follows this message. Provide your compre
                 if job_id in cancelled_jobs:
                     return {"cancelled": True, "chunk_num": chunk_num}
                 
-                print(f"🔄 Processing chunk {chunk_num} ({idx+1}/{total_chunks}) for job {job_id}")
+                print(f"🔄 Chunk {chunk_num} ({idx+1}/{total_chunks})")
                 chunk_key = f"{user.r2_directory}/{job_id}/chunk_{chunk_num:03d}.txt"
                 
                 chunk_content = download_from_r2(chunk_key)
@@ -2368,11 +2378,16 @@ The conversation data you will analyze follows this message. Provide your compre
                     print(f"❌ Chunk {chunk_num} content not found at {chunk_key}")
                     return {"error": f"Chunk {chunk_num} not found", "chunk_num": chunk_num}
                 
-                print(f"✅ Chunk {chunk_num} loaded, size: {len(chunk_content)} chars")
+                print(f"✅ Chunk {chunk_num}: {len(chunk_content)} chars")
                 
                 # Process with OpenAI using full content (no truncation) and optimized parameters
-                print(f"🤖 SENDING chunk {chunk_num} to OpenAI (model: gpt-5-nano-2025-08-07) - Starting API call...")
+                print(f"🤖 OpenAI call for chunk {chunk_num}...")
                 chunk_start_time = time.time()
+                
+                # Small delay to prevent rate limiting when processing multiple chunks
+                if idx > 0:  # Don't delay the first chunk
+                    await asyncio.sleep(0.5)  # 500ms delay between API calls
+                
                 ai_response = await openai_call_with_retry(
                     openai_client,
                     model="gpt-5-nano-2025-08-07",  # Primary model for UCP analysis
@@ -2386,7 +2401,7 @@ The conversation data you will analyze follows this message. Provide your compre
                 )
                 chunk_duration = time.time() - chunk_start_time
                 
-                print(f"✅ OpenAI response received for chunk {chunk_num} after {chunk_duration:.1f} seconds")
+                print(f"✅ Chunk {chunk_num} done ({chunk_duration:.1f}s)")
                 
                 # Extract usage data for performance tracking
                 usage = ai_response.usage
@@ -2403,12 +2418,11 @@ The conversation data you will analyze follows this message. Provide your compre
                 
                 cache_hit_rate = (cached_tokens / input_tokens * 100) if input_tokens > 0 else 0
                 
-                print(f"📊 Chunk {chunk_num} - Tokens: {output_tokens} output, {input_tokens} input")
+                print(f"📊 Tokens: {output_tokens} out, {input_tokens} in")
                 if cached_tokens > 0:
-                    print(f"🚀 Cache hit! {cached_tokens}/{input_tokens} tokens cached ({cache_hit_rate:.1f}%)")
-                else:
-                    print(f"💾 No cache hit for chunk {chunk_num}")
+                    print(f"⚡ Cache: {cached_tokens}/{input_tokens} ({cache_hit_rate:.1f}%)")
                 
+                # Save to R2
                 # Calculate cost (gpt-5-nano-2025-08-07 pricing)
                 non_cached_input_tokens = input_tokens - cached_tokens
                 input_cost = (non_cached_input_tokens / 1_000_000) * 0.050  # $0.050 per 1M input tokens
@@ -2433,9 +2447,7 @@ The conversation data you will analyze follows this message. Provide your compre
                 # Save individual result to R2 for incremental progress
                 result_key = f"{user.r2_directory}/{job_id}/result_{chunk_num:03d}.json"
                 upload_to_r2(result_key, json.dumps(chunk_result, indent=2))
-                print(f"💾 Saving result for chunk {chunk_num} to R2")
                 
-                print(f"✅ Chunk {chunk_num} processing complete")
                 return chunk_result
                 
             except Exception as e:
@@ -2489,11 +2501,18 @@ The conversation data you will analyze follows this message. Provide your compre
             try:
                 batch_results = await asyncio.wait_for(
                     asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=300  # 5 minute timeout per batch
+                    timeout=180  # 3 minute timeout per batch (reduced from 5 minutes)
                 )
                 batch_duration = time.time() - batch_start_time
-                print(f"🎉 ===== BATCH {batch_num}/{total_batches} COMPLETED ===== Duration: {batch_duration:.1f}s =====")
-                print(f"✅ Batch {batch_num} completed in {batch_duration:.1f} seconds")
+                print(f"✅ Batch {batch_num} completed in {batch_duration:.1f}s")
+                
+                # Adaptive batch sizing: if batch took too long, reduce future batch sizes
+                avg_time_per_chunk = batch_duration / len(batch_chunks)
+                if avg_time_per_chunk > 90 and batch_size > 1:  # If over 1.5 minutes per chunk
+                    print(f"⚠️ Batch performance degraded ({avg_time_per_chunk:.1f}s per chunk), consider reducing batch size")
+                elif avg_time_per_chunk < 45 and batch_size < 3:  # If under 45s per chunk
+                    print(f"🚀 Good batch performance ({avg_time_per_chunk:.1f}s per chunk), could increase batch size")
+                    
             except asyncio.TimeoutError:
                 batch_duration = time.time() - batch_start_time
                 print(f"❌ Batch {batch_num} timed out after {batch_duration:.1f} seconds")
@@ -2529,7 +2548,6 @@ The conversation data you will analyze follows this message. Provide your compre
                         failed_chunks.append(result)
                         failed_in_batch += 1
                     else:
-                        print(f"✅ Batch {batch_num} - Chunk {chunk_num} completed successfully (tokens: {result.get('tokens', {}).get('output', 0)})")
                         results.append(result)
                         successful_in_batch += 1
                         # Update performance counters
@@ -2540,9 +2558,7 @@ The conversation data you will analyze follows this message. Provide your compre
                         if "cost" in result:
                             total_cost += result["cost"]
             
-            print(f"🎯 ===== BATCH {batch_num} SUMMARY =====")
-            print(f"📊 Batch {batch_num} summary: {successful_in_batch} successful, {failed_in_batch} failed")
-            print(f"🎯 ===== END BATCH {batch_num} SUMMARY =====")
+            print(f"📊 Batch {batch_num}: {successful_in_batch} ok, {failed_in_batch} failed")
             
             # Update progress after each batch
             progress_percent = 15 + int((batch_end / chunks_to_process) * 70)
@@ -2563,8 +2579,8 @@ The conversation data you will analyze follows this message. Provide your compre
             
             # Small delay between batches to respect rate limits and allow for cancellation
             if batch_end < chunks_to_process:
-                print(f"⏸️  Waiting 2 seconds before starting batch {batch_num + 1}...")
-                await asyncio.sleep(2)  # 2 second delay between batches
+                print(f"⏸️  Waiting 1 second before starting batch {batch_num + 1}...")
+                await asyncio.sleep(1)  # Reduced from 2 seconds to 1 second  # 2 second delay between batches
         
         # Final cancellation check before saving results
         if job_id in cancelled_jobs:

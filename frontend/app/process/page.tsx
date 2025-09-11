@@ -38,6 +38,7 @@ export default function ProcessPage() {
   const [chunkData, setChunkData] = useState<any>(null);
   const [availableChunks, setAvailableChunks] = useState<any[]>([]);
   const [selectedChunks, setSelectedChunks] = useState<Set<number>>(new Set());
+  const [maxChunks, setMaxChunks] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState<'upload' | 'uploaded' | 'extracting' | 'extracted' | 'chunking' | 'chunked' | 'analyzing' | 'analyzed'>('upload');
   const [progress, setProgress] = useState(0);
@@ -56,6 +57,7 @@ export default function ProcessPage() {
   const [showFileTypes, setShowFileTypes] = useState(false);
   const [conversationUrl, setConversationUrl] = useState<string>('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [currentProcessedChunks, setCurrentProcessedChunks] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -90,6 +92,8 @@ export default function ProcessPage() {
         setLogs(session.logs || []);
         setAnalysisStartTime(session.analysisStartTime || null);
         setConversationUrl(session.chatgptUrl || '');
+        setMaxChunks(session.maxChunks || null);
+        setCurrentProcessedChunks(session.currentProcessedChunks || 0);
         if (session.currentJobId) {
           setCurrentJobId(session.currentJobId);
           // If we were in the middle of analysis, start polling
@@ -204,6 +208,8 @@ export default function ProcessPage() {
         chunkData,
         availableChunks,
         selectedChunks: Array.from(selectedChunks),
+        maxChunks,
+        currentProcessedChunks,
         progress,
         logs: logs.slice(-50), // Only keep last 50 logs to reduce storage size
         currentJobId,
@@ -771,6 +777,11 @@ export default function ProcessPage() {
                     // Update progress percentage
                     if (data.progress !== undefined) {
                       setProgress(data.progress);
+                    }
+
+                    // Track current processed chunks
+                    if (data.current_chunk !== undefined) {
+                      setCurrentProcessedChunks(data.current_chunk);
                     }
                   }
                 } catch (parseError) {
@@ -1656,6 +1667,7 @@ export default function ProcessPage() {
     setCurrentStep('analyzing');
     setAnalysisStartTime(Date.now());
     setLastProgressTimestamp(Date.now() / 1000); // Reset progress timestamp
+    setCurrentProcessedChunks(0); // Reset processed chunks counter
     addLog(`Starting analysis of ${chunksToAnalyze.length} chunks...`);
 
     // Calculate time estimate for selected chunks (40 seconds per chunk)
@@ -1673,6 +1685,7 @@ export default function ProcessPage() {
         },
         body: JSON.stringify({
           selected_chunks: chunksToAnalyze,
+          max_chunks: maxChunks || undefined,
         }),
       });
 
@@ -1758,9 +1771,25 @@ export default function ProcessPage() {
         setProgress(0);
         setAnalysisStartTime(null);
         setIsCancelling(false);
-        
-        addLog('Analysis cancelled successfully');
-        showNotification('info', 'Analysis has been cancelled');
+
+        // Remove chunks if 10+ were processed
+        if (currentProcessedChunks >= 10) {
+          const chunksToRemove = currentProcessedChunks;
+          const remainingChunks = availableChunks.slice(chunksToRemove);
+          setAvailableChunks(remainingChunks);
+          
+          // Clear selected chunks since the indices have changed
+          setSelectedChunks(new Set());
+          
+          addLog(`Removed ${chunksToRemove} processed chunks. ${remainingChunks.length} chunks remaining.`);
+          showNotification('info', `Removed ${chunksToRemove} processed chunks from the collection`);
+        } else {
+          addLog('Analysis cancelled successfully');
+          showNotification('info', 'Analysis has been cancelled');
+        }
+
+        // Reset processed chunks counter
+        setCurrentProcessedChunks(0);
       } else {
         throw new Error('Failed to cancel job');
       }
@@ -1797,6 +1826,7 @@ export default function ProcessPage() {
     setProgress(0);
     setAnalysisStartTime(null);
     setCurrentJobId(null);
+    setCurrentProcessedChunks(0);
     
     addLog('Reset complete - all processing cancelled');
   };
@@ -1961,6 +1991,7 @@ export default function ProcessPage() {
     setSelectedChunksEstimatedTime(0);
     setLogs([]);
     setAnalysisStartTime(null);
+    setCurrentProcessedChunks(0);
     
     if (pollingInterval) {
       clearInterval(pollingInterval);
@@ -2687,6 +2718,46 @@ export default function ProcessPage() {
                 >
                   <X className="h-5 w-5" />
                 </button>
+              </div>
+
+              {/* Max Chunks Control */}
+              <div className="p-6 border-b border-gray-600">
+                <div className="flex items-center justify-between mb-4">
+                  <label htmlFor="maxChunks" className="text-sm font-medium text-text-primary">
+                    Maximum chunks to analyze
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      id="maxChunks"
+                      type="number"
+                      min="1"
+                      max={availableChunks.length}
+                      value={maxChunks || ''}
+                      onChange={(e) => {
+                        const value = e.target.value ? parseInt(e.target.value) : null;
+                        setMaxChunks(value);
+                      }}
+                      placeholder="All"
+                      className="w-20 px-2 py-1 text-sm bg-bg-secondary border border-border-secondary rounded text-text-primary placeholder:text-text-muted focus:border-border-accent focus:outline-none"
+                    />
+                    <button
+                      onClick={() => setMaxChunks(null)}
+                      className="px-2 py-1 text-xs border border-border-secondary rounded text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                {maxChunks && maxChunks < availableChunks.length && (
+                  <div className="text-xs text-text-muted">
+                    Only the first {maxChunks} chunks will be analyzed (estimated time: {(() => {
+                      const seconds = Math.ceil(maxChunks * 47);
+                      const minutes = Math.floor(seconds / 60);
+                      const remainingSeconds = seconds % 60;
+                      return remainingSeconds === 0 ? `${minutes}m` : `${minutes}m ${remainingSeconds}s`;
+                    })()})
+                  </div>
+                )}
               </div>
 
               <div className="p-6 border-b border-gray-600">
