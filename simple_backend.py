@@ -347,6 +347,37 @@ async def update_user_chunks_used(user_id: str, chunks_processed: int):
 
     pass
 
+async def handle_cancellation_with_credit_deduction(user_id: str, job_id: str, chunks_processed: int):
+    """Handle job cancellation and deduct credits if 10+ chunks were processed"""
+    try:
+        if chunks_processed >= 10:
+            print(f"💳 Deducting credits for cancellation: {chunks_processed} chunks processed for user {user_id}")
+            
+            if not supabase:
+                print("Warning: Supabase not available - cannot deduct credits")
+                return
+            
+            # Use the database function to deduct credits for processed chunks
+            result = supabase.rpc("add_credits_to_user", {
+                "user_uuid": user_id,
+                "credits_to_add": -chunks_processed,  # Negative to deduct
+                "transaction_description": f"Credits deducted for cancelled job {job_id} - {chunks_processed} chunks processed"
+            }).execute()
+            
+            if result.data and result.data != -1:
+                print(f"✅ Deducted {chunks_processed} credits from user {user_id}. New balance: {result.data}")
+                return result.data
+            else:
+                print(f"❌ Failed to deduct credits from user {user_id}. Error: {result}")
+                return None
+        else:
+            print(f"📋 No credit deduction needed: only {chunks_processed} chunks processed (threshold: 10)")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error handling cancellation credit deduction for user {user_id}: {e}")
+        return None
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
     """Validate JWT token and return authenticated user"""
     try:
@@ -2293,8 +2324,9 @@ async def process_analysis_background(job_id: str, user: AuthenticatedUser, sele
         
         # Check if job was cancelled before starting
         if job_id in cancelled_jobs:
-            update_job_progress(job_id, "cancelled", 0, "Job was cancelled")
-            await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
+            print(f"🚫 Job {job_id} was cancelled before analysis started")
+            update_job_progress(job_id, "cancelled", 0, "Job was cancelled before processing started")
+            await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user before processing")
             cancelled_jobs.discard(job_id)
             return
         
@@ -2471,8 +2503,22 @@ The conversation data you will analyze follows this message. Provide your compre
         for batch_start in range(0, chunks_to_process, batch_size):
             # Check for cancellation before each batch
             if job_id in cancelled_jobs:
-                update_job_progress(job_id, "cancelled", 0, "Analysis cancelled by user")
-                await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
+                chunks_completed = len(results)
+                print(f"🚫 Job {job_id} cancelled after processing {chunks_completed} chunks")
+                
+                # Deduct credits if 10+ chunks were processed
+                new_balance = await handle_cancellation_with_credit_deduction(user.user_id, job_id, chunks_completed)
+                
+                cancellation_message = f"Analysis cancelled by user after {chunks_completed} chunks processed"
+                if chunks_completed >= 10:
+                    if new_balance is not None:
+                        cancellation_message += f". {chunks_completed} credits deducted. New balance: {new_balance}"
+                    else:
+                        cancellation_message += f". Credit deduction failed"
+                
+                update_job_progress(job_id, "cancelled", 0, cancellation_message)
+                await update_job_status_in_db(user, job_id, "cancelled", 0, cancellation_message, 
+                                             metadata={"processed_chunks": chunks_completed})
                 cancelled_jobs.discard(job_id)
                 return
                 
@@ -2584,9 +2630,22 @@ The conversation data you will analyze follows this message. Provide your compre
         
         # Final cancellation check before saving results
         if job_id in cancelled_jobs:
-            print(f"🚫 Job {job_id} cancelled before saving results")
-            update_job_progress(job_id, "cancelled", 0, "Cancelled before saving results")
-            await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user")
+            chunks_completed = len(results)
+            print(f"🚫 Job {job_id} cancelled before saving results after processing {chunks_completed} chunks")
+            
+            # Deduct credits if 10+ chunks were processed
+            new_balance = await handle_cancellation_with_credit_deduction(user.user_id, job_id, chunks_completed)
+            
+            cancellation_message = f"Cancelled before saving results after {chunks_completed} chunks processed"
+            if chunks_completed >= 10:
+                if new_balance is not None:
+                    cancellation_message += f". {chunks_completed} credits deducted. New balance: {new_balance}"
+                else:
+                    cancellation_message += f". Credit deduction failed"
+            
+            update_job_progress(job_id, "cancelled", 0, cancellation_message)
+            await update_job_status_in_db(user, job_id, "cancelled", 0, cancellation_message,
+                                         metadata={"processed_chunks": chunks_completed})
             cancelled_jobs.discard(job_id)
             return
         
@@ -2763,7 +2822,8 @@ async def cancel_job(job_id: str, user: AuthenticatedUser = Depends(get_current_
         return {
             "job_id": job_id,
             "status": "cancellation_requested",
-            "message": "Job cancellation has been requested. It may take a moment to stop."
+            "message": "Job cancellation has been requested. It may take a moment to stop.",
+            "credit_policy": "If 10 or more chunks were processed, credits will be deducted for the completed work."
         }
         
     except Exception as e:
