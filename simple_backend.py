@@ -2378,7 +2378,7 @@ The conversation data you will analyze follows this message. Provide your compre
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}  # Full content, no truncation
                     ],
-                    temperature=0.3,  # Consistent analysis
+                    # Note: temperature parameter removed - gpt-5-nano-2025-08-07 only supports default (1)
                     max_completion_tokens=15000,  # Allow comprehensive analysis
                     timeout=120  # 2 minute timeout per chunk
                 )
