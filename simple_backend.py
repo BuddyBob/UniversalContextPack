@@ -576,16 +576,18 @@ def get_openai_client(api_key: str = None) -> OpenAI:
         print(f"❌ Error creating OpenAI client: {e}")
         raise HTTPException(status_code=500, detail="Failed to initialize OpenAI client")
 
-def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
+async def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
     """
     Make OpenAI API calls with retry logic for connection issues and quota handling
     """
     import time
+    import asyncio
     from openai import OpenAI
     
     for attempt in range(max_retries):
         try:
-            response = openai_client.chat.completions.create(**kwargs)
+            # Run the blocking OpenAI call in a thread pool to avoid blocking the event loop
+            response = await asyncio.to_thread(openai_client.chat.completions.create, **kwargs)
             return response
         except Exception as e:
             error_str = str(e).lower()
@@ -599,7 +601,7 @@ def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
                 'connection', 'timeout', 'network', 'ssl', 'socket', 'read timed out'
             ]):
                 wait_time = (attempt + 1) * 2  # Exponential backoff: 2, 4, 6 seconds
-                time.sleep(wait_time)
+                await asyncio.sleep(wait_time)  # Use async sleep
                 continue
             else:
                 # Re-raise the exception if it's not a connection issue or we've exceeded retries
@@ -2371,7 +2373,7 @@ The conversation data you will analyze follows this message. Provide your compre
                 # Process with OpenAI using full content (no truncation) and optimized parameters
                 print(f"🤖 SENDING chunk {chunk_num} to OpenAI (model: gpt-5-nano-2025-08-07) - Starting API call...")
                 chunk_start_time = time.time()
-                ai_response = openai_call_with_retry(
+                ai_response = await openai_call_with_retry(
                     openai_client,
                     model="gpt-5-nano-2025-08-07",  # Primary model for UCP analysis
                     messages=[
@@ -3759,9 +3761,27 @@ async def list_jobs(user: AuthenticatedUser = Depends(get_current_user)):
 # USER PROFILE ENDPOINTS
 # ============================================================================
 
+@app.get("/api/profile/quick")
+async def get_user_profile_quick(current_user: AuthenticatedUser = Depends(get_current_user)):
+    """Ultra-fast profile endpoint for auth checks during analysis - minimal data only"""
+    try:
+        return {
+            "profile": {
+                "user_id": current_user.user_id,
+                "email": current_user.email,
+                "r2_user_directory": current_user.r2_directory,
+                "authenticated": True,
+                "analysis_in_progress": len(job_progress) > 0
+            },
+            "timestamp": time.time()
+        }
+    except Exception as e:
+        print(f"❌ Quick profile endpoint error: {e}")
+        raise HTTPException(status_code=500, detail="Quick profile check failed")
+
 @app.get("/api/profile")
 async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Get the current user's profile information including payment status and packs - with timeout protection"""
+    """Get the current user's profile information including payment status and packs - with timeout protection and analysis-aware optimizations"""
     try:
         # Add timeout protection to prevent hanging
         profile_start_time = time.time()
@@ -3782,7 +3802,11 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                 "jobs": []
             }
         
-        # Get user profile with timeout
+        # During heavy analysis periods, return a lighter profile response
+        is_analysis_period = len(job_progress) > 0  # Check if any analysis is running
+        
+        # Get user profile with shorter timeout during analysis
+        profile_timeout = 5 if is_analysis_period else 15
         try:
             profile_result = supabase.table('user_profiles').select('*').eq('id', current_user.user_id).limit(1).execute()
             
@@ -3820,32 +3844,39 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
             print(f"⚠️ Payment status query timeout: {e}")
             payment_status = {"plan": "free", "chunks_used": 0, "chunks_allowed": 5, "can_process": True}
         
-        # Get packs with timeout and limit
+        # During analysis, skip or limit the heavy queries
         packs = []
-        try:
-            # Use a quick query with limit to prevent hanging
-            packs_result = supabase.table('packs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(10).execute()
-            packs = packs_result.data if packs_result.data else []
-        except Exception as e:
-            print(f"⚠️ Packs query timeout: {e}")
-            packs = []
-        
-        # Get recent jobs with timeout and limit
         jobs = []
-        try:
-            jobs_result = supabase.table('jobs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(10).execute()
-            jobs = jobs_result.data if jobs_result.data else []
-        except Exception as e:
-            print(f"⚠️ Jobs query timeout: {e}")
-            jobs = []
+        
+        if not is_analysis_period:
+            # Get packs with timeout and limit (only when not analyzing)
+            try:
+                # Use a quick query with limit to prevent hanging
+                packs_result = supabase.table('packs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(5).execute()
+                packs = packs_result.data if packs_result.data else []
+            except Exception as e:
+                print(f"⚠️ Packs query timeout: {e}")
+                packs = []
+            
+            # Get recent jobs with timeout and limit (only when not analyzing)
+            try:
+                jobs_result = supabase.table('jobs').select('*').eq('user_id', current_user.user_id).order('created_at', desc=True).limit(5).execute()
+                jobs = jobs_result.data if jobs_result.data else []
+            except Exception as e:
+                print(f"⚠️ Jobs query timeout: {e}")
+                jobs = []
+        else:
+            # During analysis, just return empty arrays to speed up response
+            print(f"🔄 Analysis in progress, returning minimal profile data")
         
         profile_load_time = time.time() - profile_start_time
-        print(f"✅ Profile loaded in {profile_load_time:.2f}s")
+        print(f"✅ Profile loaded in {profile_load_time:.2f}s (analysis_mode: {is_analysis_period})")
         
         return {
             "profile": {
                 **profile_data,
-                **payment_status
+                **payment_status,
+                "analysis_in_progress": is_analysis_period
             },
             "packs": packs,
             "jobs": jobs,

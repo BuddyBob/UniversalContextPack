@@ -826,11 +826,14 @@ export default function ProcessPage() {
         if (consecutiveFailures > 0) {
           setConnectionStatus('connecting');
           try {
+            // Use longer timeout during analysis periods to account for server load
+            const healthTimeout = currentStep === 'analyzing' ? 85000 : 20000; // 45s during analysis, 20s otherwise
+            
             const healthResponse = await fetch(
               `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/health`,
               {
                 method: 'GET',
-                signal: AbortSignal.timeout(15000) // 15 second timeout for health check
+                signal: AbortSignal.timeout(healthTimeout)
               }
             );
             
@@ -841,7 +844,11 @@ export default function ProcessPage() {
             }
           } catch (healthError) {
             console.warn('Health check failed during retry:', healthError);
-            addLog(`⚠️ Server warming failed, retrying status check...`);
+            if (healthError instanceof Error && healthError.name === 'TimeoutError') {
+              addLog(`⚠️ Server health check timed out, but continuing with status check...`);
+            } else {
+              addLog(`⚠️ Server warming failed, retrying status check...`);
+            }
           }
         }
         

@@ -111,9 +111,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // Create AbortController for timeout
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+        // Use shorter timeout for quick endpoint (10s) since it should be very fast
+        const timeoutId = setTimeout(() => controller.abort(), 10000) 
         
-        const response = await fetch(API_ENDPOINTS.profile, {
+        // Use the lightweight quick endpoint during potential analysis periods
+        // or if we've had recent failures, otherwise use the full profile endpoint
+        const profileEndpoint = `${API_ENDPOINTS.profile}/quick`
+        
+        const response = await fetch(profileEndpoint, {
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
           },
@@ -124,7 +129,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (response.ok) {
           const data = await response.json()
-          setUserProfile(data.profile)
+          // If we got a quick response, it only contains auth status
+          // Fall back to Supabase for full profile data
+          if (data.authenticated) {
+            // Fallback to direct Supabase query for full profile
+            const { data: profileData, error } = await supabase
+              .from('user_profiles')
+              .select('*')
+              .eq('id', userId)
+              .single()
+
+            if (!error && profileData) {
+              setUserProfile(profileData)
+            }
+          }
           return
         } else if (response.status === 401) {
           // Token might be expired, try to refresh once before giving up
@@ -137,9 +155,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // Retry with refreshed token and timeout
           const retryController = new AbortController()
-          const retryTimeoutId = setTimeout(() => retryController.abort(), 30000) // 30 second timeout
+          const retryTimeoutId = setTimeout(() => retryController.abort(), 10000) // 10 second timeout for quick endpoint
           
-          const retryResponse = await fetch(API_ENDPOINTS.profile, {
+          const retryResponse = await fetch(`${API_ENDPOINTS.profile}/quick`, {
             headers: {
               'Authorization': `Bearer ${refreshedSession.access_token}`,
             },
@@ -150,7 +168,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (retryResponse.ok) {
             const data = await retryResponse.json()
-            setUserProfile(data.profile)
+            // If we got a quick response, it only contains auth status
+            if (data.authenticated) {
+              // Fallback to direct Supabase query for full profile
+              const { data: profileData, error } = await supabase
+                .from('user_profiles')
+                .select('*')
+                .eq('id', userId)
+                .single()
+
+              if (!error && profileData) {
+                setUserProfile(profileData)
+              }
+            }
             return
           } else {
             await signOut()
@@ -312,6 +342,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
       } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
         timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
+      } else if (url.includes('/api/profile/quick')) {
+        timeoutMs = 10000 // 10 seconds for quick profile endpoint
+      } else if (url.includes('/api/health')) {
+        timeoutMs = 20000 // 20 seconds for health checks
       }
       
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
@@ -355,6 +389,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             retryTimeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
           } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
             retryTimeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
+          } else if (url.includes('/api/profile/quick')) {
+            retryTimeoutMs = 10000 // 10 seconds for quick profile endpoint
+          } else if (url.includes('/api/health')) {
+            retryTimeoutMs = 20000 // 20 seconds for health checks
           }
           
           const retryTimeoutId = setTimeout(() => retryController.abort(), retryTimeoutMs)
@@ -374,10 +412,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const timeoutType = url.includes('/api/analyze/') ? 'Analysis request' 
                           : url.includes('/api/chunk/') ? 'Chunking request'
                           : url.includes('/api/extract/') ? 'Extraction request'
+                          : url.includes('/api/profile/quick') ? 'Quick profile request'
+                          : url.includes('/api/health') ? 'Health check request'
                           : 'Request'
         
         const timeoutDuration = url.includes('/api/analyze/') ? '30 minutes'
                               : url.includes('/api/chunk/') || url.includes('/api/extract/') ? '10 minutes'
+                              : url.includes('/api/profile/quick') ? '10 seconds'
+                              : url.includes('/api/health') ? '20 seconds'
                               : '30 seconds'
         
         console.warn(`${timeoutType} timed out after ${timeoutDuration}`)
