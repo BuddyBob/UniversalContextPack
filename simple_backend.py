@@ -1743,6 +1743,33 @@ async def process_conversation_url_background(job_id: str, url: str, platform: s
         job_summary["processed_chunks"] = len(extracted_texts)  # Add to metadata for consistency
         await update_job_status_in_db(user, job_id, "extracted", 100, metadata=job_summary)
         
+        # ALSO create summary.json for the results endpoint to find (same format as analysis results)
+        extraction_summary = {
+            "job_id": job_id,
+            "user_id": user.user_id,
+            "extraction_results": {
+                "conversation_id": result.get('conversation_id'),
+                "messages": result['messages'],
+                "platform": platform,
+                "source_url": url,
+                "extracted_at": result.get('extracted_at'),
+                "message_count": message_count
+            },
+            "total_conversations": 1,
+            "total_messages": message_count,
+            "performance_metrics": {
+                "extraction_time": "< 1 minute",
+                "file_size": len(extracted_content),
+                "platform": platform
+            },
+            "processed_at": datetime.utcnow().isoformat(),
+            "status": "completed"
+        }
+        
+        # Upload extraction summary as summary.json so results endpoint can find it
+        summary_json = json.dumps(extraction_summary, indent=2)
+        upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", summary_json)
+        
         print(f"Background processing completed successfully for job {job_id}")
         
     except Exception as e:
