@@ -1389,6 +1389,79 @@ async def detailed_health_check():
             "error": str(e)
         }
 
+async def extract_text_from_zip(zip_content: bytes, filename: str) -> str:
+    """Extract text content from uploaded ZIP file"""
+    import zipfile
+    import tempfile
+    import os
+    from pathlib import Path
+    
+    try:
+        # Create a temporary file to work with the ZIP
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
+            temp_zip.write(zip_content)
+            temp_zip_path = temp_zip.name
+        
+        extracted_text = ""
+        
+        # Extract and process ZIP contents
+        with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+            # Create temporary directory for extraction
+            with tempfile.TemporaryDirectory() as temp_dir:
+                zip_ref.extractall(temp_dir)
+                
+                # Process extracted files
+                for root, dirs, files in os.walk(temp_dir):
+                    for file in files:
+                        file_path = Path(root) / file
+                        
+                        # Handle different file types
+                        if file.lower().endswith(('.txt', '.md', '.json', '.csv')):
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    content = f.read()
+                                    extracted_text += f"\n\n=== {file} ===\n{content}"
+                            except UnicodeDecodeError:
+                                # Try different encodings
+                                for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
+                                    try:
+                                        with open(file_path, 'r', encoding=encoding) as f:
+                                            content = f.read()
+                                            extracted_text += f"\n\n=== {file} ===\n{content}"
+                                        break
+                                    except:
+                                        continue
+                        
+                        elif file.lower().endswith('.html'):
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    html_content = f.read()
+                                    # Simple HTML stripping
+                                    import re
+                                    text_content = re.sub('<[^<]+?>', '', html_content)
+                                    extracted_text += f"\n\n=== {file} ===\n{text_content}"
+                            except:
+                                continue
+        
+        # Clean up temp file
+        os.unlink(temp_zip_path)
+        
+        if not extracted_text.strip():
+            raise ValueError("No readable text content found in ZIP file. Please ensure the ZIP contains text files (.txt, .md, .json, .csv, .html)")
+        
+        return extracted_text.strip()
+        
+    except zipfile.BadZipFile:
+        raise ValueError("Invalid ZIP file format")
+    except Exception as e:
+        # Clean up temp file if it exists
+        try:
+            if 'temp_zip_path' in locals():
+                os.unlink(temp_zip_path)
+        except:
+            pass
+        raise ValueError(f"Error processing ZIP file: {str(e)}")
+
 @app.post("/api/reload-env")
 async def reload_environment():
     """Reload environment variables from .env file"""
@@ -1431,7 +1504,29 @@ async def extract_text(file: UploadFile = File(...), current_user: Authenticated
         
         # Read file content
         content = await file.read()
-        file_content = content.decode('utf-8')
+        
+        # Handle different file types
+        try:
+            if file.filename.lower().endswith('.zip'):
+                # Handle ZIP files
+                file_content = await extract_text_from_zip(content, file.filename)
+            else:
+                # Try to decode as text with multiple encodings
+                try:
+                    file_content = content.decode('utf-8')
+                except UnicodeDecodeError:
+                    # Try other common encodings
+                    for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
+                        try:
+                            file_content = content.decode(encoding)
+                            print(f"Successfully decoded file using {encoding} encoding")
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    else:
+                        raise ValueError("Unable to decode file. Please ensure it's a valid text file or ZIP containing text files.")
+        except Exception as decode_error:
+            raise ValueError(f"Error processing file: {str(decode_error)}")
         
         # Start background processing with user context
         asyncio.create_task(process_extraction_background(job_id, file_content, file.filename, current_user))
@@ -2650,7 +2745,7 @@ The conversation data you will analyze follows this message. Provide your compre
             update_job_progress(job_id, "analyzing", progress_percent, 
                               f"Batch {batch_num}/{total_batches} complete - {len(results)}/{chunks_to_process} chunks processed ({success_rate:.1f}% success)")
             
-            print(f"📈 Overall progress: {len(results)}/{chunks_to_process} chunks completed ({progress_percent}%)")
+            print(f"Overall progress: {len(results)}/{chunks_to_process} chunks completed ({progress_percent}%)")
             
             # Send keep-alive every 30 seconds
             current_time = time.time()
