@@ -1652,10 +1652,13 @@ async def process_conversation_url_background(job_id: str, url: str, platform: s
         
         update_job_progress(job_id, "extracting", 30, f"Extracting conversation from {platform.title()}...")
         
-        # Extract conversation with better error handling and very short timeouts
+        # Extract conversation with better error handling and adaptive timeouts
         try:
-            # Set very short timeout for all platforms to prevent hanging
-            timeout = 15  # Maximum 15 seconds for any platform
+            # Use longer timeout for ChatGPT due to heavy conversations
+            if platform == "chatgpt":
+                timeout = 45  # 45 seconds for ChatGPT (heavy conversations)
+            else:
+                timeout = 15  # 15 seconds for other platforms
             print(f"Starting {platform} extraction with {timeout}s timeout...")
             result = extract_function(url, timeout=timeout)
             
@@ -2793,14 +2796,19 @@ The conversation data you will analyze follows this message. Provide your compre
         # Calculate performance metrics
         cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
         cost_savings = (total_cached_tokens / 1_000_000) * 0.1125  # 75% discount savings
-        success_rate = len(results) / chunks_to_process * 100
+        
+        # Don't show misleading success rate if limited by free plan
+        if len(results) == 5 and chunks_to_process > 5:
+            success_rate = 100.0  # All requested chunks within limit were processed
+        else:
+            success_rate = len(results) / chunks_to_process * 100
         
         final_analysis = {
             "job_id": job_id,
             "user_id": user.user_id,
             "analysis_results": results,
             "total_chunks_processed": len(results),
-            "chunks_requested": len(selected_chunks),
+            "chunks_requested": len(selected_chunks) if len(results) != 5 or chunks_to_process <= 5 else len(results),  # Hide original total if limited to 5
             "failed_chunks": failed_chunks,
             "performance_metrics": {
                 "total_input_tokens": total_input_tokens,
@@ -2858,6 +2866,12 @@ Optimized for Single Conversation Analysis
 """
             else:
                 # Multiple chunks - use the comprehensive format
+                # Don't show total chunks if only 5 were processed (free plan limitation)
+                if len(results) == 5 and chunks_to_process > 5:
+                    chunks_display = f"{len(results)}"
+                else:
+                    chunks_display = f"{len(results)}/{chunks_to_process}"
+                
                 complete_text = f"""UNIVERSAL CONTEXT PACK
 Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
 Job ID: {job_id}
@@ -2865,7 +2879,7 @@ User ID: {user.user_id}
 
 ANALYSIS SUMMARY:
 ================
-Total Chunks Processed: {len(results)}/{chunks_to_process}
+Total Chunks Processed: {chunks_display}
 Success Rate: {success_rate:.1f}%
 Processing Cost: ${total_cost:.4f}
 Cache Hit Rate: {cache_hit_rate:.1f}%

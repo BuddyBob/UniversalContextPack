@@ -21,7 +21,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from contextlib import contextmanager
 
 class ProductionChatGPTExtractor:
-    def __init__(self, headless=True, timeout=30):
+    def __init__(self, headless=True, timeout=45):  # Increased default timeout
         self.headless = headless
         self.timeout = timeout
     
@@ -158,37 +158,115 @@ class ProductionChatGPTExtractor:
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
-            # Give time for dynamic content
-            time.sleep(3)
+            # Progressive loading detection for large conversations
+            print("Waiting for conversation to fully load...")
+            initial_wait = 3
+            max_wait = 30  # Maximum wait time for large conversations
+            check_interval = 2
+            
+            previous_content_length = 0
+            stable_count = 0
+            
+            for wait_time in range(initial_wait, max_wait, check_interval):
+                time.sleep(check_interval)
+                
+                current_content = driver.find_element(By.TAG_NAME, "body").text
+                current_length = len(current_content)
+                
+                print(f"Content length after {wait_time}s: {current_length} chars")
+                
+                # Check if content has stabilized (stopped growing)
+                if current_length == previous_content_length:
+                    stable_count += 1
+                    if stable_count >= 2:  # Content stable for 2 checks
+                        print(f"Content stabilized at {current_length} chars")
+                        break
+                else:
+                    stable_count = 0
+                    previous_content_length = current_length
+                
+                # If we have substantial content, we can proceed
+                if current_length > 5000:  # Large enough content
+                    print(f"Sufficient content loaded ({current_length} chars), proceeding...")
+                    break
             
             messages = []
             
-            # Try different selectors
+            # Debug: Check page content
+            page_text = driver.find_element(By.TAG_NAME, "body").text
+            print(f"Final page text length: {len(page_text)}")
+            
+            # Check for loading indicators or empty state
+            if 'loading' in page_text.lower() or len(page_text) < 500:
+                print("Page appears to still be loading or is empty")
+                time.sleep(5)  # Additional wait
+                page_text = driver.find_element(By.TAG_NAME, "body").text
+                print(f"After additional wait: {len(page_text)} chars")
+            
+            # Try different selectors (updated for current ChatGPT structure)
             selectors = [
                 '[data-message-author-role]',
+                '[data-testid*="conversation-turn"]',
                 '.text-message',
-                '[class*="message"]'
+                '[class*="message"]',
+                '[class*="turn"]',
+                'div[class*="group"]',  # ChatGPT often uses grouped divs
+                'article',
+                '[role="article"]'
             ]
             
             for selector in selectors:
+                print(f"Trying selector: {selector}")
                 elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                if len(elements) > 2:  # Found multiple messages
-                    for element in elements:
+                print(f"Found {len(elements)} elements with selector {selector}")
+                
+                if len(elements) > 1:  # Found multiple messages
+                    for i, element in enumerate(elements):
                         try:
                             text = element.text.strip()
                             if text and len(text) > 10:
+                                print(f"Element {i}: {text[:100]}...")
                                 role = self.determine_role_from_element(element, text)
                                 if role:
                                     messages.append({
                                         'role': role,
                                         'content': text
                                     })
-                        except Exception:
+                        except Exception as e:
+                            print(f"Error processing element {i}: {e}")
                             continue
                     
                     if messages:
+                        print(f"Successfully extracted {len(messages)} messages")
                         return self.clean_messages(messages)
             
+            # If no specific selectors work, try extracting all text content
+            print("No specific selectors worked, trying fallback extraction...")
+            all_divs = driver.find_elements(By.TAG_NAME, "div")
+            print(f"Found {len(all_divs)} div elements")
+            
+            # Look for divs with substantial text content
+            for div in all_divs:
+                try:
+                    text = div.text.strip()
+                    if text and len(text) > 50 and len(text) < 5000:  # Reasonable message length
+                        # Skip if it contains too many child elements (likely UI)
+                        children = div.find_elements(By.XPATH, ".//*")
+                        if len(children) < 10:  # Not too nested
+                            role = self.determine_role_from_element(div, text)
+                            if role and text not in [msg['content'] for msg in messages]:
+                                messages.append({
+                                    'role': role,
+                                    'content': text
+                                })
+                except Exception:
+                    continue
+            
+            if messages:
+                print(f"Fallback extraction found {len(messages)} messages")
+                return self.clean_messages(messages)
+            
+            print("No messages found with any method")
             return None
             
         except Exception as e:
@@ -202,6 +280,13 @@ class ProductionChatGPTExtractor:
             if role_attr:
                 return 'user' if role_attr.lower() in ['user', 'human'] else 'assistant'
             
+            # Check for testid attributes (common in modern ChatGPT)
+            testid = element.get_attribute('data-testid') or ''
+            if 'user' in testid.lower():
+                return 'user'
+            elif 'assistant' in testid.lower() or 'bot' in testid.lower():
+                return 'assistant'
+            
             # Check classes
             class_attr = element.get_attribute('class') or ''
             if 'user' in class_attr.lower():
@@ -210,24 +295,38 @@ class ProductionChatGPTExtractor:
                 return 'assistant'
             
             # Check parent elements
-            parent = element.find_element(By.XPATH, '..')
-            parent_class = parent.get_attribute('class') or ''
-            if 'user' in parent_class.lower():
-                return 'user'
-            elif 'assistant' in parent_class.lower():
-                return 'assistant'
+            try:
+                parent = element.find_element(By.XPATH, '..')
+                parent_class = parent.get_attribute('class') or ''
+                parent_testid = parent.get_attribute('data-testid') or ''
+                
+                if 'user' in parent_class.lower() or 'user' in parent_testid.lower():
+                    return 'user'
+                elif 'assistant' in parent_class.lower() or 'bot' in parent_class.lower() or 'assistant' in parent_testid.lower():
+                    return 'assistant'
+            except:
+                pass
             
             # Fallback to text analysis
-            text_lower = text[:50].lower()
+            text_lower = text[:100].lower()
             if any(starter in text_lower for starter in ['user:', 'human:', 'you:']):
                 return 'user'
             elif any(starter in text_lower for starter in ['assistant:', 'chatgpt:', 'ai:']):
                 return 'assistant'
             
-            return None
+            # Pattern-based detection for common conversational patterns
+            if text.strip().endswith('?') and len(text) < 500:  # Likely a question
+                return 'user'
+            elif text.startswith(('I can', 'I would', 'I think', 'Here', 'Let me', 'To ', 'You can')):
+                return 'assistant'
             
-        except Exception:
-            return None
+            # Default to alternating pattern if we can't determine
+            # This is a fallback - not ideal but better than nothing
+            return 'user'  # Will be cleaned up in post-processing
+            
+        except Exception as e:
+            print(f"Error determining role: {e}")
+            return 'user'  # Safe default
     
     def clean_messages(self, messages):
         """Clean and deduplicate messages"""
@@ -258,10 +357,40 @@ class ProductionChatGPTExtractor:
         
         with self.get_driver() as driver:
             try:
+                print(f"Loading page: {url}")
                 driver.get(url)
+                
+                # Wait for initial page load
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+                
+                # Check for common error conditions
+                page_source = driver.page_source.lower()
+                if 'conversation not found' in page_source or 'page not found' in page_source:
+                    raise Exception("Conversation not found - URL may be invalid or private")
+                
+                if 'please log in' in page_source or 'sign in' in page_source:
+                    raise Exception("Conversation requires authentication")
+                
+                # Wait for ChatGPT-specific elements to appear
+                print("Waiting for ChatGPT conversation elements...")
+                try:
+                    # Wait for any of these common ChatGPT elements
+                    WebDriverWait(driver, 15).until(
+                        lambda d: len(d.find_elements(By.CSS_SELECTOR, 
+                            '[data-message-author-role], [class*="message"], [class*="conversation"], article, [role="article"]'
+                        )) > 0
+                    )
+                except:
+                    print("Standard elements not found, continuing with extraction attempt...")
+                
                 messages = self.extract_messages(driver)
                 
                 if not messages:
+                    # Try to get any text content for debugging
+                    body_text = driver.find_element(By.TAG_NAME, "body").text
+                    print(f"Page body text (first 1000 chars): {body_text[:1000]}")
                     raise Exception("No conversation found")
                 
                 return {
@@ -275,7 +404,7 @@ class ProductionChatGPTExtractor:
                 raise Exception(f"Extraction failed: {str(e)}")
 
 # Simple API functions for web integration
-def extract_chatgpt_conversation(url, timeout=30):
+def extract_chatgpt_conversation(url, timeout=45):  # Increased default timeout
     """Extract conversation from ChatGPT URL"""
     extractor = ProductionChatGPTExtractor(timeout=timeout)
     return extractor.extract_conversation(url)
