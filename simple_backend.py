@@ -618,14 +618,29 @@ async def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
     
     for attempt in range(max_retries):
         try:
+            print(f"🔄 OpenAI API call attempt {attempt + 1}/{max_retries}")
             # Run the blocking OpenAI call in a thread pool to avoid blocking the event loop
             response = await asyncio.to_thread(openai_client.chat.completions.create, **kwargs)
+            print(f"✅ OpenAI API call successful on attempt {attempt + 1}")
             return response
         except Exception as e:
             error_str = str(e).lower()
+            print(f"❌ OpenAI API error on attempt {attempt + 1}: {e}")
+            print(f"🔍 Error type: {type(e).__name__}")
             
             # Don't retry quota/billing errors - fail immediately
             if any(term in error_str for term in ['quota', 'insufficient_quota', 'billing', 'plan']):
+                print(f"💳 Quota/billing error detected - not retrying")
+                raise e
+            
+            # Don't retry content policy errors - fail immediately
+            if any(term in error_str for term in ['content_policy', 'policy', 'safety']):
+                print(f"🚫 Content policy error detected - not retrying")
+                raise e
+            
+            # Don't retry context length errors - fail immediately  
+            if any(term in error_str for term in ['context_length', 'token limit', 'too long']):
+                print(f"📏 Context length error detected - not retrying")
                 raise e
             
             # Retry connection/network errors
@@ -633,10 +648,12 @@ async def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
                 'connection', 'timeout', 'network', 'ssl', 'socket', 'read timed out'
             ]):
                 wait_time = (attempt + 1) * 2  # Exponential backoff: 2, 4, 6 seconds
+                print(f"🔄 Retrying in {wait_time} seconds due to connection error...")
                 await asyncio.sleep(wait_time)  # Use async sleep
                 continue
             else:
                 # Re-raise the exception if it's not a connection issue or we've exceeded retries
+                print(f"❌ Not retrying - either not a connection error or max retries exceeded")
                 raise e
     
     raise Exception(f"OpenAI API failed after {max_retries} attempts")
@@ -2583,17 +2600,44 @@ The conversation data you will analyze follows this message. Provide your compre
                 if idx > 0:  # Don't delay the first chunk
                     await asyncio.sleep(0.5)  # 500ms delay between API calls
                 
-                ai_response = await openai_call_with_retry(
-                    openai_client,
-                    model="gpt-5-nano-2025-08-07",  # Primary model for UCP analysis
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}  # Full content, no truncation
-                    ],
-                    # Note: temperature parameter removed - gpt-5-nano-2025-08-07 only supports default (1)
-                    max_completion_tokens=15000,  # Allow comprehensive analysis
-                    timeout=120  # 2 minute timeout per chunk
-                )
+                print(f"🔍 Content preview: {chunk_content[:200]}...")
+                print(f"📝 Content language detected: {'Russian/Cyrillic' if any(ord(c) > 1000 for c in chunk_content[:1000]) else 'Latin/English'}")
+                
+                try:
+                    ai_response = await openai_call_with_retry(
+                        openai_client,
+                        model="gpt-5-nano-2025-08-07",  # Primary model for UCP analysis
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}  # Full content, no truncation
+                        ],
+                        # Note: temperature parameter removed - gpt-5-nano-2025-08-07 only supports default (1)
+                        max_completion_tokens=15000,  # Allow comprehensive analysis
+                        timeout=120  # 2 minute timeout per chunk
+                    )
+                except Exception as openai_error:
+                    print(f"❌ OpenAI API error for chunk {chunk_num}: {openai_error}")
+                    print(f"🔍 Error type: {type(openai_error).__name__}")
+                    print(f"📋 Error details: {str(openai_error)}")
+                    
+                    # Check for specific error types
+                    if "content_policy" in str(openai_error).lower():
+                        print(f"🚫 Content policy violation detected for chunk {chunk_num}")
+                        return {
+                            "error": "content_policy_violation", 
+                            "chunk_num": chunk_num,
+                            "message": "Content violates OpenAI's usage policies"
+                        }
+                    elif "context_length" in str(openai_error).lower():
+                        print(f"📏 Context length exceeded for chunk {chunk_num}")
+                        return {
+                            "error": "context_length_exceeded", 
+                            "chunk_num": chunk_num,
+                            "message": f"Content too long for processing ({len(chunk_content)} chars)"
+                        }
+                    else:
+                        raise openai_error  # Re-raise to be caught by outer exception handler
+                
                 chunk_duration = time.time() - chunk_start_time
                 
                 print(f"✅ Chunk {chunk_num} done ({chunk_duration:.1f}s)")
