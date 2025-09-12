@@ -1783,9 +1783,10 @@ async def process_conversation_url_background(job_id: str, url: str, platform: s
             "status": "completed"
         }
         
-        # Upload extraction summary as summary.json so results endpoint can find it
+        # Upload extraction summary (NOT as summary.json - that's reserved for final completion)
+        # Use extraction_summary.json instead so it doesn't trigger frontend completion
         summary_json = json.dumps(extraction_summary, indent=2)
-        upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", summary_json)
+        upload_to_r2(f"{user.r2_directory}/{job_id}/extraction_summary.json", summary_json)
         
         print(f"Background processing completed successfully for job {job_id}")
         
