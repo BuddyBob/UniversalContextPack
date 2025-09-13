@@ -618,15 +618,15 @@ async def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
     
     for attempt in range(max_retries):
         try:
-            print(f"🔄 OpenAI API call attempt {attempt + 1}/{max_retries}")
             # Run the blocking OpenAI call in a thread pool to avoid blocking the event loop
             response = await asyncio.to_thread(openai_client.chat.completions.create, **kwargs)
             print(f"✅ OpenAI API call successful on attempt {attempt + 1}")
             return response
         except Exception as e:
             error_str = str(e).lower()
-            print(f"❌ OpenAI API error on attempt {attempt + 1}: {e}")
-            print(f"🔍 Error type: {type(e).__name__}")
+            if attempt == 0:  # Only log on first attempt to reduce noise
+                print(f"❌ OpenAI API error on attempt {attempt + 1}: {e}")
+                print(f"🔍 Error type: {type(e).__name__}")
             
             # Don't retry quota/billing errors - fail immediately
             if any(term in error_str for term in ['quota', 'insufficient_quota', 'billing', 'plan']):
@@ -2639,15 +2639,11 @@ The conversation data you will analyze follows this message. Provide your compre
                 print(f"✅ Chunk {chunk_num}: {len(chunk_content)} chars")
                 
                 # Process with OpenAI using full content (no truncation) and optimized parameters
-                print(f"🤖 OpenAI call for chunk {chunk_num}...")
                 chunk_start_time = time.time()
                 
-                # Small delay to prevent rate limiting when processing multiple chunks
+                # Minimal delay to prevent rate limiting when processing multiple chunks
                 if idx > 0:  # Don't delay the first chunk
-                    await asyncio.sleep(0.5)  # 500ms delay between API calls
-                
-                print(f"🔍 Content preview: {chunk_content[:200]}...")
-                print(f"📝 Content language detected: {'Russian/Cyrillic' if any(ord(c) > 1000 for c in chunk_content[:1000]) else 'Latin/English'}")
+                    await asyncio.sleep(0.1)  # Reduced from 500ms to 100ms
                 
                 try:
                     ai_response = await openai_call_with_retry(
@@ -2811,11 +2807,9 @@ The conversation data you will analyze follows this message. Provide your compre
             tasks = []
             for i, chunk_num in enumerate(batch_chunks):
                 global_idx = batch_start + i
-                print(f"📤 Creating task for chunk {chunk_num} (task {i+1}/{len(batch_chunks)} in batch {batch_num})")
                 task = asyncio.create_task(process_single_chunk(chunk_num, global_idx, chunks_to_process))
                 tasks.append(task)
             
-            print(f"⏳ Waiting for batch {batch_num} with {len(tasks)} parallel tasks to complete...")
             batch_start_time = time.time()
             
             # Wait for all tasks in this batch to complete with timeout
@@ -2913,10 +2907,10 @@ The conversation data you will analyze follows this message. Provide your compre
                                   f"Keep-alive: {len(results)}/{chunks_to_process} processed, {cache_hit_rate:.1f}% cache hit rate")
                 last_keepalive = current_time
             
-            # Small delay between batches to respect rate limits and allow for cancellation
+            # Minimal delay between batches to allow for cancellation checks
             if batch_end < chunks_to_process:
-                print(f"⏸️  Waiting 1 second before starting batch {batch_num + 1}...")
-                await asyncio.sleep(1)  # Reduced from 2 seconds to 1 second  # 2 second delay between batches
+                print(f"⏸️  Brief pause before starting batch {batch_num + 1}...")
+                await asyncio.sleep(0.2)  # Reduced from 1 second to 200ms for speed
         
         # Final cancellation check before saving results
         if job_id in cancelled_jobs:
