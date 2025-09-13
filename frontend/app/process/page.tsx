@@ -2231,7 +2231,7 @@ export default function ProcessPage() {
                 <div className="text-center mb-6">
                   <h1 className="text-2xl font-bold text-white mb-2">Import files</h1>
                   <p className="text-gray-400">
-                    Drag files or a folder into the box below, or choose an option.
+                    Upload your conversations.json or export folder here!
                   </p>
                 </div>
 
