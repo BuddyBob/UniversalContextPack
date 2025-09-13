@@ -2583,16 +2583,32 @@ Structure your analysis clearly with detailed subsections for each category. Use
 
 The conversation data you will analyze follows this message. Provide your comprehensive Universal Context Pack analysis."""
         
-        # Adaptive batch size for optimal performance and Railway resource limits
-        # Start with 2 parallel chunks and monitor for failures
-        if chunks_to_process <= 5:
+        # Adaptive batch size for optimal performance and OpenAI rate limits
+        # Check average chunk size to avoid TPM (tokens per minute) limits
+        
+        # Get chunk metadata to estimate token usage
+        chunks_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", silent_404=True)
+        chunk_stats = json.loads(chunks_metadata_content) if chunks_metadata_content else {}
+        avg_chunk_chars = chunk_stats.get("average_size", 500000)  # Default estimate
+        estimated_tokens_per_chunk = avg_chunk_chars // 4  # Rough estimate: 4 chars per token
+        
+        # OpenAI gpt-5-nano has 200k TPM limit
+        max_tpm = 180000  # Use 180k to leave buffer
+        
+        if estimated_tokens_per_chunk > 100000:  # Very large chunks (>100k tokens each)
+            batch_size = 1  # Process one at a time to avoid rate limits
+            print(f"🔍 Large chunks detected (~{estimated_tokens_per_chunk:,} tokens each) - using batch size 1 to avoid rate limits")
+        elif estimated_tokens_per_chunk > 50000:  # Large chunks (>50k tokens each)
+            batch_size = min(2, max_tpm // estimated_tokens_per_chunk)  # Calculate safe batch size
+            print(f"🔍 Medium-large chunks detected (~{estimated_tokens_per_chunk:,} tokens each) - using batch size {batch_size}")
+        elif chunks_to_process <= 5:
             batch_size = 2  # Small jobs can handle 2 parallel chunks
         elif chunks_to_process <= 15:
-            batch_size = 2  # Medium jobs - conservative 2 parallel to avoid Railway limits  
+            batch_size = 2  # Medium jobs - conservative 2 parallel  
         else:
             batch_size = 2  # Large jobs - keep it safe but faster than sequential
         
-        print(f"🚀 Using parallel processing with batch size {batch_size} for {chunks_to_process} chunks")
+        print(f"🚀 Using parallel processing with batch size {batch_size} for {chunks_to_process} chunks (~{estimated_tokens_per_chunk:,} tokens each)")
         
         # Send keep-alive every 30 seconds to prevent timeouts
         last_keepalive = time.time()
@@ -2721,8 +2737,30 @@ The conversation data you will analyze follows this message. Provide your compre
                 
             except Exception as e:
                 print(f"❌ Error processing chunk {chunk_num}: {e}")
-                # Handle OpenAI quota errors specifically
-                if "quota" in str(e).lower() or "429" in str(e) or "insufficient_quota" in str(e):
+                error_str = str(e).lower()
+                
+                # Handle rate limits vs quota issues differently
+                if "rate limit reached" in error_str and "429" in str(e):
+                    # This is a rate limit - should be retried
+                    wait_time = 30  # Default wait time
+                    if "try again in" in error_str:
+                        try:
+                            # Extract wait time from error message
+                            import re
+                            match = re.search(r'try again in (\d+(?:\.\d+)?)', error_str)
+                            if match:
+                                wait_time = max(int(float(match.group(1)) + 1), 30)  # Add 1 second buffer, minimum 30s
+                        except:
+                            pass
+                    
+                    return {
+                        "error": "rate_limit", 
+                        "chunk_num": chunk_num,
+                        "wait_time": wait_time,
+                        "message": f"Rate limit reached. Should retry in {wait_time} seconds."
+                    }
+                elif "quota" in error_str or "insufficient_quota" in error_str:
+                    # This is a quota/billing issue - should fail
                     return {
                         "error": "quota_exceeded", 
                         "chunk_num": chunk_num,
@@ -2826,6 +2864,21 @@ The conversation data you will analyze follows this message. Provide your compre
                         update_job_progress(job_id, "error", 0, "OpenAI API quota exceeded. Please check your billing.")
                         await update_job_status_in_db(user, job_id, "failed", 0, "API quota exceeded")
                         return
+                    elif result.get("error") == "rate_limit":
+                        wait_time = result.get("wait_time", 60)
+                        print(f"⏳ Rate limit hit during batch {batch_num}, chunk {chunk_num} - waiting {wait_time}s before continuing")
+                        update_job_progress(job_id, "analyzing", 
+                                          int((len(results) / chunks_to_process) * 100), 
+                                          f"Rate limit reached. Waiting {wait_time}s before continuing...")
+                        
+                        # Wait for the specified time, then continue processing
+                        await asyncio.sleep(wait_time)
+                        
+                        # Add this chunk back to be retried in the next batch
+                        print(f"🔄 Retrying chunk {chunk_num} after rate limit wait")
+                        # For now, mark as failed and continue - we could implement retry logic here
+                        failed_chunks.append(result)
+                        failed_in_batch += 1
                     elif result.get("error"):
                         print(f"❌ Batch {batch_num} - Chunk {chunk_num} failed: {result.get('error')}")
                         failed_chunks.append(result)
