@@ -227,7 +227,7 @@ export default function PricingPageClient() {
                 }`}
               >
                 <div className="text-gray-900">Pay per use</div>
-                <div className="text-xs text-gray-500 mt-0.5">From $0.50/credit</div>
+                <div className="text-xs text-gray-500 mt-0.5">From $0.10/credit</div>
               </button>
               <button
                 onClick={() => {
