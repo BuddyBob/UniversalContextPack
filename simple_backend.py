@@ -4903,9 +4903,9 @@ def calculate_credit_price(credits: int) -> float:
     """Calculate price for credits with volume discounts"""
     # Special case: unlimited plan
     if credits == -1:
-        return 20.00
+        return 3.99
     
-    base_price = 0.10  # $0.10 per credit
+    base_price = 0.50  # $0.50 per credit
     
     if credits >= 250:
         # 20% off for 250+ credits

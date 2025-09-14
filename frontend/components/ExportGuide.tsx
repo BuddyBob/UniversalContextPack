@@ -190,6 +190,62 @@ const ExportGuide = () => {
           </div>
         </section>
 
+        {/* Privacy & Security Section */}
+        <section className="py-16 px-6 relative">
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-gradient-to-r from-green-500/10 to-blue-500/10 rounded-2xl p-8 border border-green-500/20">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-4">Your Privacy is Guaranteed</h2>
+                <p className="text-gray-300 text-lg">Complete data integrity and zero access to your conversations</p>
+              </div>
+              
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"/>
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-white mb-2">No Storage</h3>
+                  <p className="text-gray-400 text-sm">We never store your conversation data. Everything is processed and returned immediately.</p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-white mb-2">No Access</h3>
+                  <p className="text-gray-400 text-sm">We have zero access to your private conversations. Your data stays yours.</p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-white mb-2">Local Processing</h3>
+                  <p className="text-gray-400 text-sm">Files are processed temporarily and deleted immediately after creating your Context Pack.</p>
+                </div>
+              </div>
+              
+              <div className="mt-8 p-4 bg-green-500/5 rounded-lg border border-green-500/20">
+                <p className="text-green-300 text-sm text-center">
+                  <strong>Data Integrity Promise:</strong> Your conversations are processed securely with military-grade encryption. 
+                  We have no ability to read, store, or access your private AI conversations.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Export Guide Section */}
         <section id="export" className="min-h-screen flex items-center justify-center px-6 relative">
           <div className="max-w-6xl mx-auto relative">
@@ -266,9 +322,27 @@ const ExportGuide = () => {
                   </div>
                   <h3 className="text-xl font-semibold text-white">Use Anywhere</h3>
                 </div>
-                <p className="text-gray-300">
+                <p className="text-gray-300 mb-4">
                   Copy and paste your Context Pack into any AI to instantly transfer your conversation history and context.
                 </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a 
+                    href="/how-to-port"
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                    <span>How to Port Tutorial</span>
+                  </a>
+                  <a 
+                    href="/process"
+                    className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  >
+                    <span>Create Context Pack</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                </div>
               </div>
             </div>
           </div>
