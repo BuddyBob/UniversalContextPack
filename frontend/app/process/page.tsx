@@ -2230,13 +2230,20 @@ export default function ProcessPage() {
                 {/* Header */}
                 <div className="text-center mb-6">
                   <h1 className="text-2xl font-bold text-white mb-2">Import files</h1>
-                  <p className="text-gray-400">
+                  <p className="text-gray-500 text-sm">
                     Upload your conversations.json or export folder here!
                   </p>
                 </div>
 
                 {/* Main Upload Card */}
-                <div className="bg-gray-900/80 backdrop-blur-sm border-2 border-dashed border-gray-600 rounded-2xl p-8 text-center transition-all duration-300 hover:border-gray-500 hover:bg-gray-900/90 mb-6">
+                <div className={`
+                  backdrop-blur-sm border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300
+                  ${isDragOver 
+                    ? 'bg-blue-900/20 border-blue-400 shadow-lg shadow-blue-500/20 ring-1 ring-blue-400/30' 
+                    : 'bg-gray-900/80 border-gray-600 hover:border-gray-500 hover:bg-gray-900/90'
+                  }
+                  mb-6 group
+                `}>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -2257,46 +2264,56 @@ export default function ProcessPage() {
                   
                   {/* Dropzone */}
                   <div 
-                    className={`transition-all duration-300 ${isDragOver ? 'scale-105' : ''}`}
+                    className={`transition-all duration-300 ${isDragOver ? 'scale-[1.02]' : 'group-hover:scale-[1.01]'}`}
                     onDragOver={handleDragOver}
                     onDragEnter={handleDragEnter}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                   >
-                    <div className={`w-12 h-12 ${isDragOver ? 'bg-blue-600' : 'bg-gray-700'} rounded-xl flex items-center justify-center mx-auto mb-4 transition-all`}>
-                      <Upload className={`h-6 w-6 ${isDragOver ? 'text-white' : 'text-gray-300'}`} />
+                    <div className={`
+                      w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-6 transition-all duration-300
+                      ${isDragOver 
+                        ? 'bg-blue-600 shadow-lg shadow-blue-500/30 scale-110' 
+                        : 'bg-gray-700 group-hover:bg-gray-600'
+                      }
+                    `}>
+                      <Upload className={`h-8 w-8 transition-all duration-300 ${
+                        isDragOver ? 'text-white animate-pulse' : 'text-gray-300 group-hover:text-gray-200'
+                      }`} />
                     </div>
                     
-                    <h3 className="text-lg font-medium text-white mb-8">
-                      {isDragOver ? 'Drop here' : 'Upload here'}
+                    <h3 className={`text-xl font-medium mb-8 transition-colors duration-300 ${
+                      isDragOver ? 'text-blue-300' : 'text-white group-hover:text-gray-100'
+                    }`}>
+                      {isDragOver ? 'Drop your files here' : 'Upload here'}
                     </h3>
                     
                     {/* Action Buttons */}
                     <div className="space-y-4 mb-8">
                       <button 
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full bg-white hover:bg-gray-100 text-gray-900 py-3 px-6 rounded-xl font-medium transition-all"
+                        className="w-full bg-white hover:bg-gray-100 text-gray-900 py-3 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg"
                       >
                         Select files
                       </button>
                       
                       <button
                         onClick={() => folderInputRef.current?.click()}
-                        className="w-full bg-gray-800 border border-purple-900 hover:border-gray-900 text-gray-300 hover:text-white hover:bg-gray-800 py-3 px-6 rounded-xl font-medium transition-all"
+                        className="w-full bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white hover:bg-gray-750 py-3 px-6 rounded-xl font-medium transition-all duration-200"
                       >
-                        Upload export folder
+                        Choose export folder
                       </button>
                     </div>
                     
                     {/* File Types */}
-                    <div className="flex items-center justify-center gap-2 mb-4">
-                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-300 rounded-full text-sm">conversations.json</span>
-                      <span className="text-gray-500">·</span>
-                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-300 rounded-full text-sm">TXT</span>
-                      <span className="text-gray-500">·</span>
-                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-300 rounded-full text-sm">HTML</span>
-                      <span className="text-gray-500">·</span>
-                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-300 rounded-full text-sm">CSV</span>
+                    <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
+                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-full text-xs">conversations.json</span>
+                      <span className="text-gray-600 text-xs">·</span>
+                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-full text-xs">TXT</span>
+                      <span className="text-gray-600 text-xs">·</span>
+                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-full text-xs">HTML</span>
+                      <span className="text-gray-600 text-xs">·</span>
+                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-full text-xs">CSV</span>
                     </div>
                     
                     {/* Helper Note */}
@@ -2308,10 +2325,10 @@ export default function ProcessPage() {
 
                 {/* Alternative: Conversation URL */}
                 <div className="text-center mt-4">
-                  <div className="inline-flex items-center space-x-2 text-gray-400 text-sm mb-4">
-                    <div className="h-px bg-gray-600 w-16"></div>
-                    <span>or</span>
-                    <div className="h-px bg-gray-600 w-16"></div>
+                  <div className="inline-flex items-center space-x-2 text-gray-500 text-sm mb-4">
+                    <div className="h-px bg-gray-700 w-16"></div>
+                    <span className="text-xs">or</span>
+                    <div className="h-px bg-gray-700 w-16"></div>
                   </div>
                   
                   <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 max-w-md mx-auto">
@@ -3001,7 +3018,7 @@ export default function ProcessPage() {
             router.push('/pricing');
           }
         }}
-        className="fixed top-32 right-6 z-40 flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer bg-bg-card border border-border-primary text-text-primary hover:border-border-accent"
+        className="fixed top-32 right-6 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer bg-gray-900/90 backdrop-blur-sm border border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-800/90 hover:text-white"
       >
         <CreditCard className="w-4 h-4" />
         <span className="text-sm font-medium">

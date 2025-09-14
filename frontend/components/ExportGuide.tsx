@@ -111,23 +111,19 @@ const ExportGuide = () => {
           <div className="absolute inset-0 hero-gradient transform skew-y-1"></div>
           
           <div className="max-w-6xl mx-auto text-center relative z-10">
-            <div className="mb-6">
+            <div className="mb-8">
               <div className="text-sm text-blue-400 font-mono mb-4">~/universal-context-pack</div>
-              <h1 className="text-h1-lg text-white mb-4">
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl text-white mb-6 font-bold leading-tight">
                 Your AI
                 <br />
                 <span className="text-white font-medium">
                   Memory
                 </span>
                 <br />
-                <span className="text-gray-400 text-h1">Everywhere</span>
+                <span className="text-gray-400">Everywhere</span>
               </h1>
             </div>
             
-            <p className="text-body-lg text-gray-300 mb-8 max-w-3xl mx-auto">
-              Store your conversations with AIs. Move your conversations across different AIs
-            </p>
-
             {/* Status Message - Green Info Box */}
             <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 mb-8 max-w-md mx-auto">
               <p className="text-green-400 text-sm">
@@ -154,6 +150,44 @@ const ExportGuide = () => {
               </a>
             </div>
           </div>
+
+          {/* Floating Text Bubbles - Outside Container - Hidden on Mobile */}
+          <div className="absolute inset-0 pointer-events-none hidden lg:block">
+            {/* Bubble 1 - Far Left Edge */}
+            <div className="absolute" style={{ left: '5vw', top: '40%' }}>
+              <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
+                <span className="text-gray-300 text-base">Extract your conversations</span>
+              </div>
+            </div>
+            
+            {/* Bubble 2 - Far Right Edge */}
+            <div className="absolute" style={{ right: '5vw', top: '35%' }}>
+              <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
+                <span className="text-gray-300 text-base">Store them securely</span>
+              </div>
+            </div>
+            
+            {/* Bubble 3 - Left Side */}
+            <div className="absolute" style={{ left: '12vw', top: '65%' }}>
+              <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
+                <span className="text-gray-300 text-base">Port across different AI's</span>
+              </div>
+            </div>
+            
+            {/* Bubble 4 - Center Bottom */}
+            <div className="absolute" style={{ left: '50%', bottom: '20%', transform: 'translateX(-50%)' }}>
+              <div className="bg-purple-600/20 backdrop-blur-sm rounded-full px-5 py-3 border border-purple-500/30">
+                <span className="text-purple-300 text-base font-medium">Your conversations are your data</span>
+              </div>
+            </div>
+            
+            {/* Bubble 5 - Right Side */}
+            <div className="absolute" style={{ right: '12vw', top: '70%' }}>
+              <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
+                <span className="text-gray-300 text-base">AI Memory Manager</span>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Export Guide Section */}
@@ -169,103 +203,73 @@ const ExportGuide = () => {
               </p>
             </div>
 
-            {/* Platform Cards */}
-            <div className="grid-12 mb-16">
-              {exportSteps.map((step, index) => {
-                const Icon = step.icon
-                return (
-                  <div 
-                    key={step.platform} 
-                    className="col-span-12 lg:col-span-6 bg-gray-800/30 backdrop-blur-xl rounded-2xl overflow-hidden border border-gray-600 hover:border-gray-500 transition-all duration-300"
-                  >
-                    {/* Platform Header */}
-                    <div className="bg-gray-800/50 card-padding border-b border-gray-700">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center">
-                            <Icon className="h-6 w-6 text-white" />
-                          </div>
-                          <h3 className="text-h2 text-white">{step.platform}</h3>
-                        </div>
-                        <a 
-                          href={step.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="bg-white text-black px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors inline-flex items-center space-x-2"
-                        >
-                          <span>Open Settings</span>
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </div>
-                    </div>
-
-                    {/* Steps */}
-                    <div className="card-padding space-y-6">
-                      {/* Step 1 */}
-                      <div className="flex items-start space-x-4">
-                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
-                          1
-                        </div>
-                        <div>
-                          <p className="text-white font-medium mb-2">Visit Settings Page</p>
-                          <p className="text-gray-400 text-sm">Click the button above to open the data controls directly</p>
-                        </div>
-                      </div>
-
-                      {/* Step 2 */}
-                      <div className="flex items-start space-x-4">
-                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
-                          2
-                        </div>
-                        <div>
-                          <p className="text-white font-medium mb-2">Request Export</p>
-                          <p className="text-gray-400 text-sm">Look for "Export" or "Download" button and click it</p>
-                        </div>
-                      </div>
-
-                      {/* Step 3 */}
-                      <div className="flex items-start space-x-4">
-                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
-                          3
-                        </div>
-                        <div>
-                          <p className="text-white font-medium mb-2">Check Your Email</p>
-                          <p className="text-gray-400 text-sm">Download file when it arrives (usually within 5-10 minutes)</p>
-                        </div>
-                      </div>
-
-                      {/* Step 4 */}
-                      <div className="flex items-start space-x-4">
-                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
-                          4
-                        </div>
-                        <div>
-                          <p className="text-white font-medium mb-2">Upload to Process</p>
-                          <p className="text-gray-400 text-sm">
-                            <a href="/process" className="text-purple-400 hover:text-purple-300 transition-colors underline decoration-purple-500">
-                              Go to the Process page
-                            </a>
-                            {" "}and upload your downloaded folder to create your Universal Context Pack
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Step 5 */}
-                      <div className="flex items-start space-x-4">
-                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 mt-1">
-                          5
-                        </div>
-                        <div>
-                          <p className="text-white font-medium mb-2">Use Your Context Pack</p>
-                          <p className="text-gray-400 text-sm">
-                            Copy and paste your UCP into any LLM to instantly transfer your context.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+            {/* Simple Process Steps */}
+            <div className="max-w-2xl mx-auto mb-16">
+              {/* Step 1 - Export */}
+              <div className="bg-gray-800/20 rounded-xl p-6 mb-6 border border-gray-700">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    1
                   </div>
-                )
-              })}
+                  <h3 className="text-xl font-semibold text-white">Export Your Data</h3>
+                </div>
+                <p className="text-gray-300 mb-4">Request your conversation export from any AI platform:</p>
+                
+                <div className="grid gap-3">
+                  {exportSteps.map((step) => (
+                    <a 
+                      key={step.platform}
+                      href={step.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <step.icon className="h-5 w-5 text-gray-400" />
+                        <span className="text-white font-medium">{step.platform}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-purple-400 group-hover:text-purple-300">
+                        <span className="text-sm">Export Settings</span>
+                        <ExternalLink className="h-4 w-4" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+                <p className="text-sm text-gray-400 mt-3">
+                  Files arrive via email in 5-10 minutes.
+                </p>
+              </div>
+
+              {/* Step 2 - Upload */}
+              <div className="bg-gray-800/20 rounded-xl p-6 mb-6 border border-gray-700">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    2
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">Create Your Context Pack</h3>
+                </div>
+                <p className="text-gray-300 mb-4">Upload your exported files to generate a Universal Context Pack</p>
+                <a 
+                  href="/process"
+                  className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  <span>Go to Process Page</span>
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </div>
+
+              {/* Step 3 - Use */}
+              <div className="bg-gray-800/20 rounded-xl p-6 border border-gray-700">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    3
+                  </div>
+                  <h3 className="text-xl font-semibold text-white">Use Anywhere</h3>
+                </div>
+                <p className="text-gray-300">
+                  Copy and paste your Context Pack into any AI to instantly transfer your conversation history and context.
+                </p>
+              </div>
             </div>
           </div>
         </section>
