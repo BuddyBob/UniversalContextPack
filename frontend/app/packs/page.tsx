@@ -469,7 +469,7 @@ export default function PacksPage() {
                         className="p-3 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all text-center group"
                       >
                         <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                        <div className="text-sm font-medium text-gray-900">Complete</div>
+                        <div className="text-sm font-medium text-gray-900">complete_ucp.txt</div>
                         <div className="text-xs text-gray-500">
                           {selectedPack.total_output_tokens 
                             ? `~${formatTokenCount(selectedPack.total_output_tokens)}` 

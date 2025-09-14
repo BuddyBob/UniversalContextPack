@@ -148,14 +148,6 @@ const ExportGuide = () => {
                 <span>Skip to Upload</span>
                 <div className="w-4 h-6 transform group-hover:translate-x-1 transition-transform duration-300">→</div>
               </a>
-              
-              <a 
-                href="/how-to-port"
-                className="text-gray-400 hover:text-white transition-colors duration-300 flex items-center gap-2 group border border-gray-500 hover:border-gray-400 hover:bg-gray-600 px-6 py-4 rounded-lg"
-              >
-                <span>How to Port</span>
-                <ExternalLink className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-300" />
-              </a>
             </div>
           </div>
 

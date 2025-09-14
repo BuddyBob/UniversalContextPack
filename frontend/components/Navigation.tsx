@@ -104,6 +104,12 @@ export default function Navigation() {
               >
                 Packs
               </Link>
+              <Link 
+                href="/how-to-port" 
+                className={`nav-link ${pathname === '/how-to-port' ? 'active' : ''}`}
+              >
+                Docs
+              </Link>
             </nav>
 
             {/* Right Side Navigation */}
@@ -212,6 +218,13 @@ export default function Navigation() {
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Packs
+                </Link>
+                <Link 
+                  href="/how-to-port" 
+                  className={`mobile-nav-link ${pathname === '/how-to-port' ? 'active' : ''}`}
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  Docs
                 </Link>
                 
                 {/* Mobile User Section */}

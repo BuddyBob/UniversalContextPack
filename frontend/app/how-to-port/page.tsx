@@ -90,7 +90,6 @@ const HowToPortPage = () => {
                   <h3 className="text-base font-medium text-blue-900 mb-2">Important: Download the Complete Pack</h3>
                   <p className="text-blue-800 text-sm">
                     To get your <code className="bg-blue-100 px-1 rounded">complete_ucp.txt</code> file, download the <strong>Complete</strong> option from your packs page. 
-                    Do not use the Compact or Standard options - these are compressed versions that won't work for porting between AI platforms.
                   </p>
                 </div>
               </div>
@@ -98,10 +97,7 @@ const HowToPortPage = () => {
             
             <div className="prose prose-gray max-w-none">
               <ol className="space-y-3 text-gray-700">
-                <li>Navigate to your results page using your UCP ID</li>
-                <li>In the <strong>Download Options</strong> section, locate the <strong>Complete</strong> button (do not use Compact or Standard)</li>
-                <li>Click the <strong>Complete</strong> download button to save the <code className="bg-gray-200 px-1 rounded text-sm">complete_ucp.txt</code> file</li>
-                <li>Open the downloaded file in a text editor to copy its contents for porting</li>
+                <li>Navigate to packs tab, download the complete ucp, open in a text editor to copy its contents for porting</li>
               </ol>
             </div>
           </div>
