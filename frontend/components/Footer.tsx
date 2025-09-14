@@ -45,11 +45,6 @@ export default function Footer() {
             <h3 className="text-sm font-medium text-primary mb-4">Legal</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/security" className="text-sm text-secondary hover:text-primary transition-colors">
-                  Security
-                </Link>
-              </li>
-              <li>
                 <Link href="/privacy-policy" className="text-sm text-secondary hover:text-primary transition-colors">
                   Privacy Policy
                 </Link>
@@ -89,9 +84,6 @@ export default function Footer() {
             </Link>
           </div>
           <div className="flex space-x-6 mt-4 sm:mt-0">
-            <Link href="/security" className="text-sm text-muted hover:text-secondary transition-colors">
-              Security
-            </Link>
             <Link href="/privacy-policy" className="text-sm text-muted hover:text-secondary transition-colors">
               Privacy
             </Link>
