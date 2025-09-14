@@ -65,16 +65,12 @@ const HowToPortPage = () => {
                   <span><strong>Download your Context Pack:</strong> Navigate to your packs page and download the <code className="bg-gray-200 px-1 rounded text-sm">ucp_complete.txt</code> file</span>
                 </li>
                 <li className="flex items-start">
-                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white text-xs font-medium rounded-full flex items-center justify-center mr-3 mt-0.5">2</span>
-                  <span>Create a new conversation in your target AI platform</span>
+                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white text-xs font-medium rounded-full flex items-center justify-center mr-3 mt-0.5">4</span>
+                  <span>Add a context prompt to help the AI understand the import</span>
                 </li>
                 <li className="flex items-start">
                   <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white text-xs font-medium rounded-full flex items-center justify-center mr-3 mt-0.5">3</span>
                   <span>Paste your Context Pack as the first message</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white text-xs font-medium rounded-full flex items-center justify-center mr-3 mt-0.5">4</span>
-                  <span>Add a context prompt to help the AI understand the import</span>
                 </li>
               </ol>
             </div>
@@ -89,16 +85,10 @@ const HowToPortPage = () => {
                 <div>
                   <h3 className="text-base font-medium text-blue-900 mb-2">Important: Download the Complete Pack</h3>
                   <p className="text-blue-800 text-sm">
-                    To get your <code className="bg-blue-100 px-1 rounded">complete_ucp.txt</code> file, download the <strong>Complete</strong> option from your packs page. 
+                    Download your <code className="bg-blue-100 px-1 rounded">complete_ucp.txt</code> file from the packs tab. 
                   </p>
                 </div>
               </div>
-            </div>
-            
-            <div className="prose prose-gray max-w-none">
-              <ol className="space-y-3 text-gray-700">
-                <li>Navigate to packs tab, download the complete ucp, open in a text editor to copy its contents for porting</li>
-              </ol>
             </div>
           </div>
 
@@ -139,19 +129,6 @@ const HowToPortPage = () => {
             ))}
           </div>
 
-          {/* Best Practices */}
-          <div className="mb-12">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Best Practices</h2>
-            <div className="prose prose-gray max-w-none">
-              <ul className="space-y-2 text-gray-700">
-                <li>Always start with a fresh conversation when importing context</li>
-                <li>Include the context prompt to help the AI understand the data format</li>
-                <li>Wait for explicit acknowledgment before continuing your conversation</li>
-                <li>Test the context transfer with a follow-up question that references previous conversations</li>
-                <li>Keep your Context Pack file size under 100MB for optimal performance</li>
-              </ul>
-            </div>
-          </div>
 
           {/* Troubleshooting */}
           <div className="mb-12">

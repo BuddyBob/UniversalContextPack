@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Download, FileText, Brain, BarChart3, Calendar, DollarSign, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import AuthModal from '@/components/AuthModal'
@@ -23,6 +24,7 @@ interface UCPPack {
 
 export default function PacksPage() {
   const { user, session, makeAuthenticatedRequest } = useAuth()
+  const searchParams = useSearchParams()
   const [packs, setPacks] = useState<UCPPack[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPack, setSelectedPack] = useState<UCPPack | null>(null)
@@ -78,6 +80,19 @@ export default function PacksPage() {
       setPacks([])
     }
   }, [user, session])
+
+  // Auto-select pack if ID is provided in URL
+  useEffect(() => {
+    const packId = searchParams.get('id')
+    if (packId && packs.length > 0) {
+      const targetPack = packs.find(pack => 
+        (pack.ucpId === packId) || (pack.id === packId)
+      )
+      if (targetPack) {
+        setSelectedPack(targetPack)
+      }
+    }
+  }, [packs, searchParams])
 
   const loadPacks = async () => {
     if (!user) {
@@ -418,6 +433,17 @@ export default function PacksPage() {
                       <h3 className="text-lg font-medium text-gray-900">Pack Details</h3>
                       <p className="text-sm text-gray-600 mt-1">UCP ID: {selectedPack.ucpId || selectedPack.id}</p>
                     </div>
+                  </div>
+
+                  {/* How to Port Button */}
+                  <div className="mb-6">
+                    <a 
+                      href="/how-to-port"
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 hover:border-blue-300 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span>How to Port This Pack</span>
+                    </a>
                   </div>
 
                   {/* Download Options */}

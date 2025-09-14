@@ -2005,7 +2005,11 @@ export default function ProcessPage() {
   };
 
   const viewResults = () => {
-    router.push('/packs');
+    if (currentJobId) {
+      router.push(`/packs?id=${currentJobId}`);
+    } else {
+      router.push('/packs');
+    }
   };
 
   return (
@@ -2676,6 +2680,7 @@ export default function ProcessPage() {
                     <CheckCircle className="h-5 w-5 text-green-600" />
                   </div>
                   <h3 className="text-lg font-semibold text-text-primary">Universal Context Pack Created</h3>
+                  <p className="text-sm text-text-secondary">Download your complete_ucp.txt and paste into any AI chat.</p>
                 </div>
 
                 <div className="flex space-x-3">
