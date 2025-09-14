@@ -423,16 +423,7 @@ export default function PacksPage() {
                   {/* Download Options */}
                   <div className="mb-6">
                     <h4 className="text-md font-medium text-gray-900 mb-3">Download Options</h4>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      <button
-                        onClick={() => downloadPack(selectedPack.ucpId || selectedPack.id || '')}
-                        className="p-3 border border-gray-300 bg-white hover:bg-gray-50 rounded-lg transition-all text-center group"
-                      >
-                        <Download className="h-4 w-4 text-gray-600 mx-auto mb-1 group-hover:scale-110 transition-transform" />
-                        <div className="text-sm font-medium text-gray-900">Entire Pack</div>
-                        <div className="text-xs text-gray-500">All formats</div>
-                      </button>
-                      
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                       <button
                         onClick={canDownloadCompact(selectedPack.total_output_tokens) ? () => downloadCompact(selectedPack.ucpId || selectedPack.id || '') : undefined}
                         disabled={!canDownloadCompact(selectedPack.total_output_tokens)}

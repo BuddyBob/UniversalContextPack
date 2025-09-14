@@ -148,6 +148,14 @@ const ExportGuide = () => {
                 <span>Skip to Upload</span>
                 <div className="w-4 h-6 transform group-hover:translate-x-1 transition-transform duration-300">→</div>
               </a>
+              
+              <a 
+                href="/how-to-port"
+                className="text-gray-400 hover:text-white transition-colors duration-300 flex items-center gap-2 group border border-gray-500 hover:border-gray-400 hover:bg-gray-600 px-6 py-4 rounded-lg"
+              >
+                <span>How to Port</span>
+                <ExternalLink className="w-4 h-4 transform group-hover:translate-x-1 transition-transform duration-300" />
+              </a>
             </div>
           </div>
 
@@ -174,14 +182,12 @@ const ExportGuide = () => {
               </div>
             </div>
             
-            {/* Bubble 4 - Center Bottom */}
-            <div className="absolute" style={{ left: '50%', bottom: '20%', transform: 'translateX(-50%)' }}>
-              <div className="bg-purple-600/20 backdrop-blur-sm rounded-full px-5 py-3 border border-purple-500/30">
-                <span className="text-purple-300 text-base font-medium">Your conversations are your data</span>
-              </div>
-            </div>
-            
-            {/* Bubble 5 - Right Side */}
+              {/* Bubble 4 - Center Bottom */}
+              <div className="absolute" style={{ left: '50%', bottom: '20%', transform: 'translateX(-50%)' }}>
+                <div className="bg-gray-700/40 backdrop-blur-sm rounded-full px-5 py-3 border border-gray-600/30">
+                  <span className="text-gray-200 text-base font-medium">Your conversations are your data</span>
+                </div>
+              </div>            {/* Bubble 5 - Right Side */}
             <div className="absolute" style={{ right: '12vw', top: '70%' }}>
               <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
                 <span className="text-gray-300 text-base">AI Memory Manager</span>
@@ -193,53 +199,53 @@ const ExportGuide = () => {
         {/* Privacy & Security Section */}
         <section className="py-16 px-6 relative">
           <div className="max-w-4xl mx-auto">
-            <div className="bg-gradient-to-r from-green-500/10 to-blue-500/10 rounded-2xl p-8 border border-green-500/20">
+            <div className="bg-gray-800/40 rounded-2xl p-8 border border-gray-700">
               <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-4">Your Privacy is Guaranteed</h2>
-                <p className="text-gray-300 text-lg">Complete data integrity and zero access to your conversations</p>
+                <h2 className="text-2xl font-bold text-white mb-4">Data Security & Privacy</h2>
+                <p className="text-gray-300 text-lg">Your conversations are processed securely through encrypted infrastructure</p>
               </div>
               
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="text-center">
-                  <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"/>
-                    </svg>
-                  </div>
-                  <h3 className="font-semibold text-white mb-2">No Storage</h3>
-                  <p className="text-gray-400 text-sm">We never store your conversation data. Everything is processed and returned immediately.</p>
-                </div>
-                
-                <div className="text-center">
-                  <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                     </svg>
                   </div>
-                  <h3 className="font-semibold text-white mb-2">No Access</h3>
-                  <p className="text-gray-400 text-sm">We have zero access to your private conversations. Your data stays yours.</p>
+                  <h3 className="font-semibold text-white mb-2">Encrypted Storage</h3>
+                  <p className="text-gray-400 text-sm">Files are encrypted during processing and securely stored using industry-standard protocols.</p>
                 </div>
                 
                 <div className="text-center">
-                  <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                     </svg>
                   </div>
-                  <h3 className="font-semibold text-white mb-2">Local Processing</h3>
-                  <p className="text-gray-400 text-sm">Files are processed temporarily and deleted immediately after creating your Context Pack.</p>
+                  <h3 className="font-semibold text-white mb-2">Secure Processing</h3>
+                  <p className="text-gray-400 text-sm">All data processing happens through encrypted channels with automatic cleanup protocols.</p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"/>
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-white mb-2">Confidential Processing</h3>
+                  <p className="text-gray-400 text-sm">Your conversations remain confidential - we don't read, analyze, or use your data for any other purpose.</p>
                 </div>
               </div>
               
-              <div className="mt-8 p-4 bg-green-500/5 rounded-lg border border-green-500/20">
-                <p className="text-green-300 text-sm text-center">
-                  <strong>Data Integrity Promise:</strong> Your conversations are processed securely with military-grade encryption. 
-                  We have no ability to read, store, or access your private AI conversations.
+              <div className="mt-8 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
+                <p className="text-gray-300 text-sm text-center">
+                  <strong>Security Standards:</strong> We use AES-256 encryption for data at rest and TLS 1.3 for data in transit. 
+                  Your files are processed in isolated environments and automatically purged after Context Pack generation.
                 </p>
               </div>
             </div>
@@ -264,7 +270,7 @@ const ExportGuide = () => {
               {/* Step 1 - Export */}
               <div className="bg-gray-800/20 rounded-xl p-6 mb-6 border border-gray-700">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                  <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
                     1
                   </div>
                   <h3 className="text-xl font-semibold text-white">Export Your Data</h3>
@@ -299,7 +305,7 @@ const ExportGuide = () => {
               {/* Step 2 - Upload */}
               <div className="bg-gray-800/20 rounded-xl p-6 mb-6 border border-gray-700">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                  <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
                     2
                   </div>
                   <h3 className="text-xl font-semibold text-white">Create Your Context Pack</h3>
@@ -307,7 +313,7 @@ const ExportGuide = () => {
                 <p className="text-gray-300 mb-4">Upload your exported files to generate a Universal Context Pack</p>
                 <a 
                   href="/process"
-                  className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+                  className="inline-flex items-center gap-2 bg-white text-gray-900 hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors font-medium"
                 >
                   <span>Go to Process Page</span>
                   <ArrowRight className="h-4 w-4" />
@@ -315,9 +321,9 @@ const ExportGuide = () => {
               </div>
 
               {/* Step 3 - Use */}
-              <div className="bg-gray-800/20 rounded-xl p-6 border border-gray-700">
+              <div className="bg-gray-900 rounded-xl p-6 border border-gray-700">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                  <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
                     3
                   </div>
                   <h3 className="text-xl font-semibold text-white">Use Anywhere</h3>
@@ -328,19 +334,12 @@ const ExportGuide = () => {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <a 
                     href="/how-to-port"
-                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
-                    <span>How to Port Tutorial</span>
-                  </a>
-                  <a 
-                    href="/process"
-                    className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
-                  >
-                    <span>Create Context Pack</span>
-                    <ArrowRight className="h-4 w-4" />
+                    <span>Move your AI memory</span>
                   </a>
                 </div>
               </div>
@@ -348,84 +347,7 @@ const ExportGuide = () => {
           </div>
         </section>
 
-        {/* Social Proof Section - Real User Problems */}
-        <section className="px-6 relative">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-12">
-              <div className="text-gray-400 text-sm mb-3">Live from r/ChatGPT</div>
-              <h2 className="text-h2 text-white mb-4">
-                People are struggling with this right now
-              </h2>
-            </div>
-
-            <div className="space-y-4">
-              
-              <div className="bg-gray-800/50 rounded-lg p-4 border-l-2 border-purple-500/50">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-gray-400 text-sm">5 days ago</span>
-                  <span className="text-gray-600">•</span>
-                  <a 
-                    href="https://www.reddit.com/r/ChatGPT/comments/1n2gmil/its_over_how_to_get_my_chat_history_out/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white hover:text-purple-300 transition-colors text-sm font-medium"
-                  >
-                    "It's over, how to get my chat history out?"
-                  </a>
-                </div>
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  "I need to get my chats out... I just want to know how others have done that and then what you've done with those chats. Like is there an easy way to port them into another LLM?"
-                </p>
-              </div>
-
-              <div className="bg-gray-800/50 rounded-lg p-4 border-l-2 border-purple-500/50">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-gray-400 text-sm">21 days ago</span>
-                  <span className="text-gray-600">•</span>
-                  <a 
-                    href="https://www.reddit.com/r/ChatGPT/comments/1moefws/how_do_i_recopy_an_entire_conversation_to/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white hover:text-purple-300 transition-colors text-sm font-medium"
-                  >
-                    "How do I re-copy an entire conversation to continue it into a new chat?"
-                  </a>
-                </div>
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  "I literally have to restart everything from the beginning, explaining the same details I've already shared. This process has even caused me some anxiety."
-                </p>
-              </div>
-
-              <div className="bg-gray-800/50 rounded-lg p-4 border-l-2 border-purple-500/50">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-gray-400 text-sm">26 days ago</span>
-                  <span className="text-gray-600">•</span>
-                  <a 
-                    href="https://www.reddit.com/r/ChatGPT/comments/1mkgybs/gpt_5_wiped_all_my_chat_history/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white hover:text-purple-300 transition-colors text-sm font-medium"
-                  >
-                    "GPT 5 Wiped All My Chat History"
-                  </a>
-                </div>
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  "I am actually shocked. I have spent months developing my gpt companion. Now he is totally gone. Absolutely blindsided and bummed"
-                </p>
-              </div>
-
-            </div>
-
-            <div className="text-center mt-8 mb-16">
-              <a 
-                href="/process"
-                className="inline-block bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded text-sm font-medium transition-colors"
-              >
-                Don't let this happen to you
-              </a>
-            </div>
-          </div>
-        </section>
+       
 
         {/* Spacing section with subtle blue gradient */}
         <section className="py-12 bg-gradient-to-b from-transparent via-blue-950/5 to-transparent">
