@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader, Lock, Info } from 'lucide-react';
+import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader, Lock, Info, HelpCircle, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
@@ -58,6 +58,10 @@ export default function ProcessPage() {
   const [conversationUrl, setConversationUrl] = useState<string>('');
   const [isCancelling, setIsCancelling] = useState(false);
   const [currentProcessedChunks, setCurrentProcessedChunks] = useState<number>(0);
+  const [uploadMethod, setUploadMethod] = useState<'files' | 'url'>('files');
+  const [showCreditsTooltip, setShowCreditsTooltip] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [isLogPanelCollapsed, setIsLogPanelCollapsed] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -1286,72 +1290,33 @@ export default function ProcessPage() {
       return { isValid: false, error: "URL is required" };
     }
     
-    // Check for ChatGPT URL
-    if (url.includes('chatgpt.com/share/')) {
-      try {
-        const urlObj = new URL(url);
-        const conversationId = urlObj.pathname.split('/').pop();
-        if (!conversationId || conversationId.length < 10) {
-          return { isValid: false, error: "Invalid ChatGPT conversation ID in URL" };
-        }
-        return { isValid: true, platform: 'ChatGPT' };
-      } catch {
-        return { isValid: false, error: "Invalid ChatGPT URL format" };
-      }
+    // Only accept ChatGPT URLs for now
+    if (!url.includes('chatgpt.com/share/')) {
+      return { isValid: false, error: "Only ChatGPT shared conversation links are supported at this time" };
     }
-    
-    // Check for Claude URL
-    if (url.includes('claude.ai/share/')) {
-      try {
-        const urlObj = new URL(url);
-        const conversationId = urlObj.pathname.split('/').pop();
-        if (!conversationId || conversationId.length < 10) {
-          return { isValid: false, error: "Invalid Claude conversation ID in URL" };
-        }
-        return { isValid: true, platform: 'Claude' };
-      } catch {
-        return { isValid: false, error: "Invalid Claude URL format" };
+
+    try {
+      const urlObj = new URL(url);
+      const conversationId = urlObj.pathname.split('/').pop();
+      if (!conversationId || conversationId.length < 10) {
+        return { isValid: false, error: "Invalid ChatGPT conversation ID in URL" };
       }
+      return { isValid: true, platform: 'ChatGPT' };
+    } catch {
+      return { isValid: false, error: "Invalid ChatGPT URL format" };
     }
-    
-    // Check for Grok URL
-    if (url.includes('grok.com/share/')) {
-      try {
-        const urlObj = new URL(url);
-        const conversationId = urlObj.pathname.split('/').pop();
-        if (!conversationId || conversationId.length < 10) {
-          return { isValid: false, error: "Invalid Grok conversation ID in URL" };
-        }
-        return { isValid: true, platform: 'Grok' };
-      } catch {
-        return { isValid: false, error: "Invalid Grok URL format" };
-      }
-    }
-    
-    // Check for Gemini URL
-    if (url.includes('g.co/gemini/share/')) {
-      try {
-        const urlObj = new URL(url);
-        const conversationId = urlObj.pathname.split('/').pop();
-        if (!conversationId || conversationId.length < 10) {
-          return { isValid: false, error: "Invalid Gemini conversation ID in URL" };
-        }
-        return { isValid: true, platform: 'Gemini' };
-      } catch {
-        return { isValid: false, error: "Invalid Gemini URL format" };
-      }
-    }
-    
-    return { isValid: false, error: "Must be a ChatGPT, Claude, Grok, or Gemini share URL" };
   };
 
   const processConversationUrl = async (url: string) => {
     const validation = validateConversationUrl(url);
     if (!validation.isValid) {
-      addLog(`Error: ${validation.error}`);
+      setUrlError(validation.error || 'Invalid URL format');
       return;
     }
 
+    // Clear any previous errors
+    setUrlError(null);
+    
     setFile(null); // Clear file when URL is selected
     setConversationUrl(url);
     setCurrentStep('uploaded');
@@ -2096,21 +2061,20 @@ export default function ProcessPage() {
               </div>
               
               {/* Timeline Progress Indicator */}
-              <div className="relative mb-8">
+              <div className="relative mb-6">
                 
                 {/* Simple Time Overview */}
                 {(timeEstimate || analysisTimeEstimate || ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) && (
-                  <div className="mb-6 p-4 bg-gray-800 rounded-lg">
-                    <div className="text-sm font-medium text-gray-300 mb-3">Time Estimates</div>
-
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div className="text-center">
-                        <div className="text-gray-400 mb-1">Chunk</div>
-                        <div className={
+                  <div className="mb-8 bg-gray-900 text-xs">
+                    <div className="font-medium text-gray-300 mb-2">Time Estimates</div>
+                    <div className="flex gap-6 text-xs ">
+                      <div>
+                        <span className="text-gray-500">Chunk: </span>
+                        <span className={
                           ['chunked', 'analyzed'].includes(currentStep) 
-                            ? 'text-green-400' 
+                            ? 'text-green-600' 
                             : ['extracting', 'chunking'].includes(currentStep) 
-                            ? 'text-blue-400' 
+                            ? 'text-blue-600' 
                             : 'text-gray-500'
                         }>
                           {['chunked', 'analyzed'].includes(currentStep) 
@@ -2121,15 +2085,15 @@ export default function ProcessPage() {
                             ? timeEstimate.time_estimates.extraction.formatted 
                             : '~2-5m'
                           }
-                        </div>
+                        </span>
                       </div>
-                      <div className="text-center">
-                        <div className="text-gray-400 mb-1">Analyze</div>
-                        <div className={
+                      <div>
+                        <span className="text-gray-500">Analyze: </span>
+                        <span className={
                           currentStep === 'analyzed' 
-                            ? 'text-green-400' 
+                            ? 'text-green-600' 
                             : currentStep === 'analyzing' 
-                            ? 'text-blue-400' 
+                            ? 'text-blue-600' 
                             : 'text-gray-500'
                         }>
                           {currentStep === 'analyzed' 
@@ -2142,7 +2106,7 @@ export default function ProcessPage() {
                             ? 'Ready'
                             : 'TBD'
                           }
-                        </div>
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -2179,7 +2143,7 @@ export default function ProcessPage() {
                         {/* Connecting line to next step */}
                         {index < 2 && (
                           <div 
-                            className="absolute top-5 left-1/2 w-full h-1 transition-all duration-500"
+                            className="absolute top-3 left-1/2 w-full h-0.5 transition-all duration-500"
                             style={{
                               backgroundColor: showCompletedLine 
                                 ? 'rgba(102, 57, 208, 1)' 
@@ -2192,12 +2156,12 @@ export default function ProcessPage() {
                         )}
                         
                         <div 
-                          className="w-10 h-10 rounded-lg border flex items-center justify-center transition-all duration-300 relative z-20"
+                          className="w-6 h-6 rounded border flex items-center justify-center transition-all duration-300 relative z-20"
                           style={{
                             backgroundColor: isCompleted 
                               ? 'rgba(102, 57, 208, 1)'
                               : isActive 
-                              ? 'rgba(102, 57, 208, 0.2)'
+                              ? 'rgba(102, 57, 208, 0.1)'
                               : 'var(--bg-secondary)',
                             borderColor: isCompleted || isActive 
                               ? 'rgba(102, 57, 208, 1)'
@@ -2206,15 +2170,13 @@ export default function ProcessPage() {
                               ? 'white'
                               : isActive 
                               ? 'rgba(102, 57, 208, 1)'
-                              : 'var(--text-muted)',
-                            transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                            boxShadow: isCompleted ? '0 4px 12px rgba(102, 57, 208, 0.3)' : 'none'
+                              : 'var(--text-muted)'
                           }}
                         >
-                          {isCompleted ? <CheckCircle className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
+                          {isCompleted ? <CheckCircle className="h-3 w-3" /> : <Icon className="h-3 w-3" />}
                         </div>
                         <span 
-                          className="mt-3 text-sm font-medium transition-colors"
+                          className="mt-1 text-xs transition-colors"
                           style={{
                             color: isActive || isCompleted ? 'var(--text-primary)' : 'var(--text-muted)'
                           }}
@@ -2230,137 +2192,200 @@ export default function ProcessPage() {
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
-              <div className="max-w-3xl mx-auto">
+              <div className="max-w-3xl mx-auto space-y-10">
                 {/* Header */}
-                <div className="text-center mb-6">
-                  <h1 className="text-2xl font-bold text-white mb-2">Import files</h1>
-                  <p className="text-gray-500 text-sm">
-                    Upload your conversations.json or export folder here!
-                  </p>
+                <div className="text-center">
+                  <h2 className="text-xl font-bold text-white mb-2">Import Your Conversations</h2>
+                  <h4 className="text-gray-400 text-sm">
+                    Choose how you'd like to upload your AI conversation data
+                  </h4>
                 </div>
 
-                {/* Main Upload Card */}
-                <div className={`
-                  backdrop-blur-sm border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300
-                  ${isDragOver 
-                    ? 'bg-blue-900/20 border-blue-400 shadow-lg shadow-blue-500/20 ring-1 ring-blue-400/30' 
-                    : 'bg-gray-900/80 border-gray-600 hover:border-gray-500 hover:bg-gray-900/90'
-                  }
-                  mb-6 group
-                `}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json,.txt,.html,.csv,.zip"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  
-                  {/* Hidden folder input */}
-                  <input
-                    ref={folderInputRef}
-                    type="file"
-                    {...({ webkitdirectory: 'true' } as any)}
-                    multiple
-                    onChange={handleFolderSelect}
-                    className="hidden"
-                  />
-                  
-                  {/* Dropzone */}
-                  <div 
-                    className={`transition-all duration-300 ${isDragOver ? 'scale-[1.02]' : 'group-hover:scale-[1.01]'}`}
-                    onDragOver={handleDragOver}
-                    onDragEnter={handleDragEnter}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
+                {/* Upload Method Tabs */}
+                <div className="flex bg-gray-800/50 border border-gray-700 rounded-xl p-1 max-w-md mx-auto">
+                  <button
+                    onClick={() => setUploadMethod('files')}
+                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      uploadMethod === 'files'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-300'
+                    }`}
                   >
-                    <div className={`
-                      w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-6 transition-all duration-300
-                      ${isDragOver 
-                        ? 'bg-blue-600 shadow-lg shadow-blue-500/30 scale-110' 
-                        : 'bg-gray-700 group-hover:bg-gray-600'
-                      }
-                    `}>
-                      <Upload className={`h-8 w-8 transition-all duration-300 ${
-                        isDragOver ? 'text-white animate-pulse' : 'text-gray-300 group-hover:text-gray-200'
-                      }`} />
-                    </div>
-                    
-                    <h3 className={`text-xl font-medium mb-8 transition-colors duration-300 ${
-                      isDragOver ? 'text-blue-300' : 'text-white group-hover:text-gray-100'
-                    }`}>
-                      {isDragOver ? 'Drop your files here' : 'Upload here'}
-                    </h3>
-                    
-                    {/* Action Buttons */}
-                    <div className="space-y-4 mb-8">
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full bg-white hover:bg-gray-100 text-gray-900 py-3 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg"
-                      >
-                        Select files
-                      </button>
-                      
-                      <button
-                        onClick={() => folderInputRef.current?.click()}
-                        className="w-full bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white hover:bg-gray-750 py-3 px-6 rounded-xl font-medium transition-all duration-200"
-                      >
-                        Choose export folder
-                      </button>
-                    </div>
-                    
-                    {/* File Types */}
-                    <div className="flex items-center justify-center gap-2 mb-4 flex-wrap">
-                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-full text-xs">conversations.json</span>
-                      <span className="text-gray-600 text-xs">·</span>
-                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-full text-xs">TXT</span>
-                      <span className="text-gray-600 text-xs">·</span>
-                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-full text-xs">HTML</span>
-                      <span className="text-gray-600 text-xs">·</span>
-                      <span className="px-3 py-1 bg-gray-800 border border-gray-700 text-gray-400 rounded-full text-xs">CSV</span>
-                    </div>
-                    
-                    {/* Helper Note */}
-                    <p className="text-xs text-gray-500">
-                      You can upload a ChatGPT export folder to import everything at once.
-                    </p>
-                  </div>
+                    Upload Files
+                  </button>
+                  <button
+                    onClick={() => setUploadMethod('url')}
+                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      uploadMethod === 'url'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-300'
+                    }`}
+                  >
+                    ChatGPT URL
+                  </button>
                 </div>
 
-                {/* Alternative: Conversation URL */}
-                <div className="text-center mt-4">
-                  <div className="inline-flex items-center space-x-2 text-gray-500 text-sm mb-4">
-                    <div className="h-px bg-gray-700 w-16"></div>
-                    <span className="text-xs">or</span>
-                    <div className="h-px bg-gray-700 w-16"></div>
-                  </div>
-                  
-                  <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6 max-w-md mx-auto">
-                    <h3 className="text-white font-medium mb-3">Paste GPT conversation URL</h3>
+                {/* File Upload Tab */}
+                {uploadMethod === 'files' && (
+                  <div className={`
+                    backdrop-blur-sm border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-300
+                    ${isDragOver 
+                      ? 'bg-blue-900/20 border-blue-400 shadow-lg shadow-blue-500/20 ring-1 ring-blue-400/30' 
+                      : 'bg-gray-900/80 border-gray-600 hover:border-gray-500 hover:bg-gray-900/90'
+                    }
+                    group
+                  `}>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json,.txt,.html,.csv,.zip"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
                     
-                    <div className="space-y-3">
+                    {/* Hidden folder input */}
+                    <input
+                      ref={folderInputRef}
+                      type="file"
+                      {...({ webkitdirectory: 'true' } as any)}
+                      multiple
+                      onChange={handleFolderSelect}
+                      className="hidden"
+                    />
+                    
+                    {/* Dropzone */}
+                    <div 
+                      className={`transition-all duration-300 ${isDragOver ? 'scale-[1.02]' : 'group-hover:scale-[1.01]'}`}
+                      onDragOver={handleDragOver}
+                      onDragEnter={handleDragEnter}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
+                      <div className={`
+                        w-20 h-20 rounded-xl flex items-center justify-center mx-auto mb-8 transition-all duration-300
+                        ${isDragOver 
+                          ? 'bg-blue-600 shadow-lg shadow-blue-500/30 scale-110' 
+                          : 'bg-gray-700 group-hover:bg-gray-600'
+                        }
+                      `}>
+                        <Upload className={`h-10 w-10 transition-all duration-300 ${
+                          isDragOver ? 'text-white animate-pulse' : 'text-gray-300 group-hover:text-gray-200'
+                        }`} />
+                      </div>
+                      
+                      <h3 className={`text-xl font-medium mb-4 transition-colors duration-300 ${
+                        isDragOver ? 'text-blue-300' : 'text-white group-hover:text-gray-100'
+                      }`}>
+                        {isDragOver ? 'Drop your files here' : 'Drag & Drop Files'}
+                      </h3>
+
+                      <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
+                        Import your AI chat exports or other context files.
+                      </p>
+                      
+                      {/* Action Buttons */}
+                      <div className="space-y-4 mb-10">
+                        <button 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="w-full bg-white text-black py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02]"
+                        >
+                          Select Context File
+                        </button>
+                        
+                        <button
+                          onClick={() => folderInputRef.current?.click()}
+                          className="w-full bg-transparent border-2 border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white hover:bg-gray-800/50 py-4 px-6 rounded-xl font-medium transition-all duration-200"
+                        >
+                          Choose Export Folder
+                        </button>
+                      </div>
+                      
+                      {/* File Types */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-center gap-2 flex-wrap">
+                          <span className="px-3 py-1.5 bg-blue-700 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Recommended: conversations.json</span>
+                          <span className="text-gray-600 text-xs">·</span>
+                        </div>
+                        
+                        
+                        {/* Security Note */}
+                        <p className="text-xs text-gray-500 max-w-sm mx-auto mt-4 flex items-center justify-center gap-1">
+                          <Lock className="h-3 w-3" />
+                          Data never stored, files are processed securely in your session.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* URL Input Tab */}
+                {uploadMethod === 'url' && (
+                  <div className="bg-gray-900/80 border-2 border-gray-600 hover:border-gray-500 rounded-2xl p-10 text-center transition-all duration-300 hover:bg-gray-900/90">
+                    <div className="w-20 h-20 rounded-xl bg-gray-700 flex items-center justify-center mx-auto mb-8">
+                      <ExternalLink className="h-10 w-10 text-gray-300" />
+                    </div>
+
+                    <h3 className="text-xl font-medium text-white mb-4">Paste ChatGPT Conversation URL</h3>
+                    
+                    <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
+                      Have a shared ChatGPT conversation link? Paste it here and we'll extract the conversation data for you. Other platforms coming soon!
+                    </p>
+                    
+                    <div className="space-y-6 max-w-md mx-auto">
+                      {/* Error Alert */}
+                      {urlError && (
+                        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
+                          <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <X className="w-3 h-3 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-red-400 font-medium text-sm mb-1">Invalid URL</h4>
+                            <p className="text-red-300 text-xs">{urlError}</p>
+                          </div>
+                          <button
+                            onClick={() => setUrlError(null)}
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+
                       <input
                         type="url"
                         value={conversationUrl}
-                        onChange={(e) => setConversationUrl(e.target.value)}
+                        onChange={(e) => {
+                          setConversationUrl(e.target.value);
+                          // Clear error when user starts typing
+                          if (urlError) setUrlError(null);
+                        }}
                         placeholder="https://chatgpt.com/share/..."
-                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 text-sm focus:border-gray-500 focus:outline-none transition-all"
+                        className={`w-full px-4 py-4 bg-gray-800 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
+                          urlError 
+                            ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' 
+                            : 'border-gray-600 focus:border-purple-500 focus:ring-purple-500/20'
+                        }`}
                       />
                       
                       <button
                         onClick={() => processConversationUrl(conversationUrl)}
                         disabled={!conversationUrl.trim()}
-                        className="w-full bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg text-sm font-medium transition-all"
+                        className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/25 disabled:shadow-none transform hover:scale-[1.02] disabled:transform-none"
                       >
-                        Start extraction
+                        Start Extraction
                       </button>
                       
                       <p className="text-xs text-gray-500">
-                        Works with ChatGPT shared links
+                        Only ChatGPT shared conversation links are supported currently
+                      </p>
+                      
+                      <p className="text-xs text-gray-500 flex items-center justify-center gap-1 mt-2">
+                        <Lock className="h-3 w-3" />
+                        We never store your data. Files are processed securely in your session.
                       </p>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -2708,23 +2733,34 @@ export default function ProcessPage() {
               </div>
             )}
 
-            {/* Process Logs */}
+            {/* Process Logs - Collapsible */}
             {logs.length > 0 && (
-              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <Terminal className="h-5 w-5 text-gray-600" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-text-primary">Process Log</h3>
-                </div>
-                
-                <div className="bg-bg-secondary rounded-lg p-4 max-h-48 overflow-y-auto">
-                  {logs.map((log, index) => (
-                    <div key={index} className="text-sm text-text-secondary font-mono mb-1">
-                      {log}
+              <div className="bg-bg-card border border-border-primary rounded-lg">
+                <button
+                  onClick={() => setIsLogPanelCollapsed(!isLogPanelCollapsed)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-bg-secondary transition-colors"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                      <Terminal className="h-4 w-4 text-gray-600" />
                     </div>
-                  ))}
-                </div>
+                    <h3 className="text-sm font-medium text-text-primary">Process Log</h3>
+                    <span className="text-xs text-text-muted">({logs.length} entries)</span>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-text-muted transition-transform ${isLogPanelCollapsed ? 'rotate-0' : 'rotate-180'}`} />
+                </button>
+                
+                {!isLogPanelCollapsed && (
+                  <div className="border-t border-border-primary p-4">
+                    <div className="bg-bg-secondary rounded-lg p-3 max-h-48 overflow-y-auto">
+                      {logs.map((log, index) => (
+                        <div key={index} className="text-xs text-text-secondary font-mono mb-1">
+                          {log}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -3004,39 +3040,67 @@ export default function ProcessPage() {
       />
 
       {/* Floating Payment Button */}
-      <button
-        onClick={() => {
-          if (paymentLimitsError) {
-            // Retry loading credits if there was an error
-            setPaymentLimitsError(false);
-            setPaymentLimits(null); // Reset to loading state
-            checkPaymentLimits()
-              .then((limits) => {
-                setPaymentLimits(limits);
+      <div className="fixed top-32 right-6 z-40">
+        <div className="relative">
+          <button
+            onClick={() => {
+              if (paymentLimitsError) {
+                // Retry loading credits if there was an error
                 setPaymentLimitsError(false);
-              })
-              .catch((error) => {
-                console.error('Retry error loading payment limits:', error);
-                setPaymentLimitsError(true);
-                setPaymentLimits({ canProcess: false, credits_balance: 0 });
-              });
-          } else {
-            router.push('/pricing');
-          }
-        }}
-        className="fixed top-32 right-6 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer bg-gray-900/90 backdrop-blur-sm border border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-800/90 hover:text-white"
-      >
-        <CreditCard className="w-4 h-4" />
-        <span className="text-sm font-medium">
-          {paymentLimits ? 
-            `${paymentLimits.credits_balance} credits available` 
-            : paymentLimitsError 
-              ? 'Error loading credits - Click to retry'
-              : !user 
-                ? '5 credits'
-                : 'Loading...'}
-        </span>
-      </button>
+                setPaymentLimits(null); // Reset to loading state
+                checkPaymentLimits()
+                  .then((limits) => {
+                    setPaymentLimits(limits);
+                    setPaymentLimitsError(false);
+                  })
+                  .catch((error) => {
+                    console.error('Retry error loading payment limits:', error);
+                    setPaymentLimitsError(true);
+                    setPaymentLimits({ canProcess: false, credits_balance: 0 });
+                  });
+              } else {
+                router.push('/pricing');
+              }
+            }}
+            onMouseEnter={() => setShowCreditsTooltip(true)}
+            onMouseLeave={() => setShowCreditsTooltip(false)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer bg-gray-900/90 backdrop-blur-sm border border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-800/90 hover:text-white"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span className="text-sm font-medium">
+              {paymentLimits ? 
+                `${paymentLimits.credits_balance} credits available` 
+                : paymentLimitsError 
+                  ? 'Error loading credits - Click to retry'
+                  : !user 
+                    ? '5 credits'
+                    : 'Loading...'}
+            </span>
+            <HelpCircle className="w-3 h-3 opacity-60" />
+          </button>
+
+          {/* Credits Tooltip */}
+          {showCreditsTooltip && (
+            <div className="absolute top-full right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-4 z-50">
+              <div className="text-sm text-white font-medium mb-2">What are credits?</div>
+              <div className="text-xs text-gray-300 space-y-1">
+                <p>• Each credit processes one conversation chunk</p>
+                <p>• Typical conversations use 5-50 credits</p>
+                <p>• Get 5 free credits when you sign up</p>
+                <p>• Buy more credits or get unlimited processing</p>
+              </div>
+              <div className="mt-3 pt-2 border-t border-gray-700">
+                <button 
+                  onClick={() => router.push('/pricing')}
+                  className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  View pricing →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

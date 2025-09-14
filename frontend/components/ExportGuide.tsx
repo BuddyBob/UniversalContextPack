@@ -245,95 +245,87 @@ const ExportGuide = () => {
         </section>
 
         {/* Export Guide Section */}
-        <section id="export" className="min-h-screen flex items-center justify-center px-6 relative">
-          <div className="max-w-6xl mx-auto relative">
+        <section id="export" className="py-20 px-6 bg-gray-900/20">
+          <div className="max-w-5xl mx-auto">
             <div className="text-center mb-16">
-              <div className="text-purple-300 text-lg font-bold mb-4 tracking-wider uppercase">Step 1</div>
-              <h2 className="text-h2-lg text-white mb-6">
-                Export Your <span className="text-white font-medium">AI Conversations</span>
+              <h2 className="text-3xl font-bold text-white mb-4">
+                Export Your AI Chats
               </h2>
-              <p className="text-body-lg text-gray-300 max-w-2xl mx-auto">
-                Get your conversation history from these AI platforms to create your Universal Context Pack
+              <p className="text-gray-400 max-w-2xl mx-auto">
+                Get your conversation history from ChatGPT or Claude and use it anywhere
               </p>
             </div>
 
-            {/* Simple Process Steps */}
-            <div className="max-w-2xl mx-auto mb-16">
-              {/* Step 1 - Export */}
-              <div className="bg-gray-800/20 rounded-xl p-6 mb-6 border border-gray-700">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                    1
-                  </div>
-                  <h3 className="text-xl font-semibold text-white">Export Your Data</h3>
-                </div>
-                <p className="text-gray-300 mb-4">Request your conversation export from any AI platform:</p>
+            {/* Clean Export Interface */}
+            <div className="max-w-3xl mx-auto mb-16">
+              <div className="bg-gray-800 rounded-xl border border-gray-700 p-8">
+                <h3 className="text-lg font-semibold text-white mb-6">Download Your Chats</h3>
                 
-                <div className="grid gap-3">
+                <div className="space-y-3">
                   {exportSteps.map((step) => (
                     <a 
                       key={step.platform}
                       href={step.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition-colors group"
+                      className="flex items-center justify-between p-4 bg-white hover:bg-gray-700/50 border border-gray-600 hover:border-gray-500 rounded-lg transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <step.icon className="h-5 w-5 text-gray-400" />
-                        <span className="text-white font-medium">{step.platform}</span>
+                        <step.icon className="h-5 w-5 text-gray-900" />
+                        <span className="text-black font-medium">{step.platform}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-purple-400 group-hover:text-purple-300">
-                        <span className="text-sm">Export Settings</span>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="text-sm text-black">Download My Chats</span>
                         <ExternalLink className="h-4 w-4" />
                       </div>
                     </a>
                   ))}
                 </div>
-                <p className="text-sm text-gray-400 mt-3">
-                  Files arrive via email in 5-10 minutes.
+                
+                <p className="text-gray-500 text-sm mt-4">
+                  Files sent to your email in 5-10 minutes
                 </p>
               </div>
+            </div>
 
-              {/* Step 2 - Upload */}
-              <div className="bg-gray-800/20 rounded-xl p-6 mb-6 border border-gray-700">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                    2
-                  </div>
-                  <h3 className="text-xl font-semibold text-white">Create Your Context Pack</h3>
+            {/* Simple Process Steps */}
+            <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+              <div className="text-center bg-gray-800 p-6 rounded-lg">
+                <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white font-semibold">1</span>
                 </div>
-                <p className="text-gray-300 mb-4">Upload your exported files to generate a Universal Context Pack</p>
+                <h3 className="text-white font-medium mb-2">Download</h3>
+                <p className="text-gray-500 text-sm">Get your chat history</p>
+              </div>
+
+              <div className="text-center bg-gray-800 p-6 rounded-lg">
+                <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white font-semibold">2</span>
+                </div>
+                <h3 className="text-white font-medium mb-2">Upload</h3>
+                <p className="text-gray-500 text-sm mb-4">Create your memory pack</p>
                 <a 
                   href="/process"
-                  className="inline-flex items-center gap-2 bg-white text-gray-900 hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors font-medium"
+                  className="inline-flex items-center gap-2 bg-white text-black hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 >
-                  <span>Go to Process Page</span>
+                  Upload Files
                   <ArrowRight className="h-4 w-4" />
                 </a>
               </div>
 
-              {/* Step 3 - Use */}
-              <div className="bg-gray-900 rounded-xl p-6 border border-gray-700">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                    3
-                  </div>
-                  <h3 className="text-xl font-semibold text-white">Use Anywhere</h3>
+              <div className="text-center bg-gray-800 p-6 rounded-lg">
+                <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white font-semibold">3</span>
                 </div>
-                <p className="text-gray-300 mb-4">
-                  Copy and paste your Context Pack into any AI to instantly transfer your conversation history and context.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <a 
-                    href="/how-to-port"
-                    className="inline-flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                    <span>Move your AI memory</span>
-                  </a>
-                </div>
+                <h3 className="text-white font-medium mb-2">Use Anywhere</h3>
+                <p className="text-gray-500 text-sm mb-4">Paste into any AI chat</p>
+                <a 
+                  href="/how-to-port"
+                  className="inline-flex items-center gap-2 border bg-white border-gray-600 text-black hover:text-white hover:border-gray-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  How to Use
+                  <ArrowRight className="h-4 w-4" />
+                </a>
               </div>
             </div>
           </div>
