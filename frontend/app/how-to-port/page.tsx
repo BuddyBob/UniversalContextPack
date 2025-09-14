@@ -55,26 +55,6 @@ const HowToPortPage = () => {
             </p>
           </div>
 
-          {/* Quick Start */}
-          <div className="mb-12">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Start</h2>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
-              <ol className="space-y-3 text-gray-700">
-                <li className="flex items-start">
-                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white text-xs font-medium rounded-full flex items-center justify-center mr-3 mt-0.5">1</span>
-                  <span><strong>Download your Context Pack:</strong> Navigate to your packs page and download the <code className="bg-gray-200 px-1 rounded text-sm">ucp_complete.txt</code> file</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white text-xs font-medium rounded-full flex items-center justify-center mr-3 mt-0.5">4</span>
-                  <span>Add a context prompt to help the AI understand the import</span>
-                </li>
-                <li className="flex items-start">
-                  <span className="flex-shrink-0 w-6 h-6 bg-gray-900 text-white text-xs font-medium rounded-full flex items-center justify-center mr-3 mt-0.5">3</span>
-                  <span>Paste your Context Pack as the first message</span>
-                </li>
-              </ol>
-            </div>
-          </div>
 
           {/* Download Instructions */}
           <div className="mb-12">
@@ -85,7 +65,7 @@ const HowToPortPage = () => {
                 <div>
                   <h3 className="text-base font-medium text-blue-900 mb-2">Important: Download the Complete Pack</h3>
                   <p className="text-blue-800 text-sm">
-                    Download your <code className="bg-blue-100 px-1 rounded">complete_ucp.txt</code> file from the packs tab. 
+                    Download your <code className="bg-blue-100 px-1 rounded">complete_ucp.txt</code> file from the packs tab. Open the file and copy its contents.
                   </p>
                 </div>
               </div>
