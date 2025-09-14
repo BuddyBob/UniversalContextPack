@@ -494,7 +494,7 @@ async def create_job_in_db(user: AuthenticatedUser, job_id: str, file_name: str 
         return None
 
 async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: str, progress: int = None, error_message: str = None, metadata: dict = None):
-    """Update job status in Supabase"""
+    """Update job status in Supabase with enhanced cost tracking"""
     
     if not supabase:
         return None
@@ -511,19 +511,32 @@ async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: 
         else:
             current_status = job_check_result.data[0]["current_status"]
         
-        # Extract processed_chunks from metadata for the enhanced function
+        # Extract data from metadata if provided
         processed_chunks = None
-        if metadata and (status == "analyzed" or status == "extracted"):
-            processed_chunks = metadata.get("processed_chunks", 0)
+        total_chunks = None
+        total_input_tokens = None
+        total_output_tokens = None
+        total_cost = None
         
-        # Use enhanced backend function to update job status (with processed_chunks)
-        result = supabase.rpc("update_job_status_for_backend", {
+        if metadata:
+            processed_chunks = metadata.get("processed_chunks")
+            total_chunks = metadata.get("total_chunks")
+            total_input_tokens = metadata.get("total_input_tokens")
+            total_output_tokens = metadata.get("total_output_tokens")
+            total_cost = metadata.get("total_cost")
+        
+        # Use enhanced backend function to update job status with costs
+        result = supabase.rpc("update_job_status_with_costs_for_backend", {
             "user_uuid": user.user_id,
             "target_job_id": job_id,
             "status_param": status,
             "progress_param": progress,
             "error_message_param": error_message,
-            "processed_chunks_param": processed_chunks
+            "processed_chunks_param": processed_chunks,
+            "total_chunks_param": total_chunks,
+            "total_input_tokens_param": total_input_tokens,
+            "total_output_tokens_param": total_output_tokens,
+            "total_cost_param": total_cost
         }).execute()
         
         if result.data and len(result.data) > 0:
@@ -532,6 +545,30 @@ async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: 
             return None
             
     except Exception as e:
+        print(f"❌ Error updating job status in DB: {e}")
+        return None
+
+async def update_job_chunks_in_db(user: AuthenticatedUser, job_id: str, total_chunks: int):
+    """Update job total_chunks count in Supabase after chunking"""
+    
+    if not supabase:
+        return None
+
+    try:
+        result = supabase.rpc("update_job_chunks_for_backend", {
+            "user_uuid": user.user_id,
+            "target_job_id": job_id,
+            "total_chunks_param": total_chunks
+        }).execute()
+        
+        if result.data and len(result.data) > 0:
+            print(f"✅ Updated job {job_id} total_chunks to {total_chunks}")
+            return result.data[0]
+        else:
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error updating job chunks in DB: {e}")
         return None
 
 async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str, r2_pack_path: str, extraction_stats: dict = None, chunk_stats: dict = None, analysis_stats: dict = None, file_size: int = None):
@@ -2233,6 +2270,11 @@ async def chunk_text(job_id: str, request: ChunkRequest, user: AuthenticatedUser
             "chunked_at": datetime.utcnow().isoformat()
         }
         upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
+        
+        # Update job status in database with total_chunks count
+        await update_job_chunks_in_db(user, job_id, len(chunks))
+        await update_job_status_in_db(user, job_id, "chunked", 100, 
+                                     metadata={"total_chunks": len(chunks)})
         
         update_job_progress(job_id, "chunked", 100, f"Chunking complete! Created {len(chunks)} chunks ready for analysis", total_chunks=len(chunks))
         

@@ -154,7 +154,7 @@ const ExportGuide = () => {
           {/* Floating Text Bubbles - Outside Container - Hidden on Mobile */}
           <div className="absolute inset-0 pointer-events-none hidden lg:block">
             {/* Bubble 1 - Far Left Edge */}
-            <div className="absolute" style={{ left: '5vw', top: '60%' }}>
+            <div className="absolute" style={{ left: '5vw', top: '40%' }}>
               <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
                 <span className="text-gray-300 text-base">Extract your conversations</span>
               </div>
