@@ -2060,7 +2060,7 @@ export default function ProcessPage() {
                   </p>
                   <p className="text-gray-400 text-sm max-w-2xl mx-auto">
                     {uploadMethod === 'files'
-                      ? 'Upload your ChatGPT, Claude, or other AI conversation exports and we\'ll organize, analyze, and package everything into a single, powerful context file that any AI can understand.'
+                      ? 'Upload your AI conversation exports and we\'ll organize, analyze, and package everything into a single, powerful context file that any AI can understand.'
                       : 'Share your ChatGPT conversation URL and we\'ll extract, organize, and package your entire chat history into a portable context pack you can use anywhere.'
                     }
                   </p>
@@ -2167,7 +2167,7 @@ export default function ProcessPage() {
                           onClick={() => fileInputRef.current?.click()}
                           className="w-full bg-white text-black py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02]"
                         >
-                          Select Context File
+                          Select Conversations File
                         </button>
                         
                         <button

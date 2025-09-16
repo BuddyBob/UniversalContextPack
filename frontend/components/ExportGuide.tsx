@@ -123,13 +123,7 @@ const ExportGuide = () => {
                 <span className="text-gray-400">Everywhere</span>
               </h1>
             </div>
-            
-            {/* Status Message - Green Info Box */}
-            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 mb-8 max-w-md mx-auto">
-              <p className="text-green-400 text-sm">
-                Currently supported: ChatGPT | Grok | Claude
-              </p>
-            </div>
+
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <button 
