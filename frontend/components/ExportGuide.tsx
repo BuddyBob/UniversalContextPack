@@ -143,7 +143,7 @@ const ExportGuide = () => {
               
               <a 
                 href="/process"
-                className="text-purple-400 hover:text-white transition-colors duration-300 flex items-center gap-2 group border border-purple-500 hover:border-purple-400 hover:bg-purple-600 px-6 py-4 rounded-lg"
+                className="bg-gray-900 text-white-900 hover:text-white transition-colors duration-300 flex items-center gap-2 group border hover:border-purple-400 hover:bg-purple-600 px-6 py-4 rounded-lg"
               >
                 <span>Skip to Upload</span>
                 <div className="w-4 h-6 transform group-hover:translate-x-1 transition-transform duration-300">→</div>

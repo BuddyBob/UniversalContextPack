@@ -48,6 +48,9 @@ export default function PricingPageClient() {
   const calculatePrice = (credits: number) => {
     if (isUnlimitedSelected) return 3.99 // Unlimited for $3.99
     
+    // Special pricing for 25 credits
+    if (credits === 25) return 1.50
+    
     let basePrice = 0.10 // Base price per credit ($0.10)
     
     // Volume discounts
@@ -291,10 +294,10 @@ export default function PricingPageClient() {
               {/* Credit Options */}
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
-                  { amount: 5, price: '$0.50' },
-                  { amount: 25, price: '$2.50' },
-                  { amount: 50, price: '$4.50' },
-                ].map(({ amount, price }) => (
+                  { amount: 5 },
+                  { amount: 25 },
+                  { amount: 50 },
+                ].map(({ amount }) => (
                   <button
                     key={amount}
                     onClick={() => {
@@ -308,7 +311,7 @@ export default function PricingPageClient() {
                     }`}
                   >
                     <div className="text-lg font-semibold">{amount}</div>
-                    <div className="text-sm opacity-80">{price}</div>
+                    <div className="text-sm opacity-80">${calculatePrice(amount)}</div>
                   </button>
                 ))}
               </div>

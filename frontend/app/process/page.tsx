@@ -3081,18 +3081,18 @@ export default function ProcessPage() {
 
           {/* Credits Tooltip */}
           {showCreditsTooltip && (
-            <div className="absolute top-full right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-4 z-50">
-              <div className="text-sm text-white font-medium mb-2">What are credits?</div>
-              <div className="text-xs text-gray-300 space-y-1">
+            <div className="absolute top-full right-0 mt-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-5 z-50">
+              <div className="text-sm text-white font-medium mb-3">What are credits?</div>
+              <div className="text-sm text-gray-300 space-y-2">
                 <p>• Each credit processes one conversation chunk</p>
                 <p>• Typical conversations use 5-50 credits</p>
                 <p>• Get 5 free credits when you sign up</p>
                 <p>• Buy more credits or get unlimited processing</p>
               </div>
-              <div className="mt-3 pt-2 border-t border-gray-700">
+              <div className="mt-4 pt-3 border-t border-gray-700">
                 <button 
                   onClick={() => router.push('/pricing')}
-                  className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                  className="text-sm text-purple-400 hover:text-purple-300 transition-colors font-medium"
                 >
                   View pricing →
                 </button>
