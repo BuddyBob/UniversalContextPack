@@ -2033,48 +2033,7 @@ export default function ProcessPage() {
               )}
             </div>
           </div>
-            {/* Progress Steps */}
-            <div className="bg-gray-700 border border-gray-600 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-semibold text-text-primary">Progress</h2>
-                <div className="flex items-center space-x-2">
-                  {/* Server Health Check Button */}
-                  {(connectionStatus !== 'connected') && (
-                    <button
-                      onClick={checkServerHealth}
-                      disabled={connectionStatus === 'connecting'}
-                      className="text-sm text-text-secondary hover:text-text-primary px-3 py-1 border border-border-secondary rounded hover:border-border-accent hover:bg-bg-tertiary transition-colors disabled:opacity-50"
-                    >
-                      {connectionStatus === 'connecting' ? 'Checking...' : 'Check Server'}
-                    </button>
-                  )}
-                  
-                  {currentStep !== 'upload' && (
-                    <button
-                      onClick={resetProcess}
-                      className="text-sm text-text-secondary hover:text-text-primary px-3 py-1 border border-border-secondary rounded hover:border-border-accent hover:bg-bg-tertiary transition-colors"
-                    >
-                      Reset
-                    </button>
-                  )}
-                </div>
-              </div>
-              
-              {/* Simple Current Step Display */}
-              <div className="text-center">
-                <span className="inline-block px-3 py-1 bg-gray-800 border border-gray-600 rounded-full text-sm text-gray-300 capitalize">
-                  {currentStep === 'upload' ? 'Ready to Upload' :
-                   currentStep === 'uploaded' ? 'File Selected' :
-                   currentStep === 'extracting' ? 'Extracting Content...' :
-                   currentStep === 'extracted' ? 'Content Extracted' :
-                   currentStep === 'chunking' ? 'Processing Chunks...' :
-                   currentStep === 'chunked' ? 'Ready to Analyze' :
-                   currentStep === 'analyzing' ? 'Analyzing...' :
-                   currentStep === 'analyzed' ? 'Analysis Complete' :
-                   currentStep}
-                </span>
-              </div>
-            </div>
+
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
