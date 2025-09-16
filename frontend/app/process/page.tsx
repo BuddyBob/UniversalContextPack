@@ -2060,133 +2060,19 @@ export default function ProcessPage() {
                 </div>
               </div>
               
-              {/* Timeline Progress Indicator */}
-              <div className="relative mb-6">
-                
-                {/* Simple Time Overview */}
-                {(timeEstimate || analysisTimeEstimate || ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) && (
-                  <div className="mb-8 bg-gray-900 text-xs">
-                    <div className="font-medium text-gray-300 mb-2">Time Estimates</div>
-                    <div className="flex gap-6 text-xs ">
-                      <div>
-                        <span className="text-gray-500">Chunk: </span>
-                        <span className={
-                          ['chunked', 'analyzed'].includes(currentStep) 
-                            ? 'text-green-600' 
-                            : ['extracting', 'chunking'].includes(currentStep) 
-                            ? 'text-blue-600' 
-                            : 'text-gray-500'
-                        }>
-                          {['chunked', 'analyzed'].includes(currentStep) 
-                            ? '✓ Complete' 
-                            : ['extracting', 'chunking'].includes(currentStep) 
-                            ? 'Processing...'
-                            : timeEstimate 
-                            ? timeEstimate.time_estimates.extraction.formatted 
-                            : '~2-5m'
-                          }
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Analyze: </span>
-                        <span className={
-                          currentStep === 'analyzed' 
-                            ? 'text-green-600' 
-                            : currentStep === 'analyzing' 
-                            ? 'text-blue-600' 
-                            : 'text-gray-500'
-                        }>
-                          {currentStep === 'analyzed' 
-                            ? '✓ Complete' 
-                            : currentStep === 'analyzing' 
-                            ? 'Processing...'
-                            : analysisTimeEstimate 
-                            ? analysisTimeEstimate.formatted 
-                            : ['chunked'].includes(currentStep)
-                            ? 'Ready'
-                            : 'TBD'
-                          }
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Step icons and labels with connecting lines */}
-                <div className="flex items-center justify-between relative">
-                  {[
-                    { key: 'upload', icon: Upload, label: 'Upload' },
-                    { key: 'chunk', icon: BarChart3, label: 'Chunk' },
-                    { key: 'analyze', icon: Play, label: 'Analyze' }
-                  ].map((step, index) => {
-                    const Icon = step.icon;
-                    const isActive = 
-                      (step.key === 'upload' && ['upload', 'uploaded'].includes(currentStep)) ||
-                      (step.key === 'chunk' && ['extracting', 'extracted', 'chunking', 'chunked'].includes(currentStep)) ||
-                      (step.key === 'analyze' && ['analyzing', 'analyzed'].includes(currentStep));
-                    
-                    const isCompleted = 
-                      (step.key === 'upload' && ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
-                      (step.key === 'chunk' && ['analyzing', 'analyzed'].includes(currentStep));
-
-                    // Show connecting line to next step if current step is completed
-                    const showCompletedLine = 
-                      (step.key === 'upload' && ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
-                      (step.key === 'chunk' && ['analyzing', 'analyzed'].includes(currentStep));
-
-                    const showActiveLine = 
-                      (step.key === 'upload' && ['extracting', 'extracted', 'chunking', 'chunked', 'analyzing', 'analyzed'].includes(currentStep)) ||
-                      (step.key === 'chunk' && ['analyzing', 'analyzed'].includes(currentStep));
-
-                    return (
-                      <div key={step.key} className="flex flex-col items-center relative z-10 flex-1">
-                        {/* Connecting line to next step */}
-                        {index < 2 && (
-                          <div 
-                            className="absolute top-3 left-1/2 w-full h-0.5 transition-all duration-500"
-                            style={{
-                              backgroundColor: showCompletedLine 
-                                ? 'rgba(102, 57, 208, 1)' 
-                                : showActiveLine 
-                                ? 'rgba(102, 57, 208, 0.5)'
-                                : 'var(--border-secondary)',
-                              zIndex: 1
-                            }}
-                          />
-                        )}
-                        
-                        <div 
-                          className="w-6 h-6 rounded border flex items-center justify-center transition-all duration-300 relative z-20"
-                          style={{
-                            backgroundColor: isCompleted 
-                              ? 'rgba(102, 57, 208, 1)'
-                              : isActive 
-                              ? 'rgba(102, 57, 208, 0.1)'
-                              : 'var(--bg-secondary)',
-                            borderColor: isCompleted || isActive 
-                              ? 'rgba(102, 57, 208, 1)'
-                              : 'var(--border-primary)',
-                            color: isCompleted 
-                              ? 'white'
-                              : isActive 
-                              ? 'rgba(102, 57, 208, 1)'
-                              : 'var(--text-muted)'
-                          }}
-                        >
-                          {isCompleted ? <CheckCircle className="h-3 w-3" /> : <Icon className="h-3 w-3" />}
-                        </div>
-                        <span 
-                          className="mt-1 text-xs transition-colors"
-                          style={{
-                            color: isActive || isCompleted ? 'var(--text-primary)' : 'var(--text-muted)'
-                          }}
-                        >
-                          {step.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+              {/* Simple Current Step Display */}
+              <div className="text-center">
+                <span className="inline-block px-3 py-1 bg-gray-800 border border-gray-600 rounded-full text-sm text-gray-300 capitalize">
+                  {currentStep === 'upload' ? 'Ready to Upload' :
+                   currentStep === 'uploaded' ? 'File Selected' :
+                   currentStep === 'extracting' ? 'Extracting Content...' :
+                   currentStep === 'extracted' ? 'Content Extracted' :
+                   currentStep === 'chunking' ? 'Processing Chunks...' :
+                   currentStep === 'chunked' ? 'Ready to Analyze' :
+                   currentStep === 'analyzing' ? 'Analyzing...' :
+                   currentStep === 'analyzed' ? 'Analysis Complete' :
+                   currentStep}
+                </span>
               </div>
             </div>
 
