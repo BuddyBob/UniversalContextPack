@@ -2136,7 +2136,12 @@ export default function ProcessPage() {
                       </h3>
 
                       <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
-                        Import your AI chat exports or other context files.
+                        <button 
+                          onClick={() => router.push('/#export-guide')}
+                          className="text-blue-400 hover:text-blue-300 underline transition-colors"
+                        >
+                          Import your AI chat exports
+                        </button> or other context files.
                       </p>
                       
                       {/* Action Buttons */}

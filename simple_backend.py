@@ -2549,10 +2549,13 @@ async def process_analysis_background(job_id: str, user: AuthenticatedUser, sele
         
         # Get OpenAI client
         update_job_progress(job_id, "analyzing", 10, "Initializing AI client...")
+        print(f"🔧 Initializing OpenAI client for job {job_id}")
         openai_client = get_openai_client()
+        print(f"✅ OpenAI client initialized successfully for job {job_id}")
         
         # Check if this is a single conversation for different analysis style
         is_single_conversation = chunks_to_process == 1 and total_chunks == 1
+        print(f"📊 Job {job_id}: Processing {chunks_to_process} chunks (single conversation: {is_single_conversation})")
         
         if is_single_conversation:
             # Conversational narrative style for single chats
