@@ -58,6 +58,7 @@ export default function ProcessPage() {
   const [conversationUrl, setConversationUrl] = useState<string>('');
   const [isCancelling, setIsCancelling] = useState(false);
   const [currentProcessedChunks, setCurrentProcessedChunks] = useState<number>(0);
+  const [showUploadOptions, setShowUploadOptions] = useState(false);
   const [uploadMethod, setUploadMethod] = useState<'files' | 'url'>('files');
   const [showCreditsTooltip, setShowCreditsTooltip] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -2048,13 +2049,21 @@ export default function ProcessPage() {
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
-              <div className="max-w-3xl mx-auto space-y-10">
-                {/* Header */}
-                <div className="text-center">
-                  <h2 className="text-xl font-bold text-white mb-2">Import Your Conversations</h2>
-                  <h4 className="text-gray-400 text-sm">
-                    Choose how you'd like to upload your AI conversation data
-                  </h4>
+              <div className="max-w-4xl mx-auto space-y-8">
+                {/* Header with Value Proposition */}
+                <div className="text-center space-y-4">
+                  <p className="text-xl text-gray-300 font-medium">
+                    {uploadMethod === 'files' 
+                      ? 'Turn your messy AI chat exports into one clean, smart context pack'
+                      : 'Stop restarting chats and losing context'
+                    }
+                  </p>
+                  <p className="text-gray-400 text-sm max-w-2xl mx-auto">
+                    {uploadMethod === 'files'
+                      ? 'Upload your ChatGPT, Claude, or other AI conversation exports and we\'ll organize, analyze, and package everything into a single, powerful context file that any AI can understand.'
+                      : 'Share your ChatGPT conversation URL and we\'ll extract, organize, and package your entire chat history into a portable context pack you can use anywhere.'
+                    }
+                  </p>
                 </div>
 
                 {/* Upload Method Tabs */}
@@ -2137,7 +2146,15 @@ export default function ProcessPage() {
 
                       <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
                         <button 
-                          onClick={() => router.push('/#export-guide')}
+                          onClick={() => {
+                            router.push('/');
+                            setTimeout(() => {
+                              const element = document.getElementById('export-guide');
+                              if (element) {
+                                element.scrollIntoView({ behavior: 'smooth' });
+                              }
+                            }, 100);
+                          }}
                           className="text-blue-400 hover:text-blue-300 underline transition-colors"
                         >
                           Import your AI chat exports

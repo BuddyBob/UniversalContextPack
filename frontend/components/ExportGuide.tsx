@@ -163,7 +163,7 @@ const ExportGuide = () => {
             {/* Bubble 2 - Far Right Edge */}
             <div className="absolute" style={{ right: '5vw', top: '35%' }}>
               <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
-                <span className="text-gray-300 text-base">Store them securely</span>
+                <span className="text-gray-300 text-base">No more chat limits</span>
               </div>
             </div>
             
