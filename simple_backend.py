@@ -333,12 +333,12 @@ async def get_user_payment_status(user_id: str) -> dict:
                     "r2_dir": f"user_{user_id}"
                 }).execute()
                 
-            return {"plan": "free", "chunks_used": 0, "chunks_allowed": 5, "can_process": True}
+            return {"plan": "free", "chunks_used": 0, "chunks_allowed": 2, "can_process": True}
         
     except Exception as e:
         print(f"Error getting payment status: {e}")
         # Default to free plan
-        return {"plan": "free", "chunks_used": 0, "chunks_allowed": 5, "can_process": True}
+        return {"plan": "free", "chunks_used": 0, "chunks_allowed": 2, "can_process": True}
 
 async def update_user_chunks_used(user_id: str, chunks_processed: int):
     """Update chunks - now handled automatically by database trigger when job status = 'analyzed'"""
@@ -2392,7 +2392,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
         if not supabase:
             # Legacy mode - return default values
             return {
-                "credits_balance": 5,
+                "credits_balance": 2,
                 "can_process": True,
                 "email": user.email if hasattr(user, 'email') else "unknown@example.com",
                 "payment_plan": "legacy"
@@ -2423,7 +2423,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             if create_result.data:
                 profile = create_result.data
                 return {
-                    "credits_balance": profile.get("credits_balance", 5),
+                    "credits_balance": profile.get("credits_balance", 2),
                     "can_process": True,
                     "email": profile.get("email", "unknown@example.com"),
                     "payment_plan": profile.get("payment_plan", "credits"),
@@ -2434,7 +2434,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             else:
                 # Fallback default
                 return {
-                    "credits_balance": 5,
+                    "credits_balance": 2,
                     "can_process": True,
                     "email": getattr(user, 'email', "unknown@example.com"),
                     "payment_plan": "credits"
@@ -2489,8 +2489,8 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         chunks_to_process = len(selected_chunks)
         if payment_plan != "unlimited":
             chunks_to_process = min(available_credits, len(selected_chunks))
-            if payment_plan == "free" and chunks_to_process > 5:
-                chunks_to_process = 5
+            if payment_plan == "free" and chunks_to_process > 2:
+                chunks_to_process = 2
         
         if chunks_to_process <= 0 and payment_plan != "unlimited":
             return {
@@ -2643,7 +2643,7 @@ The conversation data you will analyze follows this message. Provide your compre
         elif estimated_tokens_per_chunk > 50000:  # Large chunks (>50k tokens each)
             batch_size = min(2, max_tpm // estimated_tokens_per_chunk)  # Calculate safe batch size
             print(f"🔍 Medium-large chunks detected (~{estimated_tokens_per_chunk:,} tokens each) - using batch size {batch_size}")
-        elif chunks_to_process <= 5:
+        elif chunks_to_process <= 2:
             batch_size = 2  # Small jobs can handle 2 parallel chunks
         elif chunks_to_process <= 15:
             batch_size = 2  # Medium jobs - conservative 2 parallel  
@@ -2988,33 +2988,33 @@ The conversation data you will analyze follows this message. Provide your compre
         cost_savings = (total_cached_tokens / 1_000_000) * 0.1125  # 75% discount savings
         
         # Don't show misleading success rate if limited by free plan
-        if len(results) == 5 and chunks_to_process > 5:
+        if len(results) == 2 and chunks_to_process > 2:
             success_rate = 100.0  # All requested chunks within limit were processed
         else:
             success_rate = len(results) / chunks_to_process * 100
         
         final_analysis = {
-            "job_id": job_id,
-            "user_id": user.user_id,
-            "analysis_results": results,
-            "total_chunks_processed": len(results),
-            "chunks_requested": len(selected_chunks) if len(results) != 5 or chunks_to_process <= 5 else len(results),  # Hide original total if limited to 5
-            "failed_chunks": failed_chunks,
-            "performance_metrics": {
-                "total_input_tokens": total_input_tokens,
-                "total_output_tokens": total_output_tokens,
-                "total_cached_tokens": total_cached_tokens,
-                "cache_hit_rate": round(cache_hit_rate, 1),
-                "cost_savings_from_cache": round(cost_savings, 4),
-                "total_cost": round(total_cost, 4),
-                "success_rate": round(success_rate, 1),
-                "batch_size_used": batch_size,
-                "parallel_processing": True,
-                "processing_time_seconds": int(time.time() - last_keepalive)
-            },
-            "processed_at": datetime.utcnow().isoformat(),
-            "metadata": chunk_metadata
-        }
+                "job_id": job_id,
+                "user_id": user.user_id,
+                "analysis_results": results,
+                "total_chunks_processed": len(results),
+                "chunks_requested": len(selected_chunks) if len(results) != 2 or chunks_to_process <= 2 else len(results),  # Hide original total if limited to 2
+                "failed_chunks": failed_chunks,
+                "performance_metrics": {
+                    "total_input_tokens": total_input_tokens,
+                    "total_output_tokens": total_output_tokens,
+                    "total_cached_tokens": total_cached_tokens,
+                    "cache_hit_rate": round(cache_hit_rate, 1),
+                    "cost_savings_from_cache": round(cost_savings, 4),
+                    "total_cost": round(total_cost, 4),
+                    "success_rate": round(success_rate, 1),
+                    "batch_size_used": batch_size,
+                    "parallel_processing": True,
+                    "processing_time_seconds": int(time.time() - last_keepalive)
+                },
+                "processed_at": datetime.utcnow().isoformat(),
+                "metadata": chunk_metadata
+            }
         
         # Upload comprehensive analysis to R2
         analysis_json = json.dumps(final_analysis, indent=2)
@@ -3056,8 +3056,8 @@ Optimized for Single Conversation Analysis
 """
             else:
                 # Multiple chunks - use the comprehensive format
-                # Don't show total chunks if only 5 were processed (free plan limitation)
-                if len(results) == 5 and chunks_to_process > 5:
+                # Don't show total chunks if only 2 were processed (free plan limitation)
+                if len(results) == 2 and chunks_to_process > 2:
                     chunks_display = f"{len(results)}"
                 else:
                     chunks_display = f"{len(results)}/{chunks_to_process}"
@@ -4147,8 +4147,8 @@ async def manual_migrate():
             "pack_name": f"UCP Pack {job_id[:8]}",
             "r2_pack_path": f"user_{user_id}/{job_id}/",
             "extraction_stats": {
-                "total_chunks": 5,  # Updated to match new free plan limit
-                "processed_chunks": 5,
+                "total_chunks": 2,  # Updated to match new free plan limit
+                "processed_chunks": 2,
                 "failed_chunks": 0
             },
             "analysis_stats": {
@@ -4416,7 +4416,7 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                     "r2_user_directory": current_user.r2_directory,
                     "plan": "free",
                     "chunks_used": 0,
-                    "chunks_allowed": 5,
+                    "chunks_allowed": 2,
                     "can_process": True
                 }
             else:
@@ -4430,7 +4430,7 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                 "r2_user_directory": current_user.r2_directory,
                 "plan": "free",
                 "chunks_used": 0,
-                "chunks_allowed": 5,
+                "chunks_allowed": 2,
                 "can_process": True,
                 "warning": "Profile loaded with fallback data"
             }
@@ -4440,7 +4440,7 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
             payment_status = await get_user_payment_status(current_user.user_id)
         except Exception as e:
             print(f"⚠️ Payment status query timeout: {e}")
-            payment_status = {"plan": "free", "chunks_used": 0, "chunks_allowed": 5, "can_process": True}
+            payment_status = {"plan": "free", "chunks_used": 0, "chunks_allowed": 2, "can_process": True}
         
         # During analysis, skip or limit the heavy queries
         packs = []
@@ -4491,7 +4491,7 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                 "r2_user_directory": current_user.r2_directory,
                 "plan": "free",
                 "chunks_used": 0,
-                "chunks_allowed": 5,
+                "chunks_allowed": 2,
                 "can_process": True,
                 "error": f"Profile load error: {str(e)}"
             },

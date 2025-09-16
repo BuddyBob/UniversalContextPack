@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   -- Payment and usage tracking
   payment_plan TEXT DEFAULT 'credits' CHECK (payment_plan IN ('credits', 'unlimited')),
   chunks_analyzed INTEGER DEFAULT 0, -- Total chunks analyzed by this user (legacy only)
-  credits_balance INTEGER DEFAULT 5, -- Credits available for analysis (999999 for unlimited)
+  credits_balance INTEGER DEFAULT 2, -- Credits available for analysis (999999 for unlimited)
   subscription_id TEXT, -- Stripe subscription ID (for future use)
   subscription_status TEXT, -- active, canceled, past_due, etc.
   plan_start_date TIMESTAMP WITH TIME ZONE,
@@ -211,7 +211,7 @@ BEGIN
     'user_' || NEW.id::text,
     'credits', -- All new users start with credit-based system
     0, -- Start with 0 chunks analyzed (legacy)
-    5  -- Start with 5 free credits
+    2  -- Start with 2 free credits
   )
   ON CONFLICT (id) DO NOTHING; -- Prevent duplicates
   RETURN NEW;
@@ -402,7 +402,7 @@ DECLARE
   user_profile RECORD;
 BEGIN
   INSERT INTO public.user_profiles (id, email, r2_user_directory, payment_plan, chunks_analyzed, credits_balance)
-  VALUES (user_uuid, user_email, r2_dir, 'credits', 0, 5)
+  VALUES (user_uuid, user_email, r2_dir, 'credits', 0, 2)
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     r2_user_directory = EXCLUDED.r2_user_directory,
@@ -433,7 +433,7 @@ BEGIN
   IF NOT FOUND THEN
     -- Create default profile for new users
     INSERT INTO public.user_profiles (id, email, r2_user_directory, payment_plan, chunks_analyzed, credits_balance)
-    VALUES (user_uuid, 'unknown@example.com', 'user_' || user_uuid, 'credits', 0, 5)
+    VALUES (user_uuid, 'unknown@example.com', 'user_' || user_uuid, 'credits', 0, 2)
     RETURNING * INTO user_profile;
   END IF;
   
@@ -447,9 +447,9 @@ BEGIN
   FROM public.credit_transactions
   WHERE user_id = user_uuid AND transaction_type = 'usage';
   
-  -- Add the initial 5 free credits to total purchased if user hasn't made any purchases
+  -- Add the initial 2 free credits to total purchased if user hasn't made any purchases
   IF total_purchased = 0 THEN
-    total_purchased := 5;
+    total_purchased := 2;
   ELSE
     total_purchased := total_purchased + 5; -- Add free credits to purchased total
   END IF;
@@ -459,8 +459,8 @@ BEGIN
     'plan', 'credits',
     'chunks_used', total_used, -- Show actual credits used
     'chunks_allowed', total_purchased, -- Show total credits available (purchased + free)
-    'credits_balance', COALESCE(user_profile.credits_balance, 5),
-    'can_process', CASE WHEN COALESCE(user_profile.credits_balance, 5) > 0 THEN true ELSE false END,
+    'credits_balance', COALESCE(user_profile.credits_balance, 2),
+    'can_process', CASE WHEN COALESCE(user_profile.credits_balance, 2) > 0 THEN true ELSE false END,
     'subscription_status', user_profile.subscription_status,
     'plan_start_date', user_profile.plan_start_date,
     'plan_end_date', user_profile.plan_end_date
@@ -1154,7 +1154,7 @@ BEGIN
   RAISE NOTICE '  ✓ Backend security definer functions for RLS bypass';
   RAISE NOTICE '';
   RAISE NOTICE 'Payment Plans:';
-  RAISE NOTICE '  • Credits: Pay-per-chunk with $0.10 base price (starts with 5 free)';
+  RAISE NOTICE '  • Credits: Pay-per-chunk with $0.10 base price (starts with 2 free)';
   RAISE NOTICE '  • Volume discounts: 50+ credits (5 percent off), 100+ (10 percent off), 250+ (20 percent off)';
   RAISE NOTICE '  • Example: 100 credits = $9.00, 250 credits = $20.00';
   RAISE NOTICE '';
@@ -1486,7 +1486,7 @@ BEGIN
   RAISE NOTICE '  • Maintenance: cleanup_old_webhook_logs, cleanup_old_payment_attempts';
   RAISE NOTICE '';
   RAISE NOTICE 'Payment Plans:';
-  RAISE NOTICE '  • Credits: $0.10 base price (starts with 5 free credits)';
+  RAISE NOTICE '  • Credits: $0.10 base price (starts with 2 free credits)';
   RAISE NOTICE '  • Volume discounts: 50+ (5% off), 100+ (10% off), 250+ (20% off)';
   RAISE NOTICE '  • Example: 100 credits = $9.00, 250 credits = $20.00';
   RAISE NOTICE '';

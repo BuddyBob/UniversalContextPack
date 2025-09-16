@@ -37,7 +37,7 @@ export default function PricingPageClient() {
     if (creditsParam) {
       const credits = parseInt(creditsParam)
       if (credits > 0 && credits <= 10000) {
-        const finalCredits = Math.max(5, credits) // Ensure minimum 5
+        const finalCredits = Math.max(2, credits) // Ensure minimum 2
         setCustomCredits(finalCredits)
         setCustomCreditsInput(finalCredits.toString())
       }
@@ -325,14 +325,14 @@ export default function PricingPageClient() {
                   <div className="flex">
                     <input
                       type="number"
-                      min="5"
+                      min="2"
                       max="10000"
                       value={customCreditsInput}
                       onChange={(e) => {
                         const value = e.target.value
                         setCustomCreditsInput(value)
                         const credits = parseInt(value) || 0
-                        if (credits >= 5 && credits <= 10000) {
+                        if (credits >= 2 && credits <= 10000) {
                           setCustomCredits(credits)
                         }
                       }}
@@ -344,7 +344,7 @@ export default function PricingPageClient() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 mt-1 font-medium">
-                    Minimum 5 credits. Volume discounts automatically applied.
+                    Minimum 2 credits. Volume discounts automatically applied.
                   </p>
                 </div>
 
@@ -379,7 +379,7 @@ export default function PricingPageClient() {
                     <>
                       <CreditCard className="h-4 w-4 mr-2" />
                       {customCredits < 5 
-                        ? 'Minimum 5 credits required' 
+                        ? 'Minimum 2 credits required' 
                         : `Purchase ${customCredits} credits`
                       }
                     </>
@@ -393,7 +393,7 @@ export default function PricingPageClient() {
             <div className="max-w-md mx-auto text-center p-8 border border-gray-200 rounded-lg bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Sign in required</h3>
               <p className="text-gray-700 mb-4 text-sm font-medium">
-                Create an account to purchase credits and get started with 5 free credits
+                Create an account to purchase credits and get started with 2 free credits
               </p>
               <button 
                 onClick={handlePurchase}

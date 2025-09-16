@@ -2034,6 +2034,17 @@ export default function ProcessPage() {
             </div>
           </div>
 
+            {/* Reset Button Section */}
+            {currentStep !== 'upload' && (
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={resetProcess}
+                  className="text-sm text-text-secondary hover:text-text-primary px-3 py-1 border border-border-secondary rounded hover:border-border-accent hover:bg-bg-tertiary transition-colors"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
@@ -2918,7 +2929,7 @@ export default function ProcessPage() {
                 : paymentLimitsError 
                   ? 'Error loading credits - Click to retry'
                   : !user 
-                    ? '5 credits'
+                    ? '2 credits'
                     : 'Loading...'}
             </span>
             <HelpCircle className="w-3 h-3 opacity-60" />
@@ -2926,18 +2937,30 @@ export default function ProcessPage() {
 
           {/* Credits Tooltip */}
           {showCreditsTooltip && (
-            <div className="absolute top-full right-0 mt-2 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-5 z-50">
-              <div className="text-sm text-white font-medium mb-3">What are credits?</div>
-              <div className="text-sm text-gray-300 space-y-2">
-                <p>• Each credit processes one conversation chunk</p>
-                <p>• Typical conversations use 5-50 credits</p>
-                <p>• Get 5 free credits when you sign up</p>
-                <p>• Buy more credits or get unlimited processing</p>
+            <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl p-6 z-50">
+              <div className="text-sm text-gray-900 font-semibold mb-4">What are credits?</div>
+              <div className="text-sm text-gray-600 space-y-3">
+                <div className="flex items-start space-x-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                  <p>Each credit processes one conversation chunk</p>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                  <p>Typical conversations use 5-50 credits</p>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
+                  <p><strong>Get 2 free credits</strong> when you sign up</p>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-2 flex-shrink-0"></div>
+                  <p>Buy more credits or get unlimited processing</p>
+                </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-gray-700">
+              <div className="mt-5 pt-4 border-t border-gray-100">
                 <button 
                   onClick={() => router.push('/pricing')}
-                  className="text-sm text-purple-400 hover:text-purple-300 transition-colors font-medium"
+                  className="inline-flex items-center text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium shadow-sm"
                 >
                   View pricing →
                 </button>

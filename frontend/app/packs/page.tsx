@@ -367,7 +367,7 @@ export default function PacksPage() {
                   </div>
                   <h3 className="font-medium text-gray-900 mb-2">Your Context Packs</h3>
                   <p className="text-gray-600 text-sm mb-4">
-                    Process chat exports to see your packs here. <strong>Get 5 free credits</strong> when you sign in!
+                    Process chat exports to see your packs here. <strong>Get 2 free credits</strong> when you sign in!
                   </p>
                   <button 
                     onClick={() => freeCreditsPrompt.triggerPrompt("viewing your processed context packs")}
