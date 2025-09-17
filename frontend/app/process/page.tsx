@@ -2049,12 +2049,12 @@ export default function ProcessPage() {
 
             {/* Upload Section */}
             {currentStep === 'upload' && (
-              <div className="max-w-4xl mx-auto space-y-8">
+              <div id="upload-section" className="max-w-4xl mx-auto space-y-8">
                 {/* Header with Value Proposition */}
                 <div className="text-center space-y-4">
                   <p className="text-xl text-gray-300 font-medium">
                     {uploadMethod === 'files' 
-                      ? 'Turn your messy AI chat exports into one clean, smart context pack'
+                      ? 'Turn all your AI chats into one smart memory file'
                       : 'Stop restarting chats and losing context'
                     }
                   </p>
@@ -2076,7 +2076,7 @@ export default function ProcessPage() {
                         : 'text-gray-400 hover:text-gray-300'
                     }`}
                   >
-                    Upload Files
+                    All Chats
                   </button>
                   <button
                     onClick={() => setUploadMethod('url')}
@@ -2138,10 +2138,10 @@ export default function ProcessPage() {
                         }`} />
                       </div>
                       
-                      <h3 className={`text-xl font-medium mb-4 transition-colors duration-300 ${
+                      <h3 className={`text-3xl font-medium mb-4 transition-colors duration-300 ${
                         isDragOver ? 'text-blue-300' : 'text-white group-hover:text-gray-100'
                       }`}>
-                        {isDragOver ? 'Drop your files here' : 'Drag & Drop Files'}
+                        {isDragOver ? 'Drop your files here' : 'Upload File'}
                       </h3>
 
                       <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
@@ -2149,11 +2149,20 @@ export default function ProcessPage() {
                           onClick={() => {
                             router.push('/');
                             setTimeout(() => {
-                              const element = document.getElementById('export-guide');
-                              if (element) {
-                                element.scrollIntoView({ behavior: 'smooth' });
+                              const el =
+                                document.getElementById('section-2') ||
+                                document.querySelector('[data-section="section-2"]') ||
+                                document.querySelectorAll('section')[1];
+
+                              if (el instanceof HTMLElement) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                try {
+                                  window.history.replaceState({}, '', '/#section-2');
+                                } catch (e) {
+                                  // ignore
+                                }
                               }
-                            }, 100);
+                            }, 250);
                           }}
                           className="text-blue-400 hover:text-blue-300 underline transition-colors"
                         >

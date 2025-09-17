@@ -89,6 +89,8 @@ allowed_origins = os.getenv("ALLOWED_ORIGINS", "https://universal-context-pack.v
 additional_origins = [
     "https://universal-context-pack.vercel.app",
     "https://universalcontextpack.vercel.app", 
+    "https://context-pack.com",                   
+    "https://www.context-pack.com", 
     "http://localhost:3000",
     "http://localhost:3001",
     "*"  # Allow all origins temporarily to debug CORS issue

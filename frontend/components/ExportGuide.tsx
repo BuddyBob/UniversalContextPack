@@ -42,11 +42,17 @@ const ExportGuide = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden">
+    <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden">
+      {/* Subtle vignette for depth + color accents */}
+      <div className="absolute inset-0 pointer-events-none z-0">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/3 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-purple-500/3 rounded-full blur-2xl animate-pulse" style={{animationDelay: '2s'}}></div>
+      </div>
+      
       {/* Dynamic Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div 
-          className="absolute w-96 h-96 bg-gradient-to-r from-blue-500/10 to-transparent rounded-full blur-3xl"
+          className="absolute w-96 h-96 bg-gradient-to-r from-indigo-500/5 to-transparent rounded-full blur-3xl"
           style={{
             left: mousePosition.x - 192,
             top: mousePosition.y - 192,
@@ -54,7 +60,7 @@ const ExportGuide = () => {
           }}
         />
         <div 
-          className="absolute w-64 h-64 bg-gradient-to-l from-purple-500/10 to-transparent rounded-full blur-2xl"
+          className="absolute w-64 h-64 bg-gradient-to-l from-fuchsia-500/5 to-transparent rounded-full blur-2xl"
           style={{
             left: mousePosition.x - 128,
             top: mousePosition.y + 100,
@@ -108,87 +114,137 @@ const ExportGuide = () => {
       <div className="relative z-10">
         {/* Hero Section */}
         <section className="min-h-screen flex items-center justify-center px-6 relative">
-          <div className="absolute inset-0 hero-gradient transform skew-y-1"></div>
-          
           <div className="max-w-6xl mx-auto text-center relative z-10">
-            <div className="mb-8">
-              <div className="text-sm text-blue-400 font-mono mb-4">~/universal-context-pack</div>
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl text-white mb-6 font-bold leading-tight">
+            <div className="mb-12">
+              <h2 className="text-4xl md:text-5xl lg:text-7xl text-white/70 font-light mb-8">
                 Your AI
-                <br />
-                <span className="text-white font-medium">
-                  Memory
-                </span>
-                <br />
-                <span className="text-gray-400">Everywhere</span>
+              </h2>
+              <h1 className="text-6xl md:text-8xl lg:text-9xl text-white leading-tight font-light mb-12">
+                Memory Everywhere
               </h1>
             </div>
 
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <button 
-                onClick={() => {
-                  document.getElementById('export')?.scrollIntoView({ behavior: 'smooth' })
-                }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-4 rounded-lg text-lg font-medium transition-all duration-300 hover:shadow-2xl hover:scale-105"
-              >
-                Get Started
-              </button>
-              
+            <div className="flex justify-center">
               <a 
                 href="/process"
-                className="bg-gray-900 text-white-900 hover:text-white transition-colors duration-300 flex items-center gap-2 group border hover:border-purple-400 hover:bg-purple-600 px-6 py-4 rounded-lg"
+                className="bg-[#6639D0] hover:bg-[#5428B8] text-white px-8 py-4 rounded-full text-lg font-medium transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
               >
-                <span>Skip to Upload</span>
-                <div className="w-4 h-6 transform group-hover:translate-x-1 transition-transform duration-300">→</div>
+                Create Pack
               </a>
             </div>
           </div>
 
-          {/* Floating Text Bubbles - Outside Container - Hidden on Mobile */}
-          <div className="absolute inset-0 pointer-events-none hidden lg:block">
-            {/* Bubble 1 - Far Left Edge */}
-            <div className="absolute" style={{ left: '5vw', top: '40%' }}>
-              <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
-                <span className="text-gray-300 text-base">Extract your conversations</span>
-              </div>
+          {/* Subtle background elements */}
+          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-96 h-96 bg-[#6639D0]/10 rounded-full blur-3xl"></div>
+          <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-[#6639D0]/5 rounded-full blur-2xl"></div>
+
+        </section>
+
+        
+
+        {/* Export Guide Section */}
+        <section id="export" className="py-20 px-6 relative">
+          {/* Smooth gradient transition from purple to dark */}
+          <div className="absolute inset-0 bg-slate-950" />
+          
+          <div className="max-w-5xl mx-auto relative z-10">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-white mb-4">
+                Export Your AI Chats
+              </h2>
+              <p className="text-gray-400 max-w-2xl mx-auto">
+                Get your conversation history from ChatGPT or Claude and use it anywhere
+              </p>
             </div>
-            
-            {/* Bubble 2 - Far Right Edge */}
-            <div className="absolute" style={{ right: '5vw', top: '35%' }}>
-              <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
-                <span className="text-gray-300 text-base">No more chat limits</span>
-              </div>
-            </div>
-            
-            {/* Bubble 3 - Left Side */}
-            <div className="absolute" style={{ left: '12vw', top: '65%' }}>
-              <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
-                <span className="text-gray-300 text-base">Port across different AI's</span>
-              </div>
-            </div>
-            
-              {/* Bubble 4 - Center Bottom */}
-              <div className="absolute" style={{ left: '50%', bottom: '20%', transform: 'translateX(-50%)' }}>
-                <div className="bg-gray-700/40 backdrop-blur-sm rounded-full px-5 py-3 border border-gray-600/30">
-                  <span className="text-gray-200 text-base font-medium">Your conversations are your data</span>
+
+            {/* Clean Export Interface */}
+            <div className="max-w-3xl mx-auto mb-16">
+              <div className="rounded-xl p-8 bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_20px_50px_rgba(15,_23,_42,_0.3)] hover:shadow-[0_20px_50px_rgba(15,_23,_42,_0.4)] transition-all duration-300">
+                <h3 className="text-lg font-semibold text-white mb-6">Download Your Chats</h3>
+                
+                <div className="space-y-3">
+                  {exportSteps.map((step) => (
+                    <a 
+                      key={step.platform}
+                      href={step.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-slate-800/80 to-slate-700/60 hover:from-slate-700/90 hover:to-slate-600/70 backdrop-blur-sm border border-slate-600/60 hover:border-slate-500/80 shadow-lg hover:shadow-xl transition-all duration-300 group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <step.icon className="h-5 w-5 text-slate-300 group-hover:text-white transition-colors" />
+                        <span className="text-white font-medium">{step.platform}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <span className="text-sm text-slate-200 group-hover:text-white transition-colors">Download My Chats</span>
+
+                        <ExternalLink className="h-4 w-4" />
+                      </div>
+                    </a>
+                  ))}
                 </div>
-              </div>            {/* Bubble 5 - Right Side */}
-            <div className="absolute" style={{ right: '12vw', top: '70%' }}>
-              <div className="bg-gray-800/40 backdrop-blur-sm rounded-full px-4 py-2 border border-gray-600/30">
-                <span className="text-gray-300 text-base">AI Memory Manager</span>
+                
+                <p className="text-gray-500 text-sm mt-4">
+                  Files sent to your email in 5-10 minutes
+                </p>
+              </div>
+            </div>
+
+            {/* Simple Process Steps */}
+            <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+              <div className="text-center p-6 rounded-xl bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_15px_35px_rgba(15,_23,_42,_0.2)] hover:shadow-[0_20px_45px_rgba(15,_23,_42,_0.3)] transition-all duration-300">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-slate-700/80 to-slate-800/90 border border-slate-600/60 mx-auto mb-4 flex items-center justify-center shadow-lg">
+                  <span className="text-white font-semibold">1</span>
+                </div>
+                <h3 className="text-white font-medium mb-2">Download</h3>
+                <p className="text-gray-400 text-sm">Get your chat history</p>
+              </div>
+
+              <div className="text-center p-6 rounded-xl bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_15px_35px_rgba(15,_23,_42,_0.2)] hover:shadow-[0_20px_45px_rgba(15,_23,_42,_0.3)] transition-all duration-300">
+                <div className="w-12 h-12 rounded-lg bg-indigo-600 border border-indigo-500/60 mx-auto mb-4 flex items-center justify-center shadow-lg">
+                  <span className="text-white font-semibold">2</span>
+                </div>
+                <h3 className="text-white font-medium mb-2">Upload</h3>
+                <p className="text-gray-400 text-sm mb-4">Create your memory pack</p>
+                <a 
+                  href="/process"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  Upload Files
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </div>
+
+              <div className="text-center p-6 rounded-xl bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_15px_35px_rgba(15,_23,_42,_0.2)] hover:shadow-[0_20px_45px_rgba(15,_23,_42,_0.3)] transition-all duration-300">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-slate-700/80 to-slate-800/90 border border-slate-600/60 mx-auto mb-4 flex items-center justify-center shadow-lg">
+                  <span className="text-white font-semibold">3</span>
+                </div>
+                <h3 className="text-white font-medium mb-2">Use Anywhere</h3>
+                <p className="text-gray-400 text-sm mb-4">Paste into any AI chat</p>
+                <a 
+                  href="/how-to-port"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+text-white border border-slate-700/60 hover:border-slate-500/80
+bg-transparent hover:bg-slate-800/60 ring-1 ring-slate-500/10"
+                >
+                  How to Use
+                  <ArrowRight className="h-4 w-4" />
+                </a>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Privacy & Security Section */}
+        {/* Security Section */}
         <section className="py-16 px-6 relative">
-          <div className="max-w-4xl mx-auto">
-            <div className="bg-gray-800/40 rounded-2xl p-8 border border-gray-700">
+          {/* Smooth transition background */}
+          <div className="absolute inset-0 bg-slate-950" />
+          
+          <div className="max-w-4xl mx-auto relative z-10">
+            <div className="bg-gradient-to-br from-white/10 via-white/5 to-transparent backdrop-blur-2xl rounded-2xl p-8 border border-white/30 ">
               <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-16 h-16  backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4 border border-white/20 shadow-lg">
+                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                   </svg>
                 </div>
@@ -238,97 +294,10 @@ const ExportGuide = () => {
           </div>
         </section>
 
-        {/* Export Guide Section */}
-        <section id="export" className="py-20 px-6 bg-gray-900/20">
-          <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold text-white mb-4">
-                Export Your AI Chats
-              </h2>
-              <p className="text-gray-400 max-w-2xl mx-auto">
-                Get your conversation history from ChatGPT or Claude and use it anywhere
-              </p>
-            </div>
-
-            {/* Clean Export Interface */}
-            <div className="max-w-3xl mx-auto mb-16">
-              <div className="bg-gray-800 rounded-xl border border-gray-700 p-8">
-                <h3 className="text-lg font-semibold text-white mb-6">Download Your Chats</h3>
-                
-                <div className="space-y-3">
-                  {exportSteps.map((step) => (
-                    <a 
-                      key={step.platform}
-                      href={step.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between p-4 bg-white hover:bg-gray-700/50 border border-gray-600 hover:border-gray-500 rounded-lg transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <step.icon className="h-5 w-5 text-gray-900" />
-                        <span className="text-black font-medium">{step.platform}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <span className="text-sm text-black">Download My Chats</span>
-                        <ExternalLink className="h-4 w-4" />
-                      </div>
-                    </a>
-                  ))}
-                </div>
-                
-                <p className="text-gray-500 text-sm mt-4">
-                  Files sent to your email in 5-10 minutes
-                </p>
-              </div>
-            </div>
-
-            {/* Simple Process Steps */}
-            <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-              <div className="text-center bg-gray-800 p-6 rounded-lg">
-                <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-white font-semibold">1</span>
-                </div>
-                <h3 className="text-white font-medium mb-2">Download</h3>
-                <p className="text-gray-500 text-sm">Get your chat history</p>
-              </div>
-
-              <div className="text-center bg-gray-800 p-6 rounded-lg">
-                <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-white font-semibold">2</span>
-                </div>
-                <h3 className="text-white font-medium mb-2">Upload</h3>
-                <p className="text-gray-500 text-sm mb-4">Create your memory pack</p>
-                <a 
-                  href="/process"
-                  className="inline-flex items-center gap-2 bg-white text-black hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  Upload Files
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-              </div>
-
-              <div className="text-center bg-gray-800 p-6 rounded-lg">
-                <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <span className="text-white font-semibold">3</span>
-                </div>
-                <h3 className="text-white font-medium mb-2">Use Anywhere</h3>
-                <p className="text-gray-500 text-sm mb-4">Paste into any AI chat</p>
-                <a 
-                  href="/how-to-port"
-                  className="inline-flex items-center gap-2 border bg-white border-gray-600 text-black hover:text-white hover:border-gray-500 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  How to Use
-                  <ArrowRight className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-          </div>
-        </section>
-
        
 
         {/* Spacing section with subtle blue gradient */}
-        <section className="py-12 bg-gradient-to-b from-transparent via-blue-950/5 to-transparent">
+        <section className="py-12 bg-gradient-to-b from-transparent via-slate-700/10 to-transparent">
           <div className="max-w-4xl mx-auto px-6">
             <div className="h-8"></div>
           </div>
