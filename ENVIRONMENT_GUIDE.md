@@ -26,7 +26,7 @@ UCPv6/
 ## 3. Railway Production (.env.railway.production)  
 **Purpose**: Copy these to Railway Dashboard → Variables
 - PORT=8000
-- ALLOWED_ORIGINS=https://universal-context-pack.vercel.app
+- ALLOWED_ORIGINS=https://www.context-pack.com
 - All backend production configs
 
 ## 4. Frontend Local (frontend/.env.local)

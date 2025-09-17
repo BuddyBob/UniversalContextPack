@@ -84,13 +84,13 @@ else:
 app = FastAPI(title="Simple UCP Backend", version="1.0.0")
 
 # CORS middleware - Configure allowed origins from environment
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "https://universal-context-pack.vercel.app").split(",")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "https://www.context-pack.com").split(",")
 # Add additional domains that might be accessing the API
 additional_origins = [
+    "https://www.context-pack.com",
+    "https://context-pack.com",                   
     "https://universal-context-pack.vercel.app",
     "https://universalcontextpack.vercel.app", 
-    "https://context-pack.com",                   
-    "https://www.context-pack.com", 
     "http://localhost:3000",
     "http://localhost:3001",
     "*"  # Allow all origins temporarily to debug CORS issue

@@ -158,7 +158,7 @@ Universal Context Pack (UCP) is an AI-powered platform that transforms conversat
 5. **Technical Excellence**: Built by AI experts who understand LLM limitations and capabilities
 
 ## Current Status
-- **Live Platform**: Fully operational at https://universal-context-pack.vercel.app
+- **Live Platform**: Fully operational at https://www.context-pack.com
 - **Production Ready**: Stable backend deployed on Railway
 - **Active Development**: Continuous improvements based on user feedback
 - **Proven Technology**: Successfully processing real user data daily
