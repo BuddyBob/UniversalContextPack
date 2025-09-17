@@ -51,6 +51,7 @@ export default function ProcessPage() {
   const [lastProgressTimestamp, setLastProgressTimestamp] = useState<number>(0);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'warning'>('connected');
   const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, credits_balance: number, plan?: string} | null>(null);
+  const [emailModeStartTime, setEmailModeStartTime] = useState<number | null>(null);
   const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -96,6 +97,7 @@ export default function ProcessPage() {
         setProgress(session.progress || 0);
         setLogs(session.logs || []);
         setAnalysisStartTime(session.analysisStartTime || null);
+        setEmailModeStartTime(session.emailModeStartTime || null);
         setConversationUrl(session.chatgptUrl || '');
         setMaxChunks(session.maxChunks || null);
         setCurrentProcessedChunks(session.currentProcessedChunks || 0);
@@ -219,6 +221,7 @@ export default function ProcessPage() {
         logs: logs.slice(-50), // Only keep last 50 logs to reduce storage size
         currentJobId,
         analysisStartTime,
+        emailModeStartTime,
         sessionId,
         conversationUrl
       };
@@ -273,6 +276,7 @@ export default function ProcessPage() {
         logs,
         currentJobId,
         analysisStartTime,
+        emailModeStartTime,
         sessionId,
         conversationUrl
       };
@@ -281,7 +285,7 @@ export default function ProcessPage() {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, sessionId, conversationUrl]);
+  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, emailModeStartTime, sessionId, conversationUrl]);
 
   // Utility function to format time estimates (rounds up)
   const formatAnalysisTime = (totalSeconds: number): string => {
@@ -1729,6 +1733,9 @@ export default function ProcessPage() {
       
       // Check if this is a large job using email notification
       if (data.email_notification && data.status === 'email_mode') {
+        const startTime = Date.now();
+        setEmailModeStartTime(startTime);
+        
         addLog(`🎯 Large job detected (${data.chunks_to_process} chunks) - Email notification mode activated`);
         addLog(`📧 You will receive an email when analysis is complete (estimated: ${Math.round(data.estimated_time_minutes)} minutes)`);
         addLog(`💻 Feel free to close this window - we'll email you when it's done!`);
@@ -2672,67 +2679,100 @@ export default function ProcessPage() {
 
             {/* Email Notification Mode for Large Jobs */}
             {currentStep === 'email_mode' && (
-              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <Brain className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-text-primary">Processing in Background</h3>
-                    <p className="text-sm text-text-secondary">Large job initiated - email notification enabled</p>
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                      <Brain className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Processing in Background</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Your analysis is running on our servers</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  {/* Key Information Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-bg-secondary border border-border-secondary rounded-lg p-4">
+                {/* Main Content */}
+                <div className="p-6 space-y-6">
+                  {/* Key Information - Professional Layout */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Start Time */}
+                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                       <div className="flex items-center space-x-2 mb-2">
-                        <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                        <span className="text-sm font-medium text-text-primary">Estimated Completion</span>
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Started</span>
                       </div>
-                      <p className="text-lg font-semibold text-text-primary">
-                        {selectedChunks.size ? `${Math.round(selectedChunks.size * 1.2)} minutes` : '8-12 minutes'}
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {emailModeStartTime ? new Date(emailModeStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
                       </p>
-                      <p className="text-xs text-text-secondary">Based on {selectedChunks.size || 6} chunks</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {emailModeStartTime ? new Date(emailModeStartTime).toLocaleDateString() : 'Today'}
+                      </p>
                     </div>
 
-                    <div className="bg-bg-secondary border border-border-secondary rounded-lg p-4">
+                    {/* Estimated Completion */}
+                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                       <div className="flex items-center space-x-2 mb-2">
-                        <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-                        <span className="text-sm font-medium text-text-primary">Notification Email</span>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Estimated Completion</span>
                       </div>
-                      <p className="text-sm font-mono text-text-primary truncate">
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {emailModeStartTime && selectedChunks.size ? 
+                          new Date(emailModeStartTime + (selectedChunks.size * 1.2 * 60 * 1000)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
+                          'In 8-12 minutes'
+                        }
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Based on {selectedChunks.size || 6} chunks
+                      </p>
+                    </div>
+
+                    {/* Email Destination */}
+                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Results sent to</span>
+                      </div>
+                      <p className="text-sm font-mono text-gray-900 dark:text-white truncate bg-white dark:bg-gray-900 px-2 py-1 rounded border">
                         {user?.email || 'your-email@domain.com'}
                       </p>
-                      <p className="text-xs text-text-secondary">Results will be sent here</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Check your inbox when complete
+                      </p>
                     </div>
                   </div>
 
-                  {/* Status Summary */}
-                  <div className="border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-r-lg">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Job submitted successfully</span>
-                    </div>
-                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                      Your analysis is now running on our servers. You may close this window safely.
-                    </p>
-                  </div>
-
-                  {/* Job Reference */}
-                  <div className="bg-bg-secondary border border-border-secondary rounded-lg p-3">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-text-secondary">Job Reference:</span>
-                      <span className="font-mono text-text-primary">{jobId}</span>
+                  {/* Status Message - Professional */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Analysis Started Successfully</h4>
+                        <p className="text-sm text-blue-800 dark:text-blue-200 mt-1">
+                          You can safely close this window or navigate to other pages. We'll email you when your Context Pack is ready for download.
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex space-x-3 pt-2">
+                  {/* Job Reference - Subtle */}
+                  {jobId && (
+                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Job Reference:</span>
+                        <span className="font-mono text-gray-900 dark:text-white text-xs">{jobId}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions - Professional Button Layout */}
+                <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-lg">
+                  <div className="flex space-x-3">
                     <button
                       onClick={() => router.push('/')}
-                      className="flex-1 bg-bg-secondary border border-border-primary text-text-primary px-4 py-2 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors text-center"
+                      className="flex-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2.5 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors text-center"
                     >
                       Return to Home
                     </button>
@@ -2767,15 +2807,9 @@ export default function ProcessPage() {
                           }
                         }
                       }}
-                      className="px-4 py-2 border border-border-accent rounded-lg text-text-primary hover:bg-bg-tertiary hover:border-border-primary transition-colors bg-blue-600/10"
+                      className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                     >
                       Check Status
-                    </button>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
-                    >
-                      Refresh
                     </button>
                   </div>
                 </div>
