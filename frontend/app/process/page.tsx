@@ -860,11 +860,6 @@ export default function ProcessPage() {
             }
           } catch (healthError) {
             console.warn('Health check failed during retry:', healthError);
-            if (healthError instanceof Error && healthError.name === 'TimeoutError') {
-              addLog(`⚠️ Server health check timed out, but continuing with status check...`);
-            } else {
-              addLog(`⚠️ Server warming failed, retrying status check...`);
-            }
           }
         }
         
@@ -2015,18 +2010,18 @@ export default function ProcessPage() {
                 <div className="flex items-center justify-center space-x-2 text-sm">
                   <div className={`w-2 h-2 rounded-full ${
                     connectionStatus === 'connected' ? 'bg-green-500' :
-                    connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                    connectionStatus === 'connecting' ? 'bg-green-500 animate-pulse' :
                     connectionStatus === 'warning' ? 'bg-orange-500 animate-pulse' :
                     'bg-red-500'
                   }`}></div>
                   <span className={`${
                     connectionStatus === 'connected' ? 'text-green-400' :
-                    connectionStatus === 'connecting' ? 'text-yellow-400' :
+                    connectionStatus === 'connecting' ? 'text-green-400' :
                     connectionStatus === 'warning' ? 'text-orange-400' :
                     'text-red-400'
                   }`}>
                     {connectionStatus === 'connected' ? 'Connected to server' :
-                     connectionStatus === 'connecting' ? 'Reconnecting to server...' :
+                     connectionStatus === 'connecting' ? 'Connected to server' :
                      connectionStatus === 'warning' ? 'Connection issues detected' :
                      'Server connection lost'}
                   </span>
@@ -2076,7 +2071,7 @@ export default function ProcessPage() {
                         : 'text-gray-400 hover:text-gray-300'
                     }`}
                   >
-                    All Chats
+                    Upload Export
                   </button>
                   <button
                     onClick={() => setUploadMethod('url')}
@@ -2141,7 +2136,7 @@ export default function ProcessPage() {
                       <h3 className={`text-3xl font-medium mb-4 transition-colors duration-300 ${
                         isDragOver ? 'text-blue-300' : 'text-white group-hover:text-gray-100'
                       }`}>
-                        {isDragOver ? 'Drop your files here' : 'Upload File'}
+                        {isDragOver ? 'Drop your files here' : 'Upload Export'}
                       </h3>
 
                       <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
@@ -2190,8 +2185,8 @@ export default function ProcessPage() {
                       {/* File Types */}
                       <div className="space-y-4">
                         <div className="flex items-center justify-center gap-2 flex-wrap">
-                          <span className="px-3 py-1.5 bg-blue-700 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Recommended: conversations.json</span>
-                          <span className="px-3 py-1.5 bg-red-700 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Warning: dont use chat.html</span>
+                          <span className="px-3 py-1.5 bg-blue-700/40 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Recommended: conversations.json</span>
+                          <span className="px-3 py-1.5 bg-red-700/40 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Warning: dont use chat.html</span>
                           <span className="text-gray-600 text-xs">·</span>
                         </div>
                         
@@ -2969,30 +2964,30 @@ export default function ProcessPage() {
 
           {/* Credits Tooltip */}
           {showCreditsTooltip && (
-            <div className="absolute top-full right-0 mt-2 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl p-6 z-50">
-              <div className="text-sm text-gray-900 font-semibold mb-4">What are credits?</div>
-              <div className="text-sm text-gray-600 space-y-3">
-                <div className="flex items-start space-x-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+            <div className="absolute top-full right-0 mt-2 min-w-96 max-w-sm bg-white/95 backdrop-blur-sm border border-gray-200/50 rounded-xl shadow-2xl p-6 z-50">
+              <div className="text-sm text-slate-900 font-semibold mb-4">What are credits?</div>
+              <div className="text-sm text-slate-600 space-y-3">
+                <div className="flex items-start space-x-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 flex-shrink-0"></div>
                   <p>Each credit processes one conversation chunk</p>
                 </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0"></div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 flex-shrink-0"></div>
                   <p>Typical conversations use 5-50 credits</p>
                 </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-2 flex-shrink-0"></div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></div>
                   <p><strong>Get 2 free credits</strong> when you sign up</p>
                 </div>
-                <div className="flex items-start space-x-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-2 flex-shrink-0"></div>
+                <div className="flex items-start space-x-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 flex-shrink-0"></div>
                   <p>Buy more credits or get unlimited processing</p>
                 </div>
               </div>
-              <div className="mt-5 pt-4 border-t border-gray-100">
+              <div className="mt-5 pt-4 border-t border-gray-100/50">
                 <button 
                   onClick={() => router.push('/pricing')}
-                  className="inline-flex items-center text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium shadow-sm"
+                  className="inline-flex items-center text-sm bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-all duration-200 font-medium shadow-sm"
                 >
                   View pricing →
                 </button>
