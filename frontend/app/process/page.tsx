@@ -2103,7 +2103,7 @@ export default function ProcessPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".json,.txt,.html,.csv,.zip"
+                      accept=".json,.txt,.csv,.zip"
                       onChange={handleFileSelect}
                       className="hidden"
                     />
@@ -2191,6 +2191,7 @@ export default function ProcessPage() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-center gap-2 flex-wrap">
                           <span className="px-3 py-1.5 bg-blue-700 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Recommended: conversations.json</span>
+                          <span className="px-3 py-1.5 bg-blue-700 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Warning: dont use chat.html</span>
                           <span className="text-gray-600 text-xs">·</span>
                         </div>
                         
