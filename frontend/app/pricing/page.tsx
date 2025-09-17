@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Pricing - Universal Context Pack',
     description: 'Affordable AI conversation analysis pricing. Pay-per-use credits with volume discounts.',
-    url: 'https://universal-context-pack.vercel.app/pricing',
+    url: 'https://www.context-pack.com/pricing',
   },
   keywords: [
     'AI conversation analysis pricing',

@@ -40,7 +40,7 @@ export default function ProcessPage() {
   const [selectedChunks, setSelectedChunks] = useState<Set<number>>(new Set());
   const [maxChunks, setMaxChunks] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [currentStep, setCurrentStep] = useState<'upload' | 'uploaded' | 'extracting' | 'extracted' | 'chunking' | 'chunked' | 'analyzing' | 'analyzed'>('upload');
+  const [currentStep, setCurrentStep] = useState<'upload' | 'uploaded' | 'extracting' | 'extracted' | 'chunking' | 'chunked' | 'analyzing' | 'analyzed' | 'email_mode'>('upload');
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
   const [showChunkModal, setShowChunkModal] = useState(false);
@@ -1657,10 +1657,30 @@ export default function ProcessPage() {
       const data = await response.json();
       setJobId(data.job_id);
       setCurrentJobId(data.job_id);
-      addLog(`Analysis job started: ${data.job_id}`);
       
-      // Start polling for status
-      startPollingAnalysisStatus(data.job_id);
+      // Check if this is a large job using email notification
+      if (data.email_notification && data.status === 'email_mode') {
+        addLog(`🎯 Large job detected (${data.chunks_to_process} chunks) - Email notification mode activated`);
+        addLog(`📧 You will receive an email when analysis is complete (estimated: ${Math.round(data.estimated_time_minutes)} minutes)`);
+        addLog(`💻 Feel free to close this window - we'll email you when it's done!`);
+        
+        // Set the step to a special email mode
+        setCurrentStep('email_mode' as any);
+        setIsProcessing(false);
+        
+        // Show notification about email mode
+        showNotification(
+          'info', 
+          `Large job (${data.chunks_to_process} chunks) will run in background. Check your email for completion notification.`
+        );
+        
+        // Don't start polling for large jobs
+        return;
+      } else {
+        addLog(`Analysis job started: ${data.job_id}`);
+        // Start polling for status for smaller jobs
+        startPollingAnalysisStatus(data.job_id);
+      }
     } catch (error) {
       console.error('Analysis failed to start:', error);
       
@@ -2576,6 +2596,73 @@ export default function ProcessPage() {
                       )}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Email Notification Mode for Large Jobs */}
+            {currentStep === 'email_mode' && (
+              <div className="bg-bg-card border border-border-primary rounded-lg p-6">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <Brain className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-text-primary">Large Job Processing in Background</h3>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mt-0.5">
+                      <span className="text-xs font-bold text-white">!</span>
+                    </div>
+                    <div>
+                      <p className="text-text-primary font-medium">Email Notification Active</p>
+                      <p className="text-sm text-text-secondary">
+                        Your large job (6+ chunks) is processing in the background. You'll receive an email when it's complete.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3">
+                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
+                      <CheckCircle className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-text-primary font-medium">What happens next?</p>
+                      <ul className="text-sm text-text-secondary space-y-1 mt-1">
+                        <li>• Your analysis is running on our servers</li>
+                        <li>• You'll get an email with a download link when complete</li>
+                        <li>• Feel free to close this window and return later</li>
+                        <li>• Processing typically takes 1-2 minutes per chunk</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="bg-bg-secondary border border-border-secondary rounded-lg p-4">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Info className="h-4 w-4 text-blue-500" />
+                      <span className="text-sm font-medium text-text-primary">Job Details</span>
+                    </div>
+                    <div className="text-sm text-text-secondary space-y-1">
+                      <p>Job ID: <span className="font-mono text-text-primary">{jobId}</span></p>
+                      <p>Processing started at: <span className="text-text-primary">{new Date().toLocaleTimeString()}</span></p>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => router.push('/')}
+                      className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors flex items-center space-x-2"
+                    >
+                      <span>← Return to Home</span>
+                    </button>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="px-6 py-3 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors flex items-center space-x-2"
+                    >
+                      <span>Refresh Page</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Universal Context Pack - Transform Your AI Conversations',
     description: 'Upload your ChatGPT, Claude, or AI assistant conversation exports and create portable context packs.',
-    url: 'https://universal-context-pack.vercel.app/',
+    url: 'https://www.context-pack.com/',
   },
 }
 

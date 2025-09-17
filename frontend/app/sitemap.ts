@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || 'https://universal-context-pack.vercel.app';
+  const base = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.context-pack.com';
   
   return [
     {

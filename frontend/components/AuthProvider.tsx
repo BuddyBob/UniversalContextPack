@@ -342,6 +342,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
       } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
         timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
+      } else if (url.includes('/api/status/')) {
+        timeoutMs = 90000 // 90 seconds for status polling to handle batch processing
       } else if (url.includes('/api/profile/quick')) {
         timeoutMs = 10000 // 10 seconds for quick profile endpoint
       } else if (url.includes('/api/health')) {
@@ -389,6 +391,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             retryTimeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
           } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
             retryTimeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
+          } else if (url.includes('/api/status/')) {
+            retryTimeoutMs = 90000 // 90 seconds for status polling to handle batch processing
           } else if (url.includes('/api/profile/quick')) {
             retryTimeoutMs = 10000 // 10 seconds for quick profile endpoint
           } else if (url.includes('/api/health')) {

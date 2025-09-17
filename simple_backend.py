@@ -190,6 +190,68 @@ def check_rate_limit(user_id: str, limit_type: str = "payment", max_attempts: in
     attempts_storage[user_id].append(now)
     return True, len(user_attempts) + 1
 
+# Email notification service
+async def send_email_notification(user_email: str, job_id: str, chunks_processed: int, total_chunks: int, success: bool = True):
+    """Send email notification when a large job completes"""
+    try:
+        # You can integrate with your preferred email service here (SendGrid, AWS SES, etc.)
+        # For now, I'll add a placeholder that logs the email content
+        
+        if success:
+            subject = "🎉 Your Universal Context Pack Analysis is Complete!"
+            message = f"""
+Hello!
+
+Your Universal Context Pack analysis has been completed successfully.
+
+Job Details:
+- Job ID: {job_id}
+- Chunks Processed: {chunks_processed}/{total_chunks}
+- Status: Successfully Completed
+
+Your analysis results are now available for download. You can access them by visiting:
+{os.getenv('FRONTEND_URL', 'https://www.context-pack.com')}/results/{job_id}
+
+Thank you for using Universal Context Pack!
+
+Best regards,
+The UCP Team
+"""
+        else:
+            subject = "❌ Your Universal Context Pack Analysis Failed"
+            message = f"""
+Hello!
+
+Unfortunately, your Universal Context Pack analysis encountered an error and could not be completed.
+
+Job Details:
+- Job ID: {job_id}
+- Chunks Processed: {chunks_processed}/{total_chunks}
+- Status: Failed
+
+Please try again or contact our support team if the issue persists.
+
+Best regards,
+The UCP Team
+"""
+        
+        # For now, just log the email (replace with actual email service)
+        print(f"📧 EMAIL NOTIFICATION for {user_email}:")
+        print(f"Subject: {subject}")
+        print(f"Message: {message}")
+        
+        # TODO: Integrate with actual email service
+        # Example integrations:
+        # - SendGrid: sg.send(Mail(from_email, to_emails, subject, html_content))
+        # - AWS SES: ses.send_email(Source=from_email, Destination={'ToAddresses': [user_email]}, Message={...})
+        # - SMTP: smtplib integration
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to send email notification to {user_email}: {e}")
+        return False
+
 # Request models
 class AnalyzeRequest(BaseModel):
     selected_chunks: List[int] = []  # List of chunk indices to analyze
@@ -2503,26 +2565,55 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
                 "payment_plan": payment_status["plan"]
             }
         
-        # Initialize progress and start background processing
-        update_job_progress(job_id, "analyzing", 0, "Starting analysis...")
+        # Check if this is a large job (6+ chunks) - use email notification instead of real-time progress
+        is_large_job = chunks_to_process >= 6
         
-        # Start background processing - don't await it!
-        asyncio.create_task(process_analysis_background(
-            job_id, user, selected_chunks[:chunks_to_process], 
-            payment_status, chunk_metadata
-        ))
-        
-        # Return immediately so client can start polling for progress
-        estimated_time_minutes = max(1, (chunks_to_process / 3) * 1.2)
-        
-        return {
-            "job_id": job_id,
-            "status": "started",
-            "message": f"Analysis started for {chunks_to_process} chunks. Use progress polling to track status.",
-            "chunks_to_process": chunks_to_process,
-            "estimated_time_minutes": estimated_time_minutes,
-            "total_chunks": total_chunks
-        }
+        if is_large_job:
+            # For large jobs, use email notification mode
+            estimated_time_minutes = max(5, chunks_to_process * 1.0)  # Estimate 1 minute per chunk
+            estimated_completion_time = datetime.now() + timedelta(minutes=estimated_time_minutes)
+            
+            # Update job progress to indicate email mode
+            update_job_progress(job_id, "email_mode", 0, f"Large job detected ({chunks_to_process} chunks). Processing in background. You will receive an email when complete.")
+            
+            # Start background processing with email notification
+            asyncio.create_task(process_analysis_background(
+                job_id, user, selected_chunks[:chunks_to_process], 
+                payment_status, chunk_metadata, email_on_completion=True
+            ))
+            
+            return {
+                "job_id": job_id,
+                "status": "email_mode",
+                "message": f"Large job ({chunks_to_process} chunks) started. You will receive an email when analysis is complete.",
+                "chunks_to_process": chunks_to_process,
+                "estimated_time_minutes": estimated_time_minutes,
+                "estimated_completion_time": estimated_completion_time.isoformat(),
+                "total_chunks": total_chunks,
+                "email_notification": True
+            }
+        else:
+            # For smaller jobs, use real-time progress tracking
+            update_job_progress(job_id, "analyzing", 0, "Starting analysis...")
+            
+            # Start background processing - don't await it!
+            asyncio.create_task(process_analysis_background(
+                job_id, user, selected_chunks[:chunks_to_process], 
+                payment_status, chunk_metadata, email_on_completion=False
+            ))
+            
+            # Return immediately so client can start polling for progress
+            estimated_time_minutes = max(1, (chunks_to_process / 3) * 1.2)
+            
+            return {
+                "job_id": job_id,
+                "status": "started",
+                "message": f"Analysis started for {chunks_to_process} chunks. Use progress polling to track status.",
+                "chunks_to_process": chunks_to_process,
+                "estimated_time_minutes": estimated_time_minutes,
+                "total_chunks": total_chunks,
+                "email_notification": False
+            }
         
     except Exception as e:
         print(f"❌ Error starting analysis: {e}")
@@ -2532,7 +2623,7 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
 # Global job cancellation tracking
 cancelled_jobs = set()
 
-async def process_analysis_background(job_id: str, user: AuthenticatedUser, selected_chunks: List[int], payment_status: dict, chunk_metadata: dict):
+async def process_analysis_background(job_id: str, user: AuthenticatedUser, selected_chunks: List[int], payment_status: dict, chunk_metadata: dict, email_on_completion: bool = False):
     """Background task for processing analysis with optimized parallel processing and caching."""
     try:
         chunks_to_process = len(selected_chunks)
@@ -3229,6 +3320,21 @@ CHUNK OVERVIEW:
         upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", analysis_json)
         print(f"✅ Summary.json uploaded - frontend will now detect completion")
         
+        # Send email notification for large jobs
+        if email_on_completion:
+            print(f"📧 Sending completion email notification to {user.email}")
+            email_sent = await send_email_notification(
+                user_email=user.email,
+                job_id=job_id,
+                chunks_processed=len(results),
+                total_chunks=chunks_to_process,
+                success=True
+            )
+            if email_sent:
+                print(f"✅ Email notification sent successfully to {user.email}")
+            else:
+                print(f"⚠️ Failed to send email notification to {user.email}")
+        
         # Verify all essential files are available
         essential_files = [
             "complete_ucp.txt",
@@ -3255,6 +3361,22 @@ CHUNK OVERVIEW:
         traceback.print_exc()
         update_job_progress(job_id, "error", 0, f"Analysis failed: {str(e)}")
         await update_job_status_in_db(user, job_id, "failed", 0, str(e))
+        
+        # Send email notification for failed large jobs
+        if email_on_completion:
+            print(f"📧 Sending failure email notification to {user.email}")
+            email_sent = await send_email_notification(
+                user_email=user.email,
+                job_id=job_id,
+                chunks_processed=len(results) if 'results' in locals() else 0,
+                total_chunks=chunks_to_process if 'chunks_to_process' in locals() else 0,
+                success=False
+            )
+            if email_sent:
+                print(f"✅ Failure email notification sent successfully to {user.email}")
+            else:
+                print(f"⚠️ Failed to send failure email notification to {user.email}")
+        
         # Clean up from cancelled jobs set if it was there
         cancelled_jobs.discard(job_id)
 
@@ -4595,7 +4717,7 @@ async def create_checkout_session(
                 )
         
         # Get the frontend URL for success/cancel redirects
-        frontend_url = os.getenv("FRONTEND_URL", "https://universal-context-pack.vercel.app")
+        frontend_url = os.getenv("FRONTEND_URL", "https://www.context-pack.com")
         
         # Create Stripe checkout session
         session = stripe.checkout.Session.create(

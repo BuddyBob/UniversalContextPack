@@ -11,7 +11,7 @@ import type { Metadata } from 'next'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://universal-context-pack.vercel.app'),
+  metadataBase: new URL('https://www.context-pack.com'),
   title: {
     default: 'Universal Context Pack - AI Memory Migration Platform',
     template: '%s | Universal Context Pack'
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://universal-context-pack.vercel.app',
+    url: 'https://www.context-pack.com',
     siteName: 'Universal Context Pack',
     title: 'Universal Context Pack - AI Memory Migration Platform',
     description: 'Transform your AI conversations into portable context packs. Migrate your memory between ChatGPT, Claude, and other AI assistants seamlessly.',
@@ -115,7 +115,7 @@ export default function RootLayout({
     '@type': 'SoftwareApplication',
     name: 'Universal Context Pack',
     description: 'Transform your ChatGPT, Claude, and AI assistant conversations into portable context packs. Migrate your AI memory between platforms seamlessly.',
-    url: 'https://universal-context-pack.vercel.app',
+    url: 'https://www.context-pack.com',
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     offers: {
@@ -127,7 +127,7 @@ export default function RootLayout({
     creator: {
       '@type': 'Organization',
       name: 'Universal Context Pack',
-      url: 'https://universal-context-pack.vercel.app'
+      url: 'https://www.context-pack.com'
     }
   }
 

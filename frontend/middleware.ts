@@ -2,6 +2,23 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
+  const hostname = request.headers.get('host')
+  
+  // Domain redirects - handle first before other middleware
+  if (hostname === 'universal-context-pack.vercel.app') {
+    const url = request.nextUrl.clone()
+    url.hostname = 'www.context-pack.com'
+    url.protocol = 'https'
+    return NextResponse.redirect(url, 301)
+  }
+  
+  if (hostname === 'context-pack.com') {
+    const url = request.nextUrl.clone()
+    url.hostname = 'www.context-pack.com'
+    url.protocol = 'https'
+    return NextResponse.redirect(url, 301)
+  }
+  
   const response = NextResponse.next();
   
   // Add noindex to preview deployments to prevent indexing of development versions
