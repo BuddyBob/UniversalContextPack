@@ -194,23 +194,27 @@ def check_rate_limit(user_id: str, limit_type: str = "payment", max_attempts: in
 async def send_email_notification(user_email: str, job_id: str, chunks_processed: int, total_chunks: int, success: bool = True):
     """Send email notification when a large job completes"""
     try:
-        # You can integrate with your preferred email service here (SendGrid, AWS SES, etc.)
-        # For now, I'll add a placeholder that logs the email content
+        # Get email configuration from environment
+        EMAIL_HOST = os.getenv("EMAIL_HOST")  # e.g., smtp.gmail.com
+        EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+        EMAIL_USER = os.getenv("EMAIL_USER")  # Your email address
+        EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")  # App password or email password
+        EMAIL_FROM = os.getenv("EMAIL_FROM", EMAIL_USER)  # From email address
         
         if success:
-            subject = "🎉 Your Universal Context Pack Analysis is Complete!"
+            subject = "🎉 Your Universal Context Pack is Ready!"
             message = f"""
 Hello!
 
-Your Universal Context Pack analysis has been completed successfully.
+Your Universal Context Pack has been completed successfully and is now available for download.
 
 Job Details:
 - Job ID: {job_id}
 - Chunks Processed: {chunks_processed}/{total_chunks}
 - Status: Successfully Completed
 
-Your analysis results are now available for download. You can access them by visiting:
-{os.getenv('FRONTEND_URL', 'https://www.context-pack.com')}/results/{job_id}
+Your Context Pack is ready for download. You can access it by visiting:
+{os.getenv('FRONTEND_URL', 'https://www.context-pack.com')}/packs
 
 Thank you for using Universal Context Pack!
 
@@ -240,13 +244,47 @@ The UCP Team
         print(f"Subject: {subject}")
         print(f"Message: {message}")
         
-        # TODO: Integrate with actual email service
-        # Example integrations:
-        # - SendGrid: sg.send(Mail(from_email, to_emails, subject, html_content))
-        # - AWS SES: ses.send_email(Source=from_email, Destination={'ToAddresses': [user_email]}, Message={...})
-        # - SMTP: smtplib integration
-        
-        return True
+        # Try to send actual email if SMTP is configured
+        if EMAIL_HOST and EMAIL_USER and EMAIL_PASSWORD:
+            try:
+                import smtplib
+                from email.mime.text import MIMEText
+                from email.mime.multipart import MIMEMultipart
+                
+                # Create message
+                msg = MIMEMultipart()
+                msg['From'] = EMAIL_FROM
+                msg['To'] = user_email
+                msg['Subject'] = subject
+                
+                # Add body to email
+                msg.attach(MIMEText(message, 'plain'))
+                
+                # Create SMTP session
+                server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+                server.starttls()  # Enable security
+                server.login(EMAIL_USER, EMAIL_PASSWORD)
+                
+                # Send email
+                text = msg.as_string()
+                server.sendmail(EMAIL_FROM, user_email, text)
+                server.quit()
+                
+                print(f"✅ Email sent successfully to {user_email}")
+                return True
+                
+            except Exception as email_error:
+                print(f"❌ Failed to send email via SMTP: {email_error}")
+                # Fall back to console logging
+                print("📧 Email content (SMTP failed):")
+                print(f"To: {user_email}")
+                print(f"Subject: {subject}")
+                print(f"Body: {message}")
+                return False
+        else:
+            print("📧 SMTP not configured, email logged to console only")
+            print("To enable email sending, set EMAIL_HOST, EMAIL_USER, and EMAIL_PASSWORD environment variables")
+            return True  # Consider logging as success for now
         
     except Exception as e:
         print(f"❌ Failed to send email notification to {user_email}: {e}")
@@ -3309,8 +3347,10 @@ CHUNK OVERVIEW:
         
         # Update job status with completion AFTER pack is created
         cache_msg = f"with {cache_hit_rate:.1f}% cache hit rate" if cache_hit_rate > 0 else ""
-        update_job_progress(job_id, "completed", 100, 
-                          f"Universal Context Pack created! Processed {len(results)}/{chunks_to_process} chunks {cache_msg}. Cost: ${total_cost:.4f}")
+        completion_message = f"Universal Context Pack created! Processed {len(results)}/{chunks_to_process} chunks {cache_msg}. Cost: ${total_cost:.4f}"
+        
+        # Update both progress tracking and database status
+        update_job_progress(job_id, "completed", 100, completion_message)
         await update_job_status_in_db(user, job_id, "analyzed", 100, 
                                      metadata={"processed_chunks": len(results)})
         
@@ -3319,6 +3359,19 @@ CHUNK OVERVIEW:
         print(f"📤 Uploading summary.json to signal completion...")
         upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", analysis_json)
         print(f"✅ Summary.json uploaded - frontend will now detect completion")
+        
+        # Also upload a completion signal file for additional frontend detection
+        completion_signal = {
+            "status": "completed",
+            "job_id": job_id,
+            "completion_time": datetime.utcnow().isoformat(),
+            "message": completion_message,
+            "redirect_to": "/packs",
+            "chunks_processed": len(results),
+            "total_chunks": chunks_to_process,
+            "email_sent": email_on_completion
+        }
+        upload_to_r2(f"{user.r2_directory}/{job_id}/completion.json", json.dumps(completion_signal, indent=2))
         
         # Send email notification for large jobs
         if email_on_completion:

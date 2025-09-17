@@ -2607,60 +2607,70 @@ export default function ProcessPage() {
                   <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                     <Brain className="h-5 w-5 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-text-primary">Large Job Processing in Background</h3>
+                  <div>
+                    <h3 className="text-lg font-semibold text-text-primary">Processing in Background</h3>
+                    <p className="text-sm text-text-secondary">Large job initiated - email notification enabled</p>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center mt-0.5">
-                      <span className="text-xs font-bold text-white">!</span>
-                    </div>
-                    <div>
-                      <p className="text-text-primary font-medium">Email Notification Active</p>
-                      <p className="text-sm text-text-secondary">
-                        Your large job (6+ chunks) is processing in the background. You'll receive an email when it's complete.
+                  {/* Key Information Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-bg-secondary border border-border-secondary rounded-lg p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-text-primary">Estimated Completion</span>
+                      </div>
+                      <p className="text-lg font-semibold text-text-primary">
+                        {selectedChunks.size ? `${Math.round(selectedChunks.size * 1.2)} minutes` : '8-12 minutes'}
                       </p>
+                      <p className="text-xs text-text-secondary">Based on {selectedChunks.size || 6} chunks</p>
+                    </div>
+
+                    <div className="bg-bg-secondary border border-border-secondary rounded-lg p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-text-primary">Notification Email</span>
+                      </div>
+                      <p className="text-sm font-mono text-text-primary truncate">
+                        {user?.email || 'your-email@domain.com'}
+                      </p>
+                      <p className="text-xs text-text-secondary">Results will be sent here</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mt-0.5">
-                      <CheckCircle className="h-4 w-4 text-white" />
+                  {/* Status Summary */}
+                  <div className="border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-r-lg">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-800 dark:text-blue-200">Job submitted successfully</span>
                     </div>
-                    <div>
-                      <p className="text-text-primary font-medium">What happens next?</p>
-                      <ul className="text-sm text-text-secondary space-y-1 mt-1">
-                        <li>• Your analysis is running on our servers</li>
-                        <li>• You'll get an email with a download link when complete</li>
-                        <li>• Feel free to close this window and return later</li>
-                        <li>• Processing typically takes 1-2 minutes per chunk</li>
-                      </ul>
+                    <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                      Your analysis is now running on our servers. You may close this window safely.
+                    </p>
+                  </div>
+
+                  {/* Job Reference */}
+                  <div className="bg-bg-secondary border border-border-secondary rounded-lg p-3">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-text-secondary">Job Reference:</span>
+                      <span className="font-mono text-text-primary">{jobId}</span>
                     </div>
                   </div>
 
-                  <div className="bg-bg-secondary border border-border-secondary rounded-lg p-4">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Info className="h-4 w-4 text-blue-500" />
-                      <span className="text-sm font-medium text-text-primary">Job Details</span>
-                    </div>
-                    <div className="text-sm text-text-secondary space-y-1">
-                      <p>Job ID: <span className="font-mono text-text-primary">{jobId}</span></p>
-                      <p>Processing started at: <span className="text-text-primary">{new Date().toLocaleTimeString()}</span></p>
-                    </div>
-                  </div>
-
-                  <div className="flex space-x-3">
+                  {/* Actions */}
+                  <div className="flex space-x-3 pt-2">
                     <button
                       onClick={() => router.push('/')}
-                      className="bg-bg-secondary border border-border-primary text-text-primary px-6 py-3 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors flex items-center space-x-2"
+                      className="flex-1 bg-bg-secondary border border-border-primary text-text-primary px-4 py-2 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors text-center"
                     >
-                      <span>← Return to Home</span>
+                      Return to Home
                     </button>
                     <button
                       onClick={() => window.location.reload()}
-                      className="px-6 py-3 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors flex items-center space-x-2"
+                      className="px-4 py-2 border border-border-secondary rounded-lg text-text-secondary hover:text-text-primary hover:border-border-accent hover:bg-bg-tertiary transition-colors"
                     >
-                      <span>Refresh Page</span>
+                      Refresh
                     </button>
                   </div>
                 </div>
