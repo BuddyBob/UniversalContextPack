@@ -3388,6 +3388,9 @@ CHUNK OVERVIEW:
             else:
                 print(f"⚠️ Failed to send email notification to {user.email}")
         
+        # Final progress update to ensure frontend knows job is fully complete
+        final_message = f"✅ Pack creation complete! Your Universal Context Pack is ready at /packs. Processed {len(results)}/{chunks_to_process} chunks."
+        update_job_progress(job_id, "pack_ready", 100, final_message)
         # Verify all essential files are available
         essential_files = [
             "complete_ucp.txt",

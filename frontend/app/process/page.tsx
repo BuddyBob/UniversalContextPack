@@ -1218,6 +1218,75 @@ export default function ProcessPage() {
     poll();
   };
 
+  const startEmailModeCompletionPolling = (jobId: string) => {
+    console.log('Starting email mode completion polling for job:', jobId);
+    
+    let consecutiveFailures = 0;
+    const maxFailures = 3;
+    const startTime = Date.now();
+    const maxPollingDuration = 4 * 60 * 60 * 1000; // 4 hours max (for very large jobs)
+    
+    const poll = async () => {
+      // Check if we've been polling too long
+      if (Date.now() - startTime > maxPollingDuration) {
+        addLog('⚠️ Email mode polling timed out. Your pack may still be processing - check your email or refresh the page.');
+        return;
+      }
+      
+      try {
+        // Check if job is complete by looking for results
+        const resultsResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/results/${jobId}`, {
+          method: 'GET'
+        });
+        
+        if (resultsResponse.ok) {
+          const resultsData = await resultsResponse.json();
+          
+          // Check if analysis is complete
+          if (resultsData.status === 'completed' || resultsData.status === 'analyzed') {
+            console.log('Email mode job completed, redirecting to packs page');
+            addLog('🎉 Analysis complete! Pack is ready. Redirecting to Packs page...');
+            
+            // Show completion notification
+            showNotification(
+              'info',
+              `Your Context Pack is ready! Processed ${resultsData.processed_chunks || 0} chunks. Redirecting to Packs page...`
+            );
+            
+            // Redirect to packs page after short delay
+            setTimeout(() => {
+              window.location.href = '/packs';
+            }, 2000);
+            
+            return; // Stop polling
+          }
+        }
+        
+        // Reset failure count on successful check
+        consecutiveFailures = 0;
+        
+        // Schedule next poll (check every 30 seconds for email mode)
+        setTimeout(poll, 30000);
+        
+      } catch (error) {
+        consecutiveFailures++;
+        console.error('Error checking email mode completion:', error);
+        
+        if (consecutiveFailures >= maxFailures) {
+          addLog('⚠️ Unable to check completion status. Your pack may still be processing - check your email or refresh the page.');
+          return; // Stop polling after too many failures
+        }
+        
+        // Retry with exponential backoff
+        const retryDelay = Math.min(30000 * Math.pow(2, consecutiveFailures - 1), 120000); // 30s to 2min max
+        setTimeout(poll, retryDelay);
+      }
+    };
+    
+    // Start polling after initial delay (give job time to start)
+    setTimeout(poll, 60000); // Wait 1 minute before first check
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
     if (selectedFile) {
@@ -1674,7 +1743,8 @@ export default function ProcessPage() {
           `Large job (${data.chunks_to_process} chunks) will run in background. Check your email for completion notification.`
         );
         
-        // Don't start polling for large jobs
+        // Start slow polling for completion detection (check every 30 seconds)
+        startEmailModeCompletionPolling(data.job_id);
         return;
       } else {
         addLog(`Analysis job started: ${data.job_id}`);
@@ -2665,6 +2735,41 @@ export default function ProcessPage() {
                       className="flex-1 bg-bg-secondary border border-border-primary text-text-primary px-4 py-2 rounded-lg font-medium hover:bg-bg-tertiary hover:border-border-accent transition-colors text-center"
                     >
                       Return to Home
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (jobId) {
+                          addLog('🔍 Checking job completion status...');
+                          try {
+                            const resultsResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/results/${jobId}`, {
+                              method: 'GET'
+                            });
+                            
+                            if (resultsResponse.ok) {
+                              const resultsData = await resultsResponse.json();
+                              
+                              if (resultsData.status === 'completed' || resultsData.status === 'analyzed') {
+                                addLog('🎉 Job completed! Redirecting to Packs page...');
+                                showNotification('info', 'Your Context Pack is ready! Redirecting to Packs page...');
+                                setTimeout(() => {
+                                  window.location.href = '/packs';
+                                }, 1500);
+                              } else {
+                                addLog(`📋 Job status: ${resultsData.status || 'processing'}. Still in progress...`);
+                                showNotification('info', 'Job is still processing. You will receive an email when complete.');
+                              }
+                            } else {
+                              addLog('❓ Unable to check status. Job may still be processing...');
+                            }
+                          } catch (error) {
+                            console.error('Error checking completion:', error);
+                            addLog('❌ Error checking completion status. Please try again later.');
+                          }
+                        }
+                      }}
+                      className="px-4 py-2 border border-border-accent rounded-lg text-text-primary hover:bg-bg-tertiary hover:border-border-primary transition-colors bg-blue-600/10"
+                    >
+                      Check Status
                     </button>
                     <button
                       onClick={() => window.location.reload()}
