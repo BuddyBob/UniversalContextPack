@@ -2252,8 +2252,8 @@ export default function ProcessPage() {
                           }}
                           className="text-blue-400 hover:text-blue-300 underline transition-colors"
                         >
-                          Import your AI chat exports
-                        </button> or other context files.
+                          How to export your chats?
+                        </button> 
                       </p>
                       
                       {/* Action Buttons */}
