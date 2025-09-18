@@ -4758,11 +4758,11 @@ async def create_checkout_session(
         
         # Validate the amount matches our pricing
         if request.unlimited:
-            expected_amount = 20.00
+            expected_amount = 3.99  # Updated to match frontend pricing
             if abs(request.amount - expected_amount) > 0.01:
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"Amount mismatch for unlimited plan. Expected $20.00, got ${request.amount}"
+                    detail=f"Amount mismatch for unlimited plan. Expected $3.99, got ${request.amount}"
                 )
         else:
             expected_amount = calculate_credit_price(request.credits)
