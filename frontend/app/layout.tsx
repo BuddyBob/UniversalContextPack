@@ -13,25 +13,25 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.context-pack.com'),
   title: {
-    default: 'Universal Context Pack - AI Memory Migration Platform',
-    template: '%s | Universal Context Pack'
+    default: 'Save Your AI Chats Forever - Never Lose Your ChatGPT History',
+    template: '%s | Context Pack'
   },
-  description: 'Transform your ChatGPT, Claude, and AI assistant conversations into portable context packs. Migrate your AI memory between platforms seamlessly with advanced conversation analysis.',
+  description: 'Keep your ChatGPT, Claude, and AI conversations safe forever. Download, organize, and move your chat history between AI tools. Never lose important conversations again.',
   keywords: [
-    'AI context migration',
-    'ChatGPT export',
-    'Claude conversation analysis', 
-    'AI assistant memory',
-    'conversation data processing',
-    'AI personalization',
-    'context pack',
-    'AI tool switching',
-    'OpenAI conversation export',
-    'AI conversation backup'
+    'save ChatGPT chats',
+    'backup AI conversations',
+    'download ChatGPT history',
+    'keep AI chats forever',
+    'ChatGPT chat backup',
+    'AI conversation storage',
+    'move ChatGPT to Claude',
+    'AI chat organizer',
+    'preserve AI conversations',
+    'ChatGPT export tool'
   ],
-  authors: [{ name: 'Universal Context Pack Team' }],
-  creator: 'Universal Context Pack',
-  publisher: 'Universal Context Pack',
+  authors: [{ name: 'Context Pack Team' }],
+  creator: 'Context Pack',
+  publisher: 'Context Pack',
   alternates: {
     canonical: '/'
   },
@@ -39,15 +39,15 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: 'https://www.context-pack.com',
-    siteName: 'Universal Context Pack',
-    title: 'Universal Context Pack - AI Memory Migration Platform',
-    description: 'Transform your AI conversations into portable context packs. Migrate your memory between ChatGPT, Claude, and other AI assistants seamlessly.',
+    siteName: 'Context Pack',
+    title: 'Save Your AI Chats Forever - Never Lose Your ChatGPT History',
+    description: 'Keep your ChatGPT, Claude, and AI conversations safe forever. Download, organize, and move your chat history between AI tools.',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Universal Context Pack - AI Memory Migration'
+        alt: 'Context Pack - Save Your AI Chats Forever'
       }
     ]
   },

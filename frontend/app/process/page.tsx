@@ -1718,6 +1718,7 @@ export default function ProcessPage() {
         body: JSON.stringify({
           selected_chunks: chunksToAnalyze,
           max_chunks: maxChunks || undefined,
+          upload_method: uploadMethod, // Pass the upload method to determine analysis type
         }),
       });
 
@@ -2097,7 +2098,7 @@ export default function ProcessPage() {
           <div className="w-full flex justify-center items-center py-8">
             <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-4">
-                Universal Context Processor
+                Save Your AI Chats Forever
               </h1>
               
               {/* Connection Status Indicator */}
@@ -2146,7 +2147,7 @@ export default function ProcessPage() {
                     Turn all your AI chats into one smart memory file
                   </p>
                   <p className="text-gray-400 text-sm max-w-2xl mx-auto">
-                    Upload your AI conversation exports and we'll organize, analyze, and package everything into a single, powerful context file that any AI can understand.
+                    Upload your AI conversation exports and we'll organize, analyze, and package everything into a single, powerful context file that you can PORT everywhere.
                   </p>
                 </div>
 
@@ -2160,7 +2161,7 @@ export default function ProcessPage() {
                         : 'text-gray-400 hover:text-gray-300'
                     }`}
                   >
-                    Upload Export
+                    All Chats
                   </button>
                   <button
                     disabled
@@ -2168,7 +2169,7 @@ export default function ProcessPage() {
                     title="ChatGPT URL extraction is temporarily unavailable"
                   >
                     <span className="flex items-center justify-center gap-1">
-                      ChatGPT URL
+                      One Chat
                       <span className="text-xs opacity-75">(Soon)</span>
                     </span>
                   </button>
@@ -2225,7 +2226,7 @@ export default function ProcessPage() {
                       <h3 className={`text-3xl font-medium mb-4 transition-colors duration-300 ${
                         isDragOver ? 'text-blue-300' : 'text-white group-hover:text-gray-100'
                       }`}>
-                        {isDragOver ? 'Drop your files here' : 'Upload Export'}
+                        {isDragOver ? 'Drop your file here' : 'Upload All Chats'}
                       </h3>
 
                       <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">

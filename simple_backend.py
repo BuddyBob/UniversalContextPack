@@ -414,6 +414,7 @@ The UCP Team
 class AnalyzeRequest(BaseModel):
     selected_chunks: List[int] = []  # List of chunk indices to analyze
     max_chunks: Optional[int] = None  # Maximum number of chunks to analyze (limits the selection)
+    upload_method: Optional[str] = None  # 'files' for Upload Export tab, 'url' for URL tab
 
 class ChunkRequest(BaseModel):
     chunk_size: Optional[int] = 600000  # Default to 600k characters (~150k tokens) - safe margin below GPT's limit
@@ -2737,7 +2738,7 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
             # Start background processing with email notification
             asyncio.create_task(process_analysis_background(
                 job_id, user, selected_chunks[:chunks_to_process], 
-                payment_status, chunk_metadata, email_on_completion=True
+                payment_status, chunk_metadata, email_on_completion=True, upload_method=request.upload_method
             ))
             
             return {
@@ -2757,7 +2758,7 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
             # Start background processing - don't await it!
             asyncio.create_task(process_analysis_background(
                 job_id, user, selected_chunks[:chunks_to_process], 
-                payment_status, chunk_metadata, email_on_completion=False
+                payment_status, chunk_metadata, email_on_completion=False, upload_method=request.upload_method
             ))
             
             # Return immediately so client can start polling for progress
@@ -2781,7 +2782,7 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
 # Global job cancellation tracking
 cancelled_jobs = set()
 
-async def process_analysis_background(job_id: str, user: AuthenticatedUser, selected_chunks: List[int], payment_status: dict, chunk_metadata: dict, email_on_completion: bool = False):
+async def process_analysis_background(job_id: str, user: AuthenticatedUser, selected_chunks: List[int], payment_status: dict, chunk_metadata: dict, email_on_completion: bool = False, upload_method: str = None):
     """Background task for processing analysis with optimized parallel processing and caching."""
     try:
         chunks_to_process = len(selected_chunks)
@@ -2804,9 +2805,19 @@ async def process_analysis_background(job_id: str, user: AuthenticatedUser, sele
         openai_client = get_openai_client()
         print(f"✅ OpenAI client initialized successfully for job {job_id}")
         
+        # Determine analysis type based on upload method from frontend
+        # 'url' = user used ChatGPT URL tab (single conversation analysis for 1 chunk)
+        # 'files' = user used Upload Export tab (always full analysis, even for 1 chunk)
+        is_url_extraction = upload_method == 'url'
+        
         # Check if this is a single conversation for different analysis style
-        is_single_conversation = chunks_to_process == 1 and total_chunks == 1
-        print(f"📊 Job {job_id}: Processing {chunks_to_process} chunks (single conversation: {is_single_conversation})")
+        # Only use single conversation analysis for URL extractions with 1 chunk
+        # For file uploads (Upload Export tab), always use multi-conversation analysis
+        is_single_conversation = chunks_to_process == 1 and total_chunks == 1 and is_url_extraction
+        print(f"📊 Job {job_id}: Processing {chunks_to_process} chunks")
+        print(f"📊 Upload method: {upload_method or 'unknown'} ({'URL extraction' if is_url_extraction else 'File upload'})")
+        print(f"📊 Analysis type: {'Single conversation' if is_single_conversation else 'Multi-conversation/full dataset'}")
+        
         
         if is_single_conversation:
             # Conversational narrative style for single chats

@@ -117,10 +117,10 @@ const ExportGuide = () => {
           <div className="max-w-6xl mx-auto text-center relative z-10">
             <div className="mb-12">
               <h2 className="text-4xl md:text-5xl lg:text-7xl text-white/70 font-light mb-8">
-                Your AI
+                Save Your AI Chats
               </h2>
               <h1 className="text-6xl md:text-8xl lg:text-9xl text-white leading-tight font-light mb-12">
-                Memory Everywhere
+                Keep Forever
               </h1>
             </div>
 
@@ -129,7 +129,7 @@ const ExportGuide = () => {
                 href="/process"
                 className="bg-[#6639D0] hover:bg-[#5428B8] text-white px-8 py-4 rounded-full text-lg font-medium transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
               >
-                Create Pack
+                Backup My Chats
               </a>
             </div>
           </div>
@@ -150,10 +150,10 @@ const ExportGuide = () => {
           <div className="max-w-5xl mx-auto relative z-10">
             <div className="text-center mb-16">
               <h2 className="text-3xl font-bold text-white mb-4">
-                Export Your AI Chats
+                Download Your ChatGPT History
               </h2>
               <p className="text-gray-400 max-w-2xl mx-auto">
-                Get your conversation history from ChatGPT or Claude and use it anywhere
+                Keep your important conversations safe. Get your ChatGPT and Claude chat history in just a few clicks.
               </p>
             </div>
 
@@ -197,20 +197,20 @@ const ExportGuide = () => {
                   <span className="text-white font-semibold">1</span>
                 </div>
                 <h3 className="text-white font-medium mb-2">Download</h3>
-                <p className="text-gray-400 text-sm">Get your chat history</p>
+                <p className="text-gray-400 text-sm">Get your ChatGPT files</p>
               </div>
 
               <div className="text-center p-6 rounded-xl bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_15px_35px_rgba(15,_23,_42,_0.2)] hover:shadow-[0_20px_45px_rgba(15,_23,_42,_0.3)] transition-all duration-300">
                 <div className="w-12 h-12 rounded-lg bg-indigo-600 border border-indigo-500/60 mx-auto mb-4 flex items-center justify-center shadow-lg">
                   <span className="text-white font-semibold">2</span>
                 </div>
-                <h3 className="text-white font-medium mb-2">Upload</h3>
-                <p className="text-gray-400 text-sm mb-4">Create your memory pack</p>
+                <h3 className="text-white font-medium mb-2">Backup</h3>
+                <p className="text-gray-400 text-sm mb-4">Keep your chats safe forever</p>
                 <a 
                   href="/process"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg hover:shadow-xl transition-all duration-300"
                 >
-                  Upload Files
+                  Start Backup
                   <ArrowRight className="h-4 w-4" />
                 </a>
               </div>
@@ -219,8 +219,8 @@ const ExportGuide = () => {
                 <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-slate-700/80 to-slate-800/90 border border-slate-600/60 mx-auto mb-4 flex items-center justify-center shadow-lg">
                   <span className="text-white font-semibold">3</span>
                 </div>
-                <h3 className="text-white font-medium mb-2">Use Anywhere</h3>
-                <p className="text-gray-400 text-sm mb-4">Paste into any AI chat</p>
+                <h3 className="text-white font-medium mb-2">Move to Any AI</h3>
+                <p className="text-gray-400 text-sm mb-4">Use with Claude, Gemini, etc.</p>
                 <a 
                   href="/how-to-port"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium

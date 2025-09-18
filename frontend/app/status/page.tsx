@@ -62,7 +62,7 @@ export default function StatusPage() {
                   <span className="text-green-400 text-sm font-medium">Operational</span>
                 </div>
               </div>
-              <p className="text-secondary text-sm mt-2">Backend processing and authentication</p>
+              <p className="text-secondary text-sm mt-2">Server health and user authentication</p>
             </div>
 
             {/* File Processing */}

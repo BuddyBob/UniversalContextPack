@@ -2,14 +2,14 @@ import ExportGuide from '@/components/ExportGuide'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Universal Context Pack - Transform Your AI Conversations',
-  description: 'Upload your ChatGPT, Claude, or AI assistant conversation exports and create portable context packs. Migrate your AI memory between platforms with advanced conversation analysis.',
+  title: 'Save Your ChatGPT Chats Forever - Free AI Chat Backup',
+  description: 'Never lose your important ChatGPT conversations again. Upload your AI chat history and keep it safe forever. Works with ChatGPT, Claude, and other AI assistants.',
   alternates: {
     canonical: '/'
   },
   openGraph: {
-    title: 'Universal Context Pack - Transform Your AI Conversations',
-    description: 'Upload your ChatGPT, Claude, or AI assistant conversation exports and create portable context packs.',
+    title: 'Save Your ChatGPT Chats Forever - Free AI Chat Backup',
+    description: 'Never lose your important ChatGPT conversations again. Upload your AI chat history and keep it safe forever.',
     url: 'https://www.context-pack.com/',
   },
 }
