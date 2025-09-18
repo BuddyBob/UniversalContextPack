@@ -244,12 +244,95 @@ The UCP Team
         print(f"Subject: {subject}")
         print(f"Message: {message}")
         
+        # Try webhook-based email service as primary option (more reliable on Railway)
+        WEBHOOK_EMAIL_URL = os.getenv("WEBHOOK_EMAIL_URL")  # Optional webhook email service
+        RESEND_API_KEY = os.getenv("RESEND_API_KEY")  # Resend.com API key
+        
+        if RESEND_API_KEY:
+            try:
+                import requests
+                
+                print(f"📧 Attempting to send email via Resend API...")
+                
+                response = requests.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {RESEND_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "from": f"UCP <{EMAIL_FROM}>",
+                        "to": [user_email],
+                        "subject": subject,
+                        "text": message
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    print(f"✅ Email sent successfully via Resend to {user_email}")
+                    return True
+                else:
+                    print(f"❌ Resend API failed: {response.status_code} - {response.text}")
+                    
+            except Exception as resend_error:
+                print(f"❌ Resend email service failed: {resend_error}")
+        
+        elif WEBHOOK_EMAIL_URL:
+            try:
+                import requests
+                
+                print(f"📧 Attempting to send email via webhook: {WEBHOOK_EMAIL_URL}")
+                
+                response = requests.post(
+                    WEBHOOK_EMAIL_URL,
+                    json={
+                        "to": user_email,
+                        "subject": subject,
+                        "message": message,
+                        "from": EMAIL_FROM
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    print(f"✅ Email sent successfully via webhook to {user_email}")
+                    return True
+                else:
+                    print(f"❌ Webhook email failed: {response.status_code} - {response.text}")
+                    
+            except Exception as webhook_error:
+                print(f"❌ Webhook email service failed: {webhook_error}")
+        
         # Try to send actual email if SMTP is configured
         if EMAIL_HOST and EMAIL_USER and EMAIL_PASSWORD:
             try:
                 import smtplib
                 from email.mime.text import MIMEText
                 from email.mime.multipart import MIMEMultipart
+                import socket
+                
+                print(f"🌐 Attempting SMTP connection to {EMAIL_HOST}:{EMAIL_PORT}")
+                
+                # Test network connectivity first
+                try:
+                    socket.create_connection((EMAIL_HOST, EMAIL_PORT), timeout=10)
+                    print(f"✅ Network connection to {EMAIL_HOST}:{EMAIL_PORT} successful")
+                except socket.error as e:
+                    print(f"❌ Network connection failed: {e}")
+                    print("🔧 Trying alternative SMTP approaches...")
+                    
+                    # Try port 465 (SSL) as fallback
+                    try:
+                        socket.create_connection((EMAIL_HOST, 465), timeout=10)
+                        print(f"✅ Alternative SSL connection to {EMAIL_HOST}:465 successful")
+                        EMAIL_PORT = 465
+                        use_ssl = True
+                    except socket.error:
+                        print(f"❌ All SMTP connection attempts failed")
+                        raise e
+                else:
+                    use_ssl = False
                 
                 # Create message
                 msg = MIMEMultipart()
@@ -260,12 +343,23 @@ The UCP Team
                 # Add body to email
                 msg.attach(MIMEText(message, 'plain'))
                 
-                # Create SMTP session
-                server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-                server.starttls()  # Enable security
+                # Create SMTP session with appropriate method
+                if use_ssl:
+                    print(f"🔐 Using SSL connection on port 465")
+                    server = smtplib.SMTP_SSL(EMAIL_HOST, 465, timeout=30)
+                else:
+                    print(f"🔐 Using STARTTLS connection on port {EMAIL_PORT}")
+                    server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=30)
+                    server.starttls()  # Enable security
+                
+                # Enable debug output
+                server.set_debuglevel(1)
+                
+                print(f"🔑 Logging in with user: {EMAIL_USER}")
                 server.login(EMAIL_USER, EMAIL_PASSWORD)
                 
                 # Send email
+                print(f"📤 Sending email to {user_email}")
                 text = msg.as_string()
                 server.sendmail(EMAIL_FROM, user_email, text)
                 server.quit()
@@ -275,6 +369,32 @@ The UCP Team
                 
             except Exception as email_error:
                 print(f"❌ Failed to send email via SMTP: {email_error}")
+                print(f"📊 Error type: {type(email_error).__name__}")
+                
+                # Try one more fallback approach - direct port 25
+                try:
+                    print(f"🔄 Attempting fallback SMTP on port 25...")
+                    import smtplib
+                    
+                    server = smtplib.SMTP(EMAIL_HOST, 25, timeout=30)
+                    server.starttls()
+                    server.login(EMAIL_USER, EMAIL_PASSWORD)
+                    
+                    msg = MIMEMultipart()
+                    msg['From'] = EMAIL_FROM
+                    msg['To'] = user_email
+                    msg['Subject'] = subject
+                    msg.attach(MIMEText(message, 'plain'))
+                    
+                    server.sendmail(EMAIL_FROM, user_email, msg.as_string())
+                    server.quit()
+                    
+                    print(f"✅ Email sent successfully via port 25 to {user_email}")
+                    return True
+                    
+                except Exception as fallback_error:
+                    print(f"❌ Fallback SMTP also failed: {fallback_error}")
+                
                 # Fall back to console logging
                 print("📧 Email content (SMTP failed):")
                 print(f"To: {user_email}")
