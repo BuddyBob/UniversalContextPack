@@ -40,7 +40,7 @@ export default function ProcessPage() {
   const [selectedChunks, setSelectedChunks] = useState<Set<number>>(new Set());
   const [maxChunks, setMaxChunks] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [currentStep, setCurrentStep] = useState<'upload' | 'uploaded' | 'extracting' | 'extracted' | 'chunking' | 'chunked' | 'analyzing' | 'analyzed' | 'email_mode'>('upload');
+  const [currentStep, setCurrentStep] = useState<'upload' | 'uploaded' | 'extracting' | 'extracted' | 'chunking' | 'chunked' | 'analyzing' | 'analyzed' | 'email_mode' | 'email_completed'>('upload');
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
   const [showChunkModal, setShowChunkModal] = useState(false);
@@ -1248,19 +1248,17 @@ export default function ProcessPage() {
           
           // Check if analysis is complete
           if (resultsData.status === 'completed' || resultsData.status === 'analyzed') {
-            console.log('Email mode job completed, redirecting to packs page');
-            addLog('🎉 Analysis complete! Pack is ready. Redirecting to Packs page...');
+            console.log('Email mode job completed, showing completion state');
+            addLog('🎉 Analysis complete! Your Context Pack is ready!');
+            
+            // Update to completion state
+            setCurrentStep('email_completed');
             
             // Show completion notification
             showNotification(
               'info',
-              `Your Context Pack is ready! Processed ${resultsData.processed_chunks || 0} chunks. Redirecting to Packs page...`
+              `Your Context Pack is ready! Processed ${resultsData.processed_chunks || 0} chunks.`
             );
-            
-            // Redirect to packs page after short delay
-            setTimeout(() => {
-              window.location.href = '/packs';
-            }, 2000);
             
             return; // Stop polling
           }
@@ -2776,27 +2774,120 @@ export default function ProcessPage() {
                               const resultsData = await resultsResponse.json();
                               
                               if (resultsData.status === 'completed' || resultsData.status === 'analyzed') {
-                                addLog('🎉 Job completed! Redirecting to Packs page...');
-                                showNotification('info', 'Your Context Pack is ready! Redirecting to Packs page...');
-                                setTimeout(() => {
-                                  window.location.href = '/packs';
-                                }, 1500);
+                                addLog('🎉 Job completed! Your Context Pack is ready!');
+                                setCurrentStep('email_completed');
+                                showNotification('info', 'Your Context Pack is ready for download!');
                               } else {
                                 addLog(`📋 Job status: ${resultsData.status || 'processing'}. Still in progress...`);
                                 showNotification('info', 'Job is still processing. You will receive an email when complete.');
                               }
                             } else {
                               addLog('❓ Unable to check status. Job may still be processing...');
+                              showNotification('warning', 'Unable to check status. Please try again later.');
                             }
                           } catch (error) {
                             console.error('Error checking completion:', error);
                             addLog('❌ Error checking completion status. Please try again later.');
+                            showNotification('warning', 'Error checking status. Please try again later.');
                           }
                         }
                       }}
                       className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                     >
                       Check Status
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Email Job Completed */}
+            {currentStep === 'email_completed' && (
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-green-600 rounded-lg flex items-center justify-center">
+                      <CheckCircle className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Analysis Complete!</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Your Context Pack is ready for download</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Content */}
+                <div className="p-6 space-y-6">
+                  {/* Completion Message */}
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h4 className="text-sm font-semibold text-green-900 dark:text-green-100">Context Pack Ready</h4>
+                        <p className="text-sm text-green-800 dark:text-green-200 mt-1">
+                          Your Universal Context Pack has been successfully created and is available in the Packs tab. You should have also received an email notification.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Stats */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Completion Time */}
+                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Completed</span>
+                      </div>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {new Date().toLocaleDateString()}
+                      </p>
+                    </div>
+
+                    {/* Email Sent */}
+                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Email sent to</span>
+                      </div>
+                      <p className="text-sm font-mono text-gray-900 dark:text-white truncate bg-white dark:bg-gray-900 px-2 py-1 rounded border">
+                        {user?.email || 'your-email@domain.com'}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Check your inbox for download link
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Job Reference */}
+                  {jobId && (
+                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Job Reference:</span>
+                        <span className="font-mono text-gray-900 dark:text-white text-xs">{jobId}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 rounded-b-lg">
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => router.push('/packs')}
+                      className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
+                    >
+                      View in Packs Tab
+                    </button>
+                    <button
+                      onClick={() => router.push('/')}
+                      className="px-6 py-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      Create Another
                     </button>
                   </div>
                 </div>
