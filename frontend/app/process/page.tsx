@@ -2145,16 +2145,10 @@ export default function ProcessPage() {
                 {/* Header with Value Proposition */}
                 <div className="text-center space-y-4">
                   <p className="text-xl text-gray-300 font-medium">
-                    {uploadMethod === 'files' 
-                      ? 'Turn all your AI chats into one smart memory file'
-                      : 'Stop restarting chats and losing context'
-                    }
+                    Turn all your AI chats into one smart memory file
                   </p>
                   <p className="text-gray-400 text-sm max-w-2xl mx-auto">
-                    {uploadMethod === 'files'
-                      ? 'Upload your AI conversation exports and we\'ll organize, analyze, and package everything into a single, powerful context file that any AI can understand.'
-                      : 'Share your ChatGPT conversation URL and we\'ll extract, organize, and package your entire chat history into a portable context pack you can use anywhere.'
-                    }
+                    Upload your AI conversation exports and we'll organize, analyze, and package everything into a single, powerful context file that any AI can understand.
                   </p>
                 </div>
 
@@ -2171,14 +2165,14 @@ export default function ProcessPage() {
                     Upload Export
                   </button>
                   <button
-                    onClick={() => setUploadMethod('url')}
-                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      uploadMethod === 'url'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-400 hover:text-gray-300'
-                    }`}
+                    disabled
+                    className="flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 cursor-not-allowed opacity-50 text-gray-500 relative group"
+                    title="ChatGPT URL extraction is temporarily unavailable"
                   >
-                    ChatGPT URL
+                    <span className="flex items-center justify-center gap-1">
+                      ChatGPT URL
+                      <span className="text-xs opacity-75">(Soon)</span>
+                    </span>
                   </button>
                 </div>
 
@@ -2270,13 +2264,6 @@ export default function ProcessPage() {
                         >
                           Select Conversations File
                         </button>
-                        
-                        <button
-                          onClick={() => folderInputRef.current?.click()}
-                          className="w-full bg-transparent border-2 border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white hover:bg-gray-800/50 py-4 px-6 rounded-xl font-medium transition-all duration-200"
-                        >
-                          Choose Export Folder
-                        </button>
                       </div>
                       
                       {/* File Types */}
@@ -2298,8 +2285,8 @@ export default function ProcessPage() {
                   </div>
                 )}
 
-                {/* URL Input Tab */}
-                {uploadMethod === 'url' && (
+                {/* URL Input Tab - Temporarily Disabled */}
+                {uploadMethod === 'url' && false && (
                   <div className="bg-gray-900/80 border-2 border-gray-600 hover:border-gray-500 rounded-2xl p-10 text-center transition-all duration-300 hover:bg-gray-900/90">
                     <div className="w-20 h-20 rounded-xl bg-gray-700 flex items-center justify-center mx-auto mb-8">
                       <ExternalLink className="h-10 w-10 text-gray-300" />
