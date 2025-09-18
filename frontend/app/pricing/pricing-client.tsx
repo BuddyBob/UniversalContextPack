@@ -6,6 +6,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/components/AuthProvider'
 import { CreditCard, ArrowLeft, Calculator, Sparkles, Zap, Shield, Star } from 'lucide-react'
 import { API_ENDPOINTS } from '@/lib/api'
+import { getNewUserCredits } from '@/lib/credit-config'
 import Image from 'next/image'
 
 interface PaymentStatus {
@@ -393,7 +394,7 @@ export default function PricingPageClient() {
             <div className="max-w-md mx-auto text-center p-8 border border-gray-200 rounded-lg bg-gray-50">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Sign in required</h3>
               <p className="text-gray-700 mb-4 text-sm font-medium">
-                Create an account to purchase credits and get started with 2 free credits
+                Create an account to purchase credits and get started with {getNewUserCredits()} free credits
               </p>
               <button 
                 onClick={handlePurchase}

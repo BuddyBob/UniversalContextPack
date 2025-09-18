@@ -10,6 +10,7 @@ import FreeCreditsPrompt from '@/components/FreeCreditsPrompt';
 import { useFreeCreditsPrompt } from '@/hooks/useFreeCreditsPrompt';
 import { API_ENDPOINTS } from '@/lib/api';
 import { analytics } from '@/lib/analytics';
+import { getNewUserCredits } from '@/lib/credit-config';
 
 interface PaymentStatus {
   plan: string
@@ -3271,7 +3272,7 @@ export default function ProcessPage() {
                 : paymentLimitsError 
                   ? 'Error loading credits - Click to retry'
                   : !user 
-                    ? '2 credits'
+                    ? `${getNewUserCredits()} credits`
                     : 'Loading...'}
             </span>
             <HelpCircle className="w-3 h-3 opacity-60" />
@@ -3292,7 +3293,7 @@ export default function ProcessPage() {
                 </div>
                 <div className="flex items-start space-x-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0"></div>
-                  <p><strong>Get 2 free credits</strong> when you sign up</p>
+                  <p><strong>Get {getNewUserCredits()} free credits</strong> when you sign up</p>
                 </div>
                 <div className="flex items-start space-x-3">
                   <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-2 flex-shrink-0"></div>

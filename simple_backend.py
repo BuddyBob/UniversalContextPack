@@ -18,6 +18,9 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import tiktoken
+
+# Import credit configuration
+from credit_config import get_new_user_credits
 from openai import OpenAI
 import boto3
 from botocore.config import Config
@@ -556,12 +559,12 @@ async def get_user_payment_status(user_id: str) -> dict:
                     "r2_dir": f"user_{user_id}"
                 }).execute()
                 
-            return {"plan": "free", "chunks_used": 0, "chunks_allowed": 2, "can_process": True}
+            return {"plan": "free", "chunks_used": 0, "chunks_allowed": get_new_user_credits(), "can_process": True}
         
     except Exception as e:
         print(f"Error getting payment status: {e}")
         # Default to free plan
-        return {"plan": "free", "chunks_used": 0, "chunks_allowed": 2, "can_process": True}
+        return {"plan": "free", "chunks_used": 0, "chunks_allowed": get_new_user_credits(), "can_process": True}
 
 async def update_user_chunks_used(user_id: str, chunks_processed: int):
     """Update chunks - now handled automatically by database trigger when job status = 'analyzed'"""
@@ -2624,7 +2627,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
         if not supabase:
             # Legacy mode - return default values
             return {
-                "credits_balance": 2,
+                "credits_balance": get_new_user_credits(),
                 "can_process": True,
                 "email": user.email if hasattr(user, 'email') else "unknown@example.com",
                 "payment_plan": "legacy"
@@ -2655,7 +2658,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             if create_result.data:
                 profile = create_result.data
                 return {
-                    "credits_balance": profile.get("credits_balance", 2),
+                    "credits_balance": profile.get("credits_balance", get_new_user_credits()),
                     "can_process": True,
                     "email": profile.get("email", "unknown@example.com"),
                     "payment_plan": profile.get("payment_plan", "credits"),
@@ -2666,7 +2669,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             else:
                 # Fallback default
                 return {
-                    "credits_balance": 2,
+                    "credits_balance": get_new_user_credits(),
                     "can_process": True,
                     "email": getattr(user, 'email', "unknown@example.com"),
                     "payment_plan": "credits"
@@ -2721,8 +2724,8 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
         chunks_to_process = len(selected_chunks)
         if payment_plan != "unlimited":
             chunks_to_process = min(available_credits, len(selected_chunks))
-            if payment_plan == "free" and chunks_to_process > 2:
-                chunks_to_process = 2
+            if payment_plan == "free" and chunks_to_process > get_new_user_credits():
+                chunks_to_process = get_new_user_credits()
         
         if chunks_to_process <= 0 and payment_plan != "unlimited":
             return {
@@ -3262,7 +3265,7 @@ The conversation data you will analyze follows this message. Provide your compre
         cost_savings = (total_cached_tokens / 1_000_000) * 0.1125  # 75% discount savings
         
         # Don't show misleading success rate if limited by free plan
-        if len(results) == 2 and chunks_to_process > 2:
+        if len(results) == get_new_user_credits() and chunks_to_process > get_new_user_credits():
             success_rate = 100.0  # All requested chunks within limit were processed
         else:
             success_rate = len(results) / chunks_to_process * 100
@@ -3272,7 +3275,7 @@ The conversation data you will analyze follows this message. Provide your compre
                 "user_id": user.user_id,
                 "analysis_results": results,
                 "total_chunks_processed": len(results),
-                "chunks_requested": len(selected_chunks) if len(results) != 2 or chunks_to_process <= 2 else len(results),  # Hide original total if limited to 2
+                "chunks_requested": len(selected_chunks) if len(results) != get_new_user_credits() or chunks_to_process <= get_new_user_credits() else len(results),  # Hide original total if limited by credits
                 "failed_chunks": failed_chunks,
                 "performance_metrics": {
                     "total_input_tokens": total_input_tokens,
@@ -3330,8 +3333,8 @@ Optimized for Single Conversation Analysis
 """
             else:
                 # Multiple chunks - use the comprehensive format
-                # Don't show total chunks if only 2 were processed (free plan limitation)
-                if len(results) == 2 and chunks_to_process > 2:
+                # Don't show total chunks if only limited credits were processed (free plan limitation)
+                if len(results) == get_new_user_credits() and chunks_to_process > get_new_user_credits():
                     chunks_display = f"{len(results)}"
                 else:
                     chunks_display = f"{len(results)}/{chunks_to_process}"
@@ -4739,7 +4742,7 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                     "r2_user_directory": current_user.r2_directory,
                     "plan": "free",
                     "chunks_used": 0,
-                    "chunks_allowed": 2,
+                    "chunks_allowed": get_new_user_credits(),
                     "can_process": True
                 }
             else:
@@ -4753,7 +4756,7 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                 "r2_user_directory": current_user.r2_directory,
                 "plan": "free",
                 "chunks_used": 0,
-                "chunks_allowed": 2,
+                "chunks_allowed": get_new_user_credits(),
                 "can_process": True,
                 "warning": "Profile loaded with fallback data"
             }
@@ -4763,7 +4766,7 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
             payment_status = await get_user_payment_status(current_user.user_id)
         except Exception as e:
             print(f"⚠️ Payment status query timeout: {e}")
-            payment_status = {"plan": "free", "chunks_used": 0, "chunks_allowed": 2, "can_process": True}
+            payment_status = {"plan": "free", "chunks_used": 0, "chunks_allowed": get_new_user_credits(), "can_process": True}
         
         # During analysis, skip or limit the heavy queries
         packs = []
@@ -4814,7 +4817,7 @@ async def get_user_profile(current_user: AuthenticatedUser = Depends(get_current
                 "r2_user_directory": current_user.r2_directory,
                 "plan": "free",
                 "chunks_used": 0,
-                "chunks_allowed": 2,
+                "chunks_allowed": get_new_user_credits(),
                 "can_process": True,
                 "error": f"Profile load error: {str(e)}"
             },
