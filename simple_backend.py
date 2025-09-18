@@ -1224,6 +1224,12 @@ import re
 _UUID_PATTERN = re.compile(r'^[a-f0-9\-]{8,}$', re.IGNORECASE)
 _NUMBERS_PATTERN = re.compile(r'^[\d\-\s\.]+$')
 _LETTERS_PATTERN = re.compile(r'[a-zA-Z]')
+# ChatGPT conversation IDs like "978dfdf8faef413a-LHR" or standalone alphanumeric IDs
+_CONVERSATION_ID_PATTERN = re.compile(r'^[a-f0-9]{12,20}-[A-Z]{3}$', re.IGNORECASE)
+# Generic conversation/message IDs (standalone alphanumeric strings 8+ chars)
+_GENERIC_ID_PATTERN = re.compile(r'^[a-f0-9]{8,}$', re.IGNORECASE)
+# Line numbers/conversation indices like "22.", "23.", etc.
+_LINE_NUMBER_PATTERN = re.compile(r'^\d{1,3}\.?\s*$')
 
 # Pre-define technical patterns set for faster lookup
 _TECHNICAL_PATTERNS = {
@@ -1233,7 +1239,8 @@ _TECHNICAL_PATTERNS = {
     'finished_successfully', 'absolute', 'metadata', 'system',
     'user_editable_context', 'is_visually_hidden', 'role:', 'author:',
     'create_time', 'update_time', 'parent_id', 'children', 'mapping',
-    'finish_details', 'stop_tokens', 'citations', 'content_references', 'file-service://'
+    'finish_details', 'stop_tokens', 'citations', 'content_references', 'file-service://',
+    '-lhr', '-iad', '-syd', '-fra'  # Common ChatGPT server suffixes
 }
 
 # Pre-define common JSON elements set
@@ -1251,8 +1258,10 @@ def is_meaningful_text(text: str) -> bool:
     if len(text) < 3:
         return False
     
-    # OPTIMIZED: Use pre-compiled patterns
-    if _NUMBERS_PATTERN.match(text) or _UUID_PATTERN.match(text):
+    # OPTIMIZED: Use pre-compiled patterns - filter out conversation IDs and other technical identifiers
+    if (_NUMBERS_PATTERN.match(text) or _UUID_PATTERN.match(text) or 
+        _CONVERSATION_ID_PATTERN.match(text) or _GENERIC_ID_PATTERN.match(text) or
+        _LINE_NUMBER_PATTERN.match(text)):
         return False
     
     # OPTIMIZED: Use set lookup instead of list iteration
