@@ -18,7 +18,7 @@ $$ LANGUAGE plpgsql;
 -- Update the existing user_profiles table default
 -- This only affects NEW users, existing users keep their current balance
 ALTER TABLE public.user_profiles 
-ALTER COLUMN credits_balance SET DEFAULT 4;
+ALTER COLUMN credits_balance SET DEFAULT 2;
 
 -- Create a function to safely update new user credits in the future
 CREATE OR REPLACE FUNCTION update_new_user_credit_default(new_credits INTEGER)
