@@ -102,16 +102,27 @@ export default function ProcessPage() {
         setConversationUrl(session.chatgptUrl || '');
         setMaxChunks(session.maxChunks || null);
         setCurrentProcessedChunks(session.currentProcessedChunks || 0);
+        setSelectedChunksEstimatedTime(session.selectedChunksEstimatedTime || 0);
         if (session.currentJobId) {
           setCurrentJobId(session.currentJobId);
           // If we were in the middle of analysis, start polling
           if (session.currentStep === 'analyzing') {
             setIsProcessing(true);
             startPollingAnalysisStatus(session.currentJobId);
-            addLog('Resumed monitoring analysis progress...');
+            addLog(`Resumed monitoring analysis progress... (Start: ${session.analysisStartTime ? new Date(session.analysisStartTime).toLocaleTimeString() : 'unknown'}, Estimated: ${session.selectedChunksEstimatedTime || 0}s)`);
+            
+            // Force update to restart progress interval for time-based progress
+            setTimeout(() => {
+              setForceUpdate(prev => prev + 1);
+            }, 100);
           }
         }
         addLog('Session restored from localStorage');
+        
+        // Force a re-render after restoration to ensure progress bar updates
+        setTimeout(() => {
+          setForceUpdate(prev => prev + 1);
+        }, 500);
       } catch (error) {
         console.error('Failed to restore session:', error);
         addLog('Failed to restore previous session');
@@ -224,13 +235,14 @@ export default function ProcessPage() {
         analysisStartTime,
         emailModeStartTime,
         sessionId,
-        conversationUrl
+        conversationUrl,
+        selectedChunksEstimatedTime
       };
       localStorage.setItem('ucp_process_session', JSON.stringify(session));
     }, 1000); // Debounce by 1 second to reduce frequency
 
     return () => clearTimeout(timeoutId);
-  }, [currentStep, currentJobId, progress]); // Only save on important changes
+  }, [currentStep, currentJobId, progress, analysisStartTime, selectedChunksEstimatedTime]); // Save when analysis state changes
 
   // Update time-based progress every second during analysis
   useEffect(() => {
@@ -279,14 +291,17 @@ export default function ProcessPage() {
         analysisStartTime,
         emailModeStartTime,
         sessionId,
-        conversationUrl
+        conversationUrl,
+        selectedChunksEstimatedTime,
+        maxChunks,
+        currentProcessedChunks
       };
       localStorage.setItem('ucp_process_session', JSON.stringify(session));
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, emailModeStartTime, sessionId, conversationUrl]);
+  }, [currentStep, extractionData, costEstimate, chunkData, availableChunks, selectedChunks, progress, logs, currentJobId, analysisStartTime, emailModeStartTime, sessionId, conversationUrl, selectedChunksEstimatedTime, maxChunks, currentProcessedChunks]);
 
   // Utility function to format time estimates (rounds up)
   const formatAnalysisTime = (totalSeconds: number): string => {
@@ -643,6 +658,18 @@ export default function ProcessPage() {
     const elapsedSeconds = Math.floor((Date.now() - analysisStartTime) / 1000);
     const timeProgress = Math.min(100, (elapsedSeconds / selectedChunksEstimatedTime) * 100);
     
+    // Debug logging (remove in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Progress Debug:', {
+        analysisStartTime: new Date(analysisStartTime).toLocaleTimeString(),
+        elapsedSeconds,
+        selectedChunksEstimatedTime,
+        timeProgress: Math.round(timeProgress),
+        chunkProgress: progress,
+        finalProgress: Math.max(progress, Math.round(timeProgress))
+      });
+    }
+    
     // Use the higher of time-based or chunk-based progress for smoother experience
     return Math.max(progress, Math.round(timeProgress));
   };
@@ -917,6 +944,16 @@ export default function ProcessPage() {
         setConnectionStatus('connected');
         
         const data = await statusResponse.json();
+        
+        // Update progress if available from status
+        if (data.progress !== undefined) {
+          setProgress(data.progress);
+        }
+        
+        // Update processed chunks if available
+        if (data.processed_chunks !== undefined) {
+          setCurrentProcessedChunks(data.processed_chunks);
+        }
         
         if (data.status === 'completed') {
           if (pollingInterval) {
