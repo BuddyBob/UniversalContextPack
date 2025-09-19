@@ -117,7 +117,7 @@ const ExportGuide = () => {
           <div className="max-w-6xl mx-auto text-center relative z-10">
             <div className="mb-12">
               <h2 className="text-4xl md:text-5xl lg:text-7xl text-white/70 font-light mb-8">
-                Your Profile.
+                One Profile.
               </h2>
               <h1 className="text-6xl md:text-8xl lg:text-9xl text-white leading-tight font-light mb-12">
                 Your AI.

@@ -14,7 +14,7 @@ export default function Footer() {
               <span className="text-lg font-semibold text-primary">Universal Context Pack</span>
             </div>
             <p className="text-secondary text-sm max-w-md">
-              Your Profile. Your AI. Transform your AI conversations into portable context packs. Migrate your memory between ChatGPT, Claude, and other AI assistants seamlessly.
+              One Profile. Your AI. Transform your AI conversations into portable context packs. Migrate your memory between ChatGPT, Claude, and other AI assistants seamlessly.
             </p>
           </div>
 

@@ -2099,7 +2099,7 @@ export default function ProcessPage() {
           <div className="w-full flex justify-center items-center py-8">
             <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-4">
-                Your Profile. Your AI.
+                One Profile. Your AI.
               </h1>
               
               {/* Connection Status Indicator */}

@@ -1,7 +1,7 @@
 {
   "name": "Universal Context Pack",
   "short_name": "UCP",
-  "description": "Your Profile. Your AI. Transform your AI conversations into portable context packs",
+  "description": "One Profile. Your AI. Transform your AI conversations into portable context packs",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
