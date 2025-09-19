@@ -2182,10 +2182,10 @@ export default function ProcessPage() {
                 {/* Header with Value Proposition */}
                 <div className="text-center space-y-4">
                   <p className="text-xl text-gray-300 font-medium">
-                    Turn all your AI chats into one smart memory file
+                    All your AI chats, one memory file.
                   </p>
                   <p className="text-gray-400 text-sm max-w-2xl mx-auto">
-                    Upload your AI conversation exports and we'll organize, analyze, and package everything into a single, powerful context file that you can PORT everywhere.
+                    Upload exports → we organize, clean, and package them → you get a single smart file you can use anywhere.
                   </p>
                 </div>
 

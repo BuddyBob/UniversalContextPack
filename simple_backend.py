@@ -2735,8 +2735,8 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
                 "credits_balance": available_credits,
                 "payment_plan": payment_status["plan"]
             }
-        
-        # Check if this is a large job (6+ chunks) - use email notification instead of real-time progress
+
+        # Check if this is a large job (3+ chunks) - use email notification instead of real-time progress
         is_large_job = chunks_to_process >= 3
         
         if is_large_job:
