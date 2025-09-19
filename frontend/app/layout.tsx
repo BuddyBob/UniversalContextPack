@@ -13,7 +13,7 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.context-pack.com'),
   title: {
-    default: 'Save Your AI Chats Forever - Never Lose Your ChatGPT History',
+    default: 'Your Profile. Your AI. - Save AI Chats Forever',
     template: '%s | Context Pack'
   },
   description: 'Keep your ChatGPT, Claude, and AI conversations safe forever. Download, organize, and move your chat history between AI tools. Never lose important conversations again.',
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://www.context-pack.com',
     siteName: 'Context Pack',
-    title: 'Save Your AI Chats Forever - Never Lose Your ChatGPT History',
+    title: 'Your Profile. Your AI. - Save AI Chats Forever',
     description: 'Keep your ChatGPT, Claude, and AI conversations safe forever. Download, organize, and move your chat history between AI tools.',
     images: [
       {
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Universal Context Pack - AI Memory Migration Platform',
+    title: 'Your Profile. Your AI. - AI Memory Migration Platform',
     description: 'Transform your AI conversations into portable context packs. Migrate your memory between ChatGPT, Claude, and other AI assistants.',
     images: ['/og-image.png'],
     creator: '@UCPlatform'
@@ -99,7 +99,7 @@ export const metadata: Metadata = {
     'msapplication-TileImage': '/icon.png',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'default',
-    'apple-mobile-web-app-title': 'Universal Context Pack',
+    'apple-mobile-web-app-title': 'Your Profile. Your AI.',
     'format-detection': 'telephone=no',
   },
   manifest: '/manifest.json',
@@ -113,7 +113,7 @@ export default function RootLayout({
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'Universal Context Pack',
+    name: 'Your Profile. Your AI. - Universal Context Pack',
     description: 'Transform your ChatGPT, Claude, and AI assistant conversations into portable context packs. Migrate your AI memory between platforms seamlessly.',
     url: 'https://www.context-pack.com',
     applicationCategory: 'BusinessApplication',

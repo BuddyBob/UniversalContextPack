@@ -2099,7 +2099,7 @@ export default function ProcessPage() {
           <div className="w-full flex justify-center items-center py-8">
             <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-4">
-                Save Your AI Chats Forever
+                Your Profile. Your AI.
               </h1>
               
               {/* Connection Status Indicator */}
@@ -2227,7 +2227,7 @@ export default function ProcessPage() {
                       <h3 className={`text-3xl font-medium mb-4 transition-colors duration-300 ${
                         isDragOver ? 'text-blue-300' : 'text-white group-hover:text-gray-100'
                       }`}>
-                        {isDragOver ? 'Drop your file here' : 'Upload All Chats'}
+                        {isDragOver ? 'Drop your file here' : 'Upload Chats Export'}
                       </h3>
 
                       <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">

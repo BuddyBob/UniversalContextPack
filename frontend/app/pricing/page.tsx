@@ -2,13 +2,13 @@ import { Metadata } from 'next'
 import PricingPageClient from './pricing-client'
 
 export const metadata: Metadata = {
-  title: 'Pricing - Universal Context Pack',
+  title: 'Pricing - Your Profile. Your AI.',
   description: 'Affordable AI conversation analysis pricing. Pay-per-use credits with volume discounts. Transform your ChatGPT and Claude conversations starting at $0.50 per credit.',
   alternates: {
     canonical: '/pricing'
   },
   openGraph: {
-    title: 'Pricing - Universal Context Pack',
+    title: 'Pricing - Your Profile. Your AI.',
     description: 'Affordable AI conversation analysis pricing. Pay-per-use credits with volume discounts.',
     url: 'https://www.context-pack.com/pricing',
   },

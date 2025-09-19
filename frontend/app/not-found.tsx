@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Page Not Found - Universal Context Pack',
-  description: 'The page you are looking for does not exist. Return to Universal Context Pack to transform your AI conversations.',
+  title: 'Page Not Found - Your Profile. Your AI.',
+  description: 'The page you are looking for does not exist. Return to transform your AI conversations and manage your AI memory.',
   robots: {
     index: false,
     follow: true,

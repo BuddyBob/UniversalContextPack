@@ -181,7 +181,7 @@ export default function PricingPageClient() {
           
           <div className="text-center">
             <h1 className="text-3xl font-semibold text-gray-900 mb-3">
-              Pricing
+              Your Profile. Your AI.
             </h1>
             <p className="text-lg text-gray-600 max-w-xl mx-auto">
               Simple, transparent pricing for AI conversation analysis

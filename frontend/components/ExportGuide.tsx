@@ -117,10 +117,10 @@ const ExportGuide = () => {
           <div className="max-w-6xl mx-auto text-center relative z-10">
             <div className="mb-12">
               <h2 className="text-4xl md:text-5xl lg:text-7xl text-white/70 font-light mb-8">
-                Save Your AI Chats
+                Your Profile.
               </h2>
               <h1 className="text-6xl md:text-8xl lg:text-9xl text-white leading-tight font-light mb-12">
-                Keep Forever
+                Your AI.
               </h1>
             </div>
 
@@ -129,7 +129,7 @@ const ExportGuide = () => {
                 href="/process"
                 className="bg-[#6639D0] hover:bg-[#5428B8] text-white px-8 py-4 rounded-full text-lg font-medium transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
               >
-                Backup My Chats
+                Create Context Pack
               </a>
             </div>
           </div>
