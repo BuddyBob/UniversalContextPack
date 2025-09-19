@@ -153,7 +153,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in to Continue</h2>
           <p className="text-gray-600">
-            You'll get 5 processing credits to start immediately. Quick Google sign-in.
+            You'll get 4 processing credits to start immediately. Quick Google sign-in.
           </p>
         </div>
 
@@ -178,17 +178,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <span>{loading ? 'Opening Google...' : 'Sign in with Google'}</span>
         </button>
 
-        {/* Info about redirect */}
-        <div className="mt-4 text-center text-sm text-gray-500">
-          <p>You'll be taken to Google to sign in, then returned here to continue processing.</p>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-6 text-center text-sm text-gray-500">
-          <p>
-            By signing in, you agree to our terms of service and privacy policy.
-          </p>
-        </div>
       </div>
     </div>
   )

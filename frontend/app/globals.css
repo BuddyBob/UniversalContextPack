@@ -908,7 +908,7 @@
     border-radius: 8px !important;
     box-shadow: var(--shadow-lg) !important;
     min-width: 200px !important;
-    z-index: 50 !important;
+    z-index: 150 !important;
   }
   
   .nav-dropdown-item {

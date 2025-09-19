@@ -402,7 +402,7 @@ DECLARE
   user_profile RECORD;
 BEGIN
   INSERT INTO public.user_profiles (id, email, r2_user_directory, payment_plan, chunks_analyzed, credits_balance)
-  VALUES (user_uuid, user_email, r2_dir, 'credits', 0, 2)
+  VALUES (user_uuid, user_email, r2_dir, 'credits', 0, get_default_new_user_credits())
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     r2_user_directory = EXCLUDED.r2_user_directory,
@@ -433,7 +433,7 @@ BEGIN
   IF NOT FOUND THEN
     -- Create default profile for new users
     INSERT INTO public.user_profiles (id, email, r2_user_directory, payment_plan, chunks_analyzed, credits_balance)
-    VALUES (user_uuid, 'unknown@example.com', 'user_' || user_uuid, 'credits', 0, 2)
+    VALUES (user_uuid, 'unknown@example.com', 'user_' || user_uuid, 'credits', 0, get_default_new_user_credits())
     RETURNING * INTO user_profile;
   END IF;
   
