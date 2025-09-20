@@ -5159,8 +5159,72 @@ async def stripe_webhook(request: Request):
                 
         elif event['type'] == 'payment_intent.payment_failed':
             payment_intent = event['data']['object']
-            print(f"❌ Payment failed: {payment_intent['id']} - {payment_intent.get('last_payment_error', {}).get('message', 'Unknown error')}")
-            # TODO: Log failed payment for investigation
+            error_message = payment_intent.get('last_payment_error', {}).get('message', 'Unknown error')
+            user_id = payment_intent['metadata'].get('user_id') if payment_intent.get('metadata') else None
+            
+            print(f"❌ Payment failed: {payment_intent['id']} - {error_message}")
+            
+            # Log payment failure to database for investigation
+            if supabase and user_id:
+                try:
+                    supabase.table("payment_attempts").insert({
+                        "user_id": user_id,
+                        "attempt_type": "payment_intent",
+                        "credits_requested": int(payment_intent['metadata'].get('credits', 0)) if payment_intent.get('metadata') else 0,
+                        "amount_requested": payment_intent['amount'] / 100,
+                        "status": "failed",
+                        "error_message": error_message,
+                        "created_at": datetime.utcnow().isoformat()
+                    }).execute()
+                    print(f"📝 Logged payment failure for user {user_id}")
+                except Exception as log_error:
+                    print(f"⚠️ Failed to log payment failure: {log_error}")
+            
+        elif event['type'] == 'checkout.session.async_payment_failed':
+            session = event['data']['object']
+            error_message = session.get('last_payment_error', {}).get('message', 'Async payment failed')
+            user_id = session['metadata'].get('user_id') if session.get('metadata') else None
+            
+            print(f"❌ Checkout session async payment failed: {session['id']} - {error_message}")
+            
+            # Log payment failure to database
+            if supabase and user_id:
+                try:
+                    supabase.table("payment_attempts").insert({
+                        "user_id": user_id,
+                        "attempt_type": "checkout_session",
+                        "credits_requested": int(session['metadata'].get('credits', 0)) if session.get('metadata') else 0,
+                        "amount_requested": session['amount_total'] / 100 if session.get('amount_total') else 0,
+                        "status": "failed",
+                        "error_message": error_message,
+                        "created_at": datetime.utcnow().isoformat()
+                    }).execute()
+                    print(f"📝 Logged checkout failure for user {user_id}")
+                except Exception as log_error:
+                    print(f"⚠️ Failed to log checkout failure: {log_error}")
+            
+        elif event['type'] == 'checkout.session.expired':
+            session = event['data']['object']
+            user_id = session['metadata'].get('user_id') if session.get('metadata') else None
+            
+            print(f"⏰ Checkout session expired: {session['id']}")
+            
+            # Log session expiry to database
+            if supabase and user_id:
+                try:
+                    supabase.table("payment_attempts").insert({
+                        "user_id": user_id,
+                        "attempt_type": "checkout_session",
+                        "credits_requested": int(session['metadata'].get('credits', 0)) if session.get('metadata') else 0,
+                        "amount_requested": session['amount_total'] / 100 if session.get('amount_total') else 0,
+                        "status": "expired",
+                        "error_message": "Checkout session expired",
+                        "created_at": datetime.utcnow().isoformat()
+                    }).execute()
+                    print(f"📝 Logged session expiry for user {user_id}")
+                except Exception as log_error:
+                    print(f"⚠️ Failed to log session expiry: {log_error}")
+            
             
         elif event['type'] == 'charge.dispute.created':
             dispute = event['data']['object']
@@ -5261,10 +5325,37 @@ async def stripe_webhook(request: Request):
         else:
             print(f"📝 Unhandled webhook event: {event['type']}")
             
+        # Update webhook log with final status
+        if supabase:
+            try:
+                supabase.table("webhook_logs").update({
+                    "status": "success",
+                    "stripe_event_type": event['type'],
+                    "processed_data": {
+                        "event_type": event['type'],
+                        "processed_at": datetime.utcnow().isoformat()
+                    },
+                    "updated_at": datetime.utcnow().isoformat()
+                }).eq("webhook_id", webhook_id).execute()
+            except Exception as log_error:
+                print(f"⚠️ [{webhook_id}] Failed to update webhook log: {log_error}")
+            
         return {"status": "success"}
         
     except Exception as e:
         print(f"Webhook error: {e}")
+        
+        # Update webhook log with error status
+        if supabase:
+            try:
+                supabase.table("webhook_logs").update({
+                    "status": "failed",
+                    "error_message": str(e),
+                    "updated_at": datetime.utcnow().isoformat()
+                }).eq("webhook_id", webhook_id).execute()
+            except Exception as log_error:
+                print(f"⚠️ [{webhook_id}] Failed to update webhook error log: {log_error}")
+        
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 def calculate_credit_price(credits: int) -> float:
@@ -5393,6 +5484,38 @@ async def get_cache_performance(job_id: str, user: AuthenticatedUser = Depends(g
     except Exception as e:
         print(f"Error fetching cache performance: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch cache performance")
+
+@app.get("/api/payment-attempts")
+async def get_payment_attempts(user: AuthenticatedUser = Depends(get_current_user)):
+    """Get recent payment attempts for debugging payment issues"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not available")
+        
+        # Get recent payment attempts for this user
+        result = supabase.table("payment_attempts").select("*").eq("user_id", user.user_id).order("created_at", desc=True).limit(10).execute()
+        
+        attempts = []
+        if result.data:
+            for attempt in result.data:
+                attempts.append({
+                    "attempt_type": attempt.get("attempt_type"),
+                    "status": attempt.get("status"),
+                    "error_message": attempt.get("error_message"),
+                    "credits_requested": attempt.get("credits_requested"),
+                    "amount_requested": attempt.get("amount_requested"),
+                    "created_at": attempt.get("created_at")
+                })
+        
+        return {
+            "recent_attempts": attempts,
+            "total_attempts": len(attempts),
+            "failed_attempts": len([a for a in attempts if a["status"] == "failed"])
+        }
+        
+    except Exception as e:
+        print(f"Error fetching payment attempts: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch payment attempts")
 
 @app.post("/stripe/webhook")
 async def stripe_webhook_alias(request: Request):

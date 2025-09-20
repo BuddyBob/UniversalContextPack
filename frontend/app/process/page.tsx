@@ -215,6 +215,66 @@ export default function ProcessPage() {
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
+    
+    // Handle payment failures
+    const paymentFailed = searchParams.get('payment_failed');
+    if (paymentFailed === 'true') {
+      const errorReason = searchParams.get('error_reason') || 'Payment processing failed';
+      const errorCode = searchParams.get('error_code') || 'unknown_error';
+      
+      addLog(`Payment failed: ${errorReason}`);
+      
+      // Show appropriate notification based on error type
+      if (errorCode === 'card_declined' || errorReason.toLowerCase().includes('card') || errorReason.toLowerCase().includes('declined')) {
+        showNotification(
+          'warning',
+          'Payment failed: Your card was declined. Please try a different payment method or contact your bank.'
+        );
+      } else if (errorCode === 'insufficient_funds' || errorReason.toLowerCase().includes('insufficient')) {
+        showNotification(
+          'warning',
+          'Payment failed: Insufficient funds. Please check your account balance and try again.'
+        );
+      } else if (errorCode === 'expired_card' || errorReason.toLowerCase().includes('expired')) {
+        showNotification(
+          'warning',
+          'Payment failed: Your card has expired. Please update your payment method.'
+        );
+      } else if (errorCode === 'incorrect_cvc' || errorReason.toLowerCase().includes('cvc') || errorReason.toLowerCase().includes('security code')) {
+        showNotification(
+          'warning',
+          'Payment failed: Incorrect security code (CVC). Please check your card details and try again.'
+        );
+      } else if (errorCode === 'processing_error' || errorReason.toLowerCase().includes('processing')) {
+        showNotification(
+          'warning',
+          'Payment failed: Processing error. Please try again in a few minutes.'
+        );
+      } else {
+        showNotification(
+          'warning',
+          `Payment failed: ${errorReason}. Please try again or contact support if the issue persists.`
+        );
+      }
+      
+      // Clean up URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+    
+    // Handle payment timeout/session expiry
+    const paymentExpired = searchParams.get('payment_expired');
+    if (paymentExpired === 'true') {
+      addLog('Payment session expired');
+      showNotification(
+        'info',
+        'Payment session expired. Please try again to complete your purchase.'
+      );
+      
+      // Clean up URL parameters
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
   }, [searchParams, user]);
 
   // Save session to localStorage less frequently for better performance
@@ -420,6 +480,43 @@ export default function ProcessPage() {
       addLog(`Payment verification error: ${error}`);
       console.error('Payment verification error:', error);
     }
+  };
+
+  // Function to check recent payment attempts for debugging
+  const checkPaymentAttempts = async () => {
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/payment-attempts`,
+        {
+          method: 'GET'
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.failed_attempts > 0) {
+          const lastFailure = data.recent_attempts.find((attempt: any) => attempt.status === 'failed');
+          if (lastFailure) {
+            addLog(`Recent payment issue detected: ${lastFailure.error_message}`);
+            
+            // Show helpful suggestion based on error
+            if (lastFailure.error_message.toLowerCase().includes('card')) {
+              addLog('💡 Tip: Try using a different card or payment method');
+            } else if (lastFailure.error_message.toLowerCase().includes('funds')) {
+              addLog('💡 Tip: Please check your account balance');
+            } else if (lastFailure.error_message.toLowerCase().includes('expired')) {
+              addLog('💡 Tip: Please update your payment method');
+            }
+          }
+        }
+        
+        return data;
+      }
+    } catch (error) {
+      console.error('Error checking payment attempts:', error);
+    }
+    return null;
   };
 
   const performExtraction = async () => {
