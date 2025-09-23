@@ -51,7 +51,7 @@ export default function ProcessPage() {
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [lastProgressTimestamp, setLastProgressTimestamp] = useState<number>(0);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'warning'>('connected');
-  const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, credits_balance: number, plan?: string} | null>(null);
+  const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, credits_balance: number, plan?: string, isUnlimited?: boolean} | null>(null);
   const [emailModeStartTime, setEmailModeStartTime] = useState<number | null>(null);
   const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
@@ -188,7 +188,7 @@ export default function ProcessPage() {
           .then((limits) => {
             setPaymentLimits(limits);
             setPaymentLimitsError(false);
-            addLog(`Credit balance updated: ${limits.credits_balance} credits available`);
+            addLog(`Credit balance updated: ${limits.isUnlimited || limits.plan === 'unlimited' ? 'Unlimited access' : `${limits.credits_balance} credits available`}`);
           })
           .catch((error) => {
             console.error('Error refreshing payment limits after payment:', error);
@@ -427,7 +427,7 @@ export default function ProcessPage() {
           const limits = await checkPaymentLimits();
           setPaymentLimits(limits);
           setPaymentLimitsError(false);
-          addLog(`Credit balance updated: ${limits.credits_balance} credits available`);
+          addLog(`Credit balance updated: ${limits.isUnlimited || limits.plan === 'unlimited' ? 'Unlimited access' : `${limits.credits_balance} credits available`}`);
           return; // Success, no need to do fallback checks
         } else {
           const errorData = await response.json();
@@ -453,7 +453,7 @@ export default function ProcessPage() {
           
           if (limits.credits_balance > 0 || attempts >= maxAttempts) {
             if (limits.credits_balance > 0) {
-              addLog(`Payment processed! Credit balance: ${limits.credits_balance} credits available`);
+              addLog(`Payment processed! ${limits.isUnlimited || limits.plan === 'unlimited' ? 'Unlimited access activated' : `Credit balance: ${limits.credits_balance} credits available`}`);
             } else {
               addLog('Payment is still processing. Please refresh the page in a few minutes if credits don\'t appear.');
             }
@@ -805,11 +805,13 @@ export default function ProcessPage() {
         
         if (response.ok) {
           const data = await response.json();
-          const canProcess = data.credits_balance > 0;
+          const isUnlimited = data.payment_plan === 'unlimited';
+          const canProcess = isUnlimited || data.credits_balance > 0;
           const result = {
             canProcess,
             credits_balance: data.credits_balance || 0,
-            plan: 'credits'
+            plan: data.payment_plan || 'credits',
+            isUnlimited
           };
           return result;
         } else {
@@ -1809,7 +1811,10 @@ export default function ProcessPage() {
     const currentLimits = await checkPaymentLimits();
     setPaymentLimits(currentLimits); // Update the state as well
     if (!currentLimits.canProcess) {
-      addLog(`Error: Insufficient credits (${currentLimits.credits_balance} available). Please purchase more credits to continue.`);
+      const creditMsg = currentLimits.isUnlimited || currentLimits.plan === 'unlimited' 
+        ? 'Unlimited access available' 
+        : `${currentLimits.credits_balance} available`;
+      addLog(`Error: Insufficient credits (${creditMsg}). Please purchase more credits to continue.`);
       showNotification(
         'limit_reached',
         'Insufficient credits! Purchase more credits to analyze chunks.'
@@ -1820,11 +1825,15 @@ export default function ProcessPage() {
 
     const chunksToAnalyze = Array.from(selectedChunks);
     
-    // Enforce credit limit
-    const maxAllowedChunks = currentLimits.credits_balance;
-    if (chunksToAnalyze.length > maxAllowedChunks) {
+    // Enforce credit limit (unless unlimited plan)
+    const isUnlimited = currentLimits.isUnlimited || currentLimits.plan === 'unlimited';
+    const maxAllowedChunks = isUnlimited ? chunksToAnalyze.length : currentLimits.credits_balance;
+    
+    if (!isUnlimited && chunksToAnalyze.length > maxAllowedChunks) {
       addLog(`Warning: Selected ${chunksToAnalyze.length} chunks but only ${maxAllowedChunks} credits available. Limiting to ${maxAllowedChunks} chunks.`);
       chunksToAnalyze.splice(maxAllowedChunks); // Trim to available credits
+    } else if (isUnlimited) {
+      addLog(`Unlimited plan detected - processing all ${chunksToAnalyze.length} selected chunks`);
     }
     
     if (chunksToAnalyze.length !== selectedChunks.size) {
@@ -2669,9 +2678,14 @@ export default function ProcessPage() {
                       <p className="text-gray-400">
                         {(() => {
                           const totalChunks = chunkData.total_chunks;
-                          const availableCredits = paymentLimits ? paymentLimits.credits_balance : totalChunks;
+                          const isUnlimited = paymentLimits?.isUnlimited || paymentLimits?.plan === 'unlimited';
+                          const availableCredits = isUnlimited ? totalChunks : (paymentLimits ? paymentLimits.credits_balance : totalChunks);
                           const chunksToProcess = Math.min(availableCredits, totalChunks);
                           
+                          // If unlimited plan, show unlimited message
+                          if (isUnlimited) {
+                            return `${totalChunks} chunks ready for unlimited AI processing`;
+                          }
                           // If user has more chunks than credits, show partial processing message
                           if (totalChunks > availableCredits) {
                             return `${totalChunks} chunks. You can process ${chunksToProcess} chunks with your current credits.`;
@@ -2711,9 +2725,14 @@ export default function ProcessPage() {
                             ? 'Credits Required for UCP Creation'
                             : (() => {
                                 const totalChunks = availableChunks.length;
-                                const availableCredits = paymentLimits ? paymentLimits.credits_balance : totalChunks;
+                                const isUnlimited = paymentLimits?.isUnlimited || paymentLimits?.plan === 'unlimited';
+                                const availableCredits = isUnlimited ? totalChunks : (paymentLimits ? paymentLimits.credits_balance : totalChunks);
                                 const chunksToProcess = Math.min(availableCredits, totalChunks);
                                 
+                                // If unlimited plan, show unlimited message
+                                if (isUnlimited) {
+                                  return `Create UCP (${totalChunks} chunks - Unlimited)`;
+                                }
                                 // If user has more chunks than credits, show "Processing X out of Y"
                                 if (totalChunks > availableCredits) {
                                   return `Create UCP (Processing ${chunksToProcess} out of ${totalChunks} chunks)`;

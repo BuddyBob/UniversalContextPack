@@ -846,7 +846,13 @@ BEGIN
   WHERE id = user_uuid
   RETURNING credits_balance INTO new_balance;
   
-  -- Log the transaction
+  -- Check if update affected any rows
+  IF NOT FOUND THEN
+    RAISE LOG 'User not found: %', user_uuid;
+    RETURN -1;
+  END IF;
+  
+  -- Log the transaction (use 'purchase' instead of 'unlimited_purchase')
   INSERT INTO public.credit_transactions (
     user_id, 
     transaction_type, 
@@ -857,7 +863,7 @@ BEGIN
   )
   VALUES (
     user_uuid, 
-    'unlimited_purchase', 
+    'purchase', 
     999999, 
     amount_paid, 
     stripe_payment_id,

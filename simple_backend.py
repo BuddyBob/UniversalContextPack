@@ -577,11 +577,20 @@ async def handle_cancellation_with_credit_deduction(user_id: str, job_id: str, c
     """Handle job cancellation and deduct credits if 10+ chunks were processed"""
     try:
         if chunks_processed >= 10:
-            print(f"💳 Deducting credits for cancellation: {chunks_processed} chunks processed for user {user_id}")
+            print(f"💳 Checking credit deduction for cancellation: {chunks_processed} chunks processed for user {user_id}")
             
             if not supabase:
                 print("Warning: Supabase not available - cannot deduct credits")
                 return
+            
+            # Check user's payment plan first
+            user_result = supabase.table("user_profiles").select("payment_plan").eq("id", user_id).execute()
+            
+            if user_result.data and user_result.data[0].get("payment_plan") == "unlimited":
+                print(f"🌟 Unlimited plan user - no credits deducted for {chunks_processed} chunks")
+                return None
+            
+            print(f"💳 Deducting credits for credit-plan user: {chunks_processed} chunks processed")
             
             # Use the database function to deduct credits for processed chunks
             result = supabase.rpc("add_credits_to_user", {
@@ -2640,7 +2649,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             profile = result.data
             return {
                 "credits_balance": profile.get("credits_balance", 0),
-                "can_process": profile.get("credits_balance", 0) > 0,
+                "can_process": profile.get("payment_plan") == "unlimited" or profile.get("credits_balance", 0) > 0,
                 "email": profile.get("email", "unknown@example.com"),
                 "payment_plan": profile.get("payment_plan", "credits"),
                 "chunks_analyzed": profile.get("chunks_analyzed", 0),
@@ -2722,18 +2731,27 @@ async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: Authenticat
                 print(f" Limited to first {request.max_chunks} chunks: {selected_chunks}")
         
         chunks_to_process = len(selected_chunks)
-        if payment_plan != "unlimited":
+        
+        # Check if user has unlimited plan
+        if payment_plan == "unlimited":
+            # Unlimited plan - can process all chunks
+            chunks_to_process = len(selected_chunks)
+            print(f"🌟 Unlimited plan detected - processing all {chunks_to_process} chunks")
+        else:
+            # Credit-based plan - limit by available credits
             chunks_to_process = min(available_credits, len(selected_chunks))
             if payment_plan == "free" and chunks_to_process > get_new_user_credits():
                 chunks_to_process = get_new_user_credits()
+            print(f"💳 Credit plan - processing {chunks_to_process} chunks (available credits: {available_credits})")
         
+        # Only block if credit plan with no credits
         if chunks_to_process <= 0 and payment_plan != "unlimited":
             return {
                 "job_id": job_id,
                 "status": "limit_reached", 
                 "message": "No credits available. Purchase credits to analyze chunks.",
                 "credits_balance": available_credits,
-                "payment_plan": payment_status["plan"]
+                "payment_plan": payment_plan
             }
 
         # Check if this is a large job (3+ chunks) - use email notification instead of real-time progress
@@ -5440,7 +5458,8 @@ async def grant_unlimited_access(user_id: str, amount: float, stripe_payment_id:
         # and update their plan to unlimited
         result = supabase.rpc("grant_unlimited_access", {
             "user_uuid": user_id,
-            "transaction_description": f"Stripe payment - ${amount} for unlimited access (Payment ID: {stripe_payment_id})"
+            "amount_paid": amount,
+            "stripe_payment_id": stripe_payment_id
         }).execute()
         
         print(f"📊 Supabase RPC result: {result}")
@@ -5455,6 +5474,109 @@ async def grant_unlimited_access(user_id: str, amount: float, stripe_payment_id:
         # Try to log more details about the error
         if hasattr(e, '__dict__'):
             print(f"❌ Error details: {e.__dict__}")
+
+@app.post("/api/debug/grant-unlimited")
+async def debug_grant_unlimited(request: dict, user: AuthenticatedUser = Depends(get_current_user)):
+    """Debug endpoint to manually grant unlimited access"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not available")
+        
+        target_email = request.get("email")
+        if not target_email:
+            raise HTTPException(status_code=400, detail="Email required")
+        
+        # Find user by email
+        user_result = supabase.table("user_profiles").select("id, email, credits_balance, payment_plan").eq("email", target_email).execute()
+        
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail=f"User not found: {target_email}")
+        
+        target_user = user_result.data[0]
+        print(f"🔍 Found user: {target_user}")
+        
+        # Grant unlimited access
+        await grant_unlimited_access(target_user["id"], 3.99, "manual_debug_grant")
+        
+        # Check the result
+        updated_user = supabase.table("user_profiles").select("id, email, credits_balance, payment_plan, subscription_status").eq("id", target_user["id"]).execute()
+        
+        return {
+            "success": True,
+            "message": f"Unlimited access granted to {target_email}",
+            "user_before": target_user,
+            "user_after": updated_user.data[0] if updated_user.data else None
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in debug grant unlimited: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/debug/check-user/{email}")
+async def debug_check_user(email: str):
+    """Debug endpoint to check user status - BYPASS AUTH FOR DEBUGGING"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not available")
+        
+        print(f"🔍 Checking user: {email}")
+        
+        # Find user by email
+        user_result = supabase.table("user_profiles").select("*").eq("email", email).execute()
+        
+        if not user_result.data:
+            return {"found": False, "email": email}
+        
+        user_data = user_result.data[0]
+        print(f"👤 Found user: {user_data}")
+        
+        # Also check recent transactions
+        transactions = supabase.table("credit_transactions").select("*").eq("user_id", user_data["id"]).order("created_at", desc=True).limit(5).execute()
+        
+        return {
+            "found": True,
+            "user": user_data,
+            "recent_transactions": transactions.data
+        }
+        
+    except Exception as e:
+        print(f"❌ Error checking user: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/debug/grant-unlimited/{email}")
+async def debug_grant_unlimited_by_email(email: str):
+    """Debug endpoint to manually grant unlimited access by email - BYPASS AUTH FOR DEBUGGING"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not available")
+        
+        print(f"🌟 Granting unlimited access to: {email}")
+        
+        # Find user by email
+        user_result = supabase.table("user_profiles").select("id, email, credits_balance, payment_plan").eq("email", email).execute()
+        
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail=f"User not found: {email}")
+        
+        target_user = user_result.data[0]
+        print(f"🔍 Found user: {target_user}")
+        
+        # Grant unlimited access using the existing function
+        await grant_unlimited_access(target_user["id"], 3.99, "manual_debug_grant_" + target_user["id"][:8])
+        
+        # Check the result
+        updated_user = supabase.table("user_profiles").select("id, email, credits_balance, payment_plan, subscription_status").eq("id", target_user["id"]).execute()
+        
+        return {
+            "success": True,
+            "message": f"Unlimited access granted to {email}",
+            "user_before": target_user,
+            "user_after": updated_user.data[0] if updated_user.data else None
+        }
+        
+    except Exception as e:
+        print(f"❌ Error in debug grant unlimited: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/cache-performance/{job_id}")
 async def get_cache_performance(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
