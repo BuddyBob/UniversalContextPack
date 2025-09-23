@@ -417,7 +417,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- PAYMENT HELPER FUNCTIONS
 -- ============================================================================
 
--- Function to get user payment status (credits only)
+-- Function to get user payment status (supports both credits and unlimited plans)
 CREATE OR REPLACE FUNCTION public.get_user_payment_status(user_uuid UUID)
 RETURNS JSONB AS $$
 DECLARE
@@ -437,6 +437,22 @@ BEGIN
     RETURNING * INTO user_profile;
   END IF;
   
+  -- Check if user has unlimited plan
+  IF user_profile.payment_plan = 'unlimited' THEN
+    -- Return unlimited plan status
+    RETURN jsonb_build_object(
+      'plan', 'unlimited',
+      'chunks_used', 0, -- Not relevant for unlimited
+      'chunks_allowed', 999999, -- Unlimited 
+      'credits_balance', 999999, -- Always show unlimited credits
+      'can_process', true, -- Always can process
+      'subscription_status', COALESCE(user_profile.subscription_status, 'active'),
+      'plan_start_date', user_profile.plan_start_date,
+      'plan_end_date', user_profile.plan_end_date
+    );
+  END IF;
+  
+  -- For credits plan, calculate usage as before
   -- Calculate total credits purchased (sum of all 'purchase' transactions)
   SELECT COALESCE(SUM(credits), 0) INTO total_purchased
   FROM public.credit_transactions
@@ -846,13 +862,7 @@ BEGIN
   WHERE id = user_uuid
   RETURNING credits_balance INTO new_balance;
   
-  -- Check if update affected any rows
-  IF NOT FOUND THEN
-    RAISE LOG 'User not found: %', user_uuid;
-    RETURN -1;
-  END IF;
-  
-  -- Log the transaction (use 'purchase' instead of 'unlimited_purchase')
+
   INSERT INTO public.credit_transactions (
     user_id, 
     transaction_type, 
