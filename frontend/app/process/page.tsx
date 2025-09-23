@@ -1949,31 +1949,46 @@ export default function ProcessPage() {
     if (!currentJobId || isCancelling) return;
     
     setIsCancelling(true);
-    addLog('Requesting job cancellation...');
+    addLog('🚫 Requesting job cancellation...');
     
     try {
+      // Stop any active polling immediately
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        setPollingInterval(null);
+        addLog('⏹️ Stopped status polling');
+      }
+      
+      // Close any active EventSource connections
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        addLog('🔌 Closed real-time connection');
+      }
+      
+      // Abort any ongoing extraction requests
+      if (extractionAbortControllerRef.current) {
+        extractionAbortControllerRef.current.abort();
+        extractionAbortControllerRef.current = null;
+        addLog('🛑 Aborted extraction requests');
+      }
+      
+      // Send cancellation request to backend
       const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/cancel/${currentJobId}`, {
         method: 'POST'
       });
       
       if (response.ok) {
         const data = await response.json();
-        addLog('Cancellation requested. Stopping analysis...');
+        addLog('✅ Cancellation request sent successfully');
+        addLog('⏱️ Stopping OpenAI requests and analysis...');
         
-        // Stop polling
-        if (pollingInterval) {
-          clearInterval(pollingInterval);
-          setPollingInterval(null);
-        }
-        
-        // Reset state
+        // Reset state immediately for better UX
         setIsProcessing(false);
-        setCurrentStep('chunked');
         setProgress(0);
         setAnalysisStartTime(null);
-        setIsCancelling(false);
 
-        // Remove chunks if 10+ were processed
+        // Handle chunk removal for partial processing
         if (currentProcessedChunks >= 10) {
           const chunksToRemove = currentProcessedChunks;
           const remainingChunks = availableChunks.slice(chunksToRemove);
@@ -1982,23 +1997,40 @@ export default function ProcessPage() {
           // Clear selected chunks since the indices have changed
           setSelectedChunks(new Set());
           
-          addLog(`Removed ${chunksToRemove} processed chunks. ${remainingChunks.length} chunks remaining.`);
-          showNotification('info', `Removed ${chunksToRemove} processed chunks from the collection`);
+          addLog(`💳 Removed ${chunksToRemove} processed chunks. ${remainingChunks.length} chunks remaining.`);
+          addLog(`📊 Credits deducted for ${chunksToRemove} completed chunks`);
+          showNotification('warning', `Job cancelled. ${chunksToRemove} chunks were processed and charged.`);
+          
+          // Return to chunked state so user can reselect
+          setCurrentStep('chunked');
         } else {
-          addLog('Analysis cancelled successfully');
-          showNotification('info', 'Analysis has been cancelled');
+          addLog('🆓 Job cancelled before significant processing - no charges applied');
+          showNotification('info', 'Job cancelled successfully. No charges applied.');
+          
+          // Return to chunked state for reselection
+          setCurrentStep('chunked');
         }
 
         // Reset processed chunks counter
         setCurrentProcessedChunks(0);
+        setIsCancelling(false);
+        
+        addLog('🔄 Ready to start a new analysis');
       } else {
-        throw new Error('Failed to cancel job');
+        throw new Error(`Server responded with status ${response.status}`);
       }
     } catch (error) {
       console.error('Cancel failed:', error);
-      addLog(`Cancel failed: ${error}`);
+      addLog(`❌ Cancel request failed: ${error}`);
       setIsCancelling(false);
-      showNotification('warning', 'Failed to cancel. The job may still be running.');
+      showNotification('warning', 'Failed to cancel job. It may still be running on the server.');
+      
+      // Even if cancel request fails, stop local polling and reset UI
+      setIsProcessing(false);
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        setPollingInterval(null);
+      }
     }
   };
 
@@ -2786,9 +2818,10 @@ export default function ProcessPage() {
                   <button
                     onClick={handleCancel}
                     disabled={isCancelling}
-                    className="px-3 py-1 text-sm border border-red-600 text-red-400 rounded hover:bg-red-600/10 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 text-sm font-medium border-2 border-red-500 text-red-400 bg-red-500/5 rounded-lg hover:bg-red-500/15 hover:text-red-300 hover:border-red-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center space-x-2"
                   >
-                    {isCancelling ? 'Cancelling...' : 'Cancel'}
+                    <X className="h-4 w-4" />
+                    <span>{isCancelling ? 'Cancelling...' : 'Cancel Job'}</span>
                   </button>
                 </div>
                 
@@ -2813,6 +2846,14 @@ export default function ProcessPage() {
                       )}
                     </div>
                   )}
+                  
+                  {/* Warning about cancellation */}
+                  <div className="text-xs text-gray-400 bg-gray-800/50 border border-gray-700 rounded p-2 mt-2">
+                    <div className="flex items-center space-x-1">
+                      <Info className="h-3 w-3" />
+                      <span>Note: If you cancel after 10+ chunks are processed, you'll be charged for the completed work.</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -2822,14 +2863,26 @@ export default function ProcessPage() {
               <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                      <Brain className="h-5 w-5 text-white" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <Brain className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Processing in Background</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Your analysis is running on our servers</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Processing in Background</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Your analysis is running on our servers</p>
-                    </div>
+                    
+                    {/* Cancel button for email mode */}
+                    <button
+                      onClick={handleCancel}
+                      disabled={isCancelling}
+                      className="px-4 py-2 text-sm font-medium border-2 border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 hover:border-red-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center space-x-2"
+                    >
+                      <X className="h-4 w-4" />
+                      <span>{isCancelling ? 'Cancelling...' : 'Cancel Job'}</span>
+                    </button>
                   </div>
                 </div>
 

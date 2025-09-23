@@ -880,21 +880,43 @@ def get_openai_client(api_key: str = None) -> OpenAI:
         print(f"❌ Error creating OpenAI client: {e}")
         raise HTTPException(status_code=500, detail="Failed to initialize OpenAI client")
 
-async def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
+async def openai_call_with_retry(openai_client, max_retries=3, job_id=None, **kwargs):
     """
     Make OpenAI API calls with retry logic for connection issues and quota handling
+    Supports cancellation checking if job_id is provided
     """
     import time
     import asyncio
     from openai import OpenAI
     
+    # Check for cancellation before starting
+    if job_id and job_id in cancelled_jobs:
+        print(f"🚫 OpenAI call cancelled before starting for job {job_id}")
+        raise Exception(f"Job {job_id} was cancelled")
+    
     for attempt in range(max_retries):
         try:
+            # Check for cancellation before each attempt
+            if job_id and job_id in cancelled_jobs:
+                print(f"🚫 OpenAI call cancelled during retry attempt {attempt + 1} for job {job_id}")
+                raise Exception(f"Job {job_id} was cancelled")
+            
             # Run the blocking OpenAI call in a thread pool to avoid blocking the event loop
             response = await asyncio.to_thread(openai_client.chat.completions.create, **kwargs)
+            
+            # Check for cancellation after call completes
+            if job_id and job_id in cancelled_jobs:
+                print(f"🚫 OpenAI call cancelled after completion for job {job_id}")
+                raise Exception(f"Job {job_id} was cancelled")
+                
             print(f"✅ OpenAI API call successful on attempt {attempt + 1}")
             return response
         except Exception as e:
+            # If it's a cancellation exception, don't retry
+            if job_id and job_id in cancelled_jobs:
+                print(f"🚫 Job {job_id} cancelled - aborting OpenAI call")
+                raise e
+                
             error_str = str(e).lower()
             if attempt == 0:  # Only log on first attempt to reduce noise
                 print(f"❌ OpenAI API error on attempt {attempt + 1}: {e}")
@@ -921,7 +943,13 @@ async def openai_call_with_retry(openai_client, max_retries=3, **kwargs):
             ]):
                 wait_time = (attempt + 1) * 2  # Exponential backoff: 2, 4, 6 seconds
                 print(f"🔄 Retrying in {wait_time} seconds due to connection error...")
-                await asyncio.sleep(wait_time)  # Use async sleep
+                
+                # Check for cancellation during wait
+                for i in range(wait_time):
+                    if job_id and job_id in cancelled_jobs:
+                        print(f"🚫 Job {job_id} cancelled during retry wait")
+                        raise Exception(f"Job {job_id} was cancelled")
+                    await asyncio.sleep(1)  # Sleep 1 second at a time to check cancellation
                 continue
             else:
                 # Re-raise the exception if it's not a connection issue or we've exceeded retries
@@ -2985,6 +3013,7 @@ The conversation data you will analyze follows this message. Provide your compre
                 try:
                     ai_response = await openai_call_with_retry(
                         openai_client,
+                        job_id=job_id,  # Pass job_id for cancellation checking
                         model="gpt-5-nano-2025-08-07",  # Primary model for UCP analysis
                         messages=[
                             {"role": "system", "content": system_prompt},
