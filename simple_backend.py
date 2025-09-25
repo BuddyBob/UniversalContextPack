@@ -5199,20 +5199,9 @@ async def stripe_webhook(request: Request):
         print(f"🆔 [{webhook_id}] Event ID: {event_id}")
         
         # Handle different Stripe events
-        if event['type'] == 'payment_intent.succeeded':
-            payment_intent = event['data']['object']
-            
-            # Extract metadata
-            user_id = payment_intent['metadata'].get('user_id')
-            credits = int(payment_intent['metadata'].get('credits', 0))
-            amount = payment_intent['amount'] / 100  # Convert cents to dollars
-            
-            if user_id and credits > 0:
-                # Add credits to user account
-                await add_credits_to_user(user_id, credits, amount, payment_intent['id'])
-                print(f"✅ Added {credits} credits to user {user_id}")
-                
-        elif event['type'] == 'payment_intent.payment_failed':
+        # payment_intent.succeeded handler moved to enhanced version below
+        
+        if event['type'] == 'payment_intent.payment_failed':
             payment_intent = event['data']['object']
             error_message = payment_intent.get('last_payment_error', {}).get('message', 'Unknown error')
             user_id = payment_intent['metadata'].get('user_id') if payment_intent.get('metadata') else None

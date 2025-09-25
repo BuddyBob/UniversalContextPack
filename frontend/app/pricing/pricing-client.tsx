@@ -123,7 +123,7 @@ export default function PricingPageClient() {
     try {
       // Create checkout session and redirect directly to Stripe
       const requestBody: any = {
-        credits: isUnlimitedSelected ? -1 : customCredits, // -1 indicates unlimited
+        credits: isUnlimitedSelected ? 0 : customCredits, // 0 for unlimited (rely on unlimited flag)
         amount: calculatePrice(customCredits)
       }
       
