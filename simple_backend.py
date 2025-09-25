@@ -5365,30 +5365,7 @@ async def stripe_webhook(request: Request):
             else:
                 print(f"❌ [Async Payment] Missing metadata: user_id={user_id}, credits={credits}, unlimited={unlimited}")
         
-        elif event['type'] == 'payment_intent.succeeded':
-            payment_intent = event['data']['object']
-            
-            print(f"💳 [Webhook] Payment intent succeeded: {payment_intent['id']}")
-            print(f"💳 [Webhook] Amount: ${payment_intent['amount'] / 100}")
-            
-            # Try to find the associated checkout session
-            if 'metadata' in payment_intent and payment_intent['metadata']:
-                user_id = payment_intent['metadata'].get('user_id')
-                credits = payment_intent['metadata'].get('credits')
-                
-                if user_id and credits:
-                    credits = int(credits)
-                    amount = payment_intent['amount'] / 100
-                    
-                    print(f"💳 [Webhook] Processing payment - user_id: {user_id}, credits: {credits}, amount: ${amount}")
-                    
-                    # Add credits to user account
-                    await add_credits_to_user(user_id, credits, amount, payment_intent['id'])
-                    print(f"✅ [Payment Intent] Added {credits} credits to user {user_id}")
-                else:
-                    print(f"❌ [Payment Intent] Missing metadata: user_id={user_id}, credits={credits}")
-            else:
-                print(f"⚠️ [Payment Intent] No metadata found, might be processed via checkout session")
+        # payment_intent.succeeded handler removed - using enhanced version below
             
         elif event['type'] == 'payment_intent.created':
             payment_intent = event['data']['object']
