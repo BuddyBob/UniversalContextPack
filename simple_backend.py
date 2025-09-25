@@ -5186,9 +5186,17 @@ async def stripe_webhook(request: Request):
                 payload, sig_header, STRIPE_WEBHOOK_SECRET
             )
         except ValueError as e:
+            print(f"❌ [{webhook_id}] Invalid payload: {e}")
             raise HTTPException(status_code=400, detail="Invalid payload")
         except stripe.error.SignatureVerificationError as e:
+            print(f"❌ [{webhook_id}] Invalid signature: {e}")
             raise HTTPException(status_code=400, detail="Invalid signature")
+        
+        # Log the event details for debugging
+        event_type = event.get('type')
+        event_id = event.get('id')
+        print(f"🎯 [{webhook_id}] Event Type: {event_type}")
+        print(f"🆔 [{webhook_id}] Event ID: {event_id}")
         
         # Handle different Stripe events
         if event['type'] == 'payment_intent.succeeded':
@@ -5287,37 +5295,50 @@ async def stripe_webhook(request: Request):
         elif event['type'] == 'checkout.session.completed':
             session = event['data']['object']
             
-            print(f"🛒 [Webhook] Checkout session completed: {session['id']}")
-            print(f"🛒 [Webhook] Payment status: {session.get('payment_status', 'unknown')}")
-            print(f"🛒 [Webhook] Session status: {session.get('status', 'unknown')}")
-            print(f"🛒 [Webhook] Amount total: {session.get('amount_total', 0)}")
+            print(f"🛒 [{webhook_id}] Checkout session completed: {session['id']}")
+            print(f"🛒 [{webhook_id}] Payment status: {session.get('payment_status', 'unknown')}")
+            print(f"🛒 [{webhook_id}] Session status: {session.get('status', 'unknown')}")
+            print(f"🛒 [{webhook_id}] Amount total: {session.get('amount_total', 0)}")
+            print(f"🛒 [{webhook_id}] Session mode: {session.get('mode', 'unknown')}")
+            print(f"🛒 [{webhook_id}] Customer email: {session.get('customer_email', 'none')}")
             
             # Extract metadata from the checkout session
-            user_id = session['metadata'].get('user_id')
-            credits = int(session['metadata'].get('credits', 0))
-            unlimited = session['metadata'].get('unlimited', 'False').lower() == 'true'
+            metadata = session.get('metadata', {})
+            user_id = metadata.get('user_id')
+            credits = int(metadata.get('credits', 0)) if metadata.get('credits') else 0
+            unlimited = metadata.get('unlimited', 'False').lower() == 'true'
             amount = session['amount_total'] / 100 if session.get('amount_total') else 0  # Convert cents to dollars
             
-            print(f"🛒 [Webhook] Metadata - user_id: {user_id}, credits: {credits}, unlimited: {unlimited}, amount: ${amount}")
+            print(f"🛒 [{webhook_id}] Raw metadata: {metadata}")
+            print(f"🛒 [{webhook_id}] Parsed - user_id: {user_id}, credits: {credits}, unlimited: {unlimited}, amount: ${amount}")
             
-            # Only process if payment was successful
-            if session.get('payment_status') == 'paid':
+            # Check all possible payment statuses
+            payment_status = session.get('payment_status', 'unknown')
+            print(f"🛒 [{webhook_id}] Checking payment status: '{payment_status}'")
+            
+            # Process if payment was successful OR if it's a specific status that indicates completion
+            if payment_status in ['paid', 'complete']:
                 if user_id:
                     if unlimited:
+                        print(f"🌟 [{webhook_id}] Processing UNLIMITED purchase for user {user_id}")
                         # Grant unlimited access
                         await grant_unlimited_access(user_id, amount, session['id'])
-                        print(f"✅ [Checkout] Granted unlimited access to user {user_id}")
+                        print(f"✅ [{webhook_id}] Granted unlimited access to user {user_id}")
                     elif credits > 0:
+                        print(f"💳 [{webhook_id}] Processing CREDITS purchase: {credits} credits for user {user_id}")
                         # Add credits to user account
                         await add_credits_to_user(user_id, credits, amount, session['id'])
-                        print(f"✅ [Checkout] Added {credits} credits to user {user_id}")
+                        print(f"✅ [{webhook_id}] Added {credits} credits to user {user_id}")
                     else:
-                        print(f"❌ [Checkout] Invalid purchase: user_id={user_id}, credits={credits}, unlimited={unlimited}")
+                        print(f"❌ [{webhook_id}] Invalid purchase: user_id={user_id}, credits={credits}, unlimited={unlimited}")
+                        print(f"❌ [{webhook_id}] Amount was ${amount} - this suggests a configuration issue")
                 else:
-                    print(f"❌ [Checkout] Missing user_id in metadata")
+                    print(f"❌ [{webhook_id}] Missing user_id in metadata")
+                    print(f"❌ [{webhook_id}] Available metadata keys: {list(metadata.keys())}")
             else:
-                print(f"⚠️ [Checkout] Session completed but payment not paid yet. Status: {session.get('payment_status', 'unknown')}")
-                print(f"⚠️ [Checkout] This might be a timing issue - payment might complete shortly")
+                print(f"⚠️ [{webhook_id}] Session completed but payment status is '{payment_status}' (expected 'paid')")
+                print(f"⚠️ [{webhook_id}] Will wait for payment to complete via other webhook events")
+                print(f"⚠️ [{webhook_id}] Session object keys: {list(session.keys())}")
                 
         elif event['type'] == 'checkout.session.async_payment_succeeded':
             session = event['data']['object']
@@ -5369,8 +5390,71 @@ async def stripe_webhook(request: Request):
             else:
                 print(f"⚠️ [Payment Intent] No metadata found, might be processed via checkout session")
             
+        elif event['type'] == 'payment_intent.created':
+            payment_intent = event['data']['object']
+            print(f"💳 [{webhook_id}] Payment intent created: {payment_intent['id']}")
+            print(f"💳 [{webhook_id}] Amount: ${payment_intent['amount'] / 100}")
+            
+            # This is normal - payment intent is created when checkout session starts
+            # The actual processing happens in checkout.session.completed
+            if payment_intent.get('metadata'):
+                user_id = payment_intent['metadata'].get('user_id')
+                credits = payment_intent['metadata'].get('credits', 0)
+                unlimited = payment_intent['metadata'].get('unlimited', 'False').lower() == 'true'
+                print(f"💳 [{webhook_id}] Payment intent metadata: user_id={user_id}, credits={credits}, unlimited={unlimited}")
+
+        elif event['type'] == 'payment_intent.succeeded':
+            payment_intent = event['data']['object']
+            pi_id = payment_intent['id']
+            amount = payment_intent['amount'] / 100
+            print(f"✅ [{webhook_id}] Payment intent succeeded: {pi_id}")
+            print(f"✅ [{webhook_id}] Amount: ${amount}")
+            print(f"✅ [{webhook_id}] Metadata: {payment_intent.get('metadata', {})}")
+            
+            # Try to find the associated checkout session for this payment intent
+            try:
+                import stripe
+                sessions = stripe.checkout.Session.list(
+                    payment_intent=pi_id,
+                    limit=1
+                )
+                if sessions.data:
+                    session = sessions.data[0]
+                    print(f"🔗 [{webhook_id}] Found associated checkout session: {session.id}")
+                    print(f"🔗 [{webhook_id}] Session metadata: {session.metadata}")
+                    
+                    # Process the payment using session metadata
+                    metadata = session.metadata
+                    user_id = metadata.get('user_id')
+                    credits = int(metadata.get('credits', 0)) if metadata.get('credits') else 0
+                    unlimited = metadata.get('unlimited', 'False').lower() == 'true'
+                    
+                    if user_id:
+                        if unlimited:
+                            print(f"🌟 [{webhook_id}] Processing UNLIMITED via payment_intent.succeeded")
+                            await grant_unlimited_access(user_id, amount, session.id)
+                            print(f"✅ [{webhook_id}] Granted unlimited access via payment intent")
+                        elif credits > 0:
+                            print(f"💳 [{webhook_id}] Processing CREDITS via payment_intent.succeeded")
+                            await add_credits_to_user(user_id, credits, amount, session.id)
+                            print(f"✅ [{webhook_id}] Added credits via payment intent")
+                    else:
+                        print(f"❌ [{webhook_id}] No user_id in session metadata")
+                else:
+                    print(f"❌ [{webhook_id}] No checkout session found for payment intent {pi_id}")
+            except Exception as e:
+                print(f"❌ [{webhook_id}] Error retrieving checkout session: {e}")
+
+        elif event['type'] == 'invoice.payment_succeeded':
+            invoice = event['data']['object']
+            print(f"🧾 [{webhook_id}] Invoice payment succeeded: {invoice['id']}")
+            print(f"🧾 [{webhook_id}] Amount paid: ${invoice['amount_paid'] / 100}")
+            print(f"🧾 [{webhook_id}] Subscription: {invoice.get('subscription', 'none')}")
+            # Note: This usually handles subscription payments, not one-time purchases
+            
         else:
-            print(f"📝 Unhandled webhook event: {event['type']}")
+            print(f"📝 [{webhook_id}] Unhandled webhook event: {event['type']}")
+            print(f"📝 [{webhook_id}] Event data keys: {list(event.get('data', {}).get('object', {}).keys())}")
             
         # Update webhook log with final status
         if supabase:
@@ -5732,6 +5816,181 @@ async def get_payment_attempts(user: AuthenticatedUser = Depends(get_current_use
 async def stripe_webhook_alias(request: Request):
     """Alias endpoint for Stripe webhooks (matches Stripe dashboard configuration)"""
     return await stripe_webhook(request)
+
+@app.post("/api/debug/test-unlimited-webhook")
+async def test_unlimited_webhook(request: dict, user: AuthenticatedUser = Depends(get_current_user)):
+    """Test endpoint to simulate unlimited purchase webhook for debugging"""
+    try:
+        user_id = request.get("user_id") or user.user_id
+        amount = request.get("amount", 3.99)
+        session_id = request.get("session_id", f"test_session_{user_id}_{int(time.time())}")
+        
+        print(f"🧪 Testing unlimited access grant for user {user_id}")
+        
+        # Simulate the webhook call
+        await grant_unlimited_access(user_id, amount, session_id)
+        
+        # Check the result
+        if supabase:
+            user_check = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+            if user_check.data:
+                user_data = user_check.data[0]
+                return {
+                    "success": True,
+                    "message": "Test unlimited access grant completed",
+                    "user_before": {
+                        "payment_plan": user_data.get("payment_plan"),
+                        "credits_balance": user_data.get("credits_balance"),
+                        "subscription_status": user_data.get("subscription_status")
+                    },
+                    "user_after": user_data,
+                    "test_session_id": session_id
+                }
+        
+        return {"success": True, "message": "Test completed (no database verification)"}
+        
+    except Exception as e:
+        print(f"❌ Test unlimited webhook error: {e}")
+        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
+
+@app.post("/api/debug/simulate-checkout")
+async def simulate_checkout_webhook(request: dict, user: AuthenticatedUser = Depends(get_current_user)):
+    """Simulate a complete checkout.session.completed webhook event"""
+    try:
+        user_id = request.get("user_id") or user.user_id
+        unlimited = request.get("unlimited", True)
+        credits = request.get("credits", 0)
+        
+        print(f"🧪 [Simulate] Simulating checkout for user: {user_id}, unlimited: {unlimited}, credits: {credits}")
+        
+        # Create a mock checkout session event
+        mock_session = {
+            'id': f'cs_test_simulation_{user_id}_{int(time.time())}',
+            'payment_status': 'paid',
+            'status': 'complete',
+            'amount_total': 399 if unlimited else credits * 100,  # $3.99 for unlimited, $1 per credit
+            'mode': 'payment',
+            'customer_email': f'{user_id}@test.com',
+            'metadata': {
+                'user_id': user_id,
+                'unlimited': str(unlimited).lower(),
+                'credits': str(credits)
+            }
+        }
+        
+        # Process it like a real webhook
+        if unlimited:
+            amount = mock_session['amount_total'] / 100
+            result = await grant_unlimited_access(user_id, amount, mock_session['id'])
+            message = f"Simulated unlimited purchase for {user_id}"
+        elif credits > 0:
+            amount = credits  # $1 per credit for simulation
+            result = await add_credits_to_user(user_id, credits, amount, mock_session['id'])
+            message = f"Simulated {credits} credits purchase for {user_id}"
+        else:
+            raise HTTPException(status_code=400, detail="Must specify either unlimited=true or credits>0")
+        
+        # Verify the result
+        if supabase:
+            verification = supabase.table("user_profiles").select("*").eq("id", user_id).execute()
+            user_data = verification.data[0] if verification.data else None
+        else:
+            user_data = None
+            
+        return {
+            "success": True,
+            "message": message,
+            "simulation": {
+                "session": mock_session,
+                "user_after": user_data
+            }
+        }
+            
+    except Exception as e:
+        print(f"❌ [Simulate] Error simulating checkout: {e}")
+        raise HTTPException(status_code=500, detail=f"Simulation failed: {str(e)}")
+
+@app.get("/api/debug/webhook-events")
+async def get_recent_webhook_events(user: AuthenticatedUser = Depends(get_current_user)):
+    """Get recent webhook events from our logs"""
+    try:
+        print(f"🔍 [Debug] Fetching recent webhook events for user {user.user_id}")
+        
+        # Get webhook logs from the database if we have them
+        if supabase:
+            try:
+                # Query webhook_logs table if it exists
+                webhook_logs = supabase.table("webhook_logs").select("*").order("created_at", desc=True).limit(20).execute()
+                logs = webhook_logs.data if webhook_logs.data else []
+                
+                # Also get recent payment-related events from user_payment_status
+                payment_logs = supabase.table("user_payment_status").select("*").order("updated_at", desc=True).limit(10).execute()
+                payments = payment_logs.data if payment_logs.data else []
+                
+                return {
+                    "success": True,
+                    "webhook_logs": logs,
+                    "recent_payments": payments,
+                    "message": f"Found {len(logs)} webhook logs and {len(payments)} payment records"
+                }
+                
+            except Exception as db_e:
+                print(f"⚠️ [Debug] Database query failed: {db_e}")
+                # Fall back to Stripe API
+                
+        # Fallback: Query Stripe directly for recent events
+        try:
+            import stripe
+            from datetime import datetime, timedelta
+            
+            yesterday = datetime.now() - timedelta(days=1)
+            events = stripe.Event.list(
+                created={'gte': int(yesterday.timestamp())},
+                limit=50
+            )
+            
+            # Filter for relevant events
+            relevant_events = []
+            for event in events.data:
+                if any(keyword in event.type for keyword in ['checkout', 'payment', 'invoice']):
+                    event_data = {
+                        'id': event.id,
+                        'type': event.type,
+                        'created': datetime.fromtimestamp(event.created).isoformat(),
+                        'livemode': event.livemode
+                    }
+                    
+                    # Add object details
+                    obj = event.data.object
+                    if hasattr(obj, 'metadata') and obj.metadata:
+                        event_data['metadata'] = dict(obj.metadata)
+                    if hasattr(obj, 'amount_total'):
+                        event_data['amount'] = obj.amount_total / 100 if obj.amount_total else 0
+                    if hasattr(obj, 'payment_status'):
+                        event_data['payment_status'] = obj.payment_status
+                    if hasattr(obj, 'status'):
+                        event_data['status'] = obj.status
+                        
+                    relevant_events.append(event_data)
+            
+            return {
+                "success": True,
+                "stripe_events": relevant_events,
+                "message": f"Found {len(relevant_events)} relevant Stripe events from last 24h",
+                "note": "This is from Stripe API directly since webhook logs aren't available"
+            }
+            
+        except Exception as stripe_e:
+            print(f"❌ [Debug] Stripe API query failed: {stripe_e}")
+            return {
+                "success": False,
+                "error": f"Could not fetch events: {str(stripe_e)}",
+                "message": "Both database and Stripe API queries failed"
+            }
+        
+    except Exception as e:
+        print(f"❌ [Debug] Error fetching webhook events: {e}")
+        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
 
 @app.post("/api/migrate-missing-packs")
 async def migrate_missing_packs(user: AuthenticatedUser = Depends(get_current_user)):
