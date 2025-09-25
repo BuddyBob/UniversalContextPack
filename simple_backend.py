@@ -5413,7 +5413,6 @@ async def stripe_webhook(request: Request):
             
             # Try to find the associated checkout session for this payment intent
             try:
-                import stripe
                 sessions = stripe.checkout.Session.list(
                     payment_intent=pi_id,
                     limit=1
@@ -5940,7 +5939,6 @@ async def get_recent_webhook_events(user: AuthenticatedUser = Depends(get_curren
                 
         # Fallback: Query Stripe directly for recent events
         try:
-            import stripe
             from datetime import datetime, timedelta
             
             yesterday = datetime.now() - timedelta(days=1)
