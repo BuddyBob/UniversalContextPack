@@ -755,6 +755,16 @@ export default function ProcessPage() {
     const elapsedSeconds = Math.floor((Date.now() - analysisStartTime) / 1000);
     const timeProgress = Math.min(100, (elapsedSeconds / selectedChunksEstimatedTime) * 100);
     
+    // Calculate chunk-based progress from processed chunks
+    const chunkProgress = currentProcessedChunks > 0 && selectedChunks.size > 0 
+      ? Math.min(100, (currentProcessedChunks / selectedChunks.size) * 100)
+      : progress;
+    
+    // Use chunk progress if available, otherwise blend time and chunk progress
+    const finalProgress = currentProcessedChunks > 0 
+      ? chunkProgress 
+      : Math.max(progress, Math.round(timeProgress));
+    
     // Debug logging (remove in production)
     if (process.env.NODE_ENV === 'development') {
       console.log('Progress Debug:', {
@@ -762,13 +772,15 @@ export default function ProcessPage() {
         elapsedSeconds,
         selectedChunksEstimatedTime,
         timeProgress: Math.round(timeProgress),
-        chunkProgress: progress,
-        finalProgress: Math.max(progress, Math.round(timeProgress))
+        chunkProgress: Math.round(chunkProgress),
+        currentProcessedChunks,
+        selectedChunksSize: selectedChunks.size,
+        progress,
+        finalProgress: Math.round(finalProgress)
       });
     }
     
-    // Use the higher of time-based or chunk-based progress for smoother experience
-    return Math.max(progress, Math.round(timeProgress));
+    return Math.round(finalProgress);
   };
 
   const addLog = (message: string) => {
@@ -1694,8 +1706,8 @@ export default function ProcessPage() {
       setCurrentStep('chunked');
       addLog(`Chunking complete! Created ${data.total_chunks} chunks ready for analysis`);
       
-      // Calculate analysis time estimate for all chunks (40 seconds per chunk)
-      const totalAnalysisSeconds = data.total_chunks * 40;
+      // Calculate analysis time estimate for all chunks (1 minute per chunk)
+      const totalAnalysisSeconds = data.total_chunks * 60;
       const formatted = formatAnalysisTime(totalAnalysisSeconds);
       
       setAnalysisTimeEstimate({
@@ -1772,8 +1784,8 @@ export default function ProcessPage() {
       setCurrentStep('chunked');
       addLog(`Chunking complete! Created ${data.total_chunks} chunks ready for analysis`);
       
-      // Calculate analysis time estimate for all chunks (40 seconds per chunk)
-      const totalAnalysisSeconds = data.total_chunks * 40;
+      // Calculate analysis time estimate for all chunks (1 minute per chunk)
+      const totalAnalysisSeconds = data.total_chunks * 60;
       const formatted = formatAnalysisTime(totalAnalysisSeconds);
       
       setAnalysisTimeEstimate({
@@ -1846,8 +1858,8 @@ export default function ProcessPage() {
     setCurrentProcessedChunks(0); // Reset processed chunks counter
     addLog(`Starting analysis of ${chunksToAnalyze.length} chunks...`);
 
-    // Calculate time estimate for selected chunks (40 seconds per chunk)
-    const selectedAnalysisSeconds = chunksToAnalyze.length * 40;
+    // Calculate time estimate for selected chunks (1 minute per chunk)
+    const selectedAnalysisSeconds = chunksToAnalyze.length * 60;
     const formatted = formatAnalysisTime(selectedAnalysisSeconds);
     
     setSelectedChunksEstimatedTime(selectedAnalysisSeconds);
@@ -3231,7 +3243,7 @@ export default function ProcessPage() {
                     {selectedChunks.size > 0 && (
                       <div className="text-blue-400 mt-1 text-xs">
                         Est. time: {(() => {
-                          const seconds = selectedChunks.size * 40; // 40 seconds per chunk
+                          const seconds = selectedChunks.size * 60; // 1 minute per chunk
                           if (seconds < 60) return `${seconds}s`;
                           const minutes = Math.floor(seconds / 60);
                           const remainingSeconds = seconds % 60;
