@@ -5470,7 +5470,7 @@ async def grant_unlimited_access(user_id: str, amount: float, stripe_payment_id:
     """Grant unlimited access to user after successful payment"""
     try:
         if not supabase:
-            print("Warning: Supabase not available")
+            print("❌ Supabase not available - cannot grant unlimited access")
             return
         
         print(f"🌟 Granting unlimited access to user {user_id}")
@@ -5483,26 +5483,86 @@ async def grant_unlimited_access(user_id: str, amount: float, stripe_payment_id:
             print(f"⚠️ Payment {stripe_payment_id} already processed, skipping duplicate")
             return
         
-        # Set unlimited access for the user (set credits to a very high number like 999999)
-        # and update their plan to unlimited
-        result = supabase.rpc("grant_unlimited_access", {
-            "user_uuid": user_id,
-            "amount_paid": amount,
-            "stripe_payment_id": stripe_payment_id
-        }).execute()
+        # First, try using the database function
+        try:
+            result = supabase.rpc("grant_unlimited_access", {
+                "user_uuid": user_id,
+                "amount_paid": amount,
+                "stripe_payment_id": stripe_payment_id
+            }).execute()
+            
+            print(f"📊 Database function result: {result}")
+            
+            if result.data and result.data != -1:
+                print(f"✅ Successfully granted unlimited access to user {user_id} using database function")
+                return
+            else:
+                print(f"⚠️ Database function returned error code: {result.data}")
+                print("🔄 Falling back to manual database updates...")
+                
+        except Exception as db_func_error:
+            print(f"❌ Database function failed: {db_func_error}")
+            print("🔄 Falling back to manual database updates...")
         
-        print(f"📊 Supabase RPC result: {result}")
+        # Fallback: manually update the database if the function fails
+        print(f"🔧 Manually updating user {user_id} to unlimited plan...")
         
-        if result.data and result.data != -1:
-            print(f"✅ Successfully granted unlimited access to user {user_id}")
+        # Update user profile
+        update_result = supabase.table("user_profiles").update({
+            "payment_plan": "unlimited",
+            "credits_balance": 999999,
+            "subscription_status": "active",
+            "plan_start_date": "now()",
+            "updated_at": "now()"
+        }).eq("id", user_id).execute()
+        
+        print(f"📊 Profile update result: {update_result}")
+        
+        if update_result.data:
+            print(f"✅ Successfully updated user profile to unlimited")
+            
+            # Log the transaction
+            transaction_result = supabase.table("credit_transactions").insert({
+                "user_id": user_id,
+                "transaction_type": "purchase",
+                "credits": 999999,
+                "amount": amount,
+                "stripe_payment_id": stripe_payment_id,
+                "description": "Unlimited access purchase - no credit limits (manual fallback)"
+            }).execute()
+            
+            print(f"📊 Transaction log result: {transaction_result}")
+            
+            if transaction_result.data:
+                print(f"✅ Successfully logged unlimited access transaction for user {user_id}")
+            else:
+                print(f"⚠️ Failed to log transaction but user was updated to unlimited")
+                
         else:
-            print(f"❌ Failed to grant unlimited access to user {user_id}. Error: {result}")
+            print(f"❌ Failed to update user profile manually. Update result: {update_result}")
             
     except Exception as e:
-        print(f"❌ Error granting unlimited access to user {user_id}: {e}")
-        # Try to log more details about the error
+        print(f"❌ Critical error granting unlimited access to user {user_id}: {e}")
+        print(f"❌ Error type: {type(e).__name__}")
         if hasattr(e, '__dict__'):
             print(f"❌ Error details: {e.__dict__}")
+        
+        # Last resort: try to at least log the payment attempt
+        try:
+            supabase.table("webhook_logs").insert({
+                "webhook_id": f"failed_unlimited_{user_id}_{stripe_payment_id[:8]}",
+                "event_type": "unlimited_grant_failed", 
+                "status": "failed",
+                "error_message": str(e),
+                "processed_data": {
+                    "user_id": user_id,
+                    "amount": amount,
+                    "stripe_payment_id": stripe_payment_id
+                }
+            }).execute()
+            print(f"📝 Logged failed unlimited grant attempt for investigation")
+        except:
+            print(f"❌ Could not even log the failure - critical database issue")
 
 @app.post("/api/debug/grant-unlimited")
 async def debug_grant_unlimited(request: dict, user: AuthenticatedUser = Depends(get_current_user)):

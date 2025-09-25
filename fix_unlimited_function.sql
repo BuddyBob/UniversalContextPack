@@ -96,7 +96,7 @@ BEGIN
   IF NOT FOUND THEN
     -- Create default profile for new users
     INSERT INTO public.user_profiles (id, email, r2_user_directory, payment_plan, chunks_analyzed, credits_balance)
-    VALUES (user_uuid, 'unknown@example.com', 'user_' || user_uuid, 'credits', 0, 2)
+    VALUES (user_uuid, 'unknown@example.com', 'user_' || user_uuid, 'credits', 0, 4)
     RETURNING * INTO user_profile;
   END IF;
   
@@ -126,11 +126,11 @@ BEGIN
   FROM public.credit_transactions
   WHERE user_id = user_uuid AND transaction_type = 'usage';
   
-  -- Add the initial 2 free credits to total purchased if user hasn't made any purchases
+  -- Add the initial 4 free credits to total purchased if user hasn't made any purchases
   IF total_purchased = 0 THEN
-    total_purchased := 2;
+    total_purchased := 4;
   ELSE
-    total_purchased := total_purchased + 5; -- Add free credits to purchased total
+    total_purchased := total_purchased + 4; -- Add free credits to purchased total
   END IF;
   
   -- Return credit-based status with proper usage tracking
