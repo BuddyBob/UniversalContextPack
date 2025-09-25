@@ -138,8 +138,8 @@ BEGIN
     'plan', 'credits',
     'chunks_used', total_used, -- Show actual credits used
     'chunks_allowed', total_purchased, -- Show total credits available (purchased + free)
-    'credits_balance', COALESCE(user_profile.credits_balance, 2),
-    'can_process', CASE WHEN COALESCE(user_profile.credits_balance, 2) > 0 THEN true ELSE false END,
+    'credits_balance', COALESCE(user_profile.credits_balance, 4),
+    'can_process', CASE WHEN COALESCE(user_profile.credits_balance, 4) > 0 THEN true ELSE false END,
     'subscription_status', user_profile.subscription_status,
     'plan_start_date', user_profile.plan_start_date,
     'plan_end_date', user_profile.plan_end_date
