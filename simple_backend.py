@@ -5411,38 +5411,58 @@ async def stripe_webhook(request: Request):
             print(f"✅ [{webhook_id}] Amount: ${amount}")
             print(f"✅ [{webhook_id}] Metadata: {payment_intent.get('metadata', {})}")
             
-            # Try to find the associated checkout session for this payment intent
-            try:
-                sessions = stripe.checkout.Session.list(
-                    payment_intent=pi_id,
-                    limit=1
-                )
-                if sessions.data:
-                    session = sessions.data[0]
-                    print(f"🔗 [{webhook_id}] Found associated checkout session: {session.id}")
-                    print(f"🔗 [{webhook_id}] Session metadata: {session.metadata}")
-                    
-                    # Process the payment using session metadata
-                    metadata = session.metadata
-                    user_id = metadata.get('user_id')
-                    credits = int(metadata.get('credits', 0)) if metadata.get('credits') else 0
-                    unlimited = metadata.get('unlimited', 'False').lower() == 'true'
-                    
-                    if user_id:
-                        if unlimited:
-                            print(f"🌟 [{webhook_id}] Processing UNLIMITED via payment_intent.succeeded")
-                            await grant_unlimited_access(user_id, amount, session.id)
-                            print(f"✅ [{webhook_id}] Granted unlimited access via payment intent")
-                        elif credits > 0:
-                            print(f"💳 [{webhook_id}] Processing CREDITS via payment_intent.succeeded")
-                            await add_credits_to_user(user_id, credits, amount, session.id)
-                            print(f"✅ [{webhook_id}] Added credits via payment intent")
+            # First try to process using payment intent metadata directly
+            pi_metadata = payment_intent.get('metadata', {})
+            user_id = pi_metadata.get('user_id')
+            credits = int(pi_metadata.get('credits', 0)) if pi_metadata.get('credits') else 0
+            unlimited = pi_metadata.get('unlimited', 'False').lower() == 'true'
+            
+            print(f"🔍 [{webhook_id}] Direct processing - user_id: {user_id}, unlimited: {unlimited}, credits: {credits}")
+            
+            if user_id and (unlimited or credits > 0):
+                # Process directly from payment intent metadata
+                if unlimited:
+                    print(f"🌟 [{webhook_id}] Processing UNLIMITED via payment_intent.succeeded (direct)")
+                    await grant_unlimited_access(user_id, amount, pi_id)
+                    print(f"✅ [{webhook_id}] Granted unlimited access via payment intent (direct)")
+                elif credits > 0:
+                    print(f"💳 [{webhook_id}] Processing CREDITS via payment_intent.succeeded (direct)")
+                    await add_credits_to_user(user_id, credits, amount, pi_id)
+                    print(f"✅ [{webhook_id}] Added credits via payment intent (direct)")
+            else:
+                # Fallback: Try to find the associated checkout session
+                print(f"🔄 [{webhook_id}] No valid metadata in payment intent, looking up checkout session...")
+                try:
+                    sessions = stripe.checkout.Session.list(
+                        payment_intent=pi_id,
+                        limit=1
+                    )
+                    if sessions.data:
+                        session = sessions.data[0]
+                        print(f"🔗 [{webhook_id}] Found associated checkout session: {session.id}")
+                        print(f"🔗 [{webhook_id}] Session metadata: {session.metadata}")
+                        
+                        # Process the payment using session metadata
+                        metadata = session.metadata
+                        user_id = metadata.get('user_id')
+                        credits = int(metadata.get('credits', 0)) if metadata.get('credits') else 0
+                        unlimited = metadata.get('unlimited', 'False').lower() == 'true'
+                        
+                        if user_id:
+                            if unlimited:
+                                print(f"🌟 [{webhook_id}] Processing UNLIMITED via payment_intent.succeeded (session)")
+                                await grant_unlimited_access(user_id, amount, session.id)
+                                print(f"✅ [{webhook_id}] Granted unlimited access via payment intent (session)")
+                            elif credits > 0:
+                                print(f"💳 [{webhook_id}] Processing CREDITS via payment_intent.succeeded (session)")
+                                await add_credits_to_user(user_id, credits, amount, session.id)
+                                print(f"✅ [{webhook_id}] Added credits via payment intent (session)")
+                        else:
+                            print(f"❌ [{webhook_id}] No user_id in session metadata")
                     else:
-                        print(f"❌ [{webhook_id}] No user_id in session metadata")
-                else:
-                    print(f"❌ [{webhook_id}] No checkout session found for payment intent {pi_id}")
-            except Exception as e:
-                print(f"❌ [{webhook_id}] Error retrieving checkout session: {e}")
+                        print(f"❌ [{webhook_id}] No checkout session found for payment intent {pi_id}")
+                except Exception as e:
+                    print(f"❌ [{webhook_id}] Error retrieving checkout session: {e}")
 
         elif event['type'] == 'invoice.payment_succeeded':
             invoice = event['data']['object']
