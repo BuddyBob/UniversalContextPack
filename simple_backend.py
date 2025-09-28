@@ -257,6 +257,9 @@ The UCP Team
                 
                 print(f"📧 Attempting to send email via Resend API...")
                 
+                # Use verified domain for from address
+                from_email = "noreply@context-pack.com"  # Use your verified domain
+                
                 response = requests.post(
                     "https://api.resend.com/emails",
                     headers={
@@ -264,7 +267,7 @@ The UCP Team
                         "Content-Type": "application/json"
                     },
                     json={
-                        "from": f"UCP <{EMAIL_FROM}>",
+                        "from": f"Universal Context Pack <{from_email}>",
                         "to": [user_email],
                         "subject": subject,
                         "text": message
