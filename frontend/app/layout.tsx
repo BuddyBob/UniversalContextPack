@@ -94,6 +94,7 @@ export const metadata: Metadata = {
     ]
   },
   other: {
+    'google-adsense-account': 'ca-pub-2829668393972313',
     'theme-color': '#6639d0',
     'msapplication-TileColor': '#6639d0',
     'msapplication-TileImage': '/icon.png',
