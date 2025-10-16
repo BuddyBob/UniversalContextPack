@@ -162,6 +162,13 @@ export default function RootLayout({
             />
           </>
         )}
+
+        {/* Google AdSense */}
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2829668393972313"
+          crossOrigin="anonymous"
+        />
         
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
