@@ -416,7 +416,6 @@ export default function PacksPage() {
                     
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>{pack.total_chunks} chunks</span>
-                      <span>${pack.total_cost?.toFixed(3) || '0.000'}</span>
                     </div>
                   </div>
                 ))
@@ -539,10 +538,6 @@ export default function PacksPage() {
                       <div className="flex items-center justify-center mb-2">
                         <DollarSign className="h-5 w-5 text-gray-600" />
                       </div>
-                      <div className="text-lg font-semibold text-gray-900">
-                        ${selectedPack.total_cost ? selectedPack.total_cost.toFixed(3) : '0.000'}
-                      </div>
-                      <div className="text-sm text-gray-600 font-medium">Total Cost</div>
                     </div>
                   </div>
 
