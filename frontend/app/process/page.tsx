@@ -2779,7 +2779,7 @@ export default function ProcessPage() {
                                 }
                                 // If user has more chunks than credits, show "Processing X out of Y"
                                 if (totalChunks > availableCredits) {
-                                  return `Create UCP (Processing ${chunksToProcess} out of ${totalChunks} chunks)`;
+                                  return `Processing ${chunksToProcess}/${totalChunks} • Unlock remaining ${totalChunks - chunksToProcess} chunks`;
                                 }
                                 // Otherwise, show normal "Create UCP (X chunks)"
                                 return `Create UCP (${chunksToProcess} chunks)`;
@@ -2814,7 +2814,7 @@ export default function ProcessPage() {
                       className="w-full py-3 px-4 border border-blue-500/40 bg-blue-500/5 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 rounded-lg transition-all flex items-center justify-center space-x-2 text-sm font-medium hover:border-blue-400/50"
                     >
                       <CreditCard className="h-4 w-4" />
-                      <span>Upgrade to Process All {availableChunks.length} Chunks</span>
+                      <span>Only {paymentLimits.credits_balance}/{availableChunks.length} processed — Unlock the rest</span>
                     </button>
                   )}
                 </div>
