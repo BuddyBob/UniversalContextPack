@@ -534,11 +534,6 @@ export default function PacksPage() {
                       </div>
                       <div className="text-sm text-gray-600 font-medium">Output Tokens</div>
                     </div>
-                    <div className="bg-gray-50 border border-gray-200 p-4 text-center rounded-lg">
-                      <div className="flex items-center justify-center mb-2">
-                        <DollarSign className="h-5 w-5 text-gray-600" />
-                      </div>
-                    </div>
                   </div>
 
                   <div className="mt-6 text-center text-sm text-gray-500">
