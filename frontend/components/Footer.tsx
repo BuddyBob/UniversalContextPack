@@ -63,8 +63,9 @@ export default function Footer() {
             <div className="space-y-2 text-sm text-secondary">
               <p>Universal Context Pack, LLC</p>
               <p>
-                <a href="mailto:thavasantonio@gmail.com" className="hover:text-primary transition-colors">
-                  thavasantonio@gmail.com
+                {/* <a href="mailto:thavasantonio@gmail.com" className="hover:text-primary transition-colors"></a> */}
+                <a className="hover:text-primary transition-colors">
+                  coming soon...
                 </a>
               </p>
               <p>San Francisco, CA</p>
