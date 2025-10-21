@@ -77,39 +77,53 @@ class ChatGPTExtractor:
         # Find all script tags
         scripts = re.findall(r'<script[^>]*>(.*?)</script>', html, re.DOTALL)
         
+        print(f"🔍 Found {len(scripts)} script tags in HTML")
+        
+        total_matches = 0
+        skipped_urls = 0
+        skipped_metadata = 0
+        skipped_code = 0
+        skipped_quality = 0
+        
         for script in scripts:
             # Look for longer quoted strings (likely conversation text)
             matches = re.findall(r'"([^"]{50,})"', script)
+            total_matches += len(matches)
             
             for text in matches:
                 # Skip URLs
                 if text.startswith(('http://', 'https://', '//', 'www.')):
+                    skipped_urls += 1
                     continue
                 
                 # Skip if contains JSON metadata markers
                 if '"_' in text or '_"' in text:
+                    skipped_metadata += 1
                     continue
                 
                 # Skip code/technical strings
                 if any(x in text for x in ['function(', 'getElementById', 'addEventListener', 'window.', 'document.']):
+                    skipped_code += 1
                     continue
                 
                 # Check for good text quality (letters and spaces > 70%)
                 clean_chars = sum(c.isalpha() or c.isspace() or c in '.,!?;:-' for c in text)
                 if len(text) > 0 and clean_chars / len(text) > 0.7:
-                    # Unescape common escape sequences
+                    # Unescape
                     text = text.replace('\\n', '\n').replace('\\t', ' ')
                     text = text.replace('\\"', '"').replace('\\/', '/')
                     text = text.replace('\\u0026', '&')
-                    text = text.replace('\\r', '')
-                    
-                    # Additional unescaping for Unicode
-                    try:
-                        text = text.encode('utf-8').decode('unicode_escape')
-                    except:
-                        pass  # If decoding fails, use the original text
-                    
                     texts.append(text.strip())
+                else:
+                    skipped_quality += 1
+        
+        print(f"📊 Extraction stats:")
+        print(f"   Total matches: {total_matches}")
+        print(f"   Skipped URLs: {skipped_urls}")
+        print(f"   Skipped metadata: {skipped_metadata}")
+        print(f"   Skipped code: {skipped_code}")
+        print(f"   Skipped quality: {skipped_quality}")
+        print(f"   ✅ Extracted: {len(texts)} text blocks")
         
         return texts
     
