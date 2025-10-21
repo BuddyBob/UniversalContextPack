@@ -2352,14 +2352,15 @@ export default function ProcessPage() {
                     All Chats
                   </button>
                   <button
-                    disabled
-                    className="flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 cursor-not-allowed opacity-50 text-gray-500 relative group"
-                    title="ChatGPT URL extraction is temporarily unavailable"
+                    onClick={() => setUploadMethod('url')}
+                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      uploadMethod === 'url'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-300'
+                    }`}
+                    title="Extract a single ChatGPT conversation from shared URL"
                   >
-                    <span className="flex items-center justify-center gap-1">
-                      One Chat
-                      <span className="text-xs opacity-75">(Soon)</span>
-                    </span>
+                    One Chat
                   </button>
                 </div>
 
@@ -2472,8 +2473,8 @@ export default function ProcessPage() {
                   </div>
                 )}
 
-                {/* URL Input Tab - Temporarily Disabled */}
-                {uploadMethod === 'url' && false && (
+                {/* URL Input Tab */}
+                {uploadMethod === 'url' && (
                   <div className="bg-gray-900/80 border-2 border-gray-600 hover:border-gray-500 rounded-2xl p-10 text-center transition-all duration-300 hover:bg-gray-900/90">
                     <div className="w-20 h-20 rounded-xl bg-gray-700 flex items-center justify-center mx-auto mb-8">
                       <ExternalLink className="h-10 w-10 text-gray-300" />
@@ -2482,7 +2483,7 @@ export default function ProcessPage() {
                     <h3 className="text-xl font-medium text-white mb-4">Paste ChatGPT Conversation URL</h3>
                     
                     <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
-                      Have a shared ChatGPT conversation link? Paste it here and we'll extract the conversation data for you. Other platforms coming soon!
+                      Have a big ChatGPT conversation? Paste the shared link here to have it extracted. Other platforms coming soon!
                     </p>
                     
                     <div className="space-y-6 max-w-md mx-auto">
