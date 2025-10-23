@@ -2352,15 +2352,29 @@ export default function ProcessPage() {
                     All Chats
                   </button>
                   <button
-                    onClick={() => setUploadMethod('url')}
-                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    onClick={() => {
+                      // Check if user has unlimited plan
+                      if (!paymentLimits?.isUnlimited) {
+                        if (confirm('One Chat feature requires the Unlimited Plan ($3.99 one-time)\n\nThis premium feature lets you extract single conversations from shared ChatGPT URLs.\n\nWould you like to upgrade now?')) {
+                          router.push('/pricing');
+                        }
+                        return;
+                      }
+                      setUploadMethod('url');
+                    }}
+                    className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 relative ${
                       uploadMethod === 'url'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-400 hover:text-gray-300'
                     }`}
-                    title="Extract a single ChatGPT conversation from shared URL"
+                    title="Extract a single ChatGPT conversation from shared URL (Unlimited Plan required)"
                   >
-                    One Chat
+                    <span className="flex items-center justify-center gap-1.5">
+                      One Chat
+                      {!paymentLimits?.isUnlimited && (
+                        <Lock className="h-3.5 w-3.5 opacity-75" />
+                      )}
+                    </span>
                   </button>
                 </div>
 
