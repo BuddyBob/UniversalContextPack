@@ -65,6 +65,7 @@ export default function ProcessPage() {
   const [showCreditsTooltip, setShowCreditsTooltip] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [isLogPanelCollapsed, setIsLogPanelCollapsed] = useState(true);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -2355,9 +2356,7 @@ export default function ProcessPage() {
                     onClick={() => {
                       // Check if user has unlimited plan
                       if (!paymentLimits?.isUnlimited) {
-                        if (confirm('One Chat feature requires the Unlimited Plan ($3.99 one-time)\n\nThis premium feature lets you extract single conversations from shared ChatGPT URLs.\n\nWould you like to upgrade now?')) {
-                          router.push('/pricing');
-                        }
+                        setShowUpgradeModal(true);
                         return;
                       }
                       setUploadMethod('url');
@@ -2367,7 +2366,7 @@ export default function ProcessPage() {
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-400 hover:text-gray-300'
                     }`}
-                    title="Extract a single ChatGPT conversation from shared URL (Unlimited Plan required)"
+                    title="Extract a single ChatGPT conversation from shared URL"
                   >
                     <span className="flex items-center justify-center gap-1.5">
                       One Chat
@@ -3545,6 +3544,105 @@ export default function ProcessPage() {
           )}
         </div>
       </div>
+
+      {/* Beautiful Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header with gradient */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white relative overflow-hidden">
+              <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLW9wYWNpdHk9IjAuMSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-20"></div>
+              <div className="relative">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Lock className="w-6 h-6" />
+                    <span className="text-sm font-medium uppercase tracking-wide opacity-90">Premium Feature</span>
+                  </div>
+                  <button 
+                    onClick={() => setShowUpgradeModal(false)}
+                    className="text-white/80 hover:text-white transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <h2 className="text-2xl font-bold mb-1">One Chat Extraction</h2>
+                <p className="text-white/90 text-sm">Unlock this premium capability</p>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5">
+              {/* Feature description */}
+              <div className="space-y-3">
+                <div className="flex items-start space-x-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0 shadow-lg">
+                    <ExternalLink className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">Extract Single Conversations</h3>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      Extract and analyze individual ChatGPT conversations from shared URLs - perfect for focused context building.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Benefits */}
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4 space-y-2.5">
+                <div className="flex items-center space-x-2.5">
+                  <CheckCircle className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Unlimited URL extractions</span>
+                </div>
+                <div className="flex items-center space-x-2.5">
+                  <CheckCircle className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Unlimited file processing</span>
+                </div>
+                <div className="flex items-center space-x-2.5">
+                  <CheckCircle className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">Priority support & processing</span>
+                </div>
+                <div className="flex items-center space-x-2.5">
+                  <CheckCircle className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">One-time payment, lifetime access</span>
+                </div>
+              </div>
+
+              {/* Pricing */}
+              <div className="text-center py-3">
+                <div className="inline-flex items-baseline space-x-2">
+                  <span className="text-4xl font-bold text-gray-900">$3.99</span>
+                  <span className="text-sm text-gray-500">one-time</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">No subscriptions • Cancel anytime</p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowUpgradeModal(false)}
+                  className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-all duration-200"
+                >
+                  Maybe Later
+                </button>
+                <button
+                  onClick={() => {
+                    setShowUpgradeModal(false);
+                    router.push('/pricing');
+                  }}
+                  className="flex-1 px-4 py-3 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+                >
+                  Upgrade Now →
+                </button>
+              </div>
+
+              {/* Trust indicator */}
+              <p className="text-xs text-center text-gray-500">
+                🔒 Secure checkout • Instant access • 113 users upgraded
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
