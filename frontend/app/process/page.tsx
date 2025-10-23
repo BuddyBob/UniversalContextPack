@@ -3545,100 +3545,54 @@ export default function ProcessPage() {
         </div>
       </div>
 
-      {/* Beautiful Upgrade Modal */}
+      {/* Clean Professional Upgrade Modal */}
       {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-            {/* Header with gradient */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white relative overflow-hidden">
-              <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLW9wYWNpdHk9IjAuMSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-20"></div>
-              <div className="relative">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <Lock className="w-6 h-6" />
-                    <span className="text-sm font-medium uppercase tracking-wide opacity-90">Premium Feature</span>
-                  </div>
-                  <button 
-                    onClick={() => setShowUpgradeModal(false)}
-                    className="text-white/80 hover:text-white transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <h2 className="text-2xl font-bold mb-1">One Chat Extraction</h2>
-                <p className="text-white/90 text-sm">Unlock this premium capability</p>
-              </div>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 relative">
+            {/* Close button */}
+            <button
+              onClick={() => setShowUpgradeModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Lock Icon */}
+            <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center mb-4 mx-auto">
+              <Lock className="w-6 h-6 text-white" />
             </div>
 
             {/* Content */}
-            <div className="p-6 space-y-5">
-              {/* Feature description */}
-              <div className="space-y-3">
-                <div className="flex items-start space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center flex-shrink-0 shadow-lg">
-                    <ExternalLink className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Extract Single Conversations</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">
-                      Extract and analyze individual ChatGPT conversations from shared URLs - perfect for focused context building.
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">
+              Premium Feature
+            </h3>
+            <p className="text-sm text-gray-600 text-center mb-6">
+              URL extraction requires Unlimited Plan
+            </p>
 
-              {/* Benefits */}
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4 space-y-2.5">
-                <div className="flex items-center space-x-2.5">
-                  <CheckCircle className="w-5 h-5 text-indigo-600 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">Unlimited URL extractions</span>
-                </div>
-                <div className="flex items-center space-x-2.5">
-                  <CheckCircle className="w-5 h-5 text-indigo-600 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">Unlimited file processing</span>
-                </div>
-                <div className="flex items-center space-x-2.5">
-                  <CheckCircle className="w-5 h-5 text-indigo-600 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">Priority support & processing</span>
-                </div>
-                <div className="flex items-center space-x-2.5">
-                  <CheckCircle className="w-5 h-5 text-indigo-600 flex-shrink-0" />
-                  <span className="text-sm text-gray-700">One-time payment, lifetime access</span>
-                </div>
-              </div>
+            {/* Price */}
+            <div className="text-center mb-6 p-4 bg-gray-50 rounded-xl">
+              <div className="text-3xl font-bold text-gray-900">$3.99</div>
+              <div className="text-xs text-gray-500 mt-1">One-time • Lifetime access</div>
+            </div>
 
-              {/* Pricing */}
-              <div className="text-center py-3">
-                <div className="inline-flex items-baseline space-x-2">
-                  <span className="text-4xl font-bold text-gray-900">$3.99</span>
-                  <span className="text-sm text-gray-500">one-time</span>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">No subscriptions • Cancel anytime</p>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowUpgradeModal(false)}
-                  className="flex-1 px-4 py-3 rounded-lg border-2 border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-all duration-200"
-                >
-                  Maybe Later
-                </button>
-                <button
-                  onClick={() => {
-                    setShowUpgradeModal(false);
-                    router.push('/pricing');
-                  }}
-                  className="flex-1 px-4 py-3 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-                >
-                  Upgrade Now →
-                </button>
-              </div>
-
-              {/* Trust indicator */}
-              <p className="text-xs text-center text-gray-500">
-                🔒 Secure checkout • Instant access • 113 users upgraded
-              </p>
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowUpgradeModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowUpgradeModal(false);
+                  router.push('/pricing');
+                }}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700"
+              >
+                Upgrade
+              </button>
             </div>
           </div>
         </div>
