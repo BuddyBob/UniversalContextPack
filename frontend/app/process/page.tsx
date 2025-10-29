@@ -2353,14 +2353,7 @@ export default function ProcessPage() {
                     All Chats
                   </button>
                   <button
-                    onClick={() => {
-                      // Check if user has unlimited plan
-                      if (!paymentLimits?.isUnlimited) {
-                        setShowUpgradeModal(true);
-                        return;
-                      }
-                      setUploadMethod('url');
-                    }}
+                    onClick={() => setUploadMethod('url')}
                     className={`flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 relative ${
                       uploadMethod === 'url'
                         ? 'bg-white text-gray-900 shadow-sm'
@@ -2370,9 +2363,6 @@ export default function ProcessPage() {
                   >
                     <span className="flex items-center justify-center gap-1.5">
                       One Chat
-                      {!paymentLimits?.isUnlimited && (
-                        <Lock className="h-3.5 w-3.5 opacity-75" />
-                      )}
                     </span>
                   </button>
                 </div>
