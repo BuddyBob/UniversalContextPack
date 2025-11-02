@@ -6,8 +6,8 @@
 :root {
   /* === DARK THEME (DEFAULT) === */
   /* === BACKGROUND COLORS === */
-  --bg-primary: #0E0E0E;        /* Dark background */
-  --bg-secondary: #2a2a2a;      /* Slightly lighter dark */
+  --bg-primary: #1d1d1d;        /* Dark background */
+  --bg-secondary: #0E0E0E;;      /* Slightly lighter dark */
   --bg-card: #181818;           /* Card backgrounds */
   --bg-card-hover: #333333;     /* Card hover state */
   --bg-card-elevated: #2d2d2d;  /* Elevated cards */

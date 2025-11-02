@@ -48,6 +48,7 @@ export default function ProcessPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [sessionId] = useState(() => Date.now().toString()); // Unique session ID
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [showTooltip, setShowTooltip] = useState(false);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [lastProgressTimestamp, setLastProgressTimestamp] = useState<number>(0);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'warning'>('connected');
@@ -2284,15 +2285,32 @@ export default function ProcessPage() {
       <div className="relative z-10 max-w-6xl mx-auto p-6">
         {/* Main Content - Always Show Interface */}
         <div className="space-y-6">
-          <div className="w-full flex justify-center items-center py-8">
-            <div className="text-center">
-              <h1 className="text-3xl font-bold text-white mb-4">
-                One Profile. Your AI.
+          <div className="w-full flex justify-center items-center py-2">
+            <div className="text-center max-w-3xl mx-auto">
+              <h1 className="text-3xl font-bold text-gray-100 mb-3 animate-fade-in-up">
+                Create your Context Pack
               </h1>
+
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <h2 className="text-sm text-gray-400 leading-relaxed animate-fade-in-up" style={{animationDelay: '0.2s'}}>
+                  Upload your exported chats — we'll organize them into one pack.
+                </h2>
+                <div className="relative">
+                
+                  
+                  {showTooltip && (
+                    <div className="absolute left-1/2 -translate-x-1/2 top-6 z-50 w-64 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-3 text-xs text-gray-300 text-left">
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 border-l border-t border-slate-600 rotate-45"></div>
+                      Combine exports from ChatGPT, Claude, Gemini, etc.
+                    </div>
+                  )}
+                </div>
+              </div>
+              
               
               {/* Connection Status Indicator */}
               {isProcessing && (
-                <div className="flex items-center justify-center space-x-2 text-sm">
+                <div className="flex items-center justify-center space-x-2 text-sm mt-4">
                   <div className={`w-2 h-2 rounded-full ${
                     connectionStatus === 'connected' ? 'bg-green-500' :
                     connectionStatus === 'connecting' ? 'bg-green-500 animate-pulse' :
@@ -2330,13 +2348,13 @@ export default function ProcessPage() {
             {/* Upload Section */}
             {currentStep === 'upload' && (
               <div id="upload-section" className="max-w-4xl mx-auto space-y-8">
-                {/* Header with Value Proposition */}
-                <div className="text-center space-y-4">
+                {/* Header with Value Proposition - Now removed since it's in the main header */}
+                <div className="text-center space-y-4" style={{display: 'none'}}>
                   <p className="text-xl text-gray-300 font-medium">
-                    All your AI chats, one memory file.
+                    All your chats, one memory pack
                   </p>
                   <p className="text-gray-400 text-sm max-w-2xl mx-auto">
-                    Upload exports → we organize, clean, and package them → you get a single smart file you can use anywhere.
+                    We clean, chunk, and analyze your AI conversations then build a single memory file that truly knows you.
                   </p>
                 </div>
 
@@ -2461,7 +2479,7 @@ export default function ProcessPage() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-center gap-2 flex-wrap">
                           <span className="px-3 py-1.5 bg-blue-700/40 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Recommended: conversations.json</span>
-                          <span className="px-3 py-1.5 bg-red-700/40 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Warning: dont use chat.html</span>
+                          <span className="px-3 py-1.5 bg-red-700/40 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Warning: Avoid chat.html</span>
                           <span className="text-gray-600 text-xs">·</span>
                         </div>
                         

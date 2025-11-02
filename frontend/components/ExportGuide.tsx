@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap } from 'lucide-react'
+import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell } from 'lucide-react'
 import { analytics } from '@/lib/analytics'
 import Image from 'next/image'
 
@@ -110,6 +110,46 @@ const ExportGuide = () => {
         </div>
       </div>
 
+      {/* Floating Value Proposition - Always visible on desktop, positioned on left */}
+      <div className="hidden lg:block fixed left-8 top-1/2 -translate-y-1/2 z-20">
+        <div className="bg-gradient-to-br from-slate-800/90 via-slate-900/80 to-slate-900/90 backdrop-blur-xl border border-slate-600/50 rounded-2xl p-6 shadow-2xl max-w-xs">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-[#6639D0]/20 border border-[#6639D0]/30 flex items-center justify-center flex-shrink-0">
+              <Zap className="h-5 w-5 text-[#6639D0]" />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold text-sm mb-1">Why Context Pack?</h3>
+              <p className="text-gray-400 text-xs leading-relaxed">
+                Your AI memory, portable across any platform
+              </p>
+            </div>
+          </div>
+          
+          <div className="space-y-3 border-t border-slate-700/50 pt-4">
+            <div className="flex items-start gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#6639D0] mt-1.5 flex-shrink-0"></div>
+              <p className="text-gray-300 text-xs">Never lose important conversations</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#6639D0] mt-1.5 flex-shrink-0"></div>
+              <p className="text-gray-300 text-xs">Switch AI platforms without starting over</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#6639D0] mt-1.5 flex-shrink-0"></div>
+              <p className="text-gray-300 text-xs">One file that works everywhere</p>
+            </div>
+          </div>
+          
+          {/* Add the email feature here too */}
+          <div className="mt-4 pt-4 border-t border-slate-700/50">
+            <div className="flex items-start gap-2">
+              <Mail className="h-4 w-4 text-[#6639D0] mt-0.5 flex-shrink-0" />
+              <p className="text-gray-300 text-xs">Large files? We email when ready</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main Content */}
       <div className="relative z-10">
         {/* Hero Section */}
@@ -122,6 +162,34 @@ const ExportGuide = () => {
               <h1 className="text-6xl md:text-8xl lg:text-9xl text-white leading-tight font-light mb-12">
                 Your AI.
               </h1>
+              
+              {/* Mobile Value Prop - Only visible on mobile/tablet */}
+              <div className="lg:hidden max-w-md mx-auto mb-8">
+                <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 rounded-xl p-5 shadow-xl">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Zap className="h-5 w-5 text-[#6639D0]" />
+                    <h3 className="text-white font-semibold text-sm">What's in it for you?</h3>
+                  </div>
+                  <div className="space-y-2 text-left">
+                    <p className="text-gray-300 text-xs flex items-start gap-2">
+                      <span className="text-[#6639D0] mt-0.5">✓</span>
+                      <span>Never lose important AI conversations</span>
+                    </p>
+                    <p className="text-gray-300 text-xs flex items-start gap-2">
+                      <span className="text-[#6639D0] mt-0.5">✓</span>
+                      <span>Switch AI platforms without starting over</span>
+                    </p>
+                    <p className="text-gray-300 text-xs flex items-start gap-2">
+                      <span className="text-[#6639D0] mt-0.5">✓</span>
+                      <span>One portable file that works everywhere</span>
+                    </p>
+                    <p className="text-gray-300 text-xs flex items-start gap-2">
+                      <span className="text-[#6639D0] mt-0.5">✓</span>
+                      <span>Large files? We email when ready</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-center">
