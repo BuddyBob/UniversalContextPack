@@ -2478,8 +2478,8 @@ export default function ProcessPage() {
                       {/* File Types */}
                       <div className="space-y-4">
                         <div className="flex items-center justify-center gap-2 flex-wrap">
-                          <span className="px-3 py-1.5 bg-blue-700/40 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Recommended: conversations.json</span>
-                          <span className="px-3 py-1.5 bg-red-700/40 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Warning: Avoid chat.html</span>
+                          <span className="px-3 py-1.5 bg-blue-700/20 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Recommended: conversations.json</span>
+                          <span className="px-3 py-1.5 bg-red-700/20 border border-gray-700 text-gray-300 rounded-full text-xs font-medium">Warning: Avoid chat.html</span>
                           <span className="text-gray-600 text-xs">·</span>
                         </div>
                         
