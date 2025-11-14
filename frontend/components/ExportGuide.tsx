@@ -42,17 +42,17 @@ const ExportGuide = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden">
-      {/* Subtle vignette for depth + color accents */}
+    <div className="min-h-screen bg-[#0a0a0a] text-white relative overflow-hidden">
+      {/* Subtle purple hint in background */}
       <div className="absolute inset-0 pointer-events-none z-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/3 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-purple-500/3 rounded-full blur-2xl animate-pulse" style={{animationDelay: '2s'}}></div>
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/[0.02] rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-purple-500/[0.015] rounded-full blur-3xl"></div>
       </div>
       
-      {/* Dynamic Background */}
+      {/* Dynamic Background - Subtle purple hint */}
       <div className="fixed inset-0 pointer-events-none">
         <div 
-          className="absolute w-96 h-96 bg-gradient-to-r from-indigo-500/5 to-transparent rounded-full blur-3xl"
+          className="absolute w-96 h-96 bg-gradient-to-r from-purple-600/[0.03] to-transparent rounded-full blur-3xl"
           style={{
             left: mousePosition.x - 192,
             top: mousePosition.y - 192,
@@ -60,7 +60,7 @@ const ExportGuide = () => {
           }}
         />
         <div 
-          className="absolute w-64 h-64 bg-gradient-to-l from-fuchsia-500/5 to-transparent rounded-full blur-2xl"
+          className="absolute w-64 h-64 bg-gradient-to-l from-purple-500/[0.02] to-transparent rounded-full blur-2xl"
           style={{
             left: mousePosition.x - 128,
             top: mousePosition.y + 100,
@@ -111,100 +111,157 @@ const ExportGuide = () => {
       </div>
 
       {/* Floating Value Proposition - Always visible on desktop, positioned on left */}
-      <div className="hidden lg:block fixed left-8 top-1/2 -translate-y-1/2 z-20">
-        <div className="bg-gradient-to-br from-slate-800/90 via-slate-900/80 to-slate-900/90 backdrop-blur-xl border border-slate-600/50 rounded-2xl p-6 shadow-2xl max-w-xs">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-[#6639D0]/20 border border-[#6639D0]/30 flex items-center justify-center flex-shrink-0">
-              <Zap className="h-5 w-5 text-[#6639D0]" />
-            </div>
-            <div>
-              <h3 className="text-white font-semibold text-sm mb-1">Why Context Pack?</h3>
-              <p className="text-gray-400 text-xs leading-relaxed">
-                Your AI memory, portable across any platform
-              </p>
-            </div>
-          </div>
-          
-          <div className="space-y-3 border-t border-slate-700/50 pt-4">
-            <div className="flex items-start gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#6639D0] mt-1.5 flex-shrink-0"></div>
-              <p className="text-gray-300 text-xs">Never lose important conversations</p>
-            </div>
-            <div className="flex items-start gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#6639D0] mt-1.5 flex-shrink-0"></div>
-              <p className="text-gray-300 text-xs">Switch AI platforms without starting over</p>
-            </div>
-            <div className="flex items-start gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#6639D0] mt-1.5 flex-shrink-0"></div>
-              <p className="text-gray-300 text-xs">One file that works everywhere</p>
-            </div>
-          </div>
-          
-          {/* Add the email feature here too */}
-          <div className="mt-4 pt-4 border-t border-slate-700/50">
-            <div className="flex items-start gap-2">
-              <Mail className="h-4 w-4 text-[#6639D0] mt-0.5 flex-shrink-0" />
-              <p className="text-gray-300 text-xs">Large files? We email when ready</p>
-            </div>
-          </div>
-        </div>
-      </div>
+    
 
       {/* Main Content */}
       <div className="relative z-10">
-        {/* Hero Section */}
-        <section className="min-h-screen flex items-center justify-center px-6 relative">
-          <div className="max-w-6xl mx-auto text-center relative z-10">
-            <div className="mb-12">
-              <h2 className="text-4xl md:text-5xl lg:text-7xl text-white/70 font-light mb-8">
-                One Profile.
-              </h2>
-              <h1 className="text-6xl md:text-8xl lg:text-9xl text-white leading-tight font-light mb-12">
-                Your AI.
+        {/* Hero Section - Mem0 Style */}
+        <section className="min-h-screen flex items-center justify-center px-6 py-20 relative">
+          <div className="max-w-7xl mx-auto w-full relative z-10">
+            {/* Header */}
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 border border-slate-700/50 mb-6">
+                <span className="text-sm text-gray-400">Backed by</span>
+                <span className="text-sm font-semibold text-white">YC</span>
+              </div>
+              
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
+                AI Chats Forget.<br />
+                Context Pack Remembers.
               </h1>
               
-              {/* Mobile Value Prop - Only visible on mobile/tablet */}
-              <div className="lg:hidden max-w-md mx-auto mb-8">
-                <div className="bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 rounded-xl p-5 shadow-xl">
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
+                Your AI memory, portable across any platform
+              </p>
+              
+              <a 
+                href="/process"
+                className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl"
+              >
+                Get Started
+              </a>
+            </div>
+
+            {/* Interactive Demo - Multiple Chats → One Memory Chip */}
+            <div className="flex items-center gap-8 lg:gap-16 max-w-6xl mx-auto flex-col lg:flex-row">
+              {/* Left Side - Multiple Chat Conversations */}
+              <div className="flex-1 space-y-3 w-full">
+                {/* Chat 1 */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Zap className="h-5 w-5 text-[#6639D0]" />
-                    <h3 className="text-white font-semibold text-sm">What's in it for you?</h3>
+                    <span className="text-xs text-gray-500 font-medium">ChatGPT Conversation</span>
                   </div>
-                  <div className="space-y-2 text-left">
-                    <p className="text-gray-300 text-xs flex items-start gap-2">
-                      <span className="text-[#6639D0] mt-0.5">✓</span>
-                      <span>Never lose important AI conversations</span>
-                    </p>
-                    <p className="text-gray-300 text-xs flex items-start gap-2">
-                      <span className="text-[#6639D0] mt-0.5">✓</span>
-                      <span>Switch AI platforms without starting over</span>
-                    </p>
-                    <p className="text-gray-300 text-xs flex items-start gap-2">
-                      <span className="text-[#6639D0] mt-0.5">✓</span>
-                      <span>One portable file that works everywhere</span>
-                    </p>
-                    <p className="text-gray-300 text-xs flex items-start gap-2">
-                      <span className="text-[#6639D0] mt-0.5">✓</span>
-                      <span>Large files? We email when ready</span>
-                    </p>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-400 bg-black/30 rounded px-3 py-2">
+                      "I prefer aisle seats when flying..."
+                    </div>
+                    <div className="text-sm text-gray-400 bg-black/30 rounded px-3 py-2">
+                      "My favorite color is blue..."
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chat 2 */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs text-gray-500 font-medium">Claude Conversation</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-400 bg-black/30 rounded px-3 py-2">
+                      "I work in software engineering..."
+                    </div>
+                    <div className="text-sm text-gray-400 bg-black/30 rounded px-3 py-2">
+                      "I'm allergic to peanuts..."
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chat 3 */}
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xs text-gray-500 font-medium">Gemini Conversation</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm text-gray-400 bg-black/30 rounded px-3 py-2">
+                      "I live in San Francisco..."
+                    </div>
+                    <div className="text-sm text-gray-400 bg-black/30 rounded px-3 py-2">
+                      "My goal is to learn Spanish..."
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex justify-center">
-              <a 
-                href="/process"
-                className="bg-[#6639D0] hover:bg-[#5428B8] text-white px-8 py-4 rounded-full text-lg font-medium transition-all duration-300 transform hover:scale-105 shadow-xl hover:shadow-2xl"
-              >
-                Create Context Pack
-              </a>
+              {/* Center - Processing Arrow */}
+              <div className="flex lg:flex-col items-center gap-4">
+                <ArrowRight className="w-8 h-8 lg:rotate-0 rotate-90 text-gray-600" />
+              </div>
+
+              {/* Right Side - Single Unified Memory Chip */}
+              <div className="flex-1 w-full">
+                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <Database className="w-5 h-5 text-gray-400" />
+                    <h3 className="text-lg font-semibold text-white">Memory Chip</h3>
+                    <div className="ml-auto px-2 py-1 bg-indigo-600/20 border border-indigo-600/30 rounded text-xs text-indigo-400 font-medium">
+                      Universal
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 text-sm text-gray-300">
+                    <div className="flex items-start gap-3">
+                      <span className="text-indigo-500">•</span>
+                      <span>Travel: Prefers aisle seats, window for long flights</span>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-indigo-500">•</span>
+                      <span>Style: Favorite color blue</span>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-indigo-500">•</span>
+                      <span>Work: Software engineer</span>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-indigo-500">•</span>
+                      <span>Health: Peanut allergy</span>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-indigo-500">•</span>
+                      <span>Location: San Francisco</span>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-indigo-500">•</span>
+                      <span>Goals: Learning Spanish</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-gray-800">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">Ready to upload to any AI</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                        <span className="text-gray-400">Complete</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Compatibility badges */}
+                <div className="mt-4 flex items-center justify-center gap-3 text-xs text-gray-500">
+                  <span>Works with:</span>
+                  <span className="text-gray-400">ChatGPT</span>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-gray-400">Claude</span>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-gray-400">Gemini</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Subtle background elements */}
-          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-96 h-96 bg-[#6639D0]/10 rounded-full blur-3xl"></div>
-          <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-[#6639D0]/5 rounded-full blur-2xl"></div>
+          {/* Subtle background elements - Very subtle purple */}
+          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-96 h-96 bg-purple-600/[0.04] rounded-full blur-3xl"></div>
+          <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-purple-500/[0.02] rounded-full blur-3xl"></div>
 
         </section>
 
@@ -212,8 +269,8 @@ const ExportGuide = () => {
 
         {/* Export Guide Section */}
         <section id="export" className="py-20 px-6 relative">
-          {/* Smooth gradient transition from purple to dark */}
-          <div className="absolute inset-0 bg-slate-950" />
+          {/* Smooth gradient transition - muted black */}
+          <div className="absolute inset-0 bg-[#0a0a0a]" />
           
           <div className="max-w-5xl mx-auto relative z-10">
             <div className="text-center mb-16">
@@ -305,8 +362,8 @@ bg-transparent hover:bg-slate-800/60 ring-1 ring-slate-500/10"
 
         {/* Security Section */}
         <section className="py-16 px-6 relative">
-          {/* Smooth transition background */}
-          <div className="absolute inset-0 bg-slate-950" />
+          {/* Smooth transition background - muted black */}
+          <div className="absolute inset-0 bg-[#0a0a0a]" />
           
           <div className="max-w-4xl mx-auto relative z-10">
             <div className="bg-gradient-to-br from-white/10 via-white/5 to-transparent backdrop-blur-2xl rounded-2xl p-8 border border-white/30 ">
@@ -378,6 +435,13 @@ bg-transparent hover:bg-slate-800/60 ring-1 ring-slate-500/10"
           0%, 100% { transform: translateY(0px) rotate(0deg); }
           33% { transform: translateY(-10px) rotate(120deg); }
           66% { transform: translateY(5px) rotate(240deg); }
+        }
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        .animate-shimmer {
+          animation: shimmer 3s infinite;
         }
       `}</style>
     </div>
