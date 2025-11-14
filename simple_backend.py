@@ -2878,42 +2878,64 @@ async def process_analysis_background(job_id: str, user: AuthenticatedUser, sele
         print(f"📊 Job {job_id}: Processing {chunks_to_process} chunks")
         print(f"📊 Upload method: {upload_method or 'unknown'} ({'URL extraction' if is_url_extraction else 'File upload'})")
         print(f"📊 Analysis type: {'Single conversation' if is_single_conversation else 'Multi-conversation/full dataset'}")
-        
-        
+
         if is_single_conversation:
-            # Conversational narrative style for single chats
-            system_prompt = """You are an expert conversation analyst who creates engaging, narrative summaries of individual chat conversations. Your job is to tell the story of what happened in this conversation in a natural, conversational way.
+            # Expanded single-conversation analysis prompt: request structured + narrative output and prioritize specifics
+            system_prompt = """You are an expert conversation analyst. You will analyze a single chat conversation and produce two complementary outputs:
 
-ANALYSIS APPROACH:
-Create a flowing narrative that captures:
+1) A machine-friendly, structured JSON object containing exhaustive extracted specifics, metadata and clear, discrete facts.
+2) A human-readable narrative that tells the story of the conversation and highlights the most important practical takeaways.
 
-**CONVERSATION STORY:**
-- What actually happened in this chat - the main topics, questions, and discoveries
-- The user's goals and what they were trying to accomplish
-- Key insights, solutions, or information that emerged
-- How the conversation evolved and what was resolved
+PRIORITY:
+- Prioritize extracting concrete specifics (names, dates, timestamps, exact quoted passages, decisions, action items, configuration values, numeric values, links, code snippets, settings) over broad personality inferences.
+- If details are present in the chat (e.g., versions, config flags, error messages, email addresses, names, project identifiers), capture them verbatim and include source pointers (message index or short quote).
 
-**USER INSIGHTS:**
-- Communication style and how they express themselves
-- Problem-solving approach and thinking patterns  
-- Knowledge areas and expertise demonstrated
-- Preferences, values, and priorities revealed
-- Personality traits and behavioral patterns observed
+REQUIRED METADATA (include if available):
+- platform/source (ChatGPT/Claude/Gemini/etc.), conversation id or shared link, participants and their roles (user / assistant / system), total message count, approximate start/end timestamps, message indices for quoted items.
 
-**KEY TAKEAWAYS:**
-- Important facts, decisions, or conclusions reached
-- Useful information or resources discovered
-- Skills, interests, or knowledge areas revealed
-- Next steps or follow-up actions mentioned
+STRUCTURED OUTPUT (JSON):
+Return a top-level JSON object with the following keys. Use these exact keys and types when possible.
 
-TONE & STYLE:
-- Write in a natural, conversational tone like you're recounting the chat to a friend
-- Focus on the narrative flow - what happened, why, and how
-- Include specific examples and quotes when they illustrate key points
-- Be thorough but engaging, not formal or academic
-- Highlight what makes this user unique based on this conversation
+{
+    "metadata": { },
+    "entities": { },
+    "facts": [],
+    "decisions": [],
+    "action_items": [],
+    "configuration_values": [],
+    "quotes": [],
+    "timeline": [],
+    "sentiment_summary": {},
+    "uncertainties": [],
+    "suggested_followups": [],
+    "summary_1_sentence": "",
+    "summary_3_bullets": ["", "", ""]
+}
 
-Think of this as creating a rich context summary that someone could read to quickly understand both what happened in the conversation and who this person is based on how they communicate and think."""
+GUIDELINES FOR STRUCTURED FIELDS:
+- For every fact, include a confidence score (high/medium/low) and the source reference (message index or a short verbatim quote). If exact timestamps or message indices are not available, indicate proximity (e.g., "early", "middle", "end").
+- Preserve numeric values and code-like strings exactly as they appear (do not normalize unless a clear conversion is requested).
+- For entities, include canonical forms where possible and list aliases.
+
+NARRATIVE OUTPUT:
+- After the JSON object, produce a clear, human-readable narrative (2-6 short paragraphs) that tells the conversation story: context, goals, key moments, resolutions, and recommended next steps.
+- Include 2-4 short quoted excerpts (verbatim) that are most representative or critical, with speaker attribution and index.
+- Keep tone neutral, precise, and action-oriented. Avoid speculative judgments unless explicitly supported by clear evidence in the chat, and label any speculative interpretation as such.
+
+LENGTH & COMPLETENESS:
+- Be thorough: the structured JSON should aim to include every discrete, extractable piece of information present in the conversation. If the conversation is long, expand the output accordingly—do not compress meaningful specifics just to keep the summary short.
+- If a field would be empty, return an empty array or null rather than omitting the key.
+
+OUTPUT FORMAT RULES:
+- First output the JSON block only (no surrounding commentary) so it can be parsed programmatically.
+- After the JSON block, output a human-readable narrative separated by a clear divider line (e.g., "---\nNarrative:\n").
+
+PRIVACY & SAFETY:
+- Redact or mark as sensitive any content that appears to be passwords, API keys, or tokens. Indicate in the JSON when such items were found and provide the exact location (message index) but do not include full secret values—replace with "<REDACTED>".
+
+FINAL NOTE:
+- Remember: prioritize extracting exact specifics and actionable items. The narrative is important, but the structured JSON is the priority for downstream consumption. Provide both in full.
+"""
         else:
             # Comprehensive analysis style for multiple conversations/chunks
             system_prompt = """You are an expert data analyst specializing create context about people, their activities, interests, projects, studies and more from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
