@@ -43,16 +43,17 @@ const ExportGuide = () => {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white relative overflow-hidden">
-      {/* Subtle purple hint in background */}
+      {/* Very subtle purple hint in background */}
       <div className="absolute inset-0 pointer-events-none z-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/[0.02] rounded-full blur-3xl"></div>
-        <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-purple-500/[0.015] rounded-full blur-3xl"></div>
+        <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-purple-600/[0.025] rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-purple-500/[0.02] rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 w-[800px] h-[800px] bg-purple-600/[0.015] rounded-full blur-3xl"></div>
       </div>
       
-      {/* Dynamic Background - Subtle purple hint */}
+      {/* Dynamic Background - Very subtle purple hint */}
       <div className="fixed inset-0 pointer-events-none">
         <div 
-          className="absolute w-96 h-96 bg-gradient-to-r from-purple-600/[0.03] to-transparent rounded-full blur-3xl"
+          className="absolute w-96 h-96 bg-gradient-to-r from-purple-600/[0.04] to-transparent rounded-full blur-3xl"
           style={{
             left: mousePosition.x - 192,
             top: mousePosition.y - 192,
@@ -60,7 +61,7 @@ const ExportGuide = () => {
           }}
         />
         <div 
-          className="absolute w-64 h-64 bg-gradient-to-l from-purple-500/[0.02] to-transparent rounded-full blur-2xl"
+          className="absolute w-64 h-64 bg-gradient-to-l from-purple-500/[0.025] to-transparent rounded-full blur-2xl"
           style={{
             left: mousePosition.x - 128,
             top: mousePosition.y + 100,
@@ -68,41 +69,54 @@ const ExportGuide = () => {
           }}
         />
         
-        {/* Floating particles */}
+        {/* Floating star particles - Very faint */}
         <div className="absolute inset-0">
-          {[...Array(20)].map((_, i) => {
+          {[...Array(30)].map((_, i) => {
             const positions = [
-              { left: 10, top: 20, delay: 0 },
-              { left: 85, top: 15, delay: 1.2 },
-              { left: 25, top: 80, delay: 2.4 },
-              { left: 70, top: 60, delay: 0.8 },
-              { left: 50, top: 30, delay: 3.6 },
-              { left: 15, top: 70, delay: 1.8 },
-              { left: 90, top: 45, delay: 4.2 },
-              { left: 35, top: 85, delay: 0.6 },
-              { left: 75, top: 25, delay: 2.8 },
-              { left: 55, top: 75, delay: 3.2 },
-              { left: 20, top: 40, delay: 1.5 },
-              { left: 80, top: 70, delay: 4.0 },
-              { left: 45, top: 10, delay: 2.2 },
-              { left: 65, top: 55, delay: 0.4 },
-              { left: 30, top: 65, delay: 3.8 },
-              { left: 85, top: 35, delay: 1.0 },
-              { left: 40, top: 90, delay: 2.6 },
-              { left: 75, top: 20, delay: 4.4 },
-              { left: 60, top: 50, delay: 1.4 },
-              { left: 25, top: 35, delay: 3.0 }
+              { left: 10, top: 20, delay: 0, size: 1 },
+              { left: 85, top: 15, delay: 1.2, size: 1.5 },
+              { left: 25, top: 80, delay: 2.4, size: 1 },
+              { left: 70, top: 60, delay: 0.8, size: 2 },
+              { left: 50, top: 30, delay: 3.6, size: 1 },
+              { left: 15, top: 70, delay: 1.8, size: 1.5 },
+              { left: 90, top: 45, delay: 4.2, size: 1 },
+              { left: 35, top: 85, delay: 0.6, size: 1 },
+              { left: 75, top: 25, delay: 2.8, size: 1.5 },
+              { left: 55, top: 75, delay: 3.2, size: 1 },
+              { left: 20, top: 40, delay: 1.5, size: 2 },
+              { left: 80, top: 70, delay: 4.0, size: 1 },
+              { left: 45, top: 10, delay: 2.2, size: 1.5 },
+              { left: 65, top: 55, delay: 0.4, size: 1 },
+              { left: 30, top: 65, delay: 3.8, size: 1 },
+              { left: 85, top: 35, delay: 1.0, size: 1.5 },
+              { left: 40, top: 90, delay: 2.6, size: 1 },
+              { left: 75, top: 20, delay: 4.4, size: 2 },
+              { left: 60, top: 50, delay: 1.4, size: 1 },
+              { left: 25, top: 35, delay: 3.0, size: 1.5 },
+              { left: 5, top: 50, delay: 0.5, size: 1 },
+              { left: 95, top: 80, delay: 3.5, size: 1.5 },
+              { left: 50, top: 5, delay: 2.0, size: 1 },
+              { left: 12, top: 90, delay: 4.5, size: 1 },
+              { left: 88, top: 25, delay: 1.8, size: 2 },
+              { left: 42, top: 68, delay: 2.5, size: 1 },
+              { left: 68, top: 42, delay: 3.8, size: 1.5 },
+              { left: 33, top: 15, delay: 1.2, size: 1 },
+              { left: 78, top: 88, delay: 4.8, size: 1 },
+              { left: 58, top: 92, delay: 2.8, size: 1.5 }
             ];
-            const pos = positions[i] || { left: 50, top: 50, delay: 0 };
+            const pos = positions[i] || { left: 50, top: 50, delay: 0, size: 1 };
             
             return (
               <div
                 key={i}
-                className="absolute w-1 h-1 bg-white/20 rounded-full"
+                className="absolute bg-white/10 rounded-full"
                 style={{
+                  width: `${pos.size}px`,
+                  height: `${pos.size}px`,
                   left: `${pos.left}%`,
                   top: `${pos.top}%`,
-                  animation: `float 6s ease-in-out infinite ${pos.delay}s`
+                  animation: `float 8s ease-in-out infinite ${pos.delay}s`,
+                  boxShadow: '0 0 2px rgba(255, 255, 255, 0.1)'
                 }}
               />
             );
@@ -125,13 +139,13 @@ const ExportGuide = () => {
                 <span className="text-sm font-semibold text-white">YC</span>
               </div>
               
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
+              <h1 className="text-4xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
                 AI Chats Forget.<br />
                 Context Pack Remembers.
               </h1>
               
               <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
-                Your AI memory, portable across any platform
+                Take control of your AI memory
               </p>
               
               <a 
@@ -284,7 +298,7 @@ const ExportGuide = () => {
 
             {/* Clean Export Interface */}
             <div className="max-w-3xl mx-auto mb-16">
-              <div className="rounded-xl p-8 bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_20px_50px_rgba(15,_23,_42,_0.3)] hover:shadow-[0_20px_50px_rgba(15,_23,_42,_0.4)] transition-all duration-300">
+              <div className="rounded-lg p-8 bg-[#1a1a1a] border border-gray-800">
                 <h3 className="text-lg font-semibold text-white mb-6">Download Your Chats</h3>
                 
                 <div className="space-y-3">
@@ -294,63 +308,60 @@ const ExportGuide = () => {
                       href={step.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between p-4 rounded-lg bg-gradient-to-r from-slate-800/80 to-slate-700/60 hover:from-slate-700/90 hover:to-slate-600/70 backdrop-blur-sm border border-slate-600/60 hover:border-slate-500/80 shadow-lg hover:shadow-xl transition-all duration-300 group"
+                      className="flex items-center justify-between p-4 rounded-lg bg-[#0f0f0f] border border-gray-800 hover:border-gray-700 transition-all duration-200 group"
                     >
                       <div className="flex items-center gap-3">
-                        <step.icon className="h-5 w-5 text-slate-300 group-hover:text-white transition-colors" />
+                        <step.icon className="h-5 w-5 text-gray-400" />
                         <span className="text-white font-medium">{step.platform}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-gray-400">
-                        <span className="text-sm text-slate-200 group-hover:text-white transition-colors">Download My Chats</span>
-
-                        <ExternalLink className="h-4 w-4" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors">Download My Chats</span>
+                        <ExternalLink className="h-4 w-4 text-gray-500" />
                       </div>
                     </a>
                   ))}
                 </div>
                 
-                <p className="text-gray-500 text-sm mt-4">
+                <p className="text-gray-500 text-sm mt-6">
                   Files sent to your email in 5-10 minutes
                 </p>
               </div>
             </div>
 
             {/* Simple Process Steps */}
-            <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-              <div className="text-center p-6 rounded-xl bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_15px_35px_rgba(15,_23,_42,_0.2)] hover:shadow-[0_20px_45px_rgba(15,_23,_42,_0.3)] transition-all duration-300">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-slate-700/80 to-slate-800/90 border border-slate-600/60 mx-auto mb-4 flex items-center justify-center shadow-lg">
+            <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+              <div className="text-center p-6 rounded-lg bg-[#1a1a1a] border border-gray-800">
+                <div className="w-12 h-12 rounded-lg bg-[#2a2a2a] border border-gray-800 mx-auto mb-4 flex items-center justify-center">
                   <span className="text-white font-semibold">1</span>
                 </div>
                 <h3 className="text-white font-medium mb-2">Download</h3>
                 <p className="text-gray-400 text-sm">Get your ChatGPT files</p>
               </div>
 
-              <div className="text-center p-6 rounded-xl bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_15px_35px_rgba(15,_23,_42,_0.2)] hover:shadow-[0_20px_45px_rgba(15,_23,_42,_0.3)] transition-all duration-300">
-                <div className="w-12 h-12 rounded-lg bg-indigo-600 border border-indigo-500/60 mx-auto mb-4 flex items-center justify-center shadow-lg">
+              <div className="text-center p-6 rounded-lg bg-[#1a1a1a] border border-gray-800">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 mx-auto mb-4 flex items-center justify-center">
                   <span className="text-white font-semibold">2</span>
                 </div>
                 <h3 className="text-white font-medium mb-2">Backup</h3>
                 <p className="text-gray-400 text-sm mb-4">Keep your chats safe forever</p>
                 <a 
                   href="/process"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white transition-all duration-200"
                 >
                   Start Backup
                   <ArrowRight className="h-4 w-4" />
                 </a>
               </div>
 
-              <div className="text-center p-6 rounded-xl bg-gradient-to-br from-slate-800/70 via-slate-900/60 to-slate-900/80 backdrop-blur-xl border border-slate-600/50 shadow-[0_15px_35px_rgba(15,_23,_42,_0.2)] hover:shadow-[0_20px_45px_rgba(15,_23,_42,_0.3)] transition-all duration-300">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-slate-700/80 to-slate-800/90 border border-slate-600/60 mx-auto mb-4 flex items-center justify-center shadow-lg">
+              <div className="text-center p-6 rounded-lg bg-[#1a1a1a] border border-gray-800">
+                <div className="w-12 h-12 rounded-lg bg-[#2a2a2a] border border-gray-800 mx-auto mb-4 flex items-center justify-center">
                   <span className="text-white font-semibold">3</span>
                 </div>
                 <h3 className="text-white font-medium mb-2">Move to Any AI</h3>
                 <p className="text-gray-400 text-sm mb-4">Use with Claude, Gemini, etc.</p>
                 <a 
                   href="/how-to-port"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-text-white border border-slate-700/60 hover:border-slate-500/80
-bg-transparent hover:bg-slate-800/60 ring-1 ring-slate-500/10"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-gray-300 border border-gray-800 hover:border-gray-700 hover:bg-[#2a2a2a] transition-all duration-200"
                 >
                   How to Use
                   <ArrowRight className="h-4 w-4" />

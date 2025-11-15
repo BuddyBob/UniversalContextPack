@@ -2504,9 +2504,8 @@ export default function ProcessPage() {
                     <h3 className="text-xl font-medium text-white mb-4">Paste ChatGPT Conversation URL</h3>
                     
                     <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
-                      Have a big ChatGPT conversation? Paste the shared link here to have it extracted. Other platforms coming soon!
+                      Ran out of space. Dont restart. Drop the link here, we'll pull the context and keep going.
                     </p>
-                    
                     <div className="space-y-6 max-w-md mx-auto">
                       {/* Error Alert */}
                       {urlError && (
