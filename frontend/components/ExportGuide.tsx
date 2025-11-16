@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell } from 'lucide-react'
 import { analytics } from '@/lib/analytics'
 import Image from 'next/image'
+import DemoVideoPopover from './DemoVideoPopover'
 
 const ExportGuide = () => {
   const [scrollY, setScrollY] = useState(0)
@@ -439,6 +440,9 @@ const ExportGuide = () => {
           </div>
         </section>
       </div>
+
+      {/* Demo Video Popover */}
+      <DemoVideoPopover />
 
       {/* Custom Styles */}
       <style jsx>{`
