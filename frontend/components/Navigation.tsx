@@ -109,6 +109,12 @@ export default function Navigation() {
                 Packs
               </Link>
               <Link 
+                href="/pricing" 
+                className={`nav-link ${pathname === '/pricing' ? 'active' : ''}`}
+              >
+                Pricing
+              </Link>
+              <Link 
                 href="/how-to-port" 
                 className={`nav-link ${pathname === '/how-to-port' ? 'active' : ''}`}
               >
@@ -179,7 +185,7 @@ export default function Navigation() {
                   {user && (
                   <a 
                     href="/pricing"
-                    className="flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all"
+                    className="flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all ml-auto"
                     title="Buy more credits"
                   >
                     <CreditCard className="w-5 h-5 text-gray-400" />
@@ -234,6 +240,13 @@ export default function Navigation() {
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Packs
+                </Link>
+                <Link 
+                  href="/pricing" 
+                  className={`mobile-nav-link ${pathname === '/pricing' ? 'active' : ''}`}
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  Pricing
                 </Link>
                 <Link 
                   href="/how-to-port" 
