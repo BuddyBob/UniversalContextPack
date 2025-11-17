@@ -21,10 +21,22 @@ CREATE OR REPLACE FUNCTION get_pack_details_v2(
 ) RETURNS JSON AS $$
 DECLARE
   pack_data JSON;
+  total_chunks_analyzed INTEGER;
+  total_chunks_available INTEGER;
 BEGIN
+  -- Calculate total chunks analyzed and available across all sources
+  SELECT 
+    COALESCE(SUM(s.processed_chunks), 0),
+    COALESCE(SUM(s.total_chunks), 0)
+  INTO total_chunks_analyzed, total_chunks_available
+  FROM public.pack_sources s
+  WHERE s.pack_id = target_pack_id AND s.user_id = user_uuid;
+
   SELECT json_build_object(
     'pack', row_to_json(p.*),
     'pack_version', 'v2',
+    'total_chunks_analyzed', total_chunks_analyzed,
+    'total_chunks_available', total_chunks_available,
     'sources', (
       SELECT COALESCE(json_agg(row_to_json(s.*) ORDER BY s.created_at DESC), '[]'::json)
       FROM public.pack_sources s

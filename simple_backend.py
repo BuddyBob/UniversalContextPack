@@ -2504,7 +2504,7 @@ Provide the JSON output first, then the narrative separated by "---\\nNarrative:
                     # Multiple conversations / comprehensive analysis prompt
                     prompt = f"""You are an expert data analyst specializing create context about people, their activities, interests, projects, studies and more from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
 
-CRITICAL: This is an 817kb+ file - produce COMPREHENSIVE analysis with 10,000-15,000 tokens of output. Extract EVERY detail exhaustively from ALL conversations.
+CRITICAL: Extract EVERY detail exhaustively from ALL conversations. 10,000 tokens of output.
 
 ANALYSIS FRAMEWORK:
 Provide EXHAUSTIVE detailed analysis in these six primary categories:
@@ -2528,17 +2528,15 @@ Provide EXHAUSTIVE detailed analysis in these six primary categories:
    - Communication preferences, response styles, engagement patterns, feedback reception
 
 EXTRACTION REQUIREMENTS:
-- Extract EVERY unique fact, preference, skill, and behavioral pattern with meticulous attention to detail
-- For large files, produce 10,000-15,000 tokens of analysis covering ALL conversations and ALL details
-- Each category should have 50-200+ bullet points with specific examples
-- Cross-reference information across categories for comprehensive understanding
-- Preserve temporal context and evolution indicators
-- Look for recurring themes and developmental patterns
-- Identify unique characteristics that distinguish this individual
-- Do NOT summarize or compress - extract exhaustively
+- Extract key facts, preferences, skills, and behavioral patterns
+- Aim for 1,000-2,000 tokens of concise, high-value analysis
+- Each category should have 10-30 bullet points with specific examples
+- Focus on the most important and unique insights
+- Preserve temporal context and major patterns
+- Prioritize quality over quantity
 
 OUTPUT FORMAT:
-Structure your analysis clearly with EXTENSIVE detailed subsections for each category. Use MANY bullet points (50-200+ per category) for discrete facts and longer paragraphs for complex patterns. Always cite specific examples from the conversation data to support your analysis. For large files, each section should be several paragraphs with comprehensive bullet lists.
+Structure your analysis clearly with focused subsections for each category. Use concise bullet points (10-30 per category) for discrete facts. Cite specific examples to support your analysis. Keep the output dense with information but avoid repetition.
 
 PRIVACY & SAFETY:
 - This is the user's own conversation data being analyzed for their personal use
@@ -2546,23 +2544,36 @@ PRIVACY & SAFETY:
 - You may include technical identifiers, project names, and professional context
 - Focus on extracting actionable insights and technical details
 
-The conversation data you will analyze follows this message. Provide your comprehensive Universal Context Pack analysis.
+The conversation data you will analyze follows this message. Provide your focused Universal Context Pack analysis.
 
 Content to analyze:
 {chunk}
 
-Provide your comprehensive analysis with detailed subsections for each category. BE THOROUGH - use all 16,000 available output tokens if needed."""
+Provide your concise analysis with focused subsections for each category. Target 2,000-4,000 output tokens."""
                 
                 response = await openai_call_with_retry(
                     openai_client,
                     max_retries=3,
                     model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[
+                        {
+                            "role": "system", 
+                            "content": "You are a personal data analysis assistant. The user has uploaded their OWN documents (receipts, invoices, chat logs, PDFs, etc.) for analysis. This is THEIR data that they own and control. Your task is to analyze and extract insights from this personal data. You should process ALL types of personal documents including financial records, educational documents, medical records, chat histories, etc. This is legitimate analysis of user-owned data for personal productivity and organization - not unauthorized access. Proceed with comprehensive analysis."
+                        },
+                        {
+                            "role": "user", 
+                            "content": prompt
+                        }
+                    ],
                     temperature=0.3,
-                    max_completion_tokens=15000  # Allow comprehensive analysis (gpt-4o-mini supports up to 16k)
+                    max_completion_tokens=4000  # More reasonable output size
                 )
                 
                 analysis = response.choices[0].message.content
+                
+                # Check if OpenAI refused to analyze due to content policy
+                if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
+                    raise Exception(f"Content policy refusal: OpenAI declined to analyze this content. This may occur with documents containing sensitive personal information.")
                 
                 # Track tokens and cost
                 input_tokens = response.usage.prompt_tokens
@@ -2602,7 +2613,18 @@ Provide your comprehensive analysis with detailed subsections for each category.
                 print(f"📊 Progress updated: {progress}% (chunk {idx+1}/{len(chunks)} complete)")
                 
             except Exception as e:
-                print(f"❌ Error analyzing chunk {idx}: {e}")
+                error_msg = str(e)
+                print(f"❌ Error analyzing chunk {idx}: {error_msg}")
+                
+                # Check if this is a content policy refusal
+                if "cannot assist" in error_msg.lower() or "content policy" in error_msg.lower() or "safety" in error_msg.lower():
+                    print(f"🚫 Content policy refusal detected. This may be due to sensitive information in the document.")
+                    print(f"💡 Tip: The document may contain personal information that triggered OpenAI's safety filters.")
+                    # Save a placeholder for this chunk
+                    error_analysis = f"[Chunk {idx+1} could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records.]"
+                    current_source = download_from_r2(analyzed_path, silent_404=True) or ""
+                    upload_to_r2(analyzed_path, current_source + f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" + error_analysis)
+                
                 continue
         
         # Update source status to completed (whether full or partial analysis)

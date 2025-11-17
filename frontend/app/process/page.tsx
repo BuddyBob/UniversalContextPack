@@ -118,11 +118,9 @@ export default function ProcessPage() {
     showNotification 
   } = usePaymentNotifications();
 
-  // Load packs on mount
+  // Load packs on mount (including sample packs for unauthenticated users)
   useEffect(() => {
-    if (user) {
-      loadPacks();
-    }
+    loadPacks();
   }, [user]);
 
   // Poll for source status updates
@@ -213,14 +211,25 @@ export default function ProcessPage() {
       }
     };
 
-    // Poll every 2 seconds
-    const interval = setInterval(pollSourcesStatus, 2000);
+    // Check if any sources are actively processing
+    const hasActiveProcessing = packSources.some((s: any) => 
+      ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'pending'].includes(s.status?.toLowerCase())
+    );
     
-    // Poll immediately
-    pollSourcesStatus();
+    // Only poll if there are active sources or if we just selected a new pack
+    if (hasActiveProcessing || packSources.length === 0 || isAnalysisStarting) {
+      // Poll every 2 seconds
+      const interval = setInterval(pollSourcesStatus, 2000);
+      
+      // Poll immediately
+      pollSourcesStatus();
 
-    return () => clearInterval(interval);
-  }, [selectedPack]); // Only depend on selectedPack to avoid creating multiple intervals
+      return () => clearInterval(interval);
+    } else {
+      // Just poll once if nothing is active
+      pollSourcesStatus();
+    }
+  }, [selectedPack, packSources, isAnalysisStarting]); // Depend on packSources to detect when processing starts/stops
 
   // Auto-create pack function
   const autoCreatePack = async () => {
@@ -991,6 +1000,32 @@ export default function ProcessPage() {
 
   // Pack management functions
   const loadPacks = async () => {
+    // If user is not authenticated, show sample packs
+    if (!user) {
+      const samplePacks = [
+        {
+          pack_id: 'sample-1',
+          pack_name: 'Research Project',
+          description: 'A collection of documents and conversations',
+          total_sources: 5,
+          total_tokens: 45000,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          pack_id: 'sample-2',
+          pack_name: 'Work Notes',
+          description: 'Meeting notes and project documentation',
+          total_sources: 3,
+          total_tokens: 28000,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+      setAvailablePacks(samplePacks);
+      return;
+    }
+    
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`);
       if (response.ok) {
@@ -1021,6 +1056,13 @@ export default function ProcessPage() {
 
   const createPack = async () => {
     if (!newPackName.trim()) return;
+    
+    // Check if user is authenticated
+    if (!user) {
+      setShowAuthModal(true);
+      addLog('Please sign in to create a pack');
+      return;
+    }
     
     setIsCreatingPack(true);
     try {
@@ -1055,6 +1097,13 @@ export default function ProcessPage() {
   };
 
   const selectPack = (pack: Pack) => {
+    // Check if user is authenticated
+    if (!user) {
+      setShowAuthModal(true);
+      addLog('Please sign in to access this pack');
+      return;
+    }
+    
     setSelectedPack(pack);
     setShowPackSelector(false);
     addLog(`Selected pack: ${pack.pack_name}`);
@@ -1195,7 +1244,8 @@ export default function ProcessPage() {
   const handleBuyCredits = () => {
     // Close the modal and show the upgrade modal/payment flow
     setSourcePendingAnalysis(null);
-    setShowUpgradeModal(true);
+    // send user to /prices page
+    router.push('/pricing');
   };
 
   const checkPaymentLimits = async () => {
@@ -3083,12 +3133,24 @@ export default function ProcessPage() {
                       }
                       return analyzingSources.map((source: any) => {
                         const totalChunks = source.total_chunks ?? 0;
+                        const processedChunks = source.processed_chunks ?? 0;
                         const plannedChunks = analysisLimits[source.source_id];
                         // If we have a limit set, show that. Otherwise show total chunks.
                         const chunksToShow = plannedChunks ?? totalChunks;
-                        const chunkLabel = plannedChunks && plannedChunks < totalChunks
-                          ? `${plannedChunks}/${totalChunks} chunks`
-                          : `${chunksToShow} chunks`;
+                        
+                        // Show progress as "Analyzing chunk X/Y" if we have processed_chunks
+                        let chunkLabel = '';
+                        if (processedChunks > 0 && plannedChunks) {
+                          // Show current progress out of planned chunks
+                          chunkLabel = `Analyzing chunk ${processedChunks}/${plannedChunks}`;
+                          if (plannedChunks < totalChunks) {
+                            chunkLabel += ` (${totalChunks} total)`;
+                          }
+                        } else if (plannedChunks && plannedChunks < totalChunks) {
+                          chunkLabel = `${plannedChunks}/${totalChunks} chunks`;
+                        } else {
+                          chunkLabel = `${chunksToShow} chunks`;
+                        }
                         
                         return (
                           <div key={source.source_id} className="space-y-3">
@@ -3344,7 +3406,18 @@ export default function ProcessPage() {
                   >
                     <MessageSquare className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
                         <h3 className="font-semibold text-white mb-1">Chat Export</h3>
-                        <p className="text-sm text-gray-400">conversations.json</p>
+                        <p className="text-sm text-gray-400">
+                          <a 
+                            href="/#download-history" 
+                            target="_blank"
+                            className="text-blue-300 underline hover:text-blue-400 hover:underline transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                          >
+                            conversations.json
+                          </a>
+                        </p>
                   </button>
 
                   {/* One Chat */}
