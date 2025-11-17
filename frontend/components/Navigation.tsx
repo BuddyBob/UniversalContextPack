@@ -171,11 +171,19 @@ export default function Navigation() {
                     href="/pricing"
                     className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all"
                     title="Buy more credits"
+                    onClick={(e) => {
+                      console.log('Credit display - userProfile:', userProfile);
+                      console.log('payment_plan:', userProfile?.payment_plan);
+                      console.log('credits_balance:', userProfile?.credits_balance);
+                      console.log('credit_balance:', userProfile?.credit_balance);
+                    }}
                   >
                     <CreditCard className="w-4 h-4 text-gray-400" />
                     <div className="flex flex-col items-start">
                       <span className="text-[10px] text-gray-400 uppercase tracking-wide">Credits</span>
-                      <span className="text-sm font-semibold text-white">{userProfile?.payment_plan === 'unlimited' ? '∞' : userProfile?.credits_balance?.toLocaleString() || '0'}</span>
+                      <span className="text-sm font-semibold text-white">
+                        {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance || userProfile?.credit_balance)?.toLocaleString() || '0'}
+                      </span>
                     </div>
                   </a>
                 )}

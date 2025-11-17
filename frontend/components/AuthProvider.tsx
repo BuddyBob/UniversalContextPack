@@ -173,12 +173,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               // Fallback to direct Supabase query for full profile
               const { data: profileData, error } = await supabase
                 .from('user_profiles')
-                .select('*')
+                .select('id, email, full_name, avatar_url, r2_user_directory, credit_balance, payment_plan, created_at, updated_at')
                 .eq('id', userId)
                 .single()
 
               if (!error && profileData) {
-                setUserProfile(profileData)
+                console.log('User profile loaded (retry path):', { credit_balance: profileData.credit_balance, payment_plan: profileData.payment_plan })
+                setUserProfile({ ...profileData, credits_balance: profileData.credit_balance })
               }
             }
             return
