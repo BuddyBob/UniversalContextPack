@@ -849,24 +849,16 @@ async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str
         }).execute()
         
         if result.data and len(result.data) > 0:
+            print(f"✅ Successfully created pack in database: {result.data[0]}")
             return result.data[0]
         else:
+            print(f"❌ Pack insertion returned no data: {result}")
             return None
             
     except Exception as e:
-        return None
-        
-        if result.data:
-            print(f"Successfully created pack in database: {result.data[0]}")
-            return result.data[0]
-        else:
-            print(f"Pack insertion returned no data: {result}")
-            return None
-            
-    except Exception as e:
-        print(f"Error creating pack in database: {e}")
+        print(f"❌ Error creating pack in database: {e}")
         import traceback
-        print(f"Full error traceback: {traceback.format_exc()}")
+        print(f"📍 Full error traceback: {traceback.format_exc()}")
         return None
 
 # Initialize clients
@@ -2613,20 +2605,22 @@ Provide your comprehensive analysis with detailed subsections for each category.
                 print(f"❌ Error analyzing chunk {idx}: {e}")
                 continue
         
-        # Update source status to completed
+        # Update source status to completed (whether full or partial analysis)
+        # If user had limited credits, they successfully completed what they could afford
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
             "status_param": "completed",
             "progress_param": 100,
-            "total_chunks_param": len(chunks),
+            "total_chunks_param": len(all_chunks),  # Total chunks available in source
+            "processed_chunks_param": len(chunks),   # Chunks actually analyzed
             "total_input_tokens_param": total_input_tokens,
             "total_output_tokens_param": total_output_tokens,
             "total_cost_param": total_cost
         }).execute()
         
         if max_chunks is not None and len(chunks) < len(all_chunks):
-            print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks")
+            print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks (limited by available credits)")
         else:
             print(f"✅ Source {source_id} analyzed successfully")
         
@@ -3977,24 +3971,33 @@ CHUNK OVERVIEW:
         print(f"📦 Creating pack record in database for job {job_id}...")
         try:
             pack_name = f"UCP-{job_id[:8]}"
-            pack_record = await create_pack_in_db(
-                user=user,
-                job_id=job_id,
-                pack_name=pack_name,
-                r2_pack_path=f"{user.r2_directory}/{job_id}/",
-                extraction_stats=chunk_metadata,
-                analysis_stats={
-                    "total_input_tokens": total_input_tokens,
-                    "total_output_tokens": total_output_tokens,
-                    "total_cost": total_cost,
-                    "processed_chunks": len(results),
-                    "success_rate": success_rate,
-                    "cache_hit_rate": cache_hit_rate
-                }
-            )
-            print(f"✅ Pack record created in Supabase for job {job_id}")
+            # Only create pack if we have actual results
+            if len(results) > 0:
+                pack_record = await create_pack_in_db(
+                    user=user,
+                    job_id=job_id,
+                    pack_name=pack_name,
+                    r2_pack_path=f"{user.r2_directory}/{job_id}/",
+                    extraction_stats=chunk_metadata,
+                    analysis_stats={
+                        "total_input_tokens": total_input_tokens,
+                        "total_output_tokens": total_output_tokens,
+                        "total_cost": total_cost,
+                        "processed_chunks": len(results),
+                        "success_rate": success_rate,
+                        "cache_hit_rate": cache_hit_rate
+                    }
+                )
+                if pack_record:
+                    print(f"✅ Pack record created in Supabase for job {job_id}")
+                else:
+                    print(f"⚠️ Pack record creation returned None for job {job_id}")
+            else:
+                print(f"⚠️ Skipping pack creation - no results to pack for job {job_id}")
         except Exception as pack_error:
             print(f"⚠️ Failed to create pack record for job {job_id}: {pack_error}")
+            import traceback
+            print(f"📍 Pack creation traceback: {traceback.format_exc()}")
             # Don't fail the entire analysis if pack creation fails
         
         # Update job status with completion AFTER pack is created
@@ -6603,8 +6606,8 @@ async def stripe_webhook(request: Request):
             
         elif event['type'] == 'payment_intent.created':
             payment_intent = event['data']['object']
-            print(f"💳 [{webhook_id}] Payment intent created: {payment_intent['id']}")
-            print(f"💳 [{webhook_id}] Amount: ${payment_intent['amount'] / 100}")
+            print(f"[{webhook_id}] Payment intent created: {payment_intent['id']}")
+            print(f"[{webhook_id}] Amount: ${payment_intent['amount'] / 100}")
             
             # This is normal - payment intent is created when checkout session starts
             # The actual processing happens in checkout.session.completed
@@ -6612,7 +6615,7 @@ async def stripe_webhook(request: Request):
                 user_id = payment_intent['metadata'].get('user_id')
                 credits = payment_intent['metadata'].get('credits', 0)
                 unlimited = payment_intent['metadata'].get('unlimited', 'False').lower() == 'true'
-                print(f"💳 [{webhook_id}] Payment intent metadata: user_id={user_id}, credits={credits}, unlimited={unlimited}")
+                print(f"{webhook_id}] Payment intent metadata: user_id={user_id}, credits={credits}, unlimited={unlimited}")
 
         elif event['type'] == 'payment_intent.succeeded':
             payment_intent = event['data']['object']
@@ -7424,7 +7427,7 @@ async def migrate_missing_summaries(user: AuthenticatedUser = Depends(get_curren
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 if __name__ == "__main__":
-    print(" Starting Simple UCP Backend with R2 Storage - 3 Step Process...")
-    print(f" Using R2 bucket: {R2_BUCKET}")
-    print(" Steps: 1) Extract → 2) Chunk → 3) Analyze")
-    uvicorn.run("simple_backend:app", host="0.0.0.0", port=8000, reload=False, log_level="warning")
+    print("🚀 Starting Simple UCP Backend with R2 Storage - 3 Step Process...")
+    print(f"📦 Using R2 bucket: {R2_BUCKET}")
+    print("📋 Steps: 1) Extract → 2) Chunk → 3) Analyze")
+    uvicorn.run("simple_backend:app", host="0.0.0.0", port=8000, reload=False, log_level="info")

@@ -126,8 +126,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('✅ User profile loaded:', { credits_balance: data.credits_balance, payment_plan: data.payment_plan })
       
       setUserProfile(data)
-      console.log('✅ Setting user profile with mapping:', profileWithMapping)
-      setUserProfile(profileWithMapping)
     } catch (error) {
       console.error('Error fetching user profile:', error)
     }

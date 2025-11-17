@@ -99,6 +99,7 @@ export default function ProcessPage() {
     canProceed: boolean;
     creditsNeeded: number;
   } | null>(null);
+  const [analysisLimits, setAnalysisLimits] = useState<Record<string, number>>({});
   const [isAnalysisStarting, setIsAnalysisStarting] = useState<string | null>(null); // Track source ID that's starting analysis
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,6 +192,20 @@ export default function ProcessPage() {
           if (justCompleted) {
             setShowPackUpdateNotification(true);
             setTimeout(() => setShowPackUpdateNotification(false), 3000);
+            setAnalysisLimits((prev) => {
+              if (prev[justCompleted.source_id]) {
+                const updated = { ...prev };
+                delete updated[justCompleted.source_id];
+                return updated;
+              }
+              return prev;
+            });
+            
+            // Clear the pending analysis modal if this source was pending
+            if (sourcePendingAnalysis && sourcePendingAnalysis.sourceId === justCompleted.source_id) {
+              console.log('✅ Source completed, clearing pending analysis modal');
+              setSourcePendingAnalysis(null);
+            }
           }
         }
       } catch (error) {
@@ -205,7 +220,7 @@ export default function ProcessPage() {
     pollSourcesStatus();
 
     return () => clearInterval(interval);
-  }, [selectedPack, packSources, sourcePendingAnalysis, isAnalysisStarting]);
+  }, [selectedPack]); // Only depend on selectedPack to avoid creating multiple intervals
 
   // Auto-create pack function
   const autoCreatePack = async () => {
@@ -1089,25 +1104,52 @@ export default function ProcessPage() {
     if (!sourcePendingAnalysis) return;
 
     const sourceId = sourcePendingAnalysis.sourceId;
+    const totalChunks = sourcePendingAnalysis.totalChunks;
+    const allowedChunks = sourcePendingAnalysis.hasUnlimited
+      ? totalChunks
+      : Math.min(sourcePendingAnalysis.userCredits, totalChunks);
+
+    if (!sourcePendingAnalysis.hasUnlimited && allowedChunks <= 0) {
+      showNotification('warning', 'You need credits before analyzing this source');
+      return;
+    }
+
+    const chunksToProcess = typeof maxChunks === 'number'
+      ? Math.min(maxChunks, allowedChunks)
+      : allowedChunks;
+
+    if (chunksToProcess <= 0) {
+      showNotification('warning', 'Unable to start analysis without available chunks');
+      return;
+    }
+
+    const requestBody: { max_chunks?: number } = {};
+    if (!sourcePendingAnalysis.hasUnlimited || chunksToProcess < totalChunks) {
+      requestBody.max_chunks = chunksToProcess;
+    }
     
     try {
-      const body = maxChunks ? { max_chunks: maxChunks } : {};
-      
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/api/v2/sources/${sourceId}/start-analysis`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          body: JSON.stringify(
+            Object.keys(requestBody).length ? requestBody : {}
+          )
         }
       );
 
       if (response.ok) {
         const data = await response.json();
-        addLog(data.message || `Starting analysis of ${sourcePendingAnalysis.totalChunks} chunks...`);
+        addLog(
+          data.message ||
+          `Starting analysis of ${chunksToProcess} chunk${chunksToProcess === 1 ? '' : 's'}...`
+        );
         
         // Mark that we're starting analysis for this source
         setIsAnalysisStarting(sourceId);
+        setAnalysisLimits((prev) => ({ ...prev, [sourceId]: chunksToProcess }));
         setSourcePendingAnalysis(null);
         
         // Immediately refresh pack sources to get updated status
@@ -2515,6 +2557,7 @@ export default function ProcessPage() {
     setAnalysisStartTime(null);
     setCurrentJobId(null);
     setCurrentProcessedChunks(0);
+    setAnalysisLimits({});
     
     addLog('Reset complete - all processing cancelled');
   };
@@ -2676,6 +2719,12 @@ export default function ProcessPage() {
         if (response.ok) {
           addLog('Analysis cancelled');
           showNotification('info', 'Analysis cancelled');
+          setAnalysisLimits((prev) => {
+            if (!prev[analyzingSource.source_id]) return prev;
+            const updated = { ...prev };
+            delete updated[analyzingSource.source_id];
+            return updated;
+          });
         }
       }
     } catch (error) {
@@ -2955,7 +3004,7 @@ export default function ProcessPage() {
                   >
                     <X className="w-5 h-5 text-gray-400" />
                 </button>
-              </div>
+                </div>
 
                 {/* Show analyzing indicator instead of upload area when analyzing */}
                 {(() => {
@@ -2967,33 +3016,42 @@ export default function ProcessPage() {
                   return hasAnalyzingSource || isStarting;
                 })() ? (
                   /* Minimal Analyzing Indicator - Replaces Upload Area */
-                  <div className="bg-gray-800 border border-gray-700 rounded-xl p-8">
-                    <div className="flex items-center justify-between mb-6">
+                  <div className="bg-gray-800 border border-gray-700 rounded-xl p-8 space-y-6">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center">
-                          <Loader className="h-5 w-5 text-gray-400 animate-spin" />
+                          <Loader className="h-5 w-5 text-gray-300 animate-spin" />
                         </div>
-                        <div className="flex-1">
+                        <div>
                           <h3 className="text-lg font-medium text-white">Analyzing</h3>
                           <p className="text-sm text-gray-400">
                             {(() => {
-                              const analyzingSource = packSources.find((s: any) => 
+                              const activeSource = packSources.find((s: any) =>
                                 ['analyzing', 'processing', 'analyzing_chunks'].includes(s.status?.toLowerCase())
                               );
-                              return analyzingSource && analyzingSource.total_chunks >= 10
-                                ? "Large job - Email notification will be sent when complete"
-                                : "Processing your content";
+                              const planned = activeSource
+                                ? analysisLimits[activeSource.source_id] ?? activeSource.total_chunks
+                                : null;
+                              if (!planned) return 'We’re processing your content.';
+                              const total = activeSource?.total_chunks ?? planned;
+                              if (planned < total) {
+                                return `Analyzing ${planned}/${total} chunks with your current credits.`;
+                              }
+                              if (planned >= 10) {
+                                return 'Large job — we’ll email you when it’s finished.';
+                              }
+                              return 'We’re processing your content.';
                             })()}
                           </p>
                         </div>
                       </div>
-                      <button
+                <button
                         onClick={cancelAnalysis}
-                        className="text-sm text-red-400 hover:text-red-300 px-3 py-1 border border-red-700 rounded hover:border-red-600 hover:bg-red-900/20 transition-colors"
-                      >
+                        className="text-sm text-gray-300 hover:text-white px-3 py-1 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
+                >
                         Cancel
-                      </button>
-                    </div>
+                </button>
+              </div>
 
                     {/* Analysis Progress */}
                     {(() => {
@@ -3003,42 +3061,53 @@ export default function ProcessPage() {
                       );
                       if (isAnalysisStarting && analyzingSources.length === 0) {
                         const startingSource = packSources.find((s: any) => s.source_id === isAnalysisStarting);
+                        const plannedChunks = analysisLimits[isAnalysisStarting] ?? startingSource?.total_chunks ?? 0;
+                        const totalChunks = startingSource?.total_chunks ?? plannedChunks;
                         return (
                           <div className="space-y-3">
                             <div className="flex justify-between items-center text-sm">
                               <span className="text-gray-300">
-                                {startingSource?.source_name || startingSource?.file_name || 'Starting...'}
+                                {startingSource?.source_name || startingSource?.file_name || 'Preparing source'}
                               </span>
-                              <span className="text-gray-400">Initializing</span>
-                            </div>
+                              <span className="text-gray-400">
+                                {totalChunks > 0 && plannedChunks < totalChunks
+                                  ? `${plannedChunks}/${totalChunks} chunks`
+                                  : `${plannedChunks} chunks`}
+                              </span>
+            </div>
                             <div className="w-full bg-gray-700 rounded-full h-1.5">
                               <div className="bg-gray-500 h-1.5 rounded-full" style={{ width: '10%' }} />
                             </div>
-                            {startingSource?.total_chunks > 0 && (
-                              <p className="text-xs text-gray-500">{startingSource.total_chunks} chunks</p>
-                            )}
                           </div>
                         );
                       }
-                      return analyzingSources.map((source: any) => (
-                        <div key={source.source_id} className="space-y-3">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-gray-300 truncate pr-2">
-                              {source.source_name || source.file_name || 'Analyzing...'}
-                            </span>
-                            <span className="text-gray-400 whitespace-nowrap">{source.progress || 0}%</span>
+                      return analyzingSources.map((source: any) => {
+                        const totalChunks = source.total_chunks ?? 0;
+                        const plannedChunks = analysisLimits[source.source_id];
+                        // If we have a limit set, show that. Otherwise show total chunks.
+                        const chunksToShow = plannedChunks ?? totalChunks;
+                        const chunkLabel = plannedChunks && plannedChunks < totalChunks
+                          ? `${plannedChunks}/${totalChunks} chunks`
+                          : `${chunksToShow} chunks`;
+                        
+                        return (
+                          <div key={source.source_id} className="space-y-3">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-gray-300 truncate pr-2">
+                                {source.source_name || source.file_name || 'Analyzing...'}
+                              </span>
+                              <span className="text-gray-400 whitespace-nowrap">{source.progress || 0}%</span>
+                            </div>
+                            <div className="w-full bg-gray-700 rounded-full h-1.5">
+                              <div 
+                                className="bg-gray-400 h-1.5 rounded-full transition-all duration-300"
+                                style={{ width: `${source.progress || 0}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">{chunkLabel}</p>
                           </div>
-                          <div className="w-full bg-gray-700 rounded-full h-1.5">
-                            <div 
-                              className="bg-gray-400 h-1.5 rounded-full transition-all duration-300"
-                              style={{ width: `${source.progress || 0}%` }}
-                            />
-                          </div>
-                          {source.total_chunks > 0 && (
-                            <p className="text-xs text-gray-500">{source.total_chunks} chunks</p>
-                          )}
-                        </div>
-                      ));
+                        );
+                      });
                     })()}
                   </div>
                 ) : uploadMethod === 'url' ? (
@@ -3070,8 +3139,8 @@ export default function ProcessPage() {
                   >
                             <X className="w-4 h-4" />
                   </button>
-                </div>
-                      )}
+            </div>
+          )}
 
                       <input
                         type="url"
@@ -3088,13 +3157,13 @@ export default function ProcessPage() {
                         }`}
                       />
                       
-                      <button
+                  <button
                         onClick={() => processConversationUrl(conversationUrl)}
                         disabled={!conversationUrl.trim()}
                         className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/25 disabled:shadow-none transform hover:scale-[1.02] disabled:transform-none"
-                      >
+                  >
                         Start Extraction
-                      </button>
+                  </button>
                       
                       <p className="text-xs text-gray-500">
                         Only ChatGPT shared conversation links are supported currently
@@ -3104,9 +3173,14 @@ export default function ProcessPage() {
                         <Lock className="h-3 w-3" />
                         We never store your data. Files are processed securely in your session.
                       </p>
-                    </div>
+                </div>
                   </div>
-                ) : sourcePendingAnalysis ? (
+                ) : sourcePendingAnalysis ? (() => {
+                  const allowedChunks = sourcePendingAnalysis.hasUnlimited
+                    ? sourcePendingAnalysis.totalChunks
+                    : Math.min(sourcePendingAnalysis.userCredits, sourcePendingAnalysis.totalChunks);
+                  
+                  return (
                   /* Credit Confirmation Card - Replaces Upload Area */
                   <div className="bg-gray-900/90 border-blue-500/50 rounded-2xl p-8 shadow-md mb-6">
                     <div className="flex items-center space-x-4 mb-6">
@@ -3116,9 +3190,11 @@ export default function ProcessPage() {
                       <div>
                         <h3 className="text-xl font-semibold text-white">Ready to Analyze</h3>
                         <p className="text-gray-400">
-                          {sourcePendingAnalysis.totalChunks >= 10 
-                            ? "Large job - You'll receive an email when complete" 
-                            : "Your file has been extracted and chunked"}
+                          {sourcePendingAnalysis.hasUnlimited
+                            ? "We'll process every chunk automatically."
+                            : allowedChunks < sourcePendingAnalysis.totalChunks
+                              ? `We'll analyze ${allowedChunks}/${sourcePendingAnalysis.totalChunks} chunks with your current credits. Buy more anytime to process the rest.`
+                              : "You're all set—every chunk will be analyzed."}
                         </p>
                       </div>
                     </div>
@@ -3127,25 +3203,18 @@ export default function ProcessPage() {
                     <div className="bg-gray-800/50 rounded-xl p-6 mb-6 space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-400">Total chunks:</span>
-                        <span className="text-lg font-bold text-white">{sourcePendingAnalysis.totalChunks}</span>
+                        <span className="text-lg font-medium text-white">{sourcePendingAnalysis.totalChunks}</span>
                       </div>
-                      {!sourcePendingAnalysis.hasUnlimited && sourcePendingAnalysis.userCredits < sourcePendingAnalysis.totalChunks && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-400">Will analyze:</span>
-                          <span className="text-lg font-bold text-yellow-400">{sourcePendingAnalysis.userCredits} chunks</span>
-                        </div>
-                      )}
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-400">Your credits:</span>
-                        <span className={`text-lg font-bold ${sourcePendingAnalysis.canProceed ? 'text-green-400' : 'text-red-400'}`}>
-                          {sourcePendingAnalysis.hasUnlimited ? 'Unlimited ∞' : sourcePendingAnalysis.userCredits}
+                        <span className="text-lg font-medium text-white">
+                          {sourcePendingAnalysis.hasUnlimited ? 'Unlimited' : sourcePendingAnalysis.userCredits}
                         </span>
                       </div>
-                      {sourcePendingAnalysis.creditsNeeded > 0 && (
-                        <div className="flex justify-between items-center pt-3 border-t border-gray-700">
-                          <span className="text-sm text-gray-400">Need to purchase:</span>
-                          <span className="text-lg font-bold text-red-400">{sourcePendingAnalysis.creditsNeeded} more credits</span>
-                        </div>
+                      {!sourcePendingAnalysis.hasUnlimited && sourcePendingAnalysis.creditsNeeded > 0 && (
+                        <p className="text-xs text-gray-500 pt-2 border-t border-gray-700">
+                          Add {sourcePendingAnalysis.creditsNeeded} more credit{sourcePendingAnalysis.creditsNeeded === 1 ? '' : 's'} to unlock every chunk.
+                        </p>
                       )}
                     </div>
 
@@ -3159,61 +3228,50 @@ export default function ProcessPage() {
                           Cancel
                         </button>
                         <button
-                          onClick={() => startSourceAnalysis()}
-                          className="flex-1 px-6 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg"
+                          onClick={() => startSourceAnalysis(allowedChunks)}
+                          className="flex-1 px-6 py-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors"
                         >
-                          Start Analysis ({
-                            sourcePendingAnalysis.hasUnlimited 
-                              ? sourcePendingAnalysis.totalChunks 
-                              : Math.min(sourcePendingAnalysis.userCredits, sourcePendingAnalysis.totalChunks)
-                          } chunks)
+                          Start Analysis ({allowedChunks} chunks)
                         </button>
                       </div>
                     ) : sourcePendingAnalysis.userCredits > 0 ? (
                       <div className="space-y-3">
-                        <div className="bg-yellow-900/30 border border-yellow-500/30 rounded-xl p-4">
-                          <p className="text-sm text-yellow-300">
-                            You can analyze <span className="font-bold text-yellow-100">{sourcePendingAnalysis.userCredits} of {sourcePendingAnalysis.totalChunks} chunks</span> with your current credits.
-                          </p>
-                        </div>
                         <div className="flex gap-3">
                           <button
                             onClick={() => setSourcePendingAnalysis(null)}
-                            className="flex-1 px-6 py-3 rounded-xl border-2 border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
+                            className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
-                            onClick={() => startSourceAnalysis(sourcePendingAnalysis.userCredits)}
-                            className="flex-1 px-6 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg"
+                            onClick={() => startSourceAnalysis(allowedChunks)}
+                            className="flex-1 px-6 py-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors"
                           >
-                            Analyze {sourcePendingAnalysis.userCredits} Chunks
+                            Analyze {allowedChunks} Chunks
                           </button>
                         </div>
                         <button
                           onClick={handleBuyCredits}
-                          className="w-full px-6 py-3 rounded-xl bg-purple-600 text-white text-sm font-bold hover:bg-purple-700 transition-colors shadow-lg"
+                          className="w-full px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
                         >
                           Buy {sourcePendingAnalysis.creditsNeeded} More Credits
                         </button>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-4">
-                          <p className="text-sm text-red-300">
-                            You need <span className="font-bold text-red-100">{sourcePendingAnalysis.creditsNeeded} credits</span> to analyze this file.
-                          </p>
-                        </div>
+                        <p className="text-sm text-gray-400">
+                          You need {sourcePendingAnalysis.creditsNeeded} credits to analyze this file.
+                        </p>
                         <div className="flex gap-3">
                           <button
                             onClick={() => setSourcePendingAnalysis(null)}
-                            className="flex-1 px-6 py-3 rounded-xl border-2 border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
+                            className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={handleBuyCredits}
-                            className="flex-1 px-6 py-3 rounded-xl bg-purple-600 text-white text-sm font-bold hover:bg-purple-700 transition-colors shadow-lg"
+                            className="flex-1 px-6 py-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors"
                           >
                             Buy Credits
                           </button>
@@ -3221,7 +3279,8 @@ export default function ProcessPage() {
                       </div>
                     )}
                   </div>
-                ) : (
+                  );
+                })() : (
                   /* File Upload Area */
                   <>
                 <div
@@ -3938,18 +3997,6 @@ export default function ProcessPage() {
         </div>
         
         <div className="flex-1 p-4 space-y-4">
-          {/* Pack Update Notification */}
-          {showPackUpdateNotification && (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                <CheckCircle className="h-5 w-5 text-white" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-green-400">Pack Updated!</p>
-                <p className="text-xs text-green-300/70">New source added successfully</p>
-              </div>
-            </div>
-          )}
           
           {/* Download Options */}
           {selectedPack && packSources.some((s: any) => s.status === 'completed') && (
