@@ -6,7 +6,7 @@ import AuthModal from './AuthModal'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { Settings, User, LogOut, Sun, Moon, Menu, X, Dot } from 'lucide-react'
+import { Settings, User, LogOut, Sun, Moon, Menu, X, Dot, CreditCard } from 'lucide-react'
 
 export default function Navigation() {
   const { user, userProfile, signOut, loading, session, makeAuthenticatedRequest } = useAuth()
@@ -93,12 +93,6 @@ export default function Navigation() {
                 Home
               </Link>
               <Link 
-                href="/process" 
-                className={`nav-link ${pathname === '/process' ? 'active' : ''}`}
-              >
-                Process
-              </Link>
-              <Link 
                 href="/packs" 
                 className={`nav-link ${pathname === '/packs' ? 'active' : ''}`}
               >
@@ -135,8 +129,9 @@ export default function Navigation() {
               </div>
 
               {/* Desktop User Menu */}
-              <div className="nav-user-section hidden md:block">
+              <div className="nav-user-section hidden md:flex items-center gap-3">
                 {user ? (
+                  <>
                   <div className="relative" ref={dropdownRef}>
                     <div 
                       className="nav-user-dropdown"
@@ -156,6 +151,7 @@ export default function Navigation() {
                         <p className="nav-user-email">{user.email}</p>
                       </div>
                     </div>
+                    
 
                     {showUserDropdown && (
                       <div className="nav-dropdown-menu">
@@ -168,7 +164,18 @@ export default function Navigation() {
                         </button>
                       </div>
                     )}
+                    
                   </div>
+                  {user && (
+                  <a 
+                    href="/pricing"
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 transition-colors"
+                  >
+                    <CreditCard className="w-5 h-4 text-gray-400" />
+                    <span className="text-xs text-gray-300">999,999</span>
+                  </a>
+                )}
+                </>
                 ) : (
                   <button
                     onClick={() => setShowAuthModal(true)}
@@ -204,13 +211,6 @@ export default function Navigation() {
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Home
-                </Link>
-                <Link 
-                  href="/process" 
-                  className={`mobile-nav-link ${pathname === '/process' ? 'active' : ''}`}
-                  onClick={() => setShowMobileMenu(false)}
-                >
-                  Process
                 </Link>
                 <Link 
                   href="/packs" 

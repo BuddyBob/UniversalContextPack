@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import tiktoken
+import zipfile
 
 # Import credit configuration
 from credit_config import get_new_user_credits
@@ -102,7 +103,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins temporarily
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -436,6 +437,14 @@ class StripePaymentIntentRequest(BaseModel):
     amount: float
     unlimited: Optional[bool] = False
     package_id: str = None
+
+class CreatePackRequest(BaseModel):
+    pack_name: str
+    description: Optional[str] = None
+
+class AddSourceRequest(BaseModel):
+    source_name: str
+    source_type: str = "chat_export"  # chat_export, document, url, text
 
 # User model for authentication
 class AuthenticatedUser:
@@ -1559,6 +1568,21 @@ def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progres
     
     return extracted_texts
 
+def extract_conversations_from_zip(zip_bytes: bytes) -> str:
+    """Extract conversations.json from a ZIP file"""
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zip_file:
+            # Look for conversations.json in the ZIP
+            for file_info in zip_file.namelist():
+                if file_info.endswith('conversations.json'):
+                    print(f"📦 Found conversations.json in ZIP: {file_info}")
+                    return zip_file.read(file_info).decode('utf-8')
+            raise ValueError("conversations.json not found in ZIP file")
+    except zipfile.BadZipFile:
+        raise ValueError("Invalid ZIP file")
+    except Exception as e:
+        raise ValueError(f"Error extracting ZIP: {str(e)}")
+
 def extract_from_text_content(file_content: str) -> List[str]:
     """OPTIMIZED: Extract meaningful text from plain text content"""
     extracted_texts = []
@@ -1961,16 +1985,6 @@ async def process_conversation_url_background(job_id: str, url: str, platform: s
             if platform == 'chatgpt':
                 from chatgpt_extractor import extract_chatgpt_conversation
                 extract_function = extract_chatgpt_conversation
-            elif platform == 'claude':
-                # Use the fast extractor for Claude to prevent hanging
-                from claude_extractor_fast import extract_claude_conversation_fast
-                extract_function = extract_claude_conversation_fast
-            elif platform == 'grok':
-                from grok_extractor import extract_grok_conversation
-                extract_function = extract_grok_conversation
-            elif platform == 'gemini':
-                from gemini_extractor import extract_gemini_conversation
-                extract_function = extract_gemini_conversation
             else:
                 raise ValueError(f"Unsupported platform: {platform}")
                 
@@ -2245,6 +2259,418 @@ async def process_extraction_background(job_id: str, file_content: str, filename
     except Exception as e:
         print(f"Error in background extraction for job {job_id}: {e}")
         update_job_progress(job_id, "extracting", 0, f"Error: {str(e)}")
+
+async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: str, filename: str, user: AuthenticatedUser):
+    """Step 1: Extract and chunk the source (NO OpenAI calls, NO credit deduction)"""
+    try:
+        print(f"🔄 Extracting and chunking source {source_id} for pack {pack_id}")
+        
+        # Update status to processing (extracting and chunking)
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "processing",
+            "progress_param": 10
+        }).execute()
+        
+        # Step 1: Extract text
+        print(f"📝 Extracting text from {filename}")
+        extracted_texts = extract_from_text_content(file_content)
+        
+        # Store extracted text in R2
+        extracted_path = f"{user.r2_directory}/{pack_id}/{source_id}/extracted.txt"
+        upload_to_r2(extracted_path, "\n\n".join(extracted_texts))
+        
+        # Update progress
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "processing",
+            "progress_param": 50
+        }).execute()
+        
+        # Step 2: Chunk the text
+        print(f"✂️ Chunking text for source {source_id}")
+        chunks = []
+        # Optimized chunk size to fit within gpt-4o-mini's 128k context window
+        # 300k chars = ~75k tokens input + 15k output = 90k total (safely under 128k limit)
+        # This gives us ~100 chunks for a 180MB file
+        chunk_size = 300000  # ~75k tokens input (safe for 128k context window)
+        overlap = 10000  # Larger overlap for better context continuity
+        
+        # Combine all extracted text into one piece
+        combined_text = "\n\n".join(extracted_texts)
+        total_length = len(combined_text)
+        
+        # Only chunk if text exceeds chunk size
+        if total_length > chunk_size:
+            print(f"📦 Starting chunking: {total_length:,} chars into {chunk_size:,} char chunks with {overlap:,} char overlap")
+            chunk_count = 0
+            for j in range(0, total_length, chunk_size - overlap):
+                chunk = combined_text[j:j + chunk_size]
+                chunks.append(chunk)
+                chunk_count += 1
+                # Show progress every 5 chunks
+                if chunk_count % 5 == 0 or chunk_count == 1:
+                    progress_pct = (j / total_length) * 100
+                    print(f"  ✂️ Chunk {chunk_count}: chars {j:,} to {min(j + chunk_size, total_length):,} ({progress_pct:.1f}% complete)")
+            print(f"✅ Created {len(chunks)} chunks for source {source_id}")
+            print(f"   Total text: {total_length:,} chars")
+            print(f"   Avg chunk size: {total_length // len(chunks):,} chars")
+            print(f"   First chunk size: {len(chunks[0]):,} chars")
+            print(f"   Last chunk size: {len(chunks[-1]):,} chars")
+        else:
+            # Small enough to process as single chunk
+            chunks.append(combined_text)
+            print(f"📄 Created 1 chunk for source {source_id} ({total_length:,} chars - no chunking needed)")
+        
+        # Store chunks in R2
+        chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
+        chunks_json = json.dumps(chunks)
+        print(f"📤 Uploading {len(chunks)} chunks to R2: {chunked_path} ({len(chunks_json):,} bytes)")
+        upload_to_r2(chunked_path, chunks_json)
+        print(f"✅ Chunks uploaded successfully")
+        
+        # Update status to ready_for_analysis (extraction done, awaiting credit confirmation)
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "ready_for_analysis",
+            "progress_param": 100,
+            "total_chunks_param": len(chunks)
+        }).execute()
+        
+        print(f"✅ Extraction and chunking complete: {len(chunks)} chunks ready for analysis")
+        print(f"💡 Frontend should now show credit confirmation modal for {len(chunks)} chunks")
+        print(f"📊 Stats: {total_length:,} chars -> {len(chunks)} chunks of ~{chunk_size:,} chars each")
+        
+        return len(chunks)
+        
+    except Exception as e:
+        print(f"❌ Error extracting/chunking source {source_id}: {e}")
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "failed",
+            "progress_param": 0
+        }).execute()
+        raise
+
+async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, user: AuthenticatedUser, max_chunks: int = None):
+    """Step 2: Analyze the chunks (OpenAI calls, deduct credits)
+    
+    Args:
+        max_chunks: Optional limit on number of chunks to analyze (for partial analysis with limited credits)
+    """
+    try:
+        print(f"🤖 Starting analysis for source {source_id}")
+        
+        # Update status to analyzing
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "analyzing",
+            "progress_param": 10
+        }).execute()
+        
+        # Load chunks from R2
+        chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
+        chunks_data = download_from_r2(chunked_path, silent_404=False)
+        if not chunks_data:
+            print(f"❌ Failed to download chunks from: {chunked_path}")
+            raise Exception("Chunks not found - extraction may have failed")
+        
+        all_chunks = json.loads(chunks_data)
+        
+        # Limit chunks if max_chunks is specified
+        if max_chunks is not None and max_chunks < len(all_chunks):
+            chunks = all_chunks[:max_chunks]
+            print(f"📦 Loaded {len(all_chunks)} chunks, analyzing first {len(chunks)} chunks (limited by credits)")
+        else:
+            chunks = all_chunks
+            print(f"📦 Loaded {len(chunks)} chunks from storage")
+        
+        # Check if this is a large job that needs email notification
+        is_large_job = len(chunks) >= 10
+        
+        if is_large_job:
+            print(f"📧 Large job detected ({len(chunks)} chunks). Will send email notification on completion.")
+        
+        # Analyze chunks with OpenAI
+        print(f"🤖 Analyzing {len(chunks)} chunks for source {source_id}")
+        
+        openai_client = get_openai_client()
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cost = 0.0
+        
+        # Prepare paths for saving analysis
+        pack_analyzed_path = f"{user.r2_directory}/{pack_id}/complete_analyzed.txt"
+        analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
+        
+        # Get existing pack content (if any)
+        existing_pack_content = download_from_r2(pack_analyzed_path, silent_404=True) or ""
+        
+        # Add source separator
+        if existing_pack_content:
+            source_header = f"\n\n--- SOURCE: {filename} ---\n\n"
+        else:
+            source_header = f"--- SOURCE: {filename} ---\n\n"
+        
+        for idx, chunk in enumerate(chunks):
+            try:
+                # Use universal analysis prompt
+                prompt = f"""You are an expert analyst. Analyze this content and extract comprehensive insights.
+
+Produce 10,000-15,000 tokens of detailed analysis covering:
+- Key facts, decisions, and action items
+- Important quotes and references
+- Technical details and configurations
+- Timelines and chronological information
+- Overall themes and patterns
+
+Content to analyze:
+{chunk}
+
+Provide thorough, detailed analysis."""
+                
+                # Legacy single conversation prompt (keeping for reference but not using)
+                if False:  # Disabled - using simple prompt above instead
+                    # Single conversation analysis prompt
+                    prompt = f"""You are an expert conversation analyst. You will analyze a single chat conversation and produce two complementary outputs:
+
+1) A machine-friendly, structured JSON object containing exhaustive extracted specifics, metadata and clear, discrete facts.
+2) A human-readable narrative that tells the story of the conversation and highlights the most important practical takeaways.
+
+CRITICAL: Produce COMPREHENSIVE analysis with 10,000-15,000 tokens of output. Extract EVERY detail exhaustively. For large files (like this one), your output must be proportionally comprehensive with HUNDREDS of extracted items.
+
+PRIORITY:
+- Extract EVERY concrete specific: ALL dates, ALL timestamps, ALL exact quoted passages, ALL decisions, ALL action items, ALL configuration values, ALL numeric values, ALL links, ALL code snippets, ALL settings, technologies mentioned, and project-related information
+- Go through the ENTIRE conversation methodically - don't skip any sections
+- For large conversations, each category (facts, decisions, quotes, etc.) should have DOZENS or HUNDREDS of entries
+- Capture technical details verbatim (versions, config flags, error messages, project identifiers) and include source pointers (message index or short quote)
+- Focus on professional and technical context rather than personal identifying information
+
+REQUIRED METADATA (include if available):
+- platform/source (ChatGPT/Claude/Gemini/etc.), conversation id or shared link, participants and their roles (user / assistant / system), total message count, approximate start/end timestamps, message indices for quoted items.
+
+STRUCTURED OUTPUT (JSON):
+Return a top-level JSON object with the following keys. Use these exact keys and types when possible.
+
+{{
+    "metadata": {{}},
+    "entities": {{}},
+    "facts": [],
+    "decisions": [],
+    "action_items": [],
+    "configuration_values": [],
+    "quotes": [],
+    "timeline": [],
+    "sentiment_summary": {{}},
+    "uncertainties": [],
+    "suggested_followups": [],
+    "summary_1_sentence": "",
+    "summary_3_bullets": ["", "", ""]
+}}
+
+GUIDELINES FOR STRUCTURED FIELDS:
+- For every fact, include a confidence score (high/medium/low) and the source reference (message index or a short verbatim quote). If exact timestamps or message indices are not available, indicate proximity (e.g., "early", "middle", "end").
+- Preserve numeric values and code-like strings exactly as they appear (do not normalize unless a clear conversion is requested).
+- For entities, include canonical forms where possible and list aliases.
+
+NARRATIVE OUTPUT:
+- After the JSON object, produce a clear, human-readable narrative (2-6 short paragraphs) that tells the conversation story: context, goals, key moments, resolutions, and recommended next steps.
+- Include 2-4 short quoted excerpts (verbatim) that are most representative or critical, with speaker attribution and index.
+- Keep tone neutral, precise, and action-oriented. Avoid speculative judgments unless explicitly supported by clear evidence in the chat, and label any speculative interpretation as such.
+
+LENGTH & COMPLETENESS:
+- Be EXTREMELY thorough: the structured JSON should aim to include EVERY SINGLE discrete, extractable piece of information present in the conversation
+- For large conversations, produce 10,000-15,000 tokens of analysis - this is NOT optional
+- NEVER compress or summarize - extract every fact, every decision, every quote, every configuration value
+- If the conversation is long, your output MUST be proportionally long - do not compress meaningful specifics
+- Each section (facts, decisions, action_items, quotes, etc.) should have DOZENS or HUNDREDS of entries for large conversations
+- If a field would be empty, return an empty array or null rather than omitting the key.
+
+OUTPUT FORMAT RULES:
+- First output the JSON block only (no surrounding commentary) so it can be parsed programmatically.
+- After the JSON block, output a human-readable narrative separated by a clear divider line (e.g., "---\\nNarrative:\\n").
+
+PRIVACY & SAFETY:
+- This is the user's own conversation data being analyzed for their personal use
+- Redact passwords, API keys, tokens, and sensitive credentials with "<REDACTED>"
+- You may include technical identifiers, project names, and professional context
+- Focus on extracting actionable insights and technical details rather than listing personal contact information
+
+FINAL NOTE:
+- Remember: prioritize extracting exact technical specifics and actionable items. The narrative is important, but the structured JSON is the priority for downstream consumption. Provide both in full.
+
+Content to analyze:
+{chunk}
+
+Provide the JSON output first, then the narrative separated by "---\\nNarrative:\\n"."""
+                else:
+                    # Multiple conversations / comprehensive analysis prompt
+                    prompt = f"""You are an expert data analyst specializing create context about people, their activities, interests, projects, studies and more from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
+
+CRITICAL: This is an 817kb+ file - produce COMPREHENSIVE analysis with 10,000-15,000 tokens of output. Extract EVERY detail exhaustively from ALL conversations.
+
+ANALYSIS FRAMEWORK:
+Provide EXHAUSTIVE detailed analysis in these six primary categories:
+
+1. PERSONAL PROFILE ANALYSIS
+   - Demographics, preferences, goals, values, life context, personality traits, health
+
+2. BEHAVIORAL PATTERNS DISCOVERY  
+   - Communication style, problem-solving approach, learning patterns, decision-making, stress response, work habits
+
+3. KNOWLEDGE DOMAINS MAPPING
+   - Technical skills, professional expertise, academic background, hobby knowledge, soft skills
+
+4. PROJECT PATTERNS IDENTIFICATION
+   - Workflow preferences, tool usage, collaboration style, quality standards, resource management
+
+5. TIMELINE EVOLUTION TRACKING
+   - Skill development, career milestones, interest evolution, goal achievement over time
+
+6. INTERACTION INSIGHTS ANALYSIS
+   - Communication preferences, response styles, engagement patterns, feedback reception
+
+EXTRACTION REQUIREMENTS:
+- Extract EVERY unique fact, preference, skill, and behavioral pattern with meticulous attention to detail
+- For large files, produce 10,000-15,000 tokens of analysis covering ALL conversations and ALL details
+- Each category should have 50-200+ bullet points with specific examples
+- Cross-reference information across categories for comprehensive understanding
+- Preserve temporal context and evolution indicators
+- Look for recurring themes and developmental patterns
+- Identify unique characteristics that distinguish this individual
+- Do NOT summarize or compress - extract exhaustively
+
+OUTPUT FORMAT:
+Structure your analysis clearly with EXTENSIVE detailed subsections for each category. Use MANY bullet points (50-200+ per category) for discrete facts and longer paragraphs for complex patterns. Always cite specific examples from the conversation data to support your analysis. For large files, each section should be several paragraphs with comprehensive bullet lists.
+
+PRIVACY & SAFETY:
+- This is the user's own conversation data being analyzed for their personal use
+- Redact passwords, API keys, tokens, and sensitive credentials with "<REDACTED>"
+- You may include technical identifiers, project names, and professional context
+- Focus on extracting actionable insights and technical details
+
+The conversation data you will analyze follows this message. Provide your comprehensive Universal Context Pack analysis.
+
+Content to analyze:
+{chunk}
+
+Provide your comprehensive analysis with detailed subsections for each category. BE THOROUGH - use all 16,000 available output tokens if needed."""
+                
+                response = await openai_call_with_retry(
+                    openai_client,
+                    max_retries=3,
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    max_completion_tokens=15000  # Allow comprehensive analysis (gpt-4o-mini supports up to 16k)
+                )
+                
+                analysis = response.choices[0].message.content
+                
+                # Track tokens and cost
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+                total_cost += (input_tokens * 0.00015 / 1000) + (output_tokens * 0.0006 / 1000)
+                
+                print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed: {output_tokens} tokens out, {input_tokens} tokens in")
+                
+                # Append this chunk's analysis to files
+                chunk_sep = f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
+                
+                # Append to pack file
+                if idx == 0:
+                    # First chunk - add source header
+                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis)
+                else:
+                    current = download_from_r2(pack_analyzed_path) or ""
+                    upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis)
+                
+                # Append to individual source file
+                current_source = download_from_r2(analyzed_path, silent_404=True) or ""
+                upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
+                
+                print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed and saved")
+                
+                # Update progress
+                progress = 50 + int((idx + 1) / len(chunks) * 40)
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "processing",
+                    "progress_param": progress
+                }).execute()
+                
+                print(f"📊 Progress updated: {progress}% (chunk {idx+1}/{len(chunks)} complete)")
+                
+            except Exception as e:
+                print(f"❌ Error analyzing chunk {idx}: {e}")
+                continue
+        
+        # Update source status to completed
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "completed",
+            "progress_param": 100,
+            "total_chunks_param": len(chunks),
+            "total_input_tokens_param": total_input_tokens,
+            "total_output_tokens_param": total_output_tokens,
+            "total_cost_param": total_cost
+        }).execute()
+        
+        if max_chunks is not None and len(chunks) < len(all_chunks):
+            print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks")
+        else:
+            print(f"✅ Source {source_id} analyzed successfully")
+        
+        # Send email notification if it was a large job
+        if is_large_job:
+            try:
+                await send_email_notification(
+                    user_email=user.email,
+                    job_id=source_id,
+                    chunks_processed=len(chunks),
+                    total_chunks=len(chunks),
+                    success=True
+                )
+                print(f"📧 Email notification sent to {user.email}")
+            except Exception as email_error:
+                print(f"⚠️ Failed to send email notification: {email_error}")
+        
+        # Deduct credits from user
+        await update_user_chunks_used(user.user_id, len(chunks))
+        
+    except Exception as e:
+        print(f"❌ Error analyzing source {source_id}: {e}")
+        
+        # Update source status to failed
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "failed",
+            "error_message_param": str(e)
+        }).execute()
+        
+        # Send failure email notification if it was a large job
+        if 'is_large_job' in locals() and is_large_job:
+            try:
+                await send_email_notification(
+                    user_email=user.email,
+                    job_id=source_id,
+                    chunks_processed=0,
+                    total_chunks=len(chunks) if 'chunks' in locals() else 0,
+                    success=False
+                )
+                print(f"📧 Failure email notification sent to {user.email}")
+            except Exception as email_error:
+                print(f"⚠️ Failed to send failure email notification: {email_error}")
 
 @app.get("/api/job-summary/{job_id}")
 async def get_job_summary(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -3155,14 +3581,25 @@ The conversation data you will analyze follows this message. Provide your compre
                     }
                 return {"error": str(e), "chunk_num": chunk_num}
         
+        # For large chunks (>150k tokens), process sequentially with rate limiting
+        # to avoid hitting OpenAI's 200k TPM limit
+        if estimated_tokens_per_chunk > 150000:
+            batch_size = 1
+            print(f"⚠️ Large chunks detected (~{estimated_tokens_per_chunk:,} tokens). Using sequential processing with rate limiting.")
+        
         # Process chunks in optimized parallel batches
-        update_job_progress(job_id, "analyzing", 15, f"Processing {chunks_to_process} chunks in parallel batches of {batch_size}...")
+        update_job_progress(job_id, "analyzing", 15, f"Processing {chunks_to_process} chunks in batches of {batch_size}...")
         
         # Split chunks into batches for parallel processing
         total_batches = (chunks_to_process + batch_size - 1) // batch_size
         print(f"🚀 Starting batch processing: {total_batches} batches of {batch_size} chunks each")
         
         for batch_start in range(0, chunks_to_process, batch_size):
+            # Rate limiting for large chunks to avoid TPM limits
+            if batch_start > 0 and estimated_tokens_per_chunk > 150000:
+                print(f"⏱️ Rate limiting: waiting 3 seconds before next chunk...")
+                await asyncio.sleep(3)
+            
             # Check for cancellation before each batch
             if job_id in cancelled_jobs:
                 chunks_completed = len(results)
@@ -3774,11 +4211,109 @@ async def get_job_progress_stream(job_id: str, user: AuthenticatedUser = Depends
 
 @app.get("/api/download/{job_id}/complete")
 async def download_complete_ucp(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download complete UCP file from R2."""
+    """Download complete UCP file from R2. Works with both legacy jobs and v2 packs."""
     try:
-        content = download_from_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt")
+        print(f"Attempting to download complete UCP for job/pack: {job_id}")
+        
+        # Try direct path first (legacy jobs)
+        content = download_from_r2_with_fallback(
+            f"{user.r2_directory}/{job_id}/complete_ucp.txt",
+            job_id,
+            "complete_ucp.txt",
+            silent_404=True
+        )
+        
+        # If not found, check if this is a v2 pack with sources
+        if not content and supabase:
+            try:
+                print(f"Checking if {job_id} is a v2 pack...")
+                result = supabase.rpc("get_pack_details_v2", {
+                    "user_uuid": user.user_id,
+                    "target_pack_id": job_id
+                }).execute()
+                
+                print(f"Pack lookup result: {result.data is not None}")
+                if result.data:
+                    pack_data = result.data.get("pack", {})
+                    sources = result.data.get("sources", [])
+                    print(f"Found {len(sources)} sources in pack")
+                    
+                    # Check if this pack was migrated from a legacy job
+                    legacy_job_id = pack_data.get("legacy_job_id")
+                    if legacy_job_id:
+                        print(f"Pack has legacy_job_id: {legacy_job_id}, trying that path...")
+                        content = download_from_r2_with_fallback(
+                            f"{user.r2_directory}/{legacy_job_id}/complete_ucp.txt",
+                            legacy_job_id,
+                            "complete_ucp.txt",
+                            silent_404=True
+                        )
+                        if content:
+                            print(f"✅ Found complete_ucp.txt in legacy job {legacy_job_id}")
+                    
+                    if not content:
+                        # Try to find complete_ucp.txt in any of the sources
+                        for source in sources:
+                            source_id = source.get("source_id")
+                            source_name = source.get("source_name", "unknown")
+                            print(f"Checking source {source_id} ({source_name})")
+                            
+                            if source_id:
+                                # Try the source's directory
+                                content = download_from_r2_with_fallback(
+                                    f"{user.r2_directory}/{source_id}/complete_ucp.txt",
+                                    source_id,
+                                    "complete_ucp.txt",
+                                    silent_404=True
+                                )
+                                if content:
+                                    print(f"✅ Found complete_ucp.txt in source {source_id}")
+                                    break
+                    
+                    # If still not found, try to get the combined pack analysis
+                    if not content:
+                        pack_analyzed_path = f"{user.r2_directory}/{job_id}/complete_analyzed.txt"
+                        content = download_from_r2(pack_analyzed_path, silent_404=True)
+                        if content:
+                            print(f"✅ Found combined pack analysis")
+                    
+                    # If still not found, generate UCP from analyzed sources
+                    if not content and sources:
+                        print("No pre-generated UCP found, creating from pack sources...")
+                        combined_content = []
+                        pack_name = pack_data.get("pack_name", "Untitled Pack")
+                        
+                        combined_content.append(f"UNIVERSAL CONTEXT PACK - {pack_name}")
+                        combined_content.append("=" * 80)
+                        combined_content.append(f"\nGenerated from {len(sources)} source(s)\n")
+                        
+                        for source in sources:
+                            if source.get("status") == "completed":
+                                source_id = source.get("source_id")
+                                source_name = source.get("source_name", "unknown")
+                                
+                                # Try to get analyzed content
+                                analyzed_path = f"{user.r2_directory}/{job_id}/{source_id}/analyzed.txt"
+                                analyzed_content = download_from_r2(analyzed_path, silent_404=True)
+                                
+                                if analyzed_content:
+                                    combined_content.append(f"\n{'='*80}")
+                                    combined_content.append(f"SOURCE: {source_name}")
+                                    combined_content.append('='*80 + '\n')
+                                    combined_content.append(analyzed_content)
+                        
+                        if len(combined_content) > 3:  # Has content beyond header
+                            content = "\n".join(combined_content)
+                            print(f"✅ Generated UCP from {len([s for s in sources if s.get('status') == 'completed'])} completed sources")
+                else:
+                    print(f"No pack found with ID {job_id}")
+            except Exception as e:
+                print(f"Error checking pack sources: {e}")
+                import traceback
+                traceback.print_exc()
+        
         if content is None:
-            raise HTTPException(status_code=404, detail="File not found")
+            raise HTTPException(status_code=404, detail="Complete UCP file not found")
         
         return StreamingResponse(
             io.BytesIO(content.encode('utf-8')),
@@ -3790,9 +4325,43 @@ async def download_complete_ucp(job_id: str, user: AuthenticatedUser = Depends(g
 
 @app.get("/api/download/{job_id}/ultra-compact")
 async def download_ultra_compact_ucp(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download ultra-compact UCP file (~50k tokens)."""
+    """Download ultra-compact UCP file (~50k tokens). Works with both legacy jobs and v2 packs."""
     try:
-        content = download_from_r2(f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt")
+        print(f"Attempting to download ultra-compact UCP for job/pack: {job_id}")
+        
+        # Try direct path first (legacy jobs)
+        content = download_from_r2_with_fallback(
+            f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt",
+            job_id,
+            "ultra_compact_ucp.txt",
+            silent_404=True
+        )
+        
+        # If not found, check if this is a v2 pack with sources
+        if not content and supabase:
+            try:
+                result = supabase.rpc("get_pack_details_v2", {
+                    "user_uuid": user.user_id,
+                    "target_pack_id": job_id
+                }).execute()
+                
+                if result.data:
+                    sources = result.data.get("sources", [])
+                    for source in sources:
+                        source_id = source.get("source_id")
+                        if source_id:
+                            content = download_from_r2_with_fallback(
+                                f"{user.r2_directory}/{source_id}/ultra_compact_ucp.txt",
+                                source_id,
+                                "ultra_compact_ucp.txt",
+                                silent_404=True
+                            )
+                            if content:
+                                print(f"✅ Found ultra_compact_ucp.txt in source {source_id}")
+                                break
+            except Exception as e:
+                print(f"Error checking pack sources: {e}")
+        
         if content is None:
             raise HTTPException(status_code=404, detail="Ultra-compact UCP not found")
         
@@ -3801,14 +4370,50 @@ async def download_ultra_compact_ucp(job_id: str, user: AuthenticatedUser = Depe
             media_type='text/plain',
             headers={"Content-Disposition": f"attachment; filename=ultra_compact_ucp_{job_id}.txt"}
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=404, detail="Ultra-compact UCP not found")
+        raise HTTPException(status_code=404, detail=f"Ultra-compact UCP not found: {str(e)}")
 
 @app.get("/api/download/{job_id}/standard")
 async def download_standard_ucp(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download standard UCP file (~100k tokens).""" 
+    """Download standard UCP file (~100k tokens). Works with both legacy jobs and v2 packs.""" 
     try:
-        content = download_from_r2(f"{user.r2_directory}/{job_id}/standard_ucp.txt")
+        print(f"Attempting to download standard UCP for job/pack: {job_id}")
+        
+        # Try direct path first (legacy jobs)
+        content = download_from_r2_with_fallback(
+            f"{user.r2_directory}/{job_id}/standard_ucp.txt",
+            job_id,
+            "standard_ucp.txt",
+            silent_404=True
+        )
+        
+        # If not found, check if this is a v2 pack with sources
+        if not content and supabase:
+            try:
+                result = supabase.rpc("get_pack_details_v2", {
+                    "user_uuid": user.user_id,
+                    "target_pack_id": job_id
+                }).execute()
+                
+                if result.data:
+                    sources = result.data.get("sources", [])
+                    for source in sources:
+                        source_id = source.get("source_id")
+                        if source_id:
+                            content = download_from_r2_with_fallback(
+                                f"{user.r2_directory}/{source_id}/standard_ucp.txt",
+                                source_id,
+                                "standard_ucp.txt",
+                                silent_404=True
+                            )
+                            if content:
+                                print(f"✅ Found standard_ucp.txt in source {source_id}")
+                                break
+            except Exception as e:
+                print(f"Error checking pack sources: {e}")
+        
         if content is None:
             raise HTTPException(status_code=404, detail="Standard UCP not found")
         
@@ -3817,8 +4422,10 @@ async def download_standard_ucp(job_id: str, user: AuthenticatedUser = Depends(g
             media_type='text/plain',
             headers={"Content-Disposition": f"attachment; filename=standard_ucp_{job_id}.txt"}
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=404, detail="Standard UCP not found")
+        raise HTTPException(status_code=404, detail=f"Standard UCP not found: {str(e)}")
 
 @app.get("/api/download/{job_id}/chunked")
 async def download_chunked_ucp_index(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -4325,56 +4932,669 @@ async def check_job_exists(job_id: str, user: AuthenticatedUser = Depends(get_cu
 
 @app.get("/api/packs")
 async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
-    """List all completed packs from Supabase for the authenticated user."""
+    """List all completed packs from Supabase for the authenticated user - redirects to V2."""
+    # Simply redirect to the V2 endpoint which uses the unified view
+    return await list_packs_v2(user)
+
+# ============================================================================
+# PACK V2 API ENDPOINTS (NotebookLM-style)
+# ============================================================================
+
+@app.post("/api/v2/packs")
+async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    """Create a new pack (container) - Step 1 of new workflow"""
     try:
         if not supabase:
-            # Fallback to R2-based jobs if Supabase is not available
-            return await list_jobs(user)
+            raise HTTPException(status_code=500, detail="Database not configured")
         
-        # Add timeout for the RPC call to prevent hanging requests
-        import asyncio
-        def fetch_packs_with_timeout():
-            # Fetch packs from Supabase using backend function
-            result = supabase.rpc("get_user_packs_for_backend", {"user_uuid": user.user_id}).execute()
-            return result
+        pack_id = str(uuid.uuid4())
         
-        try:
-            # Set a 30-second timeout for the database query
-            result = await asyncio.wait_for(
-                asyncio.to_thread(fetch_packs_with_timeout), 
-                timeout=30.0
-            )
-        except asyncio.TimeoutError:
-            print(f"Database query timeout for user {user.user_id}, falling back to R2 jobs")
-            return await list_jobs(user)
+        print(f"Creating new pack {pack_id} for user {user.email}")
+        
+        # Create pack in database
+        result = supabase.rpc("create_pack_v2", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id,
+            "pack_name_param": request.pack_name,
+            "pack_description": request.description
+        }).execute()
+        
+        if result.data and len(result.data) > 0:
+            pack_data = result.data[0]
+            print(f"✅ Pack created successfully: {pack_id}")
+            return {
+                "pack_id": pack_id,
+                "pack_name": request.pack_name,
+                "description": request.description,
+                "total_sources": 0,
+                "total_tokens": 0,
+                "created_at": pack_data.get("created_at"),
+                "status": "created"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create pack")
+            
+    except Exception as e:
+        print(f"Error creating pack: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create pack: {str(e)}")
+
+@app.get("/api/v2/packs")
+async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):
+    """List all v2 packs for user"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Use RPC function to get packs (bypasses RLS with SECURITY DEFINER)
+        result = supabase.rpc("get_user_packs_v2", {
+            "user_uuid": user.user_id
+        }).execute()
+        
+        if not result.data:
+            return []
         
         packs = []
         for pack in result.data:
-            # Safely get stats, handling None values
-            extraction_stats = pack.get("pack_extraction_stats") or {}
-            analysis_stats = pack.get("pack_analysis_stats") or {}
-            
             pack_data = {
-                "job_id": pack["pack_job_id"],
-                "pack_name": pack["pack_name_out"],
-                "status": "completed",
-                "created_at": pack["pack_created_at"],
-                "stats": {
-                    "total_chunks": extraction_stats.get("total_chunks", 0),
-                    "processed_chunks": extraction_stats.get("processed_chunks", 0),
-                    "failed_chunks": extraction_stats.get("failed_chunks", 0),
-                    "total_input_tokens": analysis_stats.get("total_input_tokens", 0),
-                    "total_output_tokens": analysis_stats.get("total_output_tokens", 0),
-                    "total_cost": analysis_stats.get("total_cost", 0)
-                }
+                "pack_id": pack["pack_id"],
+                "pack_name": pack["pack_name"],
+                "description": pack.get("description"),
+                "total_sources": pack.get("total_sources", 0),
+                "total_tokens": pack.get("total_tokens", 0),
+                "created_at": pack["created_at"],
+                "last_updated": pack.get("last_updated") or pack.get("updated_at"),
+                "pack_version": "v2"
             }
             packs.append(pack_data)
         
         return packs
+        
     except Exception as e:
-        print(f"Error fetching packs from Supabase: {e}")
-        # Fallback to R2-based jobs
-        return await list_jobs(user)
+        print(f"Error listing packs: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list packs: {str(e)}")
+
+@app.get("/api/v2/packs/{pack_id}")
+async def get_pack_details_v2(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Get pack details with all sources"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=404, detail="Database not configured")
+        
+        # Use RPC function to get pack details (bypasses RLS)
+        result = supabase.rpc("get_pack_details_v2", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id
+        }).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        return result.data
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting pack details: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get pack: {str(e)}")
+
+@app.patch("/api/v2/packs/{pack_id}")
+async def update_pack_v2(pack_id: str, request: Request, user: AuthenticatedUser = Depends(get_current_user)):
+    """Update pack metadata (name, description)"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Parse request body
+        body = await request.json()
+        pack_name = body.get("pack_name")
+        description = body.get("description")
+        
+        print(f"Updating pack {pack_id} for user {user.email}")
+        
+        if not pack_name and not description:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        # Update pack using RPC function (respects RLS policies)
+        result = supabase.rpc("update_pack_v2", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id,
+            "pack_name_param": pack_name,
+            "pack_description": description
+        }).execute()
+        
+        if result.data and len(result.data) > 0:
+            print(f"✅ Pack updated successfully: {pack_id}")
+            pack_data = result.data[0]
+            return {
+                "pack_id": pack_data["pack_id"],
+                "pack_name": pack_data["pack_name"],
+                "description": pack_data.get("description"),
+                "total_sources": pack_data["total_sources"],
+                "total_tokens": pack_data["total_tokens"],
+                "updated_at": pack_data["updated_at"]
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Pack not found or unauthorized")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating pack: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update pack: {str(e)}")
+
+@app.post("/api/v2/packs/{pack_id}/sources")
+async def add_source_to_pack(
+    pack_id: str, 
+    file: UploadFile = File(...),
+    source_name: str = Form(...),
+    source_type: str = Form("chat_export"),
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Add a new source (file/chat export) to an existing pack"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        source_id = str(uuid.uuid4())
+        
+        print(f"Adding source {source_id} to pack {pack_id} for user {user.email}")
+        
+        # Read file content
+        content = await file.read()
+        file_size = len(content)
+        
+        # Handle ZIP files for chat exports
+        file_content_str = ""
+        if file.filename.lower().endswith('.zip') and source_type == 'chat_export':
+            try:
+                print(f"📦 Extracting conversations.json from ZIP: {file.filename}")
+                file_content_str = extract_conversations_from_zip(content)
+                print(f"✅ Successfully extracted conversations.json ({len(file_content_str)} bytes)")
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        else:
+            file_content_str = content.decode('utf-8') if source_type == 'chat_export' else content.decode('utf-8', errors='ignore')
+        
+        # Create source record in database
+        result = supabase.rpc("add_pack_source", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id,
+            "target_source_id": source_id,
+            "source_name_param": source_name,
+            "source_type_param": source_type,
+            "file_name_param": file.filename,
+            "file_size_param": file_size
+        }).execute()
+        
+        if not result.data or len(result.data) == 0:
+            raise HTTPException(status_code=500, detail="Failed to create source record")
+        
+        # Start background extraction and chunking (NO analysis yet, NO credit deduction)
+        asyncio.create_task(
+            extract_and_chunk_source(
+                pack_id=pack_id,
+                source_id=source_id,
+                file_content=file_content_str,
+                filename=file.filename,
+                user=user
+            )
+        )
+        
+        return {
+            "pack_id": pack_id,
+            "source_id": source_id,
+            "job_id": source_id,  # For frontend compatibility
+            "source_name": source_name,
+            "status": "extracting",
+            "message": "Source added, extraction and chunking started"
+        }
+        
+    except Exception as e:
+        print(f"Error adding source to pack: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add source: {str(e)}")
+
+@app.delete("/api/v2/packs/{pack_id}")
+async def delete_pack(
+    pack_id: str, 
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Delete a pack and all its sources"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        print(f"Deleting pack {pack_id} for user {user.email}")
+        
+        # Use RPC function to delete pack (bypasses RLS)
+        result = supabase.rpc("delete_pack_v2", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id
+        }).execute()
+        
+        if result.data:
+            print(f"✅ Pack {pack_id} deleted successfully")
+            return {"success": True, "message": "Pack deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Pack not found or unauthorized")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting pack: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete pack: {str(e)}")
+
+@app.get("/api/v2/sources/{source_id}/status")
+async def get_source_status(
+    source_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Get processing status for a source"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Use RPC function to get source status (bypasses RLS)
+        result = supabase.rpc("get_source_status_v2", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id
+        }).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Source not found")
+        
+        source = result.data
+        
+        return {
+            "source_id": source["source_id"],
+            "pack_id": source["pack_id"],
+            "status": source["status"],
+            "progress": source.get("progress", 0),
+            "error_message": source.get("error_message"),
+            "total_chunks": source.get("total_chunks", 0),
+            "extracted_count": source.get("extracted_count", 0),
+            "total_input_tokens": source.get("total_input_tokens", 0),
+            "total_output_tokens": source.get("total_output_tokens", 0),
+            "completed_at": source.get("completed_at")
+        }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting source status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get source status: {str(e)}")
+
+@app.delete("/api/v2/packs/{pack_id}/sources/{source_id}")
+async def delete_source_from_pack(
+    pack_id: str, 
+    source_id: str, 
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Remove a source from a pack"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Delete source (cascade will handle related data)
+        result = supabase.table("pack_sources").delete().eq("source_id", source_id).eq("user_id", user.user_id).execute()
+        
+        if result.data:
+            return {"success": True, "message": "Source deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Source not found")
+            
+    except Exception as e:
+        print(f"Error deleting source: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete source: {str(e)}")
+
+@app.get("/api/v2/sources/{source_id}/credit-check")
+async def check_source_credits(
+    source_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Check if user has enough credits to analyze this source"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Get source status to find chunk count
+        result = supabase.rpc("get_source_status_v2", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id
+        }).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Source not found")
+        
+        source = result.data
+        total_chunks = source.get("total_chunks", 0)
+        
+        if total_chunks == 0:
+            raise HTTPException(status_code=400, detail="Source not yet chunked")
+        
+        # Get user's current credits and payment plan
+        user_result = supabase.table("user_profiles").select("credits_balance, payment_plan").eq("id", user.user_id).single().execute()
+        user_credits = user_result.data.get("credits_balance", 0) if user_result.data else 0
+        payment_plan = user_result.data.get("payment_plan", "credits") if user_result.data else "credits"
+        
+        # Check if user has unlimited plan
+        has_unlimited = payment_plan == "unlimited"
+        
+        credit_check_result = {
+            "sourceId": source_id,
+            "totalChunks": total_chunks,
+            "creditsRequired": total_chunks,
+            "userCredits": user_credits,
+            "hasUnlimited": has_unlimited,
+            "canProceed": has_unlimited or user_credits >= total_chunks,
+            "needsPurchase": not has_unlimited and user_credits < total_chunks,
+            "creditsNeeded": max(0, total_chunks - user_credits) if not has_unlimited else 0
+        }
+        
+        print(f"💳 Credit check for source {source_id}: {total_chunks} chunks, user has {user_credits} credits, can_proceed={credit_check_result['canProceed']}")
+        
+        return credit_check_result
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error checking source credits: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to check credits: {str(e)}")
+
+@app.post("/api/v2/sources/{source_id}/start-analysis")
+async def start_source_analysis(
+    source_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Start analysis after user confirms they have enough credits (supports partial analysis)"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Parse request body for max_chunks parameter
+        body = await request.json() if request.headers.get('content-type') == 'application/json' else {}
+        max_chunks = body.get("max_chunks")  # Optional: limit analysis to specific number of chunks
+        
+        # Get source info
+        result = supabase.rpc("get_source_status_v2", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id
+        }).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Source not found")
+        
+        source = result.data
+        pack_id = source["pack_id"]
+        status = source["status"]
+        total_chunks = source.get("total_chunks", 0)
+        
+        # Validate source is ready
+        if status != "ready_for_analysis":
+            raise HTTPException(status_code=400, detail=f"Source not ready for analysis (status: {status})")
+        
+        # Check credits one more time and get payment plan
+        user_result = supabase.table("user_profiles").select("credits_balance, payment_plan").eq("id", user.user_id).single().execute()
+        user_credits = user_result.data.get("credits_balance", 0) if user_result.data else 0
+        payment_plan = user_result.data.get("payment_plan", "credits") if user_result.data else "credits"
+        
+        # Check unlimited plan
+        has_unlimited = payment_plan == "unlimited"
+        
+        # Determine how many chunks to analyze
+        chunks_to_analyze = total_chunks
+        if max_chunks is not None:
+            chunks_to_analyze = min(max_chunks, total_chunks)
+        
+        # For non-unlimited users, check if they have any credits
+        if not has_unlimited:
+            if user_credits <= 0:
+                raise HTTPException(
+                    status_code=402, 
+                    detail="No credits available. Purchase credits to analyze."
+                )
+            # Limit to available credits
+            chunks_to_analyze = min(chunks_to_analyze, user_credits)
+        
+        # Get filename from source data (already fetched above via RPC)
+        filename = source.get("file_name", "unknown")
+        
+        print(f"🚀 Starting analysis: {chunks_to_analyze} of {total_chunks} chunks")
+        
+        # Start background analysis
+        asyncio.create_task(
+            analyze_source_chunks(
+                pack_id=pack_id,
+                source_id=source_id,
+                filename=filename,
+                user=user,
+                max_chunks=chunks_to_analyze
+            )
+        )
+        
+        return {
+            "source_id": source_id,
+            "pack_id": pack_id,
+            "status": "analyzing",
+            "message": f"Analysis started for {chunks_to_analyze} of {total_chunks} chunks",
+            "total_chunks": total_chunks,
+            "analyzing_chunks": chunks_to_analyze
+        }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error starting source analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")
+
+@app.post("/api/v2/sources/{source_id}/cancel")
+async def cancel_source_analysis(
+    source_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Cancel a running source analysis"""
+    try:
+        # Add to cancelled jobs set (this stops the analysis loop)
+        cancelled_jobs.add(source_id)
+        
+        print(f"🚫 Source {source_id} cancellation requested by user {user.user_id}")
+        
+        # The analysis loop will detect cancellation and update the database status
+        # We don't need to update it here - just adding to cancelled_jobs is enough
+        
+        return {
+            "source_id": source_id,
+            "status": "cancelling",
+            "message": "Cancellation requested. Analysis will stop shortly. If 10+ chunks were processed, credits were deducted."
+        }
+        
+    except Exception as e:
+        print(f"Error cancelling source analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel analysis: {str(e)}")
+
+@app.get("/api/v2/packs/{pack_id}/download/zip")
+async def download_pack_zip_v2(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Download complete pack as ZIP with all sources"""
+    import zipfile
+    import tempfile
+    
+    try:
+        # Get pack details with sources
+        result = supabase.rpc("get_pack_details_v2", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id
+        }).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        pack_data = result.data.get("pack", {})
+        sources = result.data.get("sources", [])
+        
+        print(f"Creating ZIP for pack {pack_id} with {len(sources)} sources")
+        
+        # Create temp ZIP file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
+            with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                files_added = 0
+                
+                # Add each source's files
+                for source in sources:
+                    source_id = source.get("source_id")
+                    source_name = source.get("source_name", "unknown")
+                    status = source.get("status", "unknown")
+                    
+                    print(f"Processing source {source_id} ({source_name}) - status: {status}")
+                    
+                    # Add extracted text if available
+                    extracted_path = f"{user.r2_directory}/{pack_id}/{source_id}/extracted.txt"
+                    try:
+                        extracted_content = download_from_r2(extracted_path)
+                        if extracted_content:
+                            zipf.writestr(f"sources/{source_name}/extracted.txt", extracted_content)
+                            files_added += 1
+                            print(f"✅ Added extracted.txt for {source_name}")
+                        else:
+                            print(f"⚠️ No extracted content for {source_name}")
+                    except Exception as e:
+                        print(f"❌ Error downloading extracted.txt for {source_name}: {e}")
+                    
+                    # Add analyzed content if completed
+                    if status == "completed":
+                        analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
+                        try:
+                            analyzed_content = download_from_r2(analyzed_path)
+                            if analyzed_content:
+                                zipf.writestr(f"sources/{source_name}/analyzed.txt", analyzed_content)
+                                files_added += 1
+                                print(f"✅ Added analyzed.txt for {source_name}")
+                            else:
+                                print(f"⚠️ No analyzed content for {source_name}")
+                        except Exception as e:
+                            print(f"❌ Error downloading analyzed.txt for {source_name}: {e}")
+                    
+                    # Add chunked data if available
+                    chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
+                    try:
+                        chunked_content = download_from_r2(chunked_path)
+                        if chunked_content:
+                            zipf.writestr(f"sources/{source_name}/chunked.json", chunked_content)
+                            files_added += 1
+                            print(f"✅ Added chunked.json for {source_name}")
+                        else:
+                            print(f"⚠️ No chunked content for {source_name}")
+                    except Exception as e:
+                        print(f"❌ Error downloading chunked.json for {source_name}: {e}")
+                
+                # Add pack metadata
+                pack_info = {
+                    "pack_id": pack_id,
+                    "pack_name": pack_data.get("pack_name"),
+                    "description": pack_data.get("description"),
+                    "total_sources": len(sources),
+                    "sources": [
+                        {
+                            "source_id": s.get("source_id"),
+                            "source_name": s.get("source_name"),
+                            "status": s.get("status"),
+                            "created_at": s.get("created_at")
+                        }
+                        for s in sources
+                    ]
+                }
+                zipf.writestr("pack_info.json", json.dumps(pack_info, indent=2))
+                files_added += 1
+                
+                print(f"Total files added to ZIP: {files_added}")
+                
+                if files_added == 1:  # Only pack_info
+                    raise HTTPException(status_code=404, detail="No source files found in pack. Sources may still be processing.")
+        
+        # Read and return ZIP
+        with open(temp_zip.name, 'rb') as f:
+            zip_data = f.read()
+        
+        os.unlink(temp_zip.name)
+        
+        return StreamingResponse(
+            io.BytesIO(zip_data),
+            media_type='application/zip',
+            headers={"Content-Disposition": f"attachment; filename=pack_{pack_data.get('pack_name', pack_id)}.zip"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating pack ZIP: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create ZIP: {str(e)}")
+
+@app.get("/api/v2/packs/{pack_id}/export/{export_type}")
+async def download_pack_export_v2(
+    pack_id: str, 
+    export_type: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Download a pack export (compact/standard/complete)"""
+    try:
+        if export_type not in ['compact', 'standard', 'complete']:
+            raise HTTPException(status_code=400, detail="Invalid export type")
+        
+        # Check if it's a v2 pack or legacy
+        pack_result = supabase.rpc("get_pack_details", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id
+        }).execute()
+        
+        if not pack_result.data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        pack_data = pack_result.data
+        
+        # For legacy packs that were auto-migrated, use old download paths
+        if pack_data.get("migrated_from_legacy"):
+            # Use the old download endpoint logic
+            if export_type == 'compact':
+                return await download_ultra_compact_ucp(pack_id, user)
+            elif export_type == 'standard':
+                return await download_standard_ucp(pack_id, user)
+            else:
+                return await download_complete_ucp(pack_id, user)
+        
+        # For v2 packs, combine all sources
+        sources = pack_data.get("sources", [])
+        
+        # Combine all analyzed content from sources
+        combined_content = []
+        for source in sources:
+            if source["status"] == "completed":
+                # Download analyzed content from R2
+                analyzed_path = source.get("r2_analyzed_path")
+                if analyzed_path:
+                    content = download_from_r2(analyzed_path)
+                    if content:
+                        combined_content.append(f"=== Source: {source['source_name']} ===\n\n{content}\n\n")
+        
+        # Generate export based on type
+        if export_type == "compact":
+            full_text = "\n".join(combined_content)
+            export_content = full_text
+        elif export_type == "standard":
+            export_content = "\n".join(combined_content)
+        else:  # complete
+            export_content = "\n".join(combined_content)
+        
+        # Return as downloadable file
+        return StreamingResponse(
+            iter([export_content.encode('utf-8')]),
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename={export_type}_pack_{pack_id}.txt"
+            }
+        )
+        
+    except Exception as e:
+        print(f"Error downloading pack export: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download export: {str(e)}")
 
 @app.get("/api/test-packs")
 async def test_packs():
@@ -6207,4 +7427,4 @@ if __name__ == "__main__":
     print(" Starting Simple UCP Backend with R2 Storage - 3 Step Process...")
     print(f" Using R2 bucket: {R2_BUCKET}")
     print(" Steps: 1) Extract → 2) Chunk → 3) Analyze")
-    uvicorn.run("simple_backend:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("simple_backend:app", host="0.0.0.0", port=8000, reload=False, log_level="warning")

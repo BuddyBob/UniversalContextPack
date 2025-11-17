@@ -340,8 +340,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (url.includes('/api/analyze/')) {
         timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
-      } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
-        timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
+      } else if (url.includes('/api/chunk/') || url.includes('/api/extract/') || url.includes('/sources')) {
+        timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction/file upload
       } else if (url.includes('/api/status/')) {
         timeoutMs = 90000 // 90 seconds for status polling to handle batch processing
       } else if (url.includes('/api/profile/quick')) {
@@ -416,12 +416,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const timeoutType = url.includes('/api/analyze/') ? 'Analysis request' 
                           : url.includes('/api/chunk/') ? 'Chunking request'
                           : url.includes('/api/extract/') ? 'Extraction request'
+                          : url.includes('/sources') ? 'File upload request'
                           : url.includes('/api/profile/quick') ? 'Quick profile request'
                           : url.includes('/api/health') ? 'Health check request'
                           : 'Request'
         
         const timeoutDuration = url.includes('/api/analyze/') ? '30 minutes'
-                              : url.includes('/api/chunk/') || url.includes('/api/extract/') ? '10 minutes'
+                              : url.includes('/api/chunk/') || url.includes('/api/extract/') || url.includes('/sources') ? '10 minutes'
                               : url.includes('/api/profile/quick') ? '10 seconds'
                               : url.includes('/api/health') ? '20 seconds'
                               : '30 seconds'
