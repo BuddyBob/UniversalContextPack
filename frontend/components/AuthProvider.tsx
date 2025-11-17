@@ -92,125 +92,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const fetchUserProfile = async (userId: string) => {
+    console.log('🔍 fetchUserProfile called for userId:', userId)
+    
     // Debounce: Don't fetch if we fetched within the last 5 seconds
     const now = Date.now()
     if (now - lastProfileFetch < 5000) {
+      console.log('⏭️ Skipping profile fetch - debounced (fetched', now - lastProfileFetch, 'ms ago)')
       return
     }
     
     try {
       setLastProfileFetch(now)
-      // Get fresh session first
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      console.log('📊 Querying user_profiles table for userId:', userId)
       
-      if (sessionError || !session?.access_token) {
-        return
-      }
-      
-      // Try to get the user profile via our backend API
-      try {
-        // Create AbortController for timeout
-        const controller = new AbortController()
-        // Use shorter timeout for quick endpoint (10s) since it should be very fast
-        const timeoutId = setTimeout(() => controller.abort(), 10000) 
-        
-        // Use the lightweight quick endpoint during potential analysis periods
-        // or if we've had recent failures, otherwise use the full profile endpoint
-        const profileEndpoint = `${API_ENDPOINTS.profile}/quick`
-        
-        const response = await fetch(profileEndpoint, {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          signal: controller.signal,
-        })
-        
-        clearTimeout(timeoutId)
-        
-        if (response.ok) {
-          const data = await response.json()
-          // If we got a quick response, it only contains auth status
-          // Fall back to Supabase for full profile data
-          if (data.authenticated) {
-            // Fallback to direct Supabase query for full profile
-            const { data: profileData, error } = await supabase
-              .from('user_profiles')
-              .select('*')
-              .eq('id', userId)
-              .single()
-
-            if (!error && profileData) {
-              setUserProfile(profileData)
-            }
-          }
-          return
-        } else if (response.status === 401) {
-          // Token might be expired, try to refresh once before giving up
-          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession()
-          
-          if (refreshError || !refreshedSession) {
-            await signOut()
-            return
-          }
-          
-          // Retry with refreshed token and timeout
-          const retryController = new AbortController()
-          const retryTimeoutId = setTimeout(() => retryController.abort(), 10000) // 10 second timeout for quick endpoint
-          
-          const retryResponse = await fetch(`${API_ENDPOINTS.profile}/quick`, {
-            headers: {
-              'Authorization': `Bearer ${refreshedSession.access_token}`,
-            },
-            signal: retryController.signal,
-          })
-          
-          clearTimeout(retryTimeoutId)
-          
-          if (retryResponse.ok) {
-            const data = await retryResponse.json()
-            // If we got a quick response, it only contains auth status
-            if (data.authenticated) {
-              // Fallback to direct Supabase query for full profile
-              const { data: profileData, error } = await supabase
-                .from('user_profiles')
-                .select('id, email, full_name, avatar_url, r2_user_directory, credit_balance, payment_plan, created_at, updated_at')
-                .eq('id', userId)
-                .single()
-
-              if (!error && profileData) {
-                console.log('User profile loaded (retry path):', { credit_balance: profileData.credit_balance, payment_plan: profileData.payment_plan })
-                setUserProfile({ ...profileData, credits_balance: profileData.credit_balance })
-              }
-            }
-            return
-          } else {
-            await signOut()
-            return
-          }
-        }
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          console.warn('Profile request timed out after 30 seconds')
-        } else {
-          console.error('Profile request error:', error)
-        }
-      }
-      
-      // Fallback to direct Supabase query
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, email, full_name, avatar_url, r2_user_directory, credit_balance, payment_plan, created_at, updated_at')
+        .select('id, email, full_name, avatar_url, r2_user_directory, credits_balance, payment_plan, created_at, updated_at')
         .eq('id', userId)
         .single()
 
+      console.log('📊 Supabase query result:', { data, error })
+
       if (error) {
-        console.error('Error fetching user profile:', error)
+        console.error('❌ Error fetching user profile:', error)
         return
       }
 
-      console.log('User profile loaded:', { credit_balance: data.credit_balance, payment_plan: data.payment_plan })
-      // Map credit_balance to credits_balance for consistency with existing code
-      setUserProfile({ ...data, credits_balance: data.credit_balance })
+      if (!data) {
+        console.error('❌ No data returned from user_profiles query')
+        return
+      }
+
+      console.log('✅ User profile loaded:', { credits_balance: data.credits_balance, payment_plan: data.payment_plan })
+      
+      setUserProfile(data)
+      console.log('✅ Setting user profile with mapping:', profileWithMapping)
+      setUserProfile(profileWithMapping)
     } catch (error) {
       console.error('Error fetching user profile:', error)
     }
