@@ -169,10 +169,10 @@ export default function Navigation() {
                   {user && (
                   <a 
                     href="/pricing"
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600/10 to-purple-600/10 hover:from-blue-600/20 hover:to-purple-600/20 border border-blue-500/30 hover:border-blue-500/50 transition-all group"
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all"
                     title="Buy more credits"
                   >
-                    <CreditCard className="w-4 h-4 text-blue-400 group-hover:text-blue-300" />
+                    <CreditCard className="w-4 h-4 text-gray-400" />
                     <div className="flex flex-col items-start">
                       <span className="text-[10px] text-gray-400 uppercase tracking-wide">Credits</span>
                       <span className="text-sm font-semibold text-white">{userProfile?.payment_plan === 'unlimited' ? '∞' : userProfile?.credits_balance?.toLocaleString() || '0'}</span>
