@@ -198,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Fallback to direct Supabase query
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('id, email, full_name, avatar_url, r2_user_directory, credits_balance, payment_plan, created_at, updated_at')
+        .select('id, email, full_name, avatar_url, r2_user_directory, credit_balance, payment_plan, created_at, updated_at')
         .eq('id', userId)
         .single()
 
@@ -207,8 +207,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      console.log('User profile loaded:', { credits_balance: data.credits_balance, payment_plan: data.payment_plan })
-      setUserProfile(data)
+      console.log('User profile loaded:', { credit_balance: data.credit_balance, payment_plan: data.payment_plan })
+      // Map credit_balance to credits_balance for consistency with existing code
+      setUserProfile({ ...data, credits_balance: data.credit_balance })
     } catch (error) {
       console.error('Error fetching user profile:', error)
     }
