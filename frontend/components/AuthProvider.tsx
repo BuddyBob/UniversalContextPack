@@ -92,26 +92,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const fetchUserProfile = async (userId: string) => {
-    console.log('🔍 fetchUserProfile called for userId:', userId)
     
     // Debounce: Don't fetch if we fetched within the last 5 seconds
     const now = Date.now()
     if (now - lastProfileFetch < 5000) {
-      console.log('⏭️ Skipping profile fetch - debounced (fetched', now - lastProfileFetch, 'ms ago)')
       return
     }
     
     try {
       setLastProfileFetch(now)
-      console.log('📊 Querying user_profiles table for userId:', userId)
       
       const { data, error } = await supabase
         .from('user_profiles')
         .select('id, email, full_name, avatar_url, r2_user_directory, credits_balance, payment_plan, created_at, updated_at')
         .eq('id', userId)
         .single()
-
-      console.log('📊 Supabase query result:', { data, error })
 
       if (error) {
         console.error('❌ Error fetching user profile:', error)

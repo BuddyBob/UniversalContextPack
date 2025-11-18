@@ -87,6 +87,7 @@ export default function ProcessPage() {
   const [newPackName, setNewPackName] = useState('');
   const [newPackDescription, setNewPackDescription] = useState('');
   const [isCreatingPack, setIsCreatingPack] = useState(false);
+  const [hasHandledCreateNew, setHasHandledCreateNew] = useState(false);
   const [sourceName, setSourceName] = useState('');
   const [isEditingPackName, setIsEditingPackName] = useState(false);
   const [editedPackName, setEditedPackName] = useState('');
@@ -140,17 +141,14 @@ export default function ProcessPage() {
           // Check if any source is ready for analysis
           const readySource = sources.find((s: any) => s.status === 'ready_for_analysis');
           if (readySource) {
-            console.log('🎯 Found ready_for_analysis source:', readySource.source_id, 'Total chunks:', readySource.total_chunks, 'Modal already open?', !!sourcePendingAnalysis);
           }
           if (readySource && !sourcePendingAnalysis) {
-            console.log('✅ Opening Ready to Analyze modal for source:', readySource.source_id);
             // Fetch credit check for this source
             const creditCheck = await makeAuthenticatedRequest(
               `${API_BASE_URL}/api/v2/sources/${readySource.source_id}/credit-check`
             );
             if (creditCheck.ok) {
               const creditData = await creditCheck.json();
-              console.log('💳 Credit check data:', creditData);
               
               // Always show inline credit card for manual user approval
               // This gives users control over when analysis starts, even with unlimited plan
@@ -180,15 +178,12 @@ export default function ProcessPage() {
             const startedSource = sources.find((s: any) => s.source_id === isAnalysisStarting);
             const analyzingStatuses = ['analyzing', 'processing', 'analyzing_chunks'];
             if (startedSource && analyzingStatuses.includes(startedSource.status?.toLowerCase())) {
-              console.log('✅ Source is now analyzing, clearing starting flag. Status:', startedSource.status);
               setIsAnalysisStarting(null);
             } else if (startedSource && startedSource.status === 'completed') {
               // Source finished already, clear the starting flag
-              console.log('✅ Source completed, clearing starting flag');
               setIsAnalysisStarting(null);
             } else if (startedSource && startedSource.status === 'failed') {
               // Source failed, clear the starting flag
-              console.log('❌ Source failed, clearing starting flag');
               setIsAnalysisStarting(null);
             }
           }
@@ -212,7 +207,6 @@ export default function ProcessPage() {
             
             // Clear the pending analysis modal if this source was pending
             if (sourcePendingAnalysis && sourcePendingAnalysis.sourceId === justCompleted.source_id) {
-              console.log('✅ Source completed, clearing pending analysis modal');
               setSourcePendingAnalysis(null);
             }
           }
@@ -295,11 +289,11 @@ export default function ProcessPage() {
     const packId = searchParams.get('pack_id');
     const createNew = searchParams.get('create_new');
     
-    if (createNew === 'true') {
-      // Show create pack modal when create_new=true in URL
-      console.log('[DEBUG] create_new=true detected in URL, showing create pack modal');
+    if (createNew === 'true' && !hasHandledCreateNew) {
+      // Show create pack modal when create_new=true in URL (only once per session)
       setShowCreatePack(true);
       setShowPackSelector(false);
+      setHasHandledCreateNew(true);
       
       // Remove the create_new parameter from URL to prevent re-showing modal on navigation
       const newUrl = new URL(window.location.href);
@@ -310,8 +304,9 @@ export default function ProcessPage() {
       if (!selectedPack || (selectedPack as any).pack_id !== packId) {
         loadPackDetails(packId);
       }
-    } else if (!selectedPack) {
+    } else if (!selectedPack && !hasHandledCreateNew) {
       // User is logged in but no pack selected - show pack selector
+      // Don't show if we just handled create_new (they might be creating a pack)
       loadPacks();
     }
   }, [searchParams, user]);
@@ -1081,7 +1076,6 @@ export default function ProcessPage() {
   };
 
   const createPack = async () => {
-    console.log('[DEBUG] createPack called:', { newPackName, newPackDescription, user: !!user, isCreatingPack });
     
     if (!newPackName.trim()) {
       console.log('[DEBUG] Pack name is empty, aborting');
@@ -1113,6 +1107,11 @@ export default function ProcessPage() {
       if (response.ok) {
         const pack = await response.json();
         console.log('[DEBUG] Pack created successfully:', pack);
+        
+        // Load packs first to refresh the list
+        await loadPacks();
+        
+        // Then set the newly created pack as selected
         setSelectedPack(pack);
         setShowCreatePack(false);
         setNewPackName('');
@@ -1121,7 +1120,11 @@ export default function ProcessPage() {
         setCurrentStep('upload');
         setShowUploadOptions(true);
         addLog(`Created new pack: ${pack.pack_name}`);
-        await loadPacks();
+        
+        // Update URL with pack_id so navigation back works correctly
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('pack_id', pack.pack_id);
+        window.history.replaceState({}, '', newUrl.toString());
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         console.error('[ERROR] Failed to create pack:', { status: response.status, error: errorData });
@@ -1725,7 +1728,6 @@ export default function ProcessPage() {
     extractionAbortControllerRef.current = new AbortController();
     isExtractionPollingRef.current = true;
     
-    console.log('Starting extraction polling for job:', jobId);
     
     // Poll for extraction completion with improved error handling
     let consecutiveFailures = 0;
@@ -3459,7 +3461,7 @@ export default function ProcessPage() {
                       : 'border-gray-700 bg-gray-900/50'
                   }`}
                 >
-                  <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-20 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Upload className="w-8 h-8 text-blue-400" />
                   </div>
                   <h3 className="text-lg font-semibold text-white mb-2">Upload sources</h3>
@@ -3471,7 +3473,7 @@ export default function ProcessPage() {
                     >
                       choose file
                     </button>
-                    {' '}to upload
+                    {' '}to upload. Large files (3-4min) <br/> Email results for GPT conversations. 
                   </p>
                   <input
                     ref={fileInputRef}

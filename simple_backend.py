@@ -1042,14 +1042,9 @@ def upload_to_r2_direct(key: str, content: str):
             clean_content = content_bytes.decode('utf-8')
             response = r2_session.put(url, data=clean_content.encode('utf-8'), headers=headers, timeout=30)
         except requests.exceptions.SSLError as ssl_error:
-            print(f"🔒 SSL verification failed for R2 upload: {ssl_error}")
-            print("📋 Falling back to local storage due to SSL issues")
-            # Fallback to local storage on SSL issues
-            local_path = f"local_storage/{key}"
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.write(content)
-            return True
+            print(f"❌ SSL verification failed for R2 upload: {ssl_error}")
+            print(f"❌ Cannot upload to R2 due to SSL issues")
+            return False
         except UnicodeEncodeError as ue:
             print(f"Unicode encoding error: {ue}")
             # More aggressive cleaning for surrogate pairs
@@ -1058,13 +1053,9 @@ def upload_to_r2_direct(key: str, content: str):
             try:
                 response = r2_session.put(url, data=clean_content.encode('utf-8'), headers=headers, timeout=30)
             except requests.exceptions.SSLError as ssl_error:
-                print(f"🔒 SSL verification failed on retry: {ssl_error}")
-                # Fallback to local storage
-                local_path = f"local_storage/{key}"
-                os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
-                    f.write(clean_content)
-                return True
+                print(f"❌ SSL verification failed on retry: {ssl_error}")
+                print(f"❌ Cannot upload to R2 due to SSL issues")
+                return False
             # More aggressive cleaning for surrogate pairs
             import unicodedata
             clean_content = ''.join(char for char in content if unicodedata.category(char) != 'Cs')
@@ -1074,24 +1065,16 @@ def upload_to_r2_direct(key: str, content: str):
             print(f"✅ R2 upload successful with SSL verification: {key}")
             return True
         else:
-            print(f"R2 upload failed: {response.status_code} - {response.text}")
-            # Fallback to local storage
-            local_path = f"local_storage/{key}"
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.write(content)
-            return True
+            print(f"❌ R2 upload failed: {response.status_code} - {response.text}")
+            print(f"❌ Failed to upload {key} to R2 bucket {R2_BUCKET}")
+            print(f"❌ Please verify your R2 bucket exists and credentials are correct")
+            return False
         
     except Exception as e:
-        # Fallback to local storage
-        try:
-            local_path = f"local_storage/{key}"
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            with open(local_path, 'w', encoding='utf-8', errors='replace') as f:
-                f.write(content)
-            return True
-        except Exception as fallback_error:
-            return False
+        print(f"❌ R2 upload exception: {e}")
+        print(f"❌ Failed to upload {key} to R2")
+        print(f"❌ Please verify your R2 bucket '{R2_BUCKET}' exists and credentials are correct")
+        return False
 
 # Disable boto3 for now and use direct upload
 r2_client = None
@@ -1151,10 +1134,26 @@ def download_from_r2(key: str, silent_404: bool = False) -> str:
         if response.status_code == 200:
             # Removed success message - too verbose
             return response.text
-        elif response.status_code == 404 and silent_404:
-            # Silently return None for expected 404s (like new process.log files)
-            print(f"R2 response status: {response.status_code}")
-            return None
+        elif response.status_code == 404:
+            # Try local storage fallback for 404s
+            if not silent_404:
+                print(f"R2 download failed ({response.status_code}): {response.text}")
+                print(f"R2 download failed ({response.status_code}), trying local storage...")
+            
+            # Fall back to local storage
+            local_path = f"local_storage/{key}"
+            try:
+                with open(local_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                if not silent_404:
+                    print(f"Successfully downloaded from local storage: {key} ({len(content)} chars)")
+                return content
+            except FileNotFoundError:
+                if silent_404:
+                    return None  # Silently return None for expected 404s when file doesn't exist locally either
+                else:
+                    print(f"File not found in local storage: {local_path}")
+                    return None
         else:
             if not silent_404:
                 print(f"R2 download failed ({response.status_code}): {response.text}")
