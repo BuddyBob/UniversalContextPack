@@ -1248,6 +1248,41 @@ export default function ProcessPage() {
     router.push('/pricing');
   };
 
+  const handleCancelAnalysis = async () => {
+    if (!sourcePendingAnalysis) return;
+    
+    const sourceId = sourcePendingAnalysis.sourceId;
+    
+    // Close the modal immediately for better UX
+    setSourcePendingAnalysis(null);
+    
+    try {
+      // Delete the source from the backend (removes from pack)
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/api/v2/sources/${sourceId}`,
+        { method: 'DELETE' }
+      );
+      
+      if (response.ok) {
+        addLog('Source removed from pack');
+        
+        // Refresh pack sources to update the UI
+        if (selectedPack) {
+          const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
+          if (packResponse.ok) {
+            const packData = await packResponse.json();
+            setPackSources(packData.sources || []);
+          }
+        }
+      } else {
+        throw new Error('Failed to remove source');
+      }
+    } catch (error) {
+      console.error('Error removing source:', error);
+      showNotification('warning', 'Failed to remove source. Please try again.');
+    }
+  };
+
   const checkPaymentLimits = async () => {
     // If there's already a request in progress, wait for it
     if (paymentLimitsRequestRef.current) {
@@ -3284,7 +3319,7 @@ export default function ProcessPage() {
                     {sourcePendingAnalysis.canProceed ? (
                       <div className="flex gap-3">
                         <button
-                          onClick={() => setSourcePendingAnalysis(null)}
+                          onClick={handleCancelAnalysis}
                           className="flex-1 px-6 py-3 rounded-xl border-2 border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
                         >
                           Cancel
@@ -3300,7 +3335,7 @@ export default function ProcessPage() {
                       <div className="space-y-3">
                         <div className="flex gap-3">
                           <button
-                            onClick={() => setSourcePendingAnalysis(null)}
+                            onClick={handleCancelAnalysis}
                             className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
                           >
                             Cancel
@@ -3326,7 +3361,7 @@ export default function ProcessPage() {
                         </p>
                         <div className="flex gap-3">
                           <button
-                            onClick={() => setSourcePendingAnalysis(null)}
+                            onClick={handleCancelAnalysis}
                             className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
                           >
                             Cancel
