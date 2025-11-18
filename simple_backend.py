@@ -1254,6 +1254,60 @@ def list_r2_objects(prefix: str = "") -> List[str]:
             print(f"Error with local storage fallback: {local_e}")
         return []
 
+def delete_from_r2(key: str) -> bool:
+    """Delete a single object from R2."""
+    try:
+        url = f"{R2_ENDPOINT}/{R2_BUCKET}/{key}"
+        headers = {
+            'Host': urlparse(R2_ENDPOINT).netloc
+        }
+        headers = sign_aws_request('DELETE', url, headers, '', R2_ACCESS_KEY, R2_SECRET_KEY)
+        
+        response = r2_session.delete(url, headers=headers, timeout=30)
+        
+        if response.status_code in [200, 204, 404]:  # 404 is ok (already deleted)
+            return True
+        else:
+            print(f"❌ Failed to delete from R2: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ Error deleting from R2: {e}")
+        return False
+
+def delete_r2_directory(prefix: str) -> bool:
+    """Delete all objects with a given prefix (directory) from R2."""
+    try:
+        print(f"🗑️ Deleting R2 directory: {prefix}")
+        
+        # List all objects with this prefix
+        objects = list_r2_objects(prefix)
+        
+        if not objects:
+            print(f"No objects found with prefix: {prefix}")
+            return True
+        
+        print(f"Found {len(objects)} objects to delete")
+        deleted_count = 0
+        
+        # Delete each object
+        for key in objects:
+            if delete_from_r2(key):
+                deleted_count += 1
+        
+        print(f"✅ Deleted {deleted_count}/{len(objects)} objects from R2")
+        
+        # Also delete from local storage if it exists
+        local_path = f"local_storage/{prefix}"
+        if os.path.exists(local_path):
+            import shutil
+            shutil.rmtree(local_path)
+            print(f"✅ Deleted local storage: {local_path}")
+        
+        return deleted_count == len(objects)
+    except Exception as e:
+        print(f"❌ Error deleting R2 directory: {e}")
+        return False
+
 def count_tokens(text: str) -> int:
     """Count tokens in text using tiktoken."""
     try:
@@ -5170,14 +5224,18 @@ async def delete_pack(
         
         print(f"Deleting pack {pack_id} for user {user.email}")
         
-        # Use RPC function to delete pack (bypasses RLS)
+        # Delete all R2 files for this pack (user_id/pack_id/)
+        r2_prefix = f"{user.r2_directory}/{pack_id}/"
+        delete_r2_directory(r2_prefix)
+        
+        # Use RPC function to delete pack from database (bypasses RLS)
         result = supabase.rpc("delete_pack_v2", {
             "user_uuid": user.user_id,
             "target_pack_id": pack_id
         }).execute()
         
         if result.data:
-            print(f"✅ Pack {pack_id} deleted successfully")
+            print(f"✅ Pack {pack_id} deleted successfully from database and R2")
             return {"success": True, "message": "Pack deleted successfully"}
         else:
             raise HTTPException(status_code=404, detail="Pack not found or unauthorized")
@@ -5239,10 +5297,17 @@ async def delete_source_from_pack(
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
         
-        # Delete source (cascade will handle related data)
+        print(f"Deleting source {source_id} from pack {pack_id}")
+        
+        # Delete R2 files for this source (user_id/pack_id/source_id/)
+        r2_prefix = f"{user.r2_directory}/{pack_id}/{source_id}/"
+        delete_r2_directory(r2_prefix)
+        
+        # Delete source from database (cascade will handle related data)
         result = supabase.table("pack_sources").delete().eq("source_id", source_id).eq("user_id", user.user_id).execute()
         
         if result.data:
+            print(f"✅ Source {source_id} deleted successfully from database and R2")
             return {"success": True, "message": "Source deleted successfully"}
         else:
             raise HTTPException(status_code=404, detail="Source not found")
