@@ -153,6 +153,7 @@ export default function ProcessPage() {
             if (wasProcessingBefore) {
               console.log('[DEBUG] Source finished chunking, reloading page in 500ms...');
               setTimeout(() => window.location.reload(), 500);
+              setTimeout(() => window.location.reload(), 500);
               return; // Exit early since we're reloading
             }
           }
@@ -3692,7 +3693,7 @@ export default function ProcessPage() {
                     </div>
                     <div>
                       <h3 className="text-xl font-semibold text-white">Extracting Content</h3>
-                      <p className="text-gray-400">Processing your conversations and extracting meaningful content...</p>
+                      <p className="text-gray-400">Extracting content and creating semantic chunks... (1-2 minutes)</p>
                     </div>
                   </div>
                   
