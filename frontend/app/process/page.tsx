@@ -3026,7 +3026,7 @@ export default function ProcessPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white truncate">{source.source_name}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {source.status === 'extracting' && (source.message || `Extracting... ${source.progress || 0}%`)}
+                        {source.status === 'extracting' && `Extracting and chunking... ${source.progress || 0}%`}
                         {source.status === 'ready_for_analysis' && `Ready (${source.total_chunks || 0} chunks) - Click to analyze`}
                         {source.status === 'analyzing' && (
                           source.processed_chunks && source.total_chunks 
