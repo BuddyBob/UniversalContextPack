@@ -2331,10 +2331,18 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
                 advance_by = max(actual_chunk_size - overlap, initial_chunk_size // 4)  # Always advance at least 25% of initial
                 position = position + advance_by
                 
-                # Show progress every 10 chunks
+                # Show progress every 10 chunks and update database
                 if chunk_count % 10 == 0:
-                    progress_pct = (position / total_length) * 100
-                    print(f"Chunking progress: {chunk_count} chunks, {progress_pct:.1f}% complete")
+                    progress_pct = int((position / total_length) * 100)
+                    print(f"Chunking progress: {chunk_count} chunks, {progress_pct}% complete")
+                    # Update frontend with chunking progress
+                    supabase.rpc("update_source_status", {
+                        "user_uuid": user.user_id,
+                        "target_source_id": source_id,
+                        "status_param": "extracting",
+                        "progress_param": min(95, progress_pct),  # Cap at 95% until done
+                        "message_param": f"Chunking... {chunk_count} chunks created"
+                    }).execute()
             
             print(f"✅ Created {len(chunks)} chunks for source {source_id}")
         else:

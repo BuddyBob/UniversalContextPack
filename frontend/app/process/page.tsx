@@ -141,6 +141,16 @@ export default function ProcessPage() {
           // Check if any source is ready for analysis
           const readySource = sources.find((s: any) => s.status === 'ready_for_analysis');
           if (readySource) {
+            // Check if this source just finished chunking (was extracting before)
+            const wasExtractingBefore = packSources.find((s: any) => 
+              s.source_id === readySource.source_id && s.status === 'extracting'
+            );
+            
+            if (wasExtractingBefore) {
+              console.log('[DEBUG] Source finished chunking, reloading page...');
+              window.location.reload();
+              return; // Exit early since we're reloading
+            }
           }
           if (readySource && !sourcePendingAnalysis) {
             // Fetch credit check for this source
@@ -3016,7 +3026,7 @@ export default function ProcessPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white truncate">{source.source_name}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {source.status === 'extracting' && `Extracting... ${source.progress || 0}%`}
+                        {source.status === 'extracting' && (source.message || `Extracting... ${source.progress || 0}%`)}
                         {source.status === 'ready_for_analysis' && `Ready (${source.total_chunks || 0} chunks) - Click to analyze`}
                         {source.status === 'analyzing' && (
                           source.processed_chunks && source.total_chunks 
