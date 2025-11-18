@@ -1962,8 +1962,12 @@ async def extract_chatgpt_url(request: ChatGPTURLRequest, current_user: Authenti
 async def process_conversation_url_background(job_id: str, url: str, platform: str, user: AuthenticatedUser):
     """Background task for processing conversation URL extraction with progress updates (supports ChatGPT and Claude)."""
     try:
+        print(f"🔄 Starting background extraction for {platform} URL: {url}")
+        print(f"Job ID: {job_id}, User: {user.email}")
+        
         await update_job_status_in_db(user, job_id, "processing", 10, metadata={"step": "extracting_from_url"})
         update_job_progress(job_id, "extracting", 10, "Setting up browser...")
+        print(f"✅ Status updated, starting browser setup...")
         
         # Import the appropriate extractor
         try:
@@ -2281,13 +2285,13 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
             "progress_param": 50
         }).execute()
         
-        # Step 2: Chunk the text
+        # Step 2: Dynamic chunking based on actual token counts
         print(f"✂️ Chunking text for source {source_id}")
         chunks = []
-        # Optimized chunk size - DOUBLED to reduce chunk count by 50%
-        # 600k chars = ~150k tokens input + reduced output = fits in 128k context with smaller outputs
-        # This gives us ~50 chunks for a 180MB file (half the previous amount)
-        chunk_size = 600000  # ~150k tokens input - doubled to reduce chunk count
+        # Target: 50k tokens per chunk - maximize chunk size while staying safe
+        # 128k limit - 1k prompt - 1.5k output = 125.5k available, using 50k = 75k headroom
+        max_tokens_per_chunk = 50000
+        initial_chunk_size = 200000  # Start with ~50k tokens (4 chars/token average)
         overlap = 10000  # Overlap for context continuity
         
         # Combine all extracted text into one piece
@@ -2295,21 +2299,50 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         total_length = len(combined_text)
         
         # Only chunk if text exceeds chunk size
-        if total_length > chunk_size:
-            print(f"📦 Starting chunking: {total_length:,} chars into {chunk_size:,} char chunks with {overlap:,} char overlap")
+        if total_length > initial_chunk_size:
+            print(f"📦 Starting dynamic chunking: {total_length:,} chars, target {max_tokens_per_chunk:,} tokens/chunk")
             chunk_count = 0
-            for j in range(0, total_length, chunk_size - overlap):
-                chunk = combined_text[j:j + chunk_size]
+            position = 0
+            
+            while position < total_length:
+                # Extract initial chunk
+                chunk_end = min(position + initial_chunk_size, total_length)
+                chunk = combined_text[position:chunk_end]
+                
+                # Count actual tokens in this chunk
+                chunk_tokens = count_tokens(chunk)
+                
+                # If chunk exceeds limit, shrink it
+                actual_chunk_size = len(chunk)
+                if chunk_tokens > max_tokens_per_chunk:
+                    # Calculate safe size based on actual token density
+                    chars_per_token = len(chunk) / chunk_tokens
+                    safe_size = int(max_tokens_per_chunk * chars_per_token * 0.90)  # 10% safety margin
+                    # For very dense content (like PDFs), allow smaller chunks
+                    safe_size = max(safe_size, 30000)  # Absolute minimum 30k chars (~20k tokens worst case)
+                    chunk = combined_text[position:position + safe_size]
+                    chunk_tokens = count_tokens(chunk)
+                    actual_chunk_size = len(chunk)
+                    print(f"⚠️ Dense chunk detected: {chunk_tokens:,} tokens, adjusted to {actual_chunk_size:,} chars")
+                
                 chunks.append(chunk)
                 chunk_count += 1
-                # Show progress every 5 chunks
-                if chunk_count % 5 == 0 or chunk_count == 1:
-                    progress_pct = (j / total_length) * 100
+                
+                # Move position forward (use actual chunk size, ensure we always move forward)
+                advance_by = max(actual_chunk_size - overlap, initial_chunk_size // 4)  # Always advance at least 25% of initial
+                position = position + advance_by
+                
+                # Show progress every 10 chunks
+                if chunk_count % 10 == 0:
+                    progress_pct = (position / total_length) * 100
+                    print(f"Chunking progress: {chunk_count} chunks, {progress_pct:.1f}% complete")
+            
             print(f"✅ Created {len(chunks)} chunks for source {source_id}")
         else:
             # Small enough to process as single chunk
             chunks.append(combined_text)
-            print(f"Created 1 chunk for source {source_id} ({total_length:,} chars - no chunking needed)")
+            chunk_tokens = count_tokens(combined_text)
+            print(f"Created 1 chunk for source {source_id} ({total_length:,} chars, {chunk_tokens:,} tokens)")
         
         # Store chunks in R2
         chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
@@ -2327,7 +2360,8 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         }).execute()
         
         print(f"✅ Extraction and chunking complete: {len(chunks)} chunks ready for analysis")
-        print(f"Stats: {total_length:,} chars -> {len(chunks)} chunks of ~{chunk_size:,} chars each")
+        avg_chunk_size = total_length // len(chunks) if len(chunks) > 0 else 0
+        print(f"Stats: {total_length:,} chars -> {len(chunks)} chunks (~{avg_chunk_size:,} chars/chunk avg)")
         
         return len(chunks)
         
@@ -2401,6 +2435,20 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             source_header = f"--- SOURCE: {filename} ---\n\n"
         
         for idx, chunk in enumerate(chunks):
+            # Check for cancellation at the start of each chunk
+            if source_id in cancelled_jobs:
+                print(f"🛑 Cancellation detected for source {source_id}. Stopping at chunk {idx+1}/{len(chunks)}")
+                # Update status to cancelled
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "cancelled",
+                    "progress_param": 0,
+                    "processed_chunks_param": idx  # Save how many were processed before cancel
+                }).execute()
+                cancelled_jobs.discard(source_id)
+                return
+            
             try:
                 # Something smaller more importnat to prioratize content over preferences/goals/etc.
                 if chunks == 1:
@@ -2433,86 +2481,58 @@ Be thorough and factual. Go deep. This output will be used for content analysis 
 """
 
                 #Look for more of a user overview if looking at conversations.json
-                elif filename.lower().includes("conversations") or filename.lower().endswith('.json'):
+                elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
+                    # Separate prompt from content for better token management
+                    prompt = """Analyze this conversation data and extract key insights in these 6 categories:
 
-                    prompt = f"""You are an expert data analyst specializing in creating context about people, their activities, interests, projects, studies and more from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
+1. PERSONAL PROFILE: Demographics, preferences, goals, values, personality
+2. BEHAVIORAL PATTERNS: Communication style, problem-solving, learning, habits  
+3. KNOWLEDGE DOMAINS: Technical skills, expertise, academic background
+4. PROJECT PATTERNS: Workflow preferences, tool usage, collaboration style
+5. TIMELINE EVOLUTION: Skill development, milestones, interest changes
+6. INTERACTION INSIGHTS: Communication preferences, response styles
 
-    ANALYSIS FRAMEWORK:
-    Provide EXHAUSTIVE detailed analysis in these six primary categories:
-
-    1. PERSONAL PROFILE ANALYSIS
-    - Demographics, preferences, goals, values, life context, personality traits, health
-
-    2. BEHAVIORAL PATTERNS DISCOVERY  
-    - Communication style, problem-solving approach, learning patterns, decision-making, stress response, work habits
-
-    3. KNOWLEDGE DOMAINS MAPPING
-    - Technical skills, professional expertise, academic background, hobby knowledge, soft skills
-
-    4. PROJECT PATTERNS IDENTIFICATION
-    - Workflow preferences, tool usage, collaboration style, quality standards, resource management
-
-    5. TIMELINE EVOLUTION TRACKING
-    - Skill development, career milestones, interest evolution, goal achievement over time
-
-    6. INTERACTION INSIGHTS ANALYSIS
-    - Communication preferences, response styles, engagement patterns, feedback reception
-
-    EXTRACTION REQUIREMENTS:
-    - Extract key facts, preferences, skills, and behavioral patterns
-    - Aim for 1,000-2,000 tokens of concise, high-value analysis
-    - Each category should have 10-30 bullet points with specific examples
-    - Focus on the most important and unique insights
-    - Preserve temporal context and major patterns
-    - Prioritize quality over quantity
-
-    OUTPUT FORMAT:
-    Structure your analysis clearly with focused subsections for each category. Use concise bullet points (10-30 per category) for discrete facts. Cite specific examples to support your analysis. Keep the output dense with information but avoid repetition.
-
-    PRIVACY & SAFETY:
-    - This is the user's own conversation data being analyzed for their personal use
-    - Redact passwords, API keys, tokens, and sensitive credentials with "<REDACTED>"
-    - You may include technical identifiers, project names, and professional context
-    - Focus on extracting actionable insights and technical details
-
-    The conversation data you will analyze follows this message. Provide your focused Universal Context Pack analysis.
-
-    Content to analyze:
-    {chunk}
-
-    Provide your comprehensive analysis with focused subsections for each category."""
+Extract key facts (10-30 bullets per category). Be concise but comprehensive. Redact sensitive credentials. Output 1,000-2,000 tokens max."""
+                    content_message = chunk
                 
                 #Likely just a document or mixed data
                 else:
                     prompt = f"""You are an expert data analyst.  
 Your job is to extract and understand the core content of the following document.
-Analyze the content thoroughly and produce a detailed, structured output that includes:
+Analyze the content and produce a detailed output that includes:
 • A high-detail summary of what the document contains  
-• A breakdown of all major themes and subtopics  
-• Critical information that must be preserved for future reasoning  
-• Any relationships or references between parts of the text  
-• A list of unresolved questions or next steps  
-• A short “importance score” (1–10) for each major item to show how essential it is
-Be thorough and factual. Go deep. This output will be used for content analysis and memory construction.
+• Critical information that must be preserved for future reasoning   
+- Key facts, events, instructions, topics, questions, decisions
+Be factual This output will be used for content analysis and memory construction. Looking for 1k token output. 
 Document content:
 {chunk}
 Provide your comprehensive analysis below:"""
 
             
+                # Build messages array - use content_message if defined (separated content), otherwise prompt has content embedded
+                messages = [
+                    {
+                        "role": "system", 
+                        "content": "You are a personal data analysis assistant analyzing user-owned documents. Extract key insights concisely and comprehensively."
+                    },
+                    {
+                        "role": "user", 
+                        "content": prompt
+                    }
+                ]
+                
+                # If content_message exists (for conversation analysis), add it as a separate message
+                if 'content_message' in locals() and content_message:
+                    messages.append({
+                        "role": "user",
+                        "content": f"Content to analyze:\n\n{content_message}"
+                    })
+                
                 response = await openai_call_with_retry(
                     openai_client,
                     max_retries=3,
                     model="gpt-4o-mini",
-                    messages=[
-                        {
-                            "role": "system", 
-                            "content": "You are a personal data analysis assistant. The user has uploaded their OWN documents (receipts, invoices, chat logs, PDFs, etc.) for analysis. This is THEIR data that they own and control. Your task is to analyze and extract insights from this personal data. You should process ALL types of personal documents including financial records, educational documents, medical records, chat histories, etc. This is legitimate analysis of user-owned data for personal productivity and organization - not unauthorized access. Proceed with comprehensive analysis."
-                        },
-                        {
-                            "role": "user", 
-                            "content": prompt
-                        }
-                    ],
+                    messages=messages,
                     temperature=0.3,
                     max_completion_tokens=1500  # Reduced for concise analysis - saves tokens and costs
                 )
@@ -2548,13 +2568,14 @@ Provide your comprehensive analysis below:"""
                 upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
                 
                 
-                # Update progress
+                # Update progress with chunk count (more reliable than percentage for large files)
                 progress = 50 + int((idx + 1) / len(chunks) * 40)
                 supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
                     "target_source_id": source_id,
                     "status_param": "processing",
-                    "progress_param": progress
+                    "progress_param": progress,
+                    "processed_chunks_param": idx + 1  # Current chunk number for frontend display
                 }).execute()
                 
                 print(f"📊 Progress updated: {progress}% (chunk {idx+1}/{len(chunks)} complete)")
@@ -5332,6 +5353,14 @@ async def start_source_analysis(
         
         print(f"🚀 Starting analysis: {chunks_to_analyze} of {total_chunks} chunks")
         
+        # Update status to analyzing IMMEDIATELY so frontend sees it right away
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "analyzing",
+            "progress_param": 5
+        }).execute()
+        
         # Start background analysis
         asyncio.create_task(
             analyze_source_chunks(
@@ -7398,4 +7427,4 @@ if __name__ == "__main__":
     print("🚀 Starting Simple UCP Backend with R2 Storage - 3 Step Process...")
     print(f"📦 Using R2 bucket: {R2_BUCKET}")
     print("📋 Steps: 1) Extract → 2) Chunk → 3) Analyze")
-    uvicorn.run("simple_backend:app", host="0.0.0.0", port=8000, reload=False, log_level="info")
+    uvicorn.run("simple_backend:app", host="0.0.0.0", port=8000, reload=False, log_level="warning")

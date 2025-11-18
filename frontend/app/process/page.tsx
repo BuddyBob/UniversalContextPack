@@ -11,6 +11,7 @@ import { useFreeCreditsPrompt } from '@/hooks/useFreeCreditsPrompt';
 import { API_ENDPOINTS, API_BASE_URL } from '@/lib/api';
 import { analytics } from '@/lib/analytics';
 import { getNewUserCredits } from '@/lib/credit-config';
+import { supabase } from '@/lib/supabase';
 
 interface PaymentStatus {
   plan: string
@@ -109,6 +110,7 @@ export default function ProcessPage() {
   const isExtractionPollingRef = useRef<boolean>(false);
   const extractionAbortControllerRef = useRef<AbortController | null>(null);
   const hasAutoCreatedRef = useRef<boolean>(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Payment notifications
   const { 
@@ -137,8 +139,11 @@ export default function ProcessPage() {
 
           // Check if any source is ready for analysis
           const readySource = sources.find((s: any) => s.status === 'ready_for_analysis');
+          if (readySource) {
+            console.log('🎯 Found ready_for_analysis source:', readySource.source_id, 'Total chunks:', readySource.total_chunks, 'Modal already open?', !!sourcePendingAnalysis);
+          }
           if (readySource && !sourcePendingAnalysis) {
-            console.log('🎯 Found ready_for_analysis source:', readySource.source_id, 'Total chunks:', readySource.total_chunks);
+            console.log('✅ Opening Ready to Analyze modal for source:', readySource.source_id);
             // Fetch credit check for this source
             const creditCheck = await makeAuthenticatedRequest(
               `${API_BASE_URL}/api/v2/sources/${readySource.source_id}/credit-check`
@@ -149,7 +154,7 @@ export default function ProcessPage() {
               
               // Always show inline credit card for manual user approval
               // This gives users control over when analysis starts, even with unlimited plan
-              console.log('📊 Showing credit confirmation card for user approval');
+              console.log('📊 Setting sourcePendingAnalysis state to show modal');
               setSourcePendingAnalysis(creditData);
               
               if (creditData.canProceed) {
@@ -177,8 +182,14 @@ export default function ProcessPage() {
             if (startedSource && analyzingStatuses.includes(startedSource.status?.toLowerCase())) {
               console.log('✅ Source is now analyzing, clearing starting flag. Status:', startedSource.status);
               setIsAnalysisStarting(null);
-            } else if (startedSource) {
-              console.log('⏳ Source status:', startedSource.status, 'still waiting for analyzing status...');
+            } else if (startedSource && startedSource.status === 'completed') {
+              // Source finished already, clear the starting flag
+              console.log('✅ Source completed, clearing starting flag');
+              setIsAnalysisStarting(null);
+            } else if (startedSource && startedSource.status === 'failed') {
+              // Source failed, clear the starting flag
+              console.log('❌ Source failed, clearing starting flag');
+              setIsAnalysisStarting(null);
             }
           }
 
@@ -213,23 +224,31 @@ export default function ProcessPage() {
 
     // Check if any sources are actively processing
     const hasActiveProcessing = packSources.some((s: any) => 
-      ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'pending'].includes(s.status?.toLowerCase())
+      ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'pending', 'ready_for_analysis'].includes(s.status?.toLowerCase())
     );
     
-    // Only poll if there are active sources or if we just selected a new pack
-    if (hasActiveProcessing || packSources.length === 0 || isAnalysisStarting) {
-      // Poll every 2 seconds
-      const interval = setInterval(pollSourcesStatus, 2000);
-      
-      // Poll immediately
-      pollSourcesStatus();
-
-      return () => clearInterval(interval);
-    } else {
-      // Just poll once if nothing is active
-      pollSourcesStatus();
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
-  }, [selectedPack, packSources, isAnalysisStarting]); // Depend on packSources to detect when processing starts/stops
+    
+    // Always poll once immediately to check current status
+    pollSourcesStatus();
+    
+    // Only set up continuous polling if there are active sources OR if we're waiting for analysis to start
+    if (hasActiveProcessing || isAnalysisStarting) {
+      // Poll every 2 seconds
+      pollingIntervalRef.current = setInterval(pollSourcesStatus, 2000);
+    }
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [selectedPack, packSources, isAnalysisStarting]);
 
   // Auto-create pack function
   const autoCreatePack = async () => {
@@ -269,22 +288,29 @@ export default function ProcessPage() {
     }
   };
 
-  // Check for pack_id in URL params or create_new flag
+  // Check for pack_id or create_new in URL params
   useEffect(() => {
     if (!user) return;
     
     const packId = searchParams.get('pack_id');
     const createNew = searchParams.get('create_new');
     
-    if (createNew === 'true' && !hasAutoCreatedRef.current) {
-      hasAutoCreatedRef.current = true;
-      autoCreatePack();
+    if (createNew === 'true') {
+      // Show create pack modal when create_new=true in URL
+      console.log('[DEBUG] create_new=true detected in URL, showing create pack modal');
+      setShowCreatePack(true);
+      setShowPackSelector(false);
+      
+      // Remove the create_new parameter from URL to prevent re-showing modal on navigation
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('create_new');
+      window.history.replaceState({}, '', newUrl.toString());
     } else if (packId && packId !== 'undefined') {
       // Only load if we don't already have this pack selected
       if (!selectedPack || (selectedPack as any).pack_id !== packId) {
-      loadPackDetails(packId);
+        loadPackDetails(packId);
       }
-    } else if (!selectedPack && createNew !== 'true') {
+    } else if (!selectedPack) {
       // User is logged in but no pack selected - show pack selector
       loadPacks();
     }
@@ -1055,10 +1081,16 @@ export default function ProcessPage() {
   };
 
   const createPack = async () => {
-    if (!newPackName.trim()) return;
+    console.log('[DEBUG] createPack called:', { newPackName, newPackDescription, user: !!user, isCreatingPack });
+    
+    if (!newPackName.trim()) {
+      console.log('[DEBUG] Pack name is empty, aborting');
+      return;
+    }
     
     // Check if user is authenticated
     if (!user) {
+      console.log('[DEBUG] User not authenticated');
       setShowAuthModal(true);
       addLog('Please sign in to create a pack');
       return;
@@ -1066,6 +1098,7 @@ export default function ProcessPage() {
     
     setIsCreatingPack(true);
     try {
+      console.log('[DEBUG] Sending request to:', `${API_BASE_URL}/api/v2/packs`);
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1075,9 +1108,11 @@ export default function ProcessPage() {
         })
       });
 
+      console.log('[DEBUG] Response received:', { ok: response.ok, status: response.status });
+
       if (response.ok) {
         const pack = await response.json();
-        console.log('Pack created successfully:', pack);
+        console.log('[DEBUG] Pack created successfully:', pack);
         setSelectedPack(pack);
         setShowCreatePack(false);
         setNewPackName('');
@@ -1087,9 +1122,13 @@ export default function ProcessPage() {
         setShowUploadOptions(true);
         addLog(`Created new pack: ${pack.pack_name}`);
         await loadPacks();
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('[ERROR] Failed to create pack:', { status: response.status, error: errorData });
+        addLog(`Failed to create pack: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error creating pack:', error);
+      console.error('[ERROR] Exception creating pack:', error);
       addLog('Error creating pack');
     } finally {
       setIsCreatingPack(false);
@@ -1177,6 +1216,12 @@ export default function ProcessPage() {
       requestBody.max_chunks = chunksToProcess;
     }
     
+    // Close modal immediately for instant feedback
+    setSourcePendingAnalysis(null);
+    setIsAnalysisStarting(sourceId);
+    setAnalysisLimits((prev) => ({ ...prev, [sourceId]: chunksToProcess }));
+    
+    // Start analysis in background
     try {
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/api/v2/sources/${sourceId}/start-analysis`,
@@ -1196,48 +1241,45 @@ export default function ProcessPage() {
           `Starting analysis of ${chunksToProcess} chunk${chunksToProcess === 1 ? '' : 's'}...`
         );
         
-        // Mark that we're starting analysis for this source
-        setIsAnalysisStarting(sourceId);
-        setAnalysisLimits((prev) => ({ ...prev, [sourceId]: chunksToProcess }));
-        setSourcePendingAnalysis(null);
-        
-        // Immediately refresh pack sources to get updated status
+        // Refresh pack sources in background (don't await)
         if (selectedPack) {
-          try {
-            const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
-            if (packResponse.ok) {
-              const packData = await packResponse.json();
-              const sources = packData.sources || [];
-              setPackSources(sources);
-              
-              // Check if source is now analyzing, if so clear the starting flag
-              const analyzingStatuses = ['analyzing', 'processing', 'analyzing_chunks'];
-              const analyzingSource = sources.find((s: any) => 
-                s.source_id === sourceId && analyzingStatuses.includes(s.status?.toLowerCase())
-              );
-              if (analyzingSource) {
-                console.log('✅ Source is analyzing after immediate refresh. Status:', analyzingSource.status);
-                setIsAnalysisStarting(null);
-              } else {
-                console.log('⏳ Source not yet analyzing after immediate refresh. Current status:', 
-                  sources.find((s: any) => s.source_id === sourceId)?.status);
+          makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`)
+            .then(packResponse => {
+              if (packResponse.ok) {
+                return packResponse.json();
               }
-            }
-          } catch (error) {
-            console.error('Error refreshing pack sources:', error);
-          }
+            })
+            .then(packData => {
+              if (packData) {
+                const sources = packData.sources || [];
+                setPackSources(sources);
+                
+                // Check if source is now analyzing
+                const analyzingStatuses = ['analyzing', 'processing', 'analyzing_chunks'];
+                const analyzingSource = sources.find((s: any) => 
+                  s.source_id === sourceId && analyzingStatuses.includes(s.status?.toLowerCase())
+                );
+                if (analyzingSource) {
+                  setIsAnalysisStarting(null);
+                }
+              }
+            })
+            .catch(error => {
+              console.error('Error refreshing pack sources:', error);
+            });
         }
       } else if (response.status === 402) {
-        // Insufficient credits
+        // Insufficient credits - reopen modal
         const data = await response.json();
         showNotification('warning', `Insufficient credits: ${data.detail}`);
+        setIsAnalysisStarting(null);
       } else {
         throw new Error('Failed to start analysis');
       }
     } catch (error) {
       console.error('Error starting analysis:', error);
       showNotification('warning', 'Failed to start analysis');
-      setIsAnalysisStarting(null); // Clear on error
+      setIsAnalysisStarting(null);
     }
   };
 
@@ -2680,24 +2722,31 @@ export default function ProcessPage() {
     try {
       addLog(`Starting ${type} pack download...`);
       
-      // Use the download endpoint that works with both legacy jobs and v2 packs
-      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/download/${packId}/${type}`, {
-        method: 'GET'
-      });
+      // Use authenticated fetch to download with proper headers
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/api/download/${packId}/${type}`,
+        { method: 'GET' }
+      );
       
       if (!response.ok) {
         throw new Error(`Download failed: ${response.status}`);
       }
       
+      // Get the blob and create download link
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `${type}_ucp_${selectedPack?.pack_name || packId}.txt`;
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
       
       addLog('Pack download completed successfully');
     } catch (error) {
@@ -2718,23 +2767,31 @@ export default function ProcessPage() {
     try {
       addLog('Starting chunks download...');
       
-      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/download/${currentJobId}/chunks`, {
-        method: 'GET'
-      });
+      // Use authenticated fetch to download with proper headers
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/api/download/${currentJobId}/chunks`,
+        { method: 'GET' }
+      );
       
       if (!response.ok) {
         throw new Error(`Download failed: ${response.status}`);
       }
       
+      // Get the blob and create download link
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `ucp_chunks_${currentJobId}.zip`;
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
       
       addLog('Chunks download completed successfully');
     } catch (error) {
@@ -2802,14 +2859,16 @@ export default function ProcessPage() {
         );
         
         if (response.ok) {
-          addLog('Analysis cancelled');
-          showNotification('info', 'Analysis cancelled');
+          addLog('Analysis Cancelling');
+          showNotification('info', 'Analysis Cancelling');
           setAnalysisLimits((prev) => {
             if (!prev[analyzingSource.source_id]) return prev;
             const updated = { ...prev };
             delete updated[analyzingSource.source_id];
             return updated;
           });
+          // Reload page using current browser location 
+          router.replace(window.location.pathname + window.location.search);
         }
       }
     } catch (error) {
@@ -2957,7 +3016,16 @@ export default function ProcessPage() {
                       <p className="text-xs text-gray-500 mt-1">
                         {source.status === 'extracting' && `Extracting... ${source.progress || 0}%`}
                         {source.status === 'ready_for_analysis' && `Ready (${source.total_chunks || 0} chunks) - Click to analyze`}
-                        {source.status === 'analyzing' && `Analyzing... ${source.progress || 0}%`}
+                        {source.status === 'analyzing' && (
+                          source.processed_chunks && source.total_chunks 
+                            ? `Analyzing chunk ${source.processed_chunks}/${source.total_chunks}` 
+                            : `Analyzing... ${source.progress || 0}%`
+                        )}
+                        {source.status === 'processing' && (
+                          source.processed_chunks && source.total_chunks 
+                            ? `Processing chunk ${source.processed_chunks}/${source.total_chunks}` 
+                            : `Processing... ${source.progress || 0}%`
+                        )}
                         {source.status === 'completed' && `Complete (${source.total_chunks || 0} chunks)`}
                         {source.status === 'failed' && 'Failed'}
                         {source.status === 'pending' && 'Pending'}
@@ -3405,9 +3473,6 @@ export default function ProcessPage() {
                     </button>
                     {' '}to upload
                   </p>
-                  <p className="text-xs text-gray-500">
-                    Supported file types: PDF, txt, Markdown, Audio (e.g. mp3), .avif, .bmp, .gif, .ico, .jp2, .png, .webp, .tif, .tiff, .heic, .heif, .jpeg, .jpg, .jpe
-                  </p>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -3471,9 +3536,9 @@ export default function ProcessPage() {
                   <button
                     onClick={() => {
                           setUploadMethod('document');
-                          // Update file input to accept only pdf, txt, md
+                          // Update file input to accept documents including Google Docs exports
                           if (fileInputRef.current) {
-                            fileInputRef.current.accept = '.pdf,.txt,.md';
+                            fileInputRef.current.accept = '.pdf,.txt,.md,.doc,.docx';
                           }
                       fileInputRef.current?.click();
                     }}
@@ -3481,7 +3546,7 @@ export default function ProcessPage() {
                   >
                     <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
                     <h3 className="font-semibold text-white mb-1">Document</h3>
-                        <p className="text-sm text-gray-400">PDF, TXT, or Markdown only</p>
+                        <p className="text-sm text-gray-400">PDF, TXT, Markdown, or Word/Google Docs</p>
                   </button>
                 </div>
                   </>
