@@ -143,7 +143,7 @@ export default function ProcessPage() {
           if (readySource) {
             // Check if this source just finished chunking (was extracting before)
             const wasExtractingBefore = packSources.find((s: any) => 
-              s.source_id === readySource.source_id && s.status === 'extracting'
+              s.source_id === readySource.source_id && (s.status === 'extracting' || s.status === 'processing')
             );
             
             if (wasExtractingBefore) {
@@ -3026,7 +3026,7 @@ export default function ProcessPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white truncate">{source.source_name}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {source.status === 'extracting' && `Extracting and chunking... ${source.progress || 0}%`}
+                        {(source.status === 'extracting' || source.status === 'processing') && `Extracting and chunking... ${source.progress || 0}%`}
                         {source.status === 'ready_for_analysis' && `Ready (${source.total_chunks || 0} chunks) - Click to analyze`}
                         {source.status === 'analyzing' && (
                           source.processed_chunks && source.total_chunks 
@@ -3043,7 +3043,7 @@ export default function ProcessPage() {
                         {source.status === 'pending' && 'Pending'}
                       </p>
                     </div>
-                    {(source.status === 'extracting' || source.status === 'analyzing') && (
+                    {(source.status === 'extracting' || source.status === 'processing' || source.status === 'analyzing') && (
                       <Loader className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
                     )}
                     {source.status === 'ready_for_analysis' && (
@@ -3053,7 +3053,7 @@ export default function ProcessPage() {
                       <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                     )}
                   </div>
-                  {(source.status === 'extracting' || source.status === 'analyzing') && source.progress > 0 && (
+                  {(source.status === 'extracting' || source.status === 'processing' || source.status === 'analyzing') && source.progress > 0 && (
                     <div className="mt-2">
                       <div className="w-full bg-gray-700 rounded-full h-1">
                         <div

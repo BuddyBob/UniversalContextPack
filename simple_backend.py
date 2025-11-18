@@ -2339,7 +2339,7 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
                     supabase.rpc("update_source_status", {
                         "user_uuid": user.user_id,
                         "target_source_id": source_id,
-                        "status_param": "extracting",
+                        "status_param": "processing",
                         "progress_param": min(95, progress_pct)  # Cap at 95% until done
                     }).execute()
             
