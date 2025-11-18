@@ -62,12 +62,12 @@ export default function PacksPage() {
         {
           ucpId: 'sample-1',
           id: 'sample-1',
-          pack_name: 'Research Project',
+          pack_name: 'Research Project - Ex.',
           description: 'A collection of documents and conversations',
           status: 'completed',
           total_chunks: 5,
           total_input_tokens: 25000,
-          total_output_tokens: 20000,
+          total_output_tokens: 2200,
           total_cost: 0.15,
           completedAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
           savedAt: new Date(Date.now() - 86400000).toISOString()
@@ -75,12 +75,12 @@ export default function PacksPage() {
         {
           ucpId: 'sample-2',
           id: 'sample-2',
-          pack_name: 'Work Notes',
+          pack_name: 'Work Notes - Ex.',
           description: 'Meeting notes and project documentation',
           status: 'completed',
           total_chunks: 3,
           total_input_tokens: 18000,
-          total_output_tokens: 15000,
+          total_output_tokens: 1800,
           total_cost: 0.10,
           completedAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
           savedAt: new Date(Date.now() - 172800000).toISOString()
