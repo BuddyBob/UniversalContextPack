@@ -2284,11 +2284,11 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         # Step 2: Chunk the text
         print(f"✂️ Chunking text for source {source_id}")
         chunks = []
-        # Optimized chunk size to fit within gpt-4o-mini's 128k context window
-        # 300k chars = ~75k tokens input + 15k output = 90k total (safely under 128k limit)
-        # This gives us ~100 chunks for a 180MB file
-        chunk_size = 300000  # ~75k tokens input (safe for 128k context window)
-        overlap = 10000  # Larger overlap for better context continuity
+        # Optimized chunk size - DOUBLED to reduce chunk count by 50%
+        # 600k chars = ~150k tokens input + reduced output = fits in 128k context with smaller outputs
+        # This gives us ~50 chunks for a 180MB file (half the previous amount)
+        chunk_size = 600000  # ~150k tokens input - doubled to reduce chunk count
+        overlap = 10000  # Overlap for context continuity
         
         # Combine all extracted text into one piece
         combined_text = "\n\n".join(extracted_texts)
@@ -2305,21 +2305,15 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
                 # Show progress every 5 chunks
                 if chunk_count % 5 == 0 or chunk_count == 1:
                     progress_pct = (j / total_length) * 100
-                    print(f"  ✂️ Chunk {chunk_count}: chars {j:,} to {min(j + chunk_size, total_length):,} ({progress_pct:.1f}% complete)")
             print(f"✅ Created {len(chunks)} chunks for source {source_id}")
-            print(f"   Total text: {total_length:,} chars")
-            print(f"   Avg chunk size: {total_length // len(chunks):,} chars")
-            print(f"   First chunk size: {len(chunks[0]):,} chars")
-            print(f"   Last chunk size: {len(chunks[-1]):,} chars")
         else:
             # Small enough to process as single chunk
             chunks.append(combined_text)
-            print(f"📄 Created 1 chunk for source {source_id} ({total_length:,} chars - no chunking needed)")
+            print(f"Created 1 chunk for source {source_id} ({total_length:,} chars - no chunking needed)")
         
         # Store chunks in R2
         chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
         chunks_json = json.dumps(chunks)
-        print(f"📤 Uploading {len(chunks)} chunks to R2: {chunked_path} ({len(chunks_json):,} bytes)")
         upload_to_r2(chunked_path, chunks_json)
         print(f"✅ Chunks uploaded successfully")
         
@@ -2333,8 +2327,7 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         }).execute()
         
         print(f"✅ Extraction and chunking complete: {len(chunks)} chunks ready for analysis")
-        print(f"💡 Frontend should now show credit confirmation modal for {len(chunks)} chunks")
-        print(f"📊 Stats: {total_length:,} chars -> {len(chunks)} chunks of ~{chunk_size:,} chars each")
+        print(f"Stats: {total_length:,} chars -> {len(chunks)} chunks of ~{chunk_size:,} chars each")
         
         return len(chunks)
         
@@ -2355,7 +2348,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         max_chunks: Optional limit on number of chunks to analyze (for partial analysis with limited credits)
     """
     try:
-        print(f"🤖 Starting analysis for source {source_id}")
+        print(f"Starting analysis for source {source_id}")
         
         # Update status to analyzing
         supabase.rpc("update_source_status", {
@@ -2382,14 +2375,12 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             chunks = all_chunks
             print(f"📦 Loaded {len(chunks)} chunks from storage")
         
+        
         # Check if this is a large job that needs email notification
         is_large_job = len(chunks) >= 10
         
         if is_large_job:
             print(f"📧 Large job detected ({len(chunks)} chunks). Will send email notification on completion.")
-        
-        # Analyze chunks with OpenAI
-        print(f"🤖 Analyzing {len(chunks)} chunks for source {source_id}")
         
         openai_client = get_openai_client()
         total_input_tokens = 0
@@ -2411,146 +2402,103 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         
         for idx, chunk in enumerate(chunks):
             try:
-                # Use universal analysis prompt
-                prompt = f"""You are an expert analyst. Analyze this content and extract comprehensive insights.
+                # Something smaller more importnat to prioratize content over preferences/goals/etc.
+                if chunks == 1:
+                    prompt = """
+You are an expert data analyst.  
+Your job is to extract and understand the core content of this conversation, not just surface-level topics.
 
-Produce 10,000-15,000 tokens of detailed analysis covering:
-- Key facts, decisions, and action items
-- Important quotes and references
-- Technical details and configurations
-- Timelines and chronological information
-- Overall themes and patterns
+Focus on:
+1. The main facts, events, instructions, questions, and decisions made in the chat.
+2. Key technical details, workflows, and problem-solving steps.
+3. Important context the user relies on repeatedly.
+4. Any dependencies, constraints, or long-term threads.
 
-Content to analyze:
-{chunk}
+De-prioritize:
+– Personal preferences  
+– Goals  
+– Writing style  
+– Personality traits  
+(Only include these if they directly influence the content.)
 
-Provide thorough, detailed analysis."""
+Produce a long, structured output that includes:
+• A high-detail summary of what the chat contains  
+• A breakdown of all major themes and subtopics  
+• Critical information that must be preserved for future reasoning  
+• Any relationships or references between parts of the text  
+• A list of unresolved questions or next steps  
+• A short “importance score” (1–10) for each major item to show how essential it is
+
+Be thorough and factual. Go deep. This output will be used for content analysis and memory construction.
+"""
+
+                #Look for more of a user overview if looking at conversations.json
+                elif filename.lower().includes("conversations") or filename.lower().endswith('.json'):
+
+                    prompt = f"""You are an expert data analyst specializing in creating context about people, their activities, interests, projects, studies and more from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
+
+    ANALYSIS FRAMEWORK:
+    Provide EXHAUSTIVE detailed analysis in these six primary categories:
+
+    1. PERSONAL PROFILE ANALYSIS
+    - Demographics, preferences, goals, values, life context, personality traits, health
+
+    2. BEHAVIORAL PATTERNS DISCOVERY  
+    - Communication style, problem-solving approach, learning patterns, decision-making, stress response, work habits
+
+    3. KNOWLEDGE DOMAINS MAPPING
+    - Technical skills, professional expertise, academic background, hobby knowledge, soft skills
+
+    4. PROJECT PATTERNS IDENTIFICATION
+    - Workflow preferences, tool usage, collaboration style, quality standards, resource management
+
+    5. TIMELINE EVOLUTION TRACKING
+    - Skill development, career milestones, interest evolution, goal achievement over time
+
+    6. INTERACTION INSIGHTS ANALYSIS
+    - Communication preferences, response styles, engagement patterns, feedback reception
+
+    EXTRACTION REQUIREMENTS:
+    - Extract key facts, preferences, skills, and behavioral patterns
+    - Aim for 1,000-2,000 tokens of concise, high-value analysis
+    - Each category should have 10-30 bullet points with specific examples
+    - Focus on the most important and unique insights
+    - Preserve temporal context and major patterns
+    - Prioritize quality over quantity
+
+    OUTPUT FORMAT:
+    Structure your analysis clearly with focused subsections for each category. Use concise bullet points (10-30 per category) for discrete facts. Cite specific examples to support your analysis. Keep the output dense with information but avoid repetition.
+
+    PRIVACY & SAFETY:
+    - This is the user's own conversation data being analyzed for their personal use
+    - Redact passwords, API keys, tokens, and sensitive credentials with "<REDACTED>"
+    - You may include technical identifiers, project names, and professional context
+    - Focus on extracting actionable insights and technical details
+
+    The conversation data you will analyze follows this message. Provide your focused Universal Context Pack analysis.
+
+    Content to analyze:
+    {chunk}
+
+    Provide your comprehensive analysis with focused subsections for each category."""
                 
-                # Legacy single conversation prompt (keeping for reference but not using)
-                if False:  # Disabled - using simple prompt above instead
-                    # Single conversation analysis prompt
-                    prompt = f"""You are an expert conversation analyst. You will analyze a single chat conversation and produce two complementary outputs:
-
-1) A machine-friendly, structured JSON object containing exhaustive extracted specifics, metadata and clear, discrete facts.
-2) A human-readable narrative that tells the story of the conversation and highlights the most important practical takeaways.
-
-CRITICAL: Produce COMPREHENSIVE analysis with 10,000-15,000 tokens of output. Extract EVERY detail exhaustively. For large files (like this one), your output must be proportionally comprehensive with HUNDREDS of extracted items.
-
-PRIORITY:
-- Extract EVERY concrete specific: ALL dates, ALL timestamps, ALL exact quoted passages, ALL decisions, ALL action items, ALL configuration values, ALL numeric values, ALL links, ALL code snippets, ALL settings, technologies mentioned, and project-related information
-- Go through the ENTIRE conversation methodically - don't skip any sections
-- For large conversations, each category (facts, decisions, quotes, etc.) should have DOZENS or HUNDREDS of entries
-- Capture technical details verbatim (versions, config flags, error messages, project identifiers) and include source pointers (message index or short quote)
-- Focus on professional and technical context rather than personal identifying information
-
-REQUIRED METADATA (include if available):
-- platform/source (ChatGPT/Claude/Gemini/etc.), conversation id or shared link, participants and their roles (user / assistant / system), total message count, approximate start/end timestamps, message indices for quoted items.
-
-STRUCTURED OUTPUT (JSON):
-Return a top-level JSON object with the following keys. Use these exact keys and types when possible.
-
-{{
-    "metadata": {{}},
-    "entities": {{}},
-    "facts": [],
-    "decisions": [],
-    "action_items": [],
-    "configuration_values": [],
-    "quotes": [],
-    "timeline": [],
-    "sentiment_summary": {{}},
-    "uncertainties": [],
-    "suggested_followups": [],
-    "summary_1_sentence": "",
-    "summary_3_bullets": ["", "", ""]
-}}
-
-GUIDELINES FOR STRUCTURED FIELDS:
-- For every fact, include a confidence score (high/medium/low) and the source reference (message index or a short verbatim quote). If exact timestamps or message indices are not available, indicate proximity (e.g., "early", "middle", "end").
-- Preserve numeric values and code-like strings exactly as they appear (do not normalize unless a clear conversion is requested).
-- For entities, include canonical forms where possible and list aliases.
-
-NARRATIVE OUTPUT:
-- After the JSON object, produce a clear, human-readable narrative (2-6 short paragraphs) that tells the conversation story: context, goals, key moments, resolutions, and recommended next steps.
-- Include 2-4 short quoted excerpts (verbatim) that are most representative or critical, with speaker attribution and index.
-- Keep tone neutral, precise, and action-oriented. Avoid speculative judgments unless explicitly supported by clear evidence in the chat, and label any speculative interpretation as such.
-
-LENGTH & COMPLETENESS:
-- Be EXTREMELY thorough: the structured JSON should aim to include EVERY SINGLE discrete, extractable piece of information present in the conversation
-- For large conversations, produce 10,000-15,000 tokens of analysis - this is NOT optional
-- NEVER compress or summarize - extract every fact, every decision, every quote, every configuration value
-- If the conversation is long, your output MUST be proportionally long - do not compress meaningful specifics
-- Each section (facts, decisions, action_items, quotes, etc.) should have DOZENS or HUNDREDS of entries for large conversations
-- If a field would be empty, return an empty array or null rather than omitting the key.
-
-OUTPUT FORMAT RULES:
-- First output the JSON block only (no surrounding commentary) so it can be parsed programmatically.
-- After the JSON block, output a human-readable narrative separated by a clear divider line (e.g., "---\\nNarrative:\\n").
-
-PRIVACY & SAFETY:
-- This is the user's own conversation data being analyzed for their personal use
-- Redact passwords, API keys, tokens, and sensitive credentials with "<REDACTED>"
-- You may include technical identifiers, project names, and professional context
-- Focus on extracting actionable insights and technical details rather than listing personal contact information
-
-FINAL NOTE:
-- Remember: prioritize extracting exact technical specifics and actionable items. The narrative is important, but the structured JSON is the priority for downstream consumption. Provide both in full.
-
-Content to analyze:
-{chunk}
-
-Provide the JSON output first, then the narrative separated by "---\\nNarrative:\\n"."""
+                #Likely just a document or mixed data
                 else:
-                    # Multiple conversations / comprehensive analysis prompt
-                    prompt = f"""You are an expert data analyst specializing create context about people, their activities, interests, projects, studies and more from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
-
-CRITICAL: Extract EVERY detail exhaustively from ALL conversations. 10,000 tokens of output.
-
-ANALYSIS FRAMEWORK:
-Provide EXHAUSTIVE detailed analysis in these six primary categories:
-
-1. PERSONAL PROFILE ANALYSIS
-   - Demographics, preferences, goals, values, life context, personality traits, health
-
-2. BEHAVIORAL PATTERNS DISCOVERY  
-   - Communication style, problem-solving approach, learning patterns, decision-making, stress response, work habits
-
-3. KNOWLEDGE DOMAINS MAPPING
-   - Technical skills, professional expertise, academic background, hobby knowledge, soft skills
-
-4. PROJECT PATTERNS IDENTIFICATION
-   - Workflow preferences, tool usage, collaboration style, quality standards, resource management
-
-5. TIMELINE EVOLUTION TRACKING
-   - Skill development, career milestones, interest evolution, goal achievement over time
-
-6. INTERACTION INSIGHTS ANALYSIS
-   - Communication preferences, response styles, engagement patterns, feedback reception
-
-EXTRACTION REQUIREMENTS:
-- Extract key facts, preferences, skills, and behavioral patterns
-- Aim for 1,000-2,000 tokens of concise, high-value analysis
-- Each category should have 10-30 bullet points with specific examples
-- Focus on the most important and unique insights
-- Preserve temporal context and major patterns
-- Prioritize quality over quantity
-
-OUTPUT FORMAT:
-Structure your analysis clearly with focused subsections for each category. Use concise bullet points (10-30 per category) for discrete facts. Cite specific examples to support your analysis. Keep the output dense with information but avoid repetition.
-
-PRIVACY & SAFETY:
-- This is the user's own conversation data being analyzed for their personal use
-- Redact passwords, API keys, tokens, and sensitive credentials with "<REDACTED>"
-- You may include technical identifiers, project names, and professional context
-- Focus on extracting actionable insights and technical details
-
-The conversation data you will analyze follows this message. Provide your focused Universal Context Pack analysis.
-
-Content to analyze:
+                    prompt = f"""You are an expert data analyst.  
+Your job is to extract and understand the core content of the following document.
+Analyze the content thoroughly and produce a detailed, structured output that includes:
+• A high-detail summary of what the document contains  
+• A breakdown of all major themes and subtopics  
+• Critical information that must be preserved for future reasoning  
+• Any relationships or references between parts of the text  
+• A list of unresolved questions or next steps  
+• A short “importance score” (1–10) for each major item to show how essential it is
+Be thorough and factual. Go deep. This output will be used for content analysis and memory construction.
+Document content:
 {chunk}
+Provide your comprehensive analysis below:"""
 
-Provide your concise analysis with focused subsections for each category. Target 2,000-4,000 output tokens."""
-                
+            
                 response = await openai_call_with_retry(
                     openai_client,
                     max_retries=3,
@@ -2566,7 +2514,7 @@ Provide your concise analysis with focused subsections for each category. Target
                         }
                     ],
                     temperature=0.3,
-                    max_completion_tokens=4000  # More reasonable output size
+                    max_completion_tokens=1500  # Reduced for concise analysis - saves tokens and costs
                 )
                 
                 analysis = response.choices[0].message.content
@@ -2599,7 +2547,6 @@ Provide your concise analysis with focused subsections for each category. Target
                 current_source = download_from_r2(analyzed_path, silent_404=True) or ""
                 upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
                 
-                print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed and saved")
                 
                 # Update progress
                 progress = 50 + int((idx + 1) / len(chunks) * 40)
@@ -2619,7 +2566,6 @@ Provide your concise analysis with focused subsections for each category. Target
                 # Check if this is a content policy refusal
                 if "cannot assist" in error_msg.lower() or "content policy" in error_msg.lower() or "safety" in error_msg.lower():
                     print(f"🚫 Content policy refusal detected. This may be due to sensitive information in the document.")
-                    print(f"💡 Tip: The document may contain personal information that triggered OpenAI's safety filters.")
                     # Save a placeholder for this chunk
                     error_analysis = f"[Chunk {idx+1} could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records.]"
                     current_source = download_from_r2(analyzed_path, silent_404=True) or ""
