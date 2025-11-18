@@ -141,14 +141,18 @@ export default function ProcessPage() {
           // Check if any source is ready for analysis
           const readySource = sources.find((s: any) => s.status === 'ready_for_analysis');
           if (readySource) {
-            // Check if this source just finished chunking (was extracting before)
-            const wasExtractingBefore = packSources.find((s: any) => 
+            console.log('[DEBUG] Found ready source:', readySource.source_id, readySource.source_name);
+            // Check if this source just finished chunking (was processing before)
+            const wasProcessingBefore = packSources.find((s: any) => 
               s.source_id === readySource.source_id && (s.status === 'extracting' || s.status === 'processing')
             );
             
-            if (wasExtractingBefore) {
-              console.log('[DEBUG] Source finished chunking, reloading page...');
-              window.location.reload();
+            console.log('[DEBUG] Was processing before?', !!wasProcessingBefore, 
+              'Previous status:', packSources.find((s: any) => s.source_id === readySource.source_id)?.status);
+            
+            if (wasProcessingBefore) {
+              console.log('[DEBUG] Source finished chunking, reloading page in 500ms...');
+              setTimeout(() => window.location.reload(), 500);
               return; // Exit early since we're reloading
             }
           }

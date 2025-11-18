@@ -2322,7 +2322,14 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
                     chunk = combined_text[position:position + safe_size]
                     chunk_tokens = count_tokens(chunk)
                     actual_chunk_size = len(chunk)
-                    print(f"⚠️ Dense chunk detected: {chunk_tokens:,} tokens, adjusted to {actual_chunk_size:,} chars")
+                    # Only log dense chunks occasionally to avoid console spam
+                    if chunk_count % 20 == 0:
+                        print(f"⚠️ Dense content detected, adjusting chunk sizes (avg: {chunk_tokens:,} tokens)")
+
+                else:
+                    # Log every 20 chunks for normal content
+                    if chunk_count % 20 == 0:
+                        print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
                 
                 chunks.append(chunk)
                 chunk_count += 1
