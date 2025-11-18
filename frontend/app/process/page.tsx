@@ -3481,14 +3481,7 @@ export default function ProcessPage() {
                   </div>
                   <h3 className="text-lg font-semibold text-white mb-2">Upload sources</h3>
                   <p className="text-sm text-gray-400 mb-4">
-                    Drag & drop or{' '}
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-blue-400 hover:text-blue-300 underline"
-                    >
-                      choose file
-                    </button>
-                    {' '}to upload. Large files (3-4min) <br/> Email results for GPT conversations. 
+                   Choose one of the three options below to add sources to your pack for analysis. <br/> Large files will be processed and emailed when done.
                   </p>
                   <input
                     ref={fileInputRef}
