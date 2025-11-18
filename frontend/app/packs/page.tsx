@@ -56,9 +56,37 @@ export default function PacksPage() {
     if (user && session) {
       loadPacks()
     } else {
-      // If user is not authenticated, stop loading immediately
+      // If user is not authenticated, show sample packs
       setLoading(false)
-      setPacks([])
+      const samplePacks: UCPPack[] = [
+        {
+          ucpId: 'sample-1',
+          id: 'sample-1',
+          pack_name: 'Research Project',
+          description: 'A collection of documents and conversations',
+          status: 'completed',
+          total_chunks: 5,
+          total_input_tokens: 25000,
+          total_output_tokens: 20000,
+          total_cost: 0.15,
+          completedAt: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+          savedAt: new Date(Date.now() - 86400000).toISOString()
+        },
+        {
+          ucpId: 'sample-2',
+          id: 'sample-2',
+          pack_name: 'Work Notes',
+          description: 'Meeting notes and project documentation',
+          status: 'completed',
+          total_chunks: 3,
+          total_input_tokens: 18000,
+          total_output_tokens: 15000,
+          total_cost: 0.10,
+          completedAt: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+          savedAt: new Date(Date.now() - 172800000).toISOString()
+        }
+      ]
+      setPacks(samplePacks)
     }
   }, [user, session])
 
@@ -274,7 +302,21 @@ export default function PacksPage() {
   }
 
   const handleViewPack = (pack: UCPPack) => {
+    // If not authenticated, trigger auth prompt
+    if (!user) {
+      freeCreditsPrompt.triggerPrompt("accessing context packs")
+      return
+    }
     router.push(`/process?pack_id=${pack.ucpId || pack.id}`)
+  }
+  
+  const handleCreatePack = () => {
+    // If not authenticated, trigger auth prompt
+    if (!user) {
+      freeCreditsPrompt.triggerPrompt("creating a context pack")
+      return
+    }
+    router.push('/process?create_new=true')
   }
 
   const handleDeletePack = async (packId: string) => {
@@ -327,39 +369,20 @@ export default function PacksPage() {
         </div>
         
         {/* Dashboard Grid */}
-        {!user ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="bg-gray-900 rounded-2xl border-2 border-gray-800 p-12 text-center max-w-md shadow-xl">
-              <div className="w-20 h-20 bg-gray-800 flex items-center justify-center mx-auto mb-6 rounded-2xl">
-                <Brain className="w-10 h-10 text-gray-400" />
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-3">Welcome to Context Packs</h3>
-              <p className="text-gray-300 mb-6">
-                Sign in to create and manage your context packs. Get <strong className="text-white">{getNewUserCredits()} free credits</strong> to get started!
-              </p>
-              <button 
-                onClick={() => freeCreditsPrompt.triggerPrompt("accessing context packs dashboard")}
-                className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 text-base font-semibold rounded-xl transition-all shadow-md"
-              >
-                Sign In & Get {getNewUserCredits()} Free Credits
-              </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {/* Create New Pack Card - Always First */}
+          <div 
+            onClick={handleCreatePack}
+            className="bg-gray-800 border-2 border-gray-700 border-dashed rounded-2xl p-8 cursor-pointer transition-all hover:bg-gray-750 hover:border-gray-600 flex flex-col items-center justify-center min-h-[280px] group"
+          >
+            <div className="w-16 h-16 bg-gray-700 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-gray-600 transition-all">
+              <Plus className="w-8 h-8 text-gray-300" />
             </div>
+            <h3 className="text-xl font-bold text-gray-200 mb-2">Create New Pack</h3>
+            <p className="text-gray-400 text-sm text-center">
+              Start processing a new context pack
+            </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {/* Create New Pack Card - Always First */}
-            <div 
-              onClick={() => router.push('/process?create_new=true')}
-              className="bg-gray-800 border-2 border-gray-700 border-dashed rounded-2xl p-8 cursor-pointer transition-all hover:bg-gray-750 hover:border-gray-600 flex flex-col items-center justify-center min-h-[280px] group"
-            >
-              <div className="w-16 h-16 bg-gray-700 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-gray-600 transition-all">
-                <Plus className="w-8 h-8 text-gray-300" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-200 mb-2">Create New Pack</h3>
-              <p className="text-gray-400 text-sm text-center">
-                Start processing a new context pack
-              </p>
-            </div>
 
             {/* Pack Cards */}
             {packs.length === 0 ? (
@@ -482,7 +505,6 @@ export default function PacksPage() {
               ))
             )}
           </div>
-        )}
       </div>
 
       {/* Free Credits Prompt */}
