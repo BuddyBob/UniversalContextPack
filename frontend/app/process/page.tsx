@@ -126,6 +126,41 @@ export default function ProcessPage() {
     loadPacks();
   }, [user]);
 
+  // Check for ready_for_analysis sources and restore modal if needed
+  useEffect(() => {
+    if (!selectedPack || !packSources.length) return;
+    
+    // Find any source that's ready for analysis and not currently showing in modal
+    const readySource = packSources.find((s: any) => s.status === 'ready_for_analysis');
+    
+    if (readySource && !sourcePendingAnalysis && !isAnalysisStarting) {
+      // Fetch credit check and open modal
+      const fetchCreditCheck = async () => {
+        try {
+          const creditResponse = await makeAuthenticatedRequest(
+            `${API_BASE_URL}/api/v2/sources/${readySource.source_id}/credit-check`
+          );
+          if (creditResponse.ok) {
+            const creditData = await creditResponse.json();
+            setSourcePendingAnalysis({
+              sourceId: readySource.source_id,
+              totalChunks: creditData.total_chunks,
+              creditsRequired: creditData.credits_required,
+              userCredits: creditData.user_credits,
+              hasUnlimited: creditData.has_unlimited,
+              canProceed: creditData.can_proceed,
+              creditsNeeded: creditData.credits_needed || 0
+            });
+            setCurrentStep('upload');
+          }
+        } catch (error) {
+          console.error('Error fetching credit check:', error);
+        }
+      };
+      fetchCreditCheck();
+    }
+  }, [selectedPack, packSources, sourcePendingAnalysis, isAnalysisStarting]);
+
   // Poll for source status updates
   useEffect(() => {
     if (!selectedPack) return;
@@ -2800,7 +2835,37 @@ export default function ProcessPage() {
             <div className="space-y-2 mt-6">
               {/* Show existing pack sources */}
               {packSources.map((source: any) => (
-                <div key={source.source_id} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                <div 
+                  key={source.source_id} 
+                  onClick={async () => {
+                    if (source.status === 'ready_for_analysis') {
+                      // Fetch credit check and open modal
+                      try {
+                        const creditResponse = await makeAuthenticatedRequest(
+                          `${API_BASE_URL}/api/v2/sources/${source.source_id}/credit-check`
+                        );
+                        if (creditResponse.ok) {
+                          const creditData = await creditResponse.json();
+                          setSourcePendingAnalysis({
+                            sourceId: source.source_id,
+                            totalChunks: creditData.total_chunks,
+                            creditsRequired: creditData.credits_required,
+                            userCredits: creditData.user_credits,
+                            hasUnlimited: creditData.has_unlimited,
+                            canProceed: creditData.can_proceed,
+                            creditsNeeded: creditData.credits_needed || 0
+                          });
+                          setCurrentStep('upload');
+                        }
+                      } catch (error) {
+                        console.error('Error fetching credit check:', error);
+                      }
+                    }
+                  }}
+                  className={`bg-gray-800 rounded-lg p-3 border border-gray-700 ${
+                    source.status === 'ready_for_analysis' ? 'cursor-pointer hover:bg-gray-750 hover:border-gray-600 transition-colors' : ''
+                  }`}
+                >
                   <div className="flex items-start gap-2">
                     <FileText className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
