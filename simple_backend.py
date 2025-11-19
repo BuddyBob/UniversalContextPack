@@ -5306,22 +5306,29 @@ async def delete_source_from_pack(
         
         # Use RPC function to delete source (bypasses RLS issues)
         try:
+            print(f"Attempting RPC delete for source {source_id}")
             result = supabase.rpc("delete_pack_source", {
                 "user_uuid": user.user_id,
                 "target_pack_id": pack_id,
                 "target_source_id": source_id
             }).execute()
             
+            print(f"RPC result: {result.data}")
             if result.data:
+                print(f"✅ Source {source_id} deleted successfully via RPC")
                 return {"success": True, "message": "Source deleted successfully"}
             else:
+                print(f"⚠️ RPC returned no data, source may not exist")
                 raise HTTPException(status_code=404, detail="Source not found or already deleted")
         except Exception as rpc_error:
+            print(f"❌ RPC failed: {rpc_error}, attempting direct delete as fallback")
             result = supabase.table("pack_sources").delete().eq("source_id", source_id).eq("user_id", user.user_id).eq("pack_id", pack_id).execute()
             
             if result.data:
+                print(f"✅ Source {source_id} deleted successfully via direct delete")
                 return {"success": True, "message": "Source deleted successfully"}
             else:
+                print(f"❌ Direct delete also failed")
                 raise HTTPException(status_code=404, detail="Source not found")
             
     except HTTPException:
