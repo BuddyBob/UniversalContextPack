@@ -61,17 +61,24 @@ export default function DemoVideoPopover() {
           isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20 pointer-events-none'
         }`}
       >
-        <button
-          onClick={handleOpen}
-          className="group relative bg-[#1a1a1a] hover:bg-[#252525] text-gray-400 hover:text-white border border-gray-800 hover:border-gray-700 rounded-full px-5 py-3 shadow-lg transition-all duration-200 flex items-center gap-2.5"
-          aria-label="Watch demo video"
-        >
-          {/* Icon */}
-          <Play className="w-4 h-4" />
+        <div className="relative">
+          {/* Animated purple border */}
+          <div className="absolute inset-0 rounded-full p-[2px] bg-gradient-to-r from-purple-500 via-purple-400 to-purple-500 animate-spin-border">
+            <div className="absolute inset-[2px] rounded-full bg-[#1a1a1a]" />
+          </div>
           
-          {/* Text Label */}
-          <span className="text-sm font-medium">Watch Demo</span>
-        </button>
+          <button
+            onClick={handleOpen}
+            className="relative group bg-[#1a1a1a] hover:bg-[#252525] text-gray-400 hover:text-white rounded-full px-5 py-3 shadow-lg transition-all duration-200 flex items-center gap-2.5 z-10"
+            aria-label="Watch demo video"
+          >
+            {/* Icon */}
+            <Play className="w-4 h-4" />
+            
+            {/* Text Label */}
+            <span className="text-sm font-medium">Watch Demo</span>
+          </button>
+        </div>
       </div>
 
       {/* Video Modal */}
