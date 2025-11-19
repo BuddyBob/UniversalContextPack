@@ -5307,10 +5307,12 @@ async def delete_source_from_pack(
         # Use RPC function to delete source (bypasses RLS issues)
         try:
             print(f"Attempting RPC delete for source {source_id}")
+            # Convert strings to UUID format for the RPC function
+            from uuid import UUID
             result = supabase.rpc("delete_pack_source", {
-                "user_uuid": user.user_id,
-                "target_pack_id": pack_id,
-                "target_source_id": source_id
+                "user_uuid": str(user.user_id),
+                "target_pack_id": str(pack_id),
+                "target_source_id": str(source_id)
             }).execute()
             
             print(f"RPC result: {result.data}")
