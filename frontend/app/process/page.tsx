@@ -3297,7 +3297,7 @@ export default function ProcessPage() {
                         <h3 className="font-semibold text-white mb-1">Chat Export</h3>
                         <p className="text-sm text-gray-400">
                           <a 
-                            href="/#download-history" 
+                            href="https://chatgpt.com/#settings/DataControls" 
                             target="_blank"
                             className="text-blue-300 underline hover:text-blue-400 hover:underline transition-colors"
                             onClick={(e) => {
