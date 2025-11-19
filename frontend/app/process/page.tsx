@@ -143,13 +143,13 @@ export default function ProcessPage() {
           if (creditResponse.ok) {
             const creditData = await creditResponse.json();
             setSourcePendingAnalysis({
-              sourceId: readySource.source_id,
-              totalChunks: creditData.total_chunks,
-              creditsRequired: creditData.credits_required,
-              userCredits: creditData.user_credits,
-              hasUnlimited: creditData.has_unlimited,
-              canProceed: creditData.can_proceed,
-              creditsNeeded: creditData.credits_needed || 0
+              sourceId: creditData.sourceId || readySource.source_id,
+              totalChunks: creditData.totalChunks,
+              creditsRequired: creditData.creditsRequired,
+              userCredits: creditData.userCredits,
+              hasUnlimited: creditData.hasUnlimited,
+              canProceed: creditData.canProceed,
+              creditsNeeded: creditData.creditsNeeded || 0
             });
             setCurrentStep('upload');
           }
@@ -2847,13 +2847,13 @@ export default function ProcessPage() {
                         if (creditResponse.ok) {
                           const creditData = await creditResponse.json();
                           setSourcePendingAnalysis({
-                            sourceId: source.source_id,
-                            totalChunks: creditData.total_chunks,
-                            creditsRequired: creditData.credits_required,
-                            userCredits: creditData.user_credits,
-                            hasUnlimited: creditData.has_unlimited,
-                            canProceed: creditData.can_proceed,
-                            creditsNeeded: creditData.credits_needed || 0
+                            sourceId: creditData.sourceId || source.source_id,
+                            totalChunks: creditData.totalChunks,
+                            creditsRequired: creditData.creditsRequired,
+                            userCredits: creditData.userCredits,
+                            hasUnlimited: creditData.hasUnlimited,
+                            canProceed: creditData.canProceed,
+                            creditsNeeded: creditData.creditsNeeded || 0
                           });
                           setCurrentStep('upload');
                         }
@@ -3198,9 +3198,15 @@ export default function ProcessPage() {
                 </div>
                   </div>
                 ) : sourcePendingAnalysis ? (() => {
-                  const allowedChunks = sourcePendingAnalysis.hasUnlimited
-                    ? sourcePendingAnalysis.totalChunks
-                    : Math.min(sourcePendingAnalysis.userCredits, sourcePendingAnalysis.totalChunks);
+                  // Add safe defaults for all values
+                  const totalChunks = sourcePendingAnalysis.totalChunks || 0;
+                  const userCredits = sourcePendingAnalysis.userCredits || 0;
+                  const hasUnlimited = sourcePendingAnalysis.hasUnlimited || false;
+                  const creditsNeeded = sourcePendingAnalysis.creditsNeeded || 0;
+                  
+                  const allowedChunks = hasUnlimited
+                    ? totalChunks
+                    : Math.min(userCredits, totalChunks);
                   
                   return (
                   /* Credit Confirmation Card - Replaces Upload Area */
@@ -3212,10 +3218,10 @@ export default function ProcessPage() {
                       <div>
                         <h3 className="text-xl font-semibold text-white">Ready to Analyze</h3>
                         <p className="text-gray-400">
-                          {sourcePendingAnalysis.hasUnlimited
-                            ? "We'll process every chunk automatically."
-                            : allowedChunks < sourcePendingAnalysis.totalChunks
-                              ? `We'll analyze ${allowedChunks}/${sourcePendingAnalysis.totalChunks} chunks with your current credits. Buy more anytime to process the rest.`
+                          {hasUnlimited
+                            ? "You're all set—every chunk will be analyzed."
+                            : allowedChunks < totalChunks
+                              ? `We'll analyze ${allowedChunks}/${totalChunks} chunks with your current credits. Buy more anytime to process the rest.`
                               : "You're all set—every chunk will be analyzed."}
                         </p>
                       </div>
@@ -3225,17 +3231,17 @@ export default function ProcessPage() {
                     <div className="bg-gray-800/50 rounded-xl p-6 mb-6 space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-400">Total chunks:</span>
-                        <span className="text-lg font-medium text-white">{sourcePendingAnalysis.totalChunks}</span>
+                        <span className="text-lg font-medium text-white">{totalChunks}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-400">Your credits:</span>
                         <span className="text-lg font-medium text-white">
-                          {sourcePendingAnalysis.hasUnlimited ? 'Unlimited' : sourcePendingAnalysis.userCredits}
+                          {hasUnlimited ? 'Unlimited' : userCredits}
                         </span>
                       </div>
-                      {!sourcePendingAnalysis.hasUnlimited && sourcePendingAnalysis.creditsNeeded > 0 && (
+                      {!hasUnlimited && creditsNeeded > 0 && (
                         <p className="text-xs text-gray-500 pt-2 border-t border-gray-700">
-                          Add {sourcePendingAnalysis.creditsNeeded} more credit{sourcePendingAnalysis.creditsNeeded === 1 ? '' : 's'} to unlock every chunk.
+                          Add {creditsNeeded} more credit{creditsNeeded === 1 ? '' : 's'} to unlock every chunk.
                         </p>
                       )}
                     </div>
