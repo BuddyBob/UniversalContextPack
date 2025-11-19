@@ -1265,6 +1265,7 @@ export default function ProcessPage() {
     
     const sourceId = sourcePendingAnalysis.sourceId;
     
+    
     // Close the modal immediately for better UX
     setSourcePendingAnalysis(null);
     
@@ -1276,17 +1277,17 @@ export default function ProcessPage() {
       );
       
       if (response.ok) {
-        addLog('Source removed from pack');
+        showNotification('info', 'Source removed from pack');
         
-        // Refresh pack sources to update the UI
+        // Refresh pack sources to update the UI (this updates the left sidebar)
         if (selectedPack) {
           const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
           if (packResponse.ok) {
             const packData = await packResponse.json();
             setPackSources(packData.sources || []);
-          }
         }
       } else {
+        const errorText = await response.text();
         throw new Error('Failed to remove source');
       }
     } catch (error) {
