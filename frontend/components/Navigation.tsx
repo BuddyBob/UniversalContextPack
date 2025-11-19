@@ -19,9 +19,7 @@ export default function Navigation() {
 
   // Debug: Log userProfile changes
   useEffect(() => {
-    console.log('Navigation - userProfile updated:', userProfile)
     if (userProfile) {
-      console.log('  - credit_balance:', userProfile.credit_balance)
       console.log('  - credits_balance:', userProfile.credits_balance)
       console.log('  - payment_plan:', userProfile.payment_plan)
     }
@@ -192,7 +190,7 @@ export default function Navigation() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400 uppercase tracking-wide">Credits</span>
                       <span className="text-lg font-semibold text-white">
-                        {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance || userProfile?.credit_balance)?.toLocaleString() || '0'}
+                        {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance || userProfile?.credits_balance)?.toLocaleString() || '0'}
                       </span>
                     </div>
                   </a>

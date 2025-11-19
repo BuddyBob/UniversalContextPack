@@ -2323,7 +2323,6 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         }).execute()
         
         # Step 1: Extract text
-        print(f"📝 Extracting text from {filename}")
         extracted_texts = extract_from_text_content(file_content)
         
         # Store extracted text in R2
@@ -2409,15 +2408,16 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
             # Small enough to process as single chunk
             chunks.append(combined_text)
             chunk_tokens = count_tokens(combined_text)
-            print(f"Created 1 chunk for source {source_id} ({total_length:,} chars, {chunk_tokens:,} tokens)")
+            print(f"Created 1 chunk for source {source_id} ({total_length:,} chars, {chunk_tokens:,} tokens)", flush=True)
         
         # Store chunks in R2
         chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
         chunks_json = json.dumps(chunks)
         upload_to_r2(chunked_path, chunks_json)
-        print(f"✅ Chunks uploaded successfully")
+        print(f"✅ Chunks uploaded successfully to R2", flush=True)
         
         # Update status to ready_for_analysis (extraction done, awaiting credit confirmation)
+        print(f"📝 Updating source {source_id} status to ready_for_analysis...", flush=True)
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
@@ -2426,13 +2426,14 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
             "total_chunks_param": len(chunks)
         }).execute()
         
-        print(f"✅ Extraction and chunking complete: {len(chunks)} chunks ready for analysis")
+        print(f"✅ Extraction and chunking complete: {len(chunks)} chunks ready for analysis", flush=True)
         avg_chunk_size = total_length // len(chunks) if len(chunks) > 0 else 0
-        print(f"Stats: {total_length:,} chars -> {len(chunks)} chunks (~{avg_chunk_size:,} chars/chunk avg)")
+        print(f"Stats: {total_length:,} chars -> {len(chunks)} chunks (~{avg_chunk_size:,} chars/chunk avg)", flush=True)
         
         return len(chunks)
         
     except Exception as e:
+        print("hi")
         print(f"❌ Error extracting/chunking source {source_id}: {e}")
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
@@ -7502,7 +7503,10 @@ async def migrate_missing_summaries(user: AuthenticatedUser = Depends(get_curren
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 if __name__ == "__main__":
-    print("🚀 Starting Simple UCP Backend with R2 Storage - 3 Step Process...")
-    print(f"📦 Using R2 bucket: {R2_BUCKET}")
-    print("📋 Steps: 1) Extract → 2) Chunk → 3) Analyze")
-    uvicorn.run("simple_backend:app", host="0.0.0.0", port=8000, reload=False, log_level="warning")
+    import sys
+    # Force unbuffered output
+    
+    print("🚀 Starting Simple UCP Backend with R2 Storage - 3 Step Process...", flush=True)
+    print(f"📦 Using R2 bucket: {R2_BUCKET}", flush=True)
+    print("📋 Steps: 1) Extract → 2) Chunk → 3) Analyze", flush=True)
+    uvicorn.run("simple_backend:app", host="0.0.0.0", port=8000, reload=False, log_level="info")

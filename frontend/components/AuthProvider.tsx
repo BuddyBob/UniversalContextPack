@@ -249,14 +249,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const controller = new AbortController()
       
       // Use different timeouts based on the endpoint
-      let timeoutMs = 30000 // Default 30 seconds
+      let timeoutMs = 60000 // Default 60 seconds (increased from 30)
       
       if (url.includes('/api/analyze/')) {
         timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
-      } else if (url.includes('/api/chunk/') || url.includes('/api/extract/') || url.includes('/sources')) {
-        timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction/file upload
-      } else if (url.includes('/api/status/')) {
-        timeoutMs = 90000 // 90 seconds for status polling to handle batch processing
+      } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
+        timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
+      } else if (url.includes('/sources') && url.includes('POST')) {
+        timeoutMs = 10 * 60 * 1000 // 10 minutes for file upload
+      } else if (url.includes('/api/status/') || url.includes('/api/v2/packs/') || url.includes('/sources')) {
+        timeoutMs = 90000 // 90 seconds for status polling, pack queries, and source status
       } else if (url.includes('/api/profile/quick')) {
         timeoutMs = 10000 // 10 seconds for quick profile endpoint
       } else if (url.includes('/api/health')) {

@@ -48,7 +48,6 @@ export interface UserProfile {
   full_name?: string
   avatar_url?: string
   r2_user_directory: string
-  credit_balance?: number
   credits_balance?: number // Mapped from credit_balance for compatibility
   payment_plan?: string
   created_at: string

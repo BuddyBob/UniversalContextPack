@@ -138,56 +138,6 @@ export default function ProcessPage() {
           const sources = data.sources || [];
           setPackSources(sources);
 
-          // Check if any source is ready for analysis
-          const readySource = sources.find((s: any) => s.status === 'ready_for_analysis');
-          if (readySource) {
-            console.log('[DEBUG] Found ready source:', readySource.source_id, readySource.source_name);
-            // Check if this source just finished chunking (was processing before)
-            const wasProcessingBefore = packSources.find((s: any) => 
-              s.source_id === readySource.source_id && (s.status === 'extracting' || s.status === 'processing')
-            );
-            
-            console.log('[DEBUG] Was processing before?', !!wasProcessingBefore, 
-              'Previous status:', packSources.find((s: any) => s.source_id === readySource.source_id)?.status);
-            
-            if (wasProcessingBefore) {
-              console.log('[DEBUG] Source finished chunking, reloading page in 500ms...');
-              setTimeout(() => window.location.reload(), 500);
-              setTimeout(() => window.location.reload(), 500);
-              return; // Exit early since we're reloading
-            }
-          }
-          if (readySource && !sourcePendingAnalysis) {
-            // Fetch credit check for this source
-            const creditCheck = await makeAuthenticatedRequest(
-              `${API_BASE_URL}/api/v2/sources/${readySource.source_id}/credit-check`
-            );
-            if (creditCheck.ok) {
-              const creditData = await creditCheck.json();
-              
-              // Always show inline credit card for manual user approval
-              // This gives users control over when analysis starts, even with unlimited plan
-              console.log('📊 Setting sourcePendingAnalysis state to show modal');
-              setSourcePendingAnalysis(creditData);
-              
-              if (creditData.canProceed) {
-                const msg = creditData.hasUnlimited 
-                  ? `Ready to analyze ${creditData.totalChunks} chunks (Unlimited plan)`
-                  : `Ready to analyze ${creditData.totalChunks} chunks (${creditData.userCredits} credits available)`;
-                addLog(msg);
-                showNotification('info', msg);
-              } else {
-                const creditsMsg = creditData.creditsNeeded > 0 
-                  ? `${creditData.creditsNeeded} more credits needed to analyze this file`
-                  : 'Insufficient credits to analyze this file';
-                addLog(`⚠️ ${creditsMsg}`);
-                showNotification('warning', creditsMsg);
-              }
-            } else {
-              console.error('❌ Credit check failed:', creditCheck.status, creditCheck.statusText);
-            }
-          }
-
           // Check if source that was starting is now actually analyzing
           if (isAnalysisStarting) {
             const startedSource = sources.find((s: any) => s.source_id === isAnalysisStarting);
@@ -233,8 +183,10 @@ export default function ProcessPage() {
 
     // Check if any sources are actively processing
     const hasActiveProcessing = packSources.some((s: any) => 
-      ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'pending', 'ready_for_analysis'].includes(s.status?.toLowerCase())
+      ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'pending'].includes(s.status?.toLowerCase())
     );
+    
+    const shouldPoll = hasActiveProcessing || isAnalysisStarting;
     
     // Clear any existing interval
     if (pollingIntervalRef.current) {
@@ -245,8 +197,8 @@ export default function ProcessPage() {
     // Always poll once immediately to check current status
     pollSourcesStatus();
     
-    // Only set up continuous polling if there are active sources OR if we're waiting for analysis to start
-    if (hasActiveProcessing || isAnalysisStarting) {
+    // Set up continuous polling if there are active sources, waiting for analysis, or pending analysis modal
+    if (shouldPoll) {
       // Poll every 2 seconds
       pollingIntervalRef.current = setInterval(pollSourcesStatus, 2000);
     }
@@ -257,7 +209,7 @@ export default function ProcessPage() {
         pollingIntervalRef.current = null;
       }
     };
-  }, [selectedPack, packSources, isAnalysisStarting]);
+  }, [selectedPack, isAnalysisStarting, sourcePendingAnalysis]);
 
   // Auto-create pack function
   const autoCreatePack = async () => {
@@ -1728,11 +1680,7 @@ export default function ProcessPage() {
   };
 
   const startPollingExtractionStatus = (jobId: string) => {
-    // Prevent multiple concurrent polling instances
-    if (isExtractionPollingRef.current) {
-      console.log('Extraction polling already in progress, skipping');
-      return;
-    }
+
     
     // Cancel any existing polling
     if (extractionAbortControllerRef.current) {
@@ -1844,20 +1792,52 @@ export default function ProcessPage() {
         const progress = resultsData.progress || 0;
         setProgress(progress);
         
-        // Show progress-based messages
-        if (progress < 30) {
+        // Show chunking progress with actual numbers
+        if (resultsData.status === 'processing' && resultsData.total_chunks) {
+          const lastChunkLog = logs[logs.length - 1];
+          const currentProgressMsg = `✂️ Chunking: ${resultsData.total_chunks} chunks created (${progress}% complete)`;
+          
+          // Only add if it's different from last message
+          if (!lastChunkLog || !lastChunkLog.includes('Chunking:') || !lastChunkLog.includes(`${resultsData.total_chunks} chunks`)) {
+            addLog(currentProgressMsg);
+          }
+        } else if (progress < 30) {
           if (!logs.some(log => log.includes('Extracting text'))) {
             addLog(`📝 Extracting text from ${file?.name || 'source'}...`);
           }
-        } else if (progress < 50) {
-          if (!logs.some(log => log.includes('Chunking content'))) {
-            addLog(`✂️ Chunking content into ${resultsData.total_chunks || 'processing'} chunks...`);
+        }
+        
+        // Check if ready for analysis (chunking completed)
+        if (resultsData.status === 'ready_for_analysis') {
+          isExtractionPollingRef.current = false;
+          setIsProcessing(false);
+          setCurrentStep('upload');
+          
+          // Show success notification for chunking completion
+          
+          // Fetch credit check directly and show modal
+          try {
+            const creditCheck = await makeAuthenticatedRequest(
+              `${API_BASE_URL}/api/v2/sources/${jobId}/credit-check`
+            );
+            if (creditCheck.ok) {
+              const creditData = await creditCheck.json();
+              setSourcePendingAnalysis(creditData);
+              
+              // Also refresh pack sources to ensure UI is in sync
+              if (selectedPack) {
+                const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
+                if (packResponse.ok) {
+                  const packData = await packResponse.json();
+                  setPackSources(packData.sources || []);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching credit check:', error);
           }
-        } else if (progress < 100) {
-          const chunksProcessed = Math.floor((progress - 50) / 40 * (resultsData.total_chunks || 0));
-          if (chunksProcessed > 0 && !logs.some(log => log.includes(`Analyzing chunk ${chunksProcessed}`))) {
-            addLog(`🤖 Analyzing chunk ${chunksProcessed}/${resultsData.total_chunks || '?'}...`);
-          }
+          
+          return;
         }
         
         // Check if completed
@@ -1865,6 +1845,9 @@ export default function ProcessPage() {
           isExtractionPollingRef.current = false;
           setIsProcessing(false);
           setCurrentStep('upload'); // Reset to upload state to allow adding more sources
+          
+          // Show success notification for analysis completion
+          showNotification('upgrade_success', `🎉 Analysis complete! ${resultsData.total_chunks || 0} chunks analyzed`);
           addLog(`✅ Processing complete! ${resultsData.total_chunks || 0} chunks analyzed`);
           addLog(`💰 Cost: $${(resultsData.total_input_tokens * 0.00015 / 1000 + resultsData.total_output_tokens * 0.0006 / 1000).toFixed(4)}`);
           
@@ -2017,16 +2000,14 @@ export default function ProcessPage() {
       
       if (uploadMethod === 'chat_export') {
         // Allow conversations.json or .zip files for chat export
-        if (fileName !== 'conversations.json' && !fileName.endsWith('.zip')) {
-          addLog('Error: Chat Export requires conversations.json or .zip file');
-          showNotification('warning', 'Please upload a conversations.json file or ZIP export from ChatGPT');
+        if (fileName !== 'conversations.json') {
+          showNotification('warning', 'Please upload a conversations.json file from ChatGPT');
           if (event.target) event.target.value = '';
           return;
         }
       } else if (uploadMethod === 'document') {
         // Allow pdf, txt, md, html for documents
         if (!fileName.endsWith('.pdf') && !fileName.endsWith('.txt') && !fileName.endsWith('.md') && !fileName.endsWith('.html') && !fileName.endsWith('.htm')) {
-          addLog('Error: Documents must be PDF, TXT, HTML, or Markdown files');
           showNotification('warning', 'Please upload a PDF, TXT, HTML, or MD file');
           if (event.target) event.target.value = '';
           return;
@@ -2106,13 +2087,12 @@ export default function ProcessPage() {
       setCurrentJobId(sourceId);
       addLog(`Source uploaded successfully: ${sourceId}`);
       addLog('🔄 Extraction and chunking started...');
-      addLog('💡 The pack sources list will update automatically when ready');
       
-      // Don't start old polling - the useEffect hook at line 120 already polls pack sources
-      // Just reset the UI state
-      setIsProcessing(false);
-      setCurrentStep('upload');
+      // Clear file state since it's now in packSources
       setFile(null);
+      
+      // Start polling for extraction/chunking completion
+      startPollingExtractionStatus(sourceId);
       
     } catch (error) {
       console.error('Source upload failed:', error);
@@ -2273,161 +2253,6 @@ export default function ProcessPage() {
     }
   };
 
-  const handleChunk = async () => {
-    console.log('handleChunk called with:', { extractionData: !!extractionData, currentJobId, currentStep });
-    
-    if (!extractionData || !currentJobId) {
-      console.error('Missing required data for chunking:', { extractionData: !!extractionData, currentJobId });
-      addLog('Error: Missing extraction data or job ID');
-      return;
-    }
-
-    // Prevent multiple simultaneous chunking requests
-    if (isProcessing || currentStep === 'chunking') {
-      console.log('Chunking already in progress, ignoring duplicate request');
-      return;
-    }
-
-    console.log('Starting chunking process with jobId:', currentJobId);
-    setIsProcessing(true);
-    setCurrentStep('chunking');
-    addLog('Creating semantic chunks...');
-
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const chunkUrl = `${backendUrl}/api/chunk/${currentJobId}`;
-      console.log('Making chunking request to:', chunkUrl);
-      
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-
-      const requestBody = {
-        chunk_size: 600000, // ~150k tokens (4 chars per token) - safe margin below GPT's 200k limit
-        overlap: 6000,      // Proportional overlap
-      };
-      
-      console.log('Request body:', requestBody);
-
-      const response = await fetch(chunkUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
-      });
-
-      console.log('Chunking response status:', response.status);
-      console.log('Chunking response URL:', response.url);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Chunking error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('Chunking response data:', data);
-      setChunkData(data);
-      setAvailableChunks(data.chunks);
-      setCurrentStep('chunked');
-      addLog(`Chunking complete! Created ${data.total_chunks} chunks ready for analysis`);
-      
-      // Calculate analysis time estimate for all chunks (1 minute per chunk)
-      const totalAnalysisSeconds = data.total_chunks * 60;
-      const formatted = formatAnalysisTime(totalAnalysisSeconds);
-      
-      setAnalysisTimeEstimate({
-        formatted: formatted,
-        estimated_seconds: totalAnalysisSeconds
-      });
-      addLog(`Estimated analysis time for all chunks: ${formatted}`);
-    } catch (error) {
-      addLog(`Chunking failed: ${error}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleChunkWithData = async (extractionResults: any, jobId: string) => {
-    console.log('handleChunkWithData called with:', { extractionResults: !!extractionResults, jobId, currentStep });
-    
-    if (!extractionResults || !jobId) {
-      console.error('Missing required data for chunking:', { extractionResults: !!extractionResults, jobId });
-      addLog('Error: Missing extraction data or job ID');
-      return;
-    }
-
-    // Prevent multiple simultaneous chunking requests
-    if (isProcessing || currentStep === 'chunking') {
-      console.log('Chunking already in progress, ignoring duplicate request');
-      return;
-    }
-
-    console.log('Starting chunking process with jobId:', jobId);
-    setIsProcessing(true);
-    setCurrentStep('chunking');
-    addLog('Creating semantic chunks...');
-
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const chunkUrl = `${backendUrl}/api/chunk/${jobId}`;
-      console.log('Making chunking request to:', chunkUrl);
-      
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-
-      const requestBody = {
-        chunk_size: 600000, // ~150k tokens (4 chars per token) - safe margin below GPT's 200k limit
-        overlap: 6000,      // Proportional overlap
-      };
-      
-      console.log('Request body:', requestBody);
-
-      const response = await fetch(chunkUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
-      });
-
-      console.log('Chunking response status:', response.status);
-      console.log('Chunking response URL:', response.url);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Chunking error response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('Chunking response data:', data);
-      setChunkData(data);
-      setAvailableChunks(data.chunks);
-      setCurrentStep('chunked');
-      addLog(`Chunking complete! Created ${data.total_chunks} chunks ready for analysis`);
-      
-      // Calculate analysis time estimate for all chunks (1 minute per chunk)
-      const totalAnalysisSeconds = data.total_chunks * 60;
-      const formatted = formatAnalysisTime(totalAnalysisSeconds);
-      
-      setAnalysisTimeEstimate({
-        formatted: formatted,
-        estimated_seconds: totalAnalysisSeconds
-      });
-      addLog(`Estimated analysis time for all chunks: ${formatted}`);
-    } catch (error) {
-      addLog(`Chunking failed: ${error}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const handleAnalyze = async () => {
     console.log('handleAnalyze called with:', { 
@@ -2818,50 +2643,6 @@ export default function ProcessPage() {
     }
   };
 
-  const checkServerHealth = async () => {
-    try {
-      addLog('🔍 Checking server health...');
-      setConnectionStatus('connecting');
-      
-      const healthResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/health`,
-        {
-          method: 'GET',
-          signal: AbortSignal.timeout(15000) // 15 second timeout
-        }
-      );
-      
-      if (!healthResponse.ok) {
-        throw new Error(`Health check failed: ${healthResponse.status}`);
-      }
-      
-      const healthData = await healthResponse.json();
-      setConnectionStatus('connected');
-      
-      addLog(`✅ Server health check passed: ${healthData.status}`);
-      addLog(`📊 Response time: ${healthData.response_time_ms}ms`);
-      
-      if (healthData.system) {
-        addLog(`💾 Memory usage: ${healthData.system.memory_used_percent}%`);
-        addLog(`🖥️ CPU usage: ${healthData.system.cpu_percent}%`);
-      }
-      
-      if (healthData.job_queue) {
-        addLog(`📝 Jobs: ${healthData.job_queue.pending_jobs} pending, ${healthData.job_queue.processing_jobs} processing`);
-      }
-      
-      if (healthData.database?.healthy === false) {
-        addLog('⚠️ Database connection issues detected');
-        setConnectionStatus('warning');
-      }
-      
-    } catch (error) {
-      setConnectionStatus('disconnected');
-      addLog(`❌ Server health check failed: ${error}`);
-      addLog('💡 Try refreshing the page or contact support if issues persist');
-    }
-  };
-
   const cancelAnalysis = async () => {
     try {
       // Find analyzing source
@@ -2929,13 +2710,6 @@ export default function ProcessPage() {
     addLog('Process reset');
   };
 
-  const viewResults = () => {
-    if (currentJobId) {
-      router.push(`/packs?id=${currentJobId}`);
-    } else {
-      router.push('/packs');
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-950 flex">
@@ -4196,7 +3970,11 @@ export default function ProcessPage() {
               <button
                 onClick={() => downloadPack('complete')}
                 disabled={isDownloading}
-                className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-100 text-white rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${
+                  !isDownloading && packSources.some(s => s.status === 'completed')
+                    ? 'after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-gradient-to-r after:from-transparent after:via-green-400 after:to-transparent after:animate-shimmer-slide'
+                    : ''
+                }`}
               >
                 {isDownloading ? (
                   <>
