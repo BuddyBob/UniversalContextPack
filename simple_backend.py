@@ -5313,17 +5313,13 @@ async def delete_source_from_pack(
             }).execute()
             
             if result.data:
-                print(f"✅ Source {source_id} deleted successfully from database and R2")
                 return {"success": True, "message": "Source deleted successfully"}
             else:
                 raise HTTPException(status_code=404, detail="Source not found or already deleted")
         except Exception as rpc_error:
-            # If RPC doesn't exist, fall back to direct delete
-            print(f"RPC failed, trying direct delete: {rpc_error}")
             result = supabase.table("pack_sources").delete().eq("source_id", source_id).eq("user_id", user.user_id).eq("pack_id", pack_id).execute()
             
             if result.data:
-                print(f"✅ Source {source_id} deleted successfully (direct delete)")
                 return {"success": True, "message": "Source deleted successfully"}
             else:
                 raise HTTPException(status_code=404, detail="Source not found")
