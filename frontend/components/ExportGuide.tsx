@@ -147,13 +147,20 @@ const ExportGuide = () => {
               <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
                 Take control of your AI memory
               </p>
-              
-              <a 
-                href="/process"
-                className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl"
-              >
-                Get Started
-              </a>
+              {/*If the user is not signed in, send them to /process if they are signed in send them to /packs */}
+              {
+                user ? (
+                  <a href="/packs" className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl">
+                    Get Started
+                  </a>
+                ) : (
+                  <a 
+                    href="/process"
+                    className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl"
+                >
+                  Get Started
+                </a>
+              )}
             </div>
 
             {/* Interactive Demo - Multiple Chats → One Memory Chip */}
