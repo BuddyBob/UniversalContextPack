@@ -1265,7 +1265,6 @@ export default function ProcessPage() {
     
     const sourceId = sourcePendingAnalysis.sourceId;
     
-    
     // Close the modal immediately for better UX
     setSourcePendingAnalysis(null);
     
@@ -1285,6 +1284,7 @@ export default function ProcessPage() {
           if (packResponse.ok) {
             const packData = await packResponse.json();
             setPackSources(packData.sources || []);
+          }
         }
       } else {
         const errorText = await response.text();
