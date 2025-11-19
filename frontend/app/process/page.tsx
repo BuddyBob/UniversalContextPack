@@ -1313,7 +1313,10 @@ export default function ProcessPage() {
       if (response.ok) {
         showNotification('info', 'Source removed from pack');
         
-        // Refresh pack sources to update the UI (this updates the left sidebar)
+        // Immediately remove from local state to prevent modal from reopening
+        setPackSources(prev => prev.filter((s: any) => s.source_id !== sourceId));
+        
+        // Then refresh from server to ensure consistency
         const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
         if (packResponse.ok) {
           const packData = await packResponse.json();

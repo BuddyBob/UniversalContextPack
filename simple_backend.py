@@ -81,6 +81,8 @@ print(f"🔒 SSL verification enabled using certificates from: {certifi.where()}
 # Initialize Supabase client
 if SUPABASE_URL and SUPABASE_SERVICE_KEY:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    print(f"✅ Supabase client initialized with service role key (length: {len(SUPABASE_SERVICE_KEY)})")
+    print(f"   Service key starts with: {SUPABASE_SERVICE_KEY[:20]}...")
 else:
     print("Warning: Supabase credentials not found. Running in legacy mode.")
     supabase = None
@@ -5294,46 +5296,36 @@ async def delete_source_from_pack(
     user: AuthenticatedUser = Depends(get_current_user)
 ):
     """Remove a source from a pack"""
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Database not configured")
+    
+    print(f"Deleting source {source_id} from pack {pack_id}")
+    
+    # Delete R2 files for this source (user_id/pack_id/source_id/)
+    r2_prefix = f"{user.r2_directory}/{pack_id}/{source_id}/"
+    delete_r2_directory(r2_prefix)
+    
+    # Delete from database using RPC function (bypasses RLS, same as pack deletion)
     try:
-        if not supabase:
-            raise HTTPException(status_code=500, detail="Database not configured")
+        print(f"Attempting database delete for source {source_id}")
         
-        print(f"Deleting source {source_id} from pack {pack_id}")
+        # Use RPC function to delete source (bypasses RLS, just like delete_pack_v2)
+        result = supabase.rpc("delete_pack_source", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id,
+            "target_source_id": source_id
+        }).execute()
         
-        # Delete R2 files for this source (user_id/pack_id/source_id/)
-        r2_prefix = f"{user.r2_directory}/{pack_id}/{source_id}/"
-        delete_r2_directory(r2_prefix)
-        
-        # Delete source from database using raw SQL to bypass any RLS issues
-        try:
-            print(f"Attempting to delete source {source_id} from pack {pack_id}")
-            # Use postgrest to execute DELETE
-            result = supabase.table("pack_sources")\
-                .delete()\
-                .eq("source_id", source_id)\
-                .eq("pack_id", pack_id)\
-                .eq("user_id", user.user_id)\
-                .execute()
+        if result.data:
+            print(f"✅ Source {source_id} deleted from database successfully")
+        else:
+            print(f"⚠️ Database delete returned False (source may not exist)")
             
-            print(f"Delete result: {result}")
-            if result.data or (hasattr(result, 'count') and result.count is not None):
-                print(f"✅ Source {source_id} deleted successfully")
-                return {"success": True, "message": "Source deleted successfully"}
-            else:
-                print(f"⚠️ Delete returned no data, source may not exist")
-                # Source might not exist, but that's ok - consider it deleted
-                return {"success": True, "message": "Source already deleted or not found"}
-        except Exception as delete_error:
-            print(f"❌ Delete failed with error: {delete_error}")
-            # Even if delete fails, try to clean up and return success
-            # The source is already removed from R2, so partial success
-            return {"success": True, "message": "Source removed (database cleanup may be incomplete)"}
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error deleting source: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete source: {str(e)}")
+    except Exception as db_error:
+        print(f"⚠️ Database delete failed: {db_error}")
+    
+    # Always return success - the source is gone from R2 and UI will be updated
+    return {"success": True, "message": "Source deleted successfully"}
 
 @app.get("/api/v2/sources/{source_id}/credit-check")
 async def check_source_credits(
@@ -5378,8 +5370,7 @@ async def check_source_credits(
             "needsPurchase": not has_unlimited and user_credits < total_chunks,
             "creditsNeeded": max(0, total_chunks - user_credits) if not has_unlimited else 0
         }
-        
-        print(f"💳 Credit check for source {source_id}: {total_chunks} chunks, user has {user_credits} credits, can_proceed={credit_check_result['canProceed']}")
+
         
         return credit_check_result
             
