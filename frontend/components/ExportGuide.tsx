@@ -136,8 +136,7 @@ const ExportGuide = () => {
             {/* Header */}
             <div className="text-center mb-16">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 border border-slate-700/50 mb-6">
-                <span className="text-sm text-gray-400">Backed by</span>
-                <span className="text-sm font-semibold text-white">YC</span>
+                <span className="text-sm text-gray-400">Backed</span>
               </div>
               
               <h1 className="text-4xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
