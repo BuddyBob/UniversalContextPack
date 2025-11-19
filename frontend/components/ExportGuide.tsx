@@ -5,8 +5,10 @@ import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Cloc
 import { analytics } from '@/lib/analytics'
 import Image from 'next/image'
 import DemoVideoPopover from './DemoVideoPopover'
+import { useAuth } from './AuthProvider'
 
 const ExportGuide = () => {
+  const { user } = useAuth()
   const [scrollY, setScrollY] = useState(0)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [activeStep, setActiveStep] = useState(0)
