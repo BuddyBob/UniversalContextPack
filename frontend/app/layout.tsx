@@ -13,48 +13,49 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.context-pack.com'),
   title: {
-    default: 'One Profile. Your AI. - Save AI Chats Forever',
+    default: 'Context Pack – Your AI’s Long-Term Memory',
     template: '%s | Context Pack'
   },
-  description: 'Keep your ChatGPT, Claude, and AI conversations safe forever. Download, organize, and move your chat history between AI tools. Never lose important conversations again.',
+  description:
+    'Create portable, long-term memory packs from your ChatGPT, Claude, and Gemini chats. Upload your history, generate a Context Pack, and use it across any AI model.',
   keywords: [
+    'context pack',
+    'AI memory',
+    'AI long-term memory',
     'save ChatGPT chats',
     'backup AI conversations',
-    'download ChatGPT history',
-    'keep AI chats forever',
-    'ChatGPT chat backup',
-    'AI conversation storage',
+    'ChatGPT export tool',
+    'Claude chat backup',
+    'AI chat migration',
     'move ChatGPT to Claude',
-    'AI chat organizer',
-    'preserve AI conversations',
-    'ChatGPT export tool'
+    'AI context portability'
   ],
   authors: [{ name: 'Context Pack Team' }],
   creator: 'Context Pack',
   publisher: 'Context Pack',
-  alternates: {
-    canonical: '/'
-  },
+  alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     locale: 'en_US',
     url: 'https://www.context-pack.com',
     siteName: 'Context Pack',
-    title: 'One Profile. Your AI. - Save AI Chats Forever',
-    description: 'Keep your ChatGPT, Claude, and AI conversations safe forever. Download, organize, and move your chat history between AI tools.',
+    title: 'Context Pack – Your AI’s Long-Term Memory',
+    description:
+      'Turn your AI chat history into a single portable Context Pack. Keep your data, move it anywhere, and make every model remember you.',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Context Pack - Save Your AI Chats Forever'
+        alt: 'Context Pack – AI Long-Term Memory'
       }
     ]
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'One Profile. Your AI. - AI Memory Migration Platform',
-    description: 'Transform your AI conversations into portable context packs. Migrate your memory between ChatGPT, Claude, and other AI assistants.',
+    title: 'Context Pack – AI Memory Migration Platform',
+    description:
+      'Transform your ChatGPT, Claude, and Gemini conversations into portable Context Packs. Migrate your AI memory across platforms.',
     images: ['/og-image.png'],
     creator: '@UCPlatform'
   },
@@ -66,24 +67,20 @@ export const metadata: Metadata = {
       follow: true,
       'max-video-preview': -1,
       'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
+      'max-snippet': -1
+    }
   },
   verification: {
-    google: 'your-google-verification-code-here', // Add your Google Search Console verification code
-    // yandex: 'your-yandex-verification-code',
-    // bing: 'your-bing-verification-code',
+    google: 'your-google-verification-code-here'
   },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
       { url: '/icon.png', type: 'image/png', sizes: '32x32' },
       { url: '/icon.png', type: 'image/png', sizes: '16x16' },
-      { url: '/icon.png', type: 'image/png', sizes: '48x48' },
+      { url: '/icon.png', type: 'image/png', sizes: '48x48' }
     ],
-    apple: [
-      { url: '/apple-icon.png', sizes: '180x180' }
-    ],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180' }],
     shortcut: '/favicon.ico',
     other: [
       {
@@ -100,34 +97,36 @@ export const metadata: Metadata = {
     'msapplication-TileImage': '/icon.png',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'default',
-    'apple-mobile-web-app-title': 'One Profile. Your AI.',
-    'format-detection': 'telephone=no',
+    'apple-mobile-web-app-title': 'Context Pack',
+    'format-detection': 'telephone=no'
   },
-  manifest: '/manifest.json',
+  manifest: '/manifest.json'
 }
 
 export default function RootLayout({
-  children,
+  children
 }: {
   children: React.ReactNode
 }) {
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'One Profile. Your AI. - Universal Context Pack',
-    description: 'Transform your ChatGPT, Claude, and AI assistant conversations into portable context packs. Migrate your AI memory between platforms seamlessly.',
+    name: 'Context Pack – AI Memory Migration Platform',
+    description:
+      'Transform your ChatGPT, Claude, and Gemini conversations into portable Context Packs. Carry your AI memory across models instantly.',
     url: 'https://www.context-pack.com',
-    applicationCategory: 'BusinessApplication',
+    applicationCategory: 'Utility',
     operatingSystem: 'Web',
     offers: {
       '@type': 'Offer',
       priceCurrency: 'USD',
       price: '0.08',
-      description: 'Pay-per-use AI conversation analysis starting at $0.08 per credit'
+      description:
+        'Pay-per-use AI conversation processing starting at $0.08 per credit.'
     },
     creator: {
       '@type': 'Organization',
-      name: 'Universal Context Pack',
+      name: 'Context Pack',
       url: 'https://www.context-pack.com'
     }
   }
