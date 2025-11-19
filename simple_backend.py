@@ -5304,15 +5304,32 @@ async def delete_source_from_pack(
         r2_prefix = f"{user.r2_directory}/{pack_id}/{source_id}/"
         delete_r2_directory(r2_prefix)
         
-        # Delete source from database (cascade will handle related data)
-        result = supabase.table("pack_sources").delete().eq("source_id", source_id).eq("user_id", user.user_id).execute()
-        
-        if result.data:
-            print(f"✅ Source {source_id} deleted successfully from database and R2")
-            return {"success": True, "message": "Source deleted successfully"}
-        else:
-            raise HTTPException(status_code=404, detail="Source not found")
+        # Use RPC function to delete source (bypasses RLS issues)
+        try:
+            result = supabase.rpc("delete_pack_source", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id,
+                "target_source_id": source_id
+            }).execute()
             
+            if result.data:
+                print(f"✅ Source {source_id} deleted successfully from database and R2")
+                return {"success": True, "message": "Source deleted successfully"}
+            else:
+                raise HTTPException(status_code=404, detail="Source not found or already deleted")
+        except Exception as rpc_error:
+            # If RPC doesn't exist, fall back to direct delete
+            print(f"RPC failed, trying direct delete: {rpc_error}")
+            result = supabase.table("pack_sources").delete().eq("source_id", source_id).eq("user_id", user.user_id).eq("pack_id", pack_id).execute()
+            
+            if result.data:
+                print(f"✅ Source {source_id} deleted successfully (direct delete)")
+                return {"success": True, "message": "Source deleted successfully"}
+            else:
+                raise HTTPException(status_code=404, detail="Source not found")
+            
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error deleting source: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete source: {str(e)}")
