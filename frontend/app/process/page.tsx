@@ -1296,7 +1296,7 @@ export default function ProcessPage() {
   };
 
   const handleCancelAnalysis = async () => {
-    if (!sourcePendingAnalysis) return;
+    if (!sourcePendingAnalysis || !selectedPack) return;
     
     const sourceId = sourcePendingAnalysis.sourceId;
     
@@ -1306,7 +1306,7 @@ export default function ProcessPage() {
     try {
       // Delete the source from the backend (removes from pack)
       const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/api/v2/sources/${sourceId}`,
+        `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources/${sourceId}`,
         { method: 'DELETE' }
       );
       
@@ -1314,12 +1314,10 @@ export default function ProcessPage() {
         showNotification('info', 'Source removed from pack');
         
         // Refresh pack sources to update the UI (this updates the left sidebar)
-        if (selectedPack) {
-          const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
-          if (packResponse.ok) {
-            const packData = await packResponse.json();
-            setPackSources(packData.sources || []);
-          }
+        const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
+        if (packResponse.ok) {
+          const packData = await packResponse.json();
+          setPackSources(packData.sources || []);
         }
       } else {
         const errorText = await response.text();
