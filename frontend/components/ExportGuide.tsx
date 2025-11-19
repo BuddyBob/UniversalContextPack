@@ -149,7 +149,7 @@ const ExportGuide = () => {
               </p>
               
               <a 
-                href="/packs"
+                href="/process"
                 className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl"
               >
                 Get Started

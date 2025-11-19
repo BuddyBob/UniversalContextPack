@@ -3280,11 +3280,15 @@ export default function ProcessPage() {
                   {/* Chat Exports */}
                   <button
                     onClick={() => {
-                          setUploadMethod('chat_export');
-                          // Update file input to accept conversations.json or zip
-                          if (fileInputRef.current) {
-                            fileInputRef.current.accept = '.json,.zip';
-                          }
+                      if (!user) {
+                        setShowAuthModal(true);
+                        return;
+                      }
+                      setUploadMethod('chat_export');
+                      // Update file input to accept conversations.json or zip
+                      if (fileInputRef.current) {
+                        fileInputRef.current.accept = '.json,.zip';
+                      }
                       fileInputRef.current?.click();
                     }}
                     className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
@@ -3308,6 +3312,10 @@ export default function ProcessPage() {
                   {/* One Chat */}
                   <button
                     onClick={() => {
+                      if (!user) {
+                        setShowAuthModal(true);
+                        return;
+                      }
                       setUploadMethod('url');
                     }}
                     className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
@@ -3320,11 +3328,15 @@ export default function ProcessPage() {
                   {/* Document */}
                   <button
                     onClick={() => {
-                          setUploadMethod('document');
-                          // Update file input to accept documents including Google Docs exports
-                          if (fileInputRef.current) {
-                            fileInputRef.current.accept = '.pdf,.txt,.md,.doc,.docx';
-                          }
+                      if (!user) {
+                        setShowAuthModal(true);
+                        return;
+                      }
+                      setUploadMethod('document');
+                      // Update file input to accept documents including Google Docs exports
+                      if (fileInputRef.current) {
+                        fileInputRef.current.accept = '.pdf,.txt,.md,.doc,.docx';
+                      }
                       fileInputRef.current?.click();
                     }}
                     className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"

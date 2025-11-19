@@ -130,7 +130,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // Store current page to return to after auth
       const currentPath = window.location.pathname
-      const redirectTo = `${window.location.origin}${currentPath}`
+      // If user is on /process, redirect to /packs after auth to create a pack first
+      const redirectPath = currentPath === '/process' ? '/packs' : currentPath
+      const redirectTo = `${window.location.origin}${redirectPath}`
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
