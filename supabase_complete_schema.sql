@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   -- Payment and usage tracking
   payment_plan TEXT DEFAULT 'credits' CHECK (payment_plan IN ('credits', 'unlimited')),
   chunks_analyzed INTEGER DEFAULT 0, -- Total chunks analyzed by this user (legacy only)
-  credits_balance INTEGER DEFAULT 2, -- Credits available for analysis (999999 for unlimited)
+  credits_balance INTEGER DEFAULT 10, -- Credits available for analysis (999999 for unlimited)
   subscription_id TEXT, -- Stripe subscription ID (for future use)
   subscription_status TEXT, -- active, canceled, past_due, etc.
   plan_start_date TIMESTAMP WITH TIME ZONE,

@@ -59,7 +59,7 @@ credits: isUnlimitedSelected ? 0 : customCredits,  // ✅ Fixed
 -- Run in Supabase to fix current user
 SELECT public.grant_unlimited_access(
   '9d122971-3ae6-411b-950f-57dba32931b4'::UUID, 
-  3.99, 
+  4.99, 
   'manual_fix_after_comprehensive_audit'
 );
 ```

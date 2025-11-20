@@ -4390,7 +4390,7 @@ export default function ProcessPage() {
 
             {/* Price */}
             <div className="text-center mb-6 p-4 bg-gray-50 rounded-xl">
-              <div className="text-3xl font-bold text-gray-900">$3.99</div>
+              <div className="text-3xl font-bold text-gray-900">$4.99</div>
               <div className="text-xs text-gray-500 mt-1">One-time • Lifetime access</div>
             </div>
 

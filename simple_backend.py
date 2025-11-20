@@ -6326,11 +6326,11 @@ async def create_checkout_session(
         
         # Validate the amount matches our pricing
         if request.unlimited:
-            expected_amount = 3.99  # Updated to match frontend pricing
+            expected_amount = 4.99  # Updated to match frontend pricing
             if abs(request.amount - expected_amount) > 0.01:
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"Amount mismatch for unlimited plan. Expected $3.99, got ${request.amount}"
+                    detail=f"Amount mismatch for unlimited plan. Expected $4.99, got ${request.amount}"
                 )
         else:
             expected_amount = calculate_credit_price(request.credits)
@@ -6856,7 +6856,7 @@ def calculate_credit_price(credits: int) -> float:
     """Calculate price for credits with volume discounts"""
     # Special case: unlimited plan
     if credits == -1:
-        return 3.99
+        return 4.99
     
     # Special pricing for 25 credits
     if credits == 25:
@@ -7032,7 +7032,7 @@ async def debug_grant_unlimited(request: dict, user: AuthenticatedUser = Depends
         print(f"🔍 Found user: {target_user}")
         
         # Grant unlimited access
-        await grant_unlimited_access(target_user["id"], 3.99, "manual_debug_grant")
+        await grant_unlimited_access(target_user["id"], 4.99, "manual_debug_grant")
         
         # Check the result
         updated_user = supabase.table("user_profiles").select("id, email, credits_balance, payment_plan, subscription_status").eq("id", target_user["id"]).execute()
@@ -7098,7 +7098,7 @@ async def debug_grant_unlimited_by_email(email: str):
         print(f"🔍 Found user: {target_user}")
         
         # Grant unlimited access using the existing function
-        await grant_unlimited_access(target_user["id"], 3.99, "manual_debug_grant_" + target_user["id"][:8])
+        await grant_unlimited_access(target_user["id"], 4.99, "manual_debug_grant_" + target_user["id"][:8])
         
         # Check the result
         updated_user = supabase.table("user_profiles").select("id, email, credits_balance, payment_plan, subscription_status").eq("id", target_user["id"]).execute()
@@ -7185,7 +7185,7 @@ async def test_unlimited_webhook(request: dict, user: AuthenticatedUser = Depend
     """Test endpoint to simulate unlimited purchase webhook for debugging"""
     try:
         user_id = request.get("user_id") or user.user_id
-        amount = request.get("amount", 3.99)
+        amount = request.get("amount", 4.99)
         session_id = request.get("session_id", f"test_session_{user_id}_{int(time.time())}")
         
         print(f"🧪 Testing unlimited access grant for user {user_id}")
@@ -7231,7 +7231,7 @@ async def simulate_checkout_webhook(request: dict, user: AuthenticatedUser = Dep
             'id': f'cs_test_simulation_{user_id}_{int(time.time())}',
             'payment_status': 'paid',
             'status': 'complete',
-            'amount_total': 399 if unlimited else credits * 100,  # $3.99 for unlimited, $1 per credit
+            'amount_total': 499 if unlimited else credits * 100,  # $4.99 for unlimited, $1 per credit
             'mode': 'payment',
             'customer_email': f'{user_id}@test.com',
             'metadata': {

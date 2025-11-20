@@ -98,7 +98,7 @@ If a user still needs unlimited access manually:
 
 ```sql
 -- In Supabase SQL Editor:
-SELECT public.grant_unlimited_access('USER_UUID_HERE'::UUID, 3.99, 'manual_fix');
+SELECT public.grant_unlimited_access('USER_UUID_HERE'::UUID, 4.99, 'manual_fix');
 
 -- Verify:
 SELECT payment_plan, credits_balance, subscription_status

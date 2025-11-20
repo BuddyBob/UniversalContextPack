@@ -7,7 +7,7 @@ Change values here to update credits across the entire application.
 
 # Default credits for new users
 # Change this value to update credits for all new registrations
-DEFAULT_NEW_USER_CREDITS = 4
+DEFAULT_NEW_USER_CREDITS = 10
 
 # Credit costs (for future use)
 CREDIT_COSTS = {

@@ -97,14 +97,14 @@ AND routine_name = 'grant_unlimited_access';
 
 ### 3. What This Fixes:
 
-1. **$3.99 Unlimited Plan Purchases**: Now properly grants unlimited access in database
+1. **$4.99 Unlimited Plan Purchases**: Now properly grants unlimited access in database
 2. **Chunk Processing**: Unlimited users can analyze unlimited chunks
 3. **Credit System**: No credit deduction for unlimited users
 4. **Frontend Display**: Should now show unlimited status correctly
 
 ### 4. How the System Now Works:
 
-1. **User purchases $3.99 unlimited plan**
+1. **User purchases $4.99 unlimited plan**
    → Stripe webhook calls `grant_unlimited_access()`
    → Database updates: `payment_plan = 'unlimited'`, `credits_balance = 999999`
 
@@ -125,4 +125,4 @@ AND routine_name = 'grant_unlimited_access';
 ### 6. Next Steps:
 1. Run the SQL script above in Supabase SQL editor
 2. Restart your backend to apply the changes
-3. Test with a new $3.99 purchase to verify the complete flow
+3. Test with a new $4.99 purchase to verify the complete flow

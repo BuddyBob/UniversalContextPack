@@ -7,7 +7,7 @@
 
 // Default credits for new users
 // Change this value to update credits display across the frontend
-export const DEFAULT_NEW_USER_CREDITS = 4;
+export const DEFAULT_NEW_USER_CREDITS = 10;
 
 // Credit costs (for future use)
 export const CREDIT_COSTS = {
