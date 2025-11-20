@@ -36,6 +36,7 @@ import re
 import requests
 import certifi
 import traceback
+from PyPDF2 import PdfReader
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import stripe
@@ -1629,6 +1630,38 @@ def extract_conversations_from_zip(zip_bytes: bytes) -> str:
         raise ValueError("Invalid ZIP file")
     except Exception as e:
         raise ValueError(f"Error extracting ZIP: {str(e)}")
+
+def extract_text_from_pdf(pdf_bytes: bytes) -> str:
+    """Extract text from PDF using PyPDF2"""
+    try:
+        pdf_file = io.BytesIO(pdf_bytes)
+        pdf_reader = PdfReader(pdf_file)
+        
+        extracted_text = []
+        total_pages = len(pdf_reader.pages)
+        
+        print(f"📄 Extracting text from PDF ({total_pages} pages)")
+        
+        for page_num, page in enumerate(pdf_reader.pages, 1):
+            try:
+                text = page.extract_text()
+                if text and text.strip():
+                    extracted_text.append(text)
+                    
+                # Log progress every 10 pages
+                if page_num % 10 == 0:
+                    print(f"  Extracted {page_num}/{total_pages} pages")
+            except Exception as page_error:
+                print(f"  Warning: Could not extract text from page {page_num}: {page_error}")
+                continue
+        
+        combined_text = "\n\n".join(extracted_text)
+        print(f"✅ PDF extraction complete: {len(combined_text):,} characters extracted")
+        
+        return combined_text
+    except Exception as e:
+        print(f"❌ Error extracting PDF: {e}")
+        raise ValueError(f"Failed to extract PDF content: {str(e)}")
 
 def extract_from_text_content(file_content: str) -> List[str]:
     """OPTIMIZED: Extract meaningful text from plain text content"""
@@ -5165,16 +5198,28 @@ async def add_source_to_pack(
         content = await file.read()
         file_size = len(content)
         
-        # Handle ZIP files for chat exports
+        # Handle different file types
         file_content_str = ""
-        if file.filename.lower().endswith('.zip') and source_type == 'chat_export':
+        filename_lower = file.filename.lower()
+        
+        if filename_lower.endswith('.zip') and source_type == 'chat_export':
+            # Extract chat export from ZIP
             try:
                 print(f"📦 Extracting conversations.json from ZIP: {file.filename}")
                 file_content_str = extract_conversations_from_zip(content)
                 print(f"✅ Successfully extracted conversations.json ({len(file_content_str)} bytes)")
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=str(e))
+        elif filename_lower.endswith('.pdf'):
+            # Extract text from PDF
+            try:
+                print(f"📄 Extracting text from PDF: {file.filename}")
+                file_content_str = extract_text_from_pdf(content)
+                print(f"✅ Successfully extracted PDF text ({len(file_content_str)} bytes)")
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
         else:
+            # Plain text or other format
             file_content_str = content.decode('utf-8') if source_type == 'chat_export' else content.decode('utf-8', errors='ignore')
         
         # Create source record in database
