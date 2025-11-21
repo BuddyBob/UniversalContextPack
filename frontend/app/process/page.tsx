@@ -25,6 +25,7 @@ interface Pack {
   pack_id: string
   pack_name: string
   description?: string
+  custom_system_prompt?: string
   total_sources: number
   total_tokens: number
   created_at?: string
@@ -91,6 +92,10 @@ export default function ProcessPage() {
   const [sourceName, setSourceName] = useState('');
   const [isEditingPackName, setIsEditingPackName] = useState(false);
   const [editedPackName, setEditedPackName] = useState('');
+  const [customSystemPrompt, setCustomSystemPrompt] = useState('');
+  const [isSavingCustomPrompt, setIsSavingCustomPrompt] = useState(false);
+  const [customPromptSavedAt, setCustomPromptSavedAt] = useState<number | null>(null);
+  const [customPromptError, setCustomPromptError] = useState<string | null>(null);
   const [showPackUpdateNotification, setShowPackUpdateNotification] = useState(false);
   const [sourcePendingAnalysis, setSourcePendingAnalysis] = useState<{
     sourceId: string;
@@ -125,6 +130,11 @@ export default function ProcessPage() {
   useEffect(() => {
     loadPacks();
   }, [user]);
+
+  // Sync custom prompt state when pack changes
+  useEffect(() => {
+    setCustomSystemPrompt(selectedPack?.custom_system_prompt || '');
+  }, [selectedPack]);
 
   // Check for ready_for_analysis sources and restore modal if needed
   useEffect(() => {
@@ -1069,11 +1079,11 @@ export default function ProcessPage() {
         const packData = data.pack || data;
         const sources = data.sources || [];
         setSelectedPack(packData);
-        setPackSources(sources);
-        addLog(`Loaded pack: ${packData.pack_name} with ${sources.length} source(s)`);
-      }
-    } catch (error) {
-      console.error('Error loading pack details:', error);
+      setPackSources(sources);
+      addLog(`Loaded pack: ${packData.pack_name} with ${sources.length} source(s)`);
+    }
+  } catch (error) {
+    console.error('Error loading pack details:', error);
     }
   };
 
@@ -1115,6 +1125,7 @@ export default function ProcessPage() {
         
         // Then set the newly created pack as selected
         setSelectedPack(pack);
+        setCustomSystemPrompt(pack.custom_system_prompt || '');
         setShowCreatePack(false);
         setNewPackName('');
         setNewPackDescription('');
@@ -1175,6 +1186,7 @@ export default function ProcessPage() {
           ...selectedPack,
           pack_name: updatedData.pack_name,
           description: updatedData.description,
+          custom_system_prompt: updatedData.custom_system_prompt,
           total_sources: updatedData.total_sources,
           total_tokens: updatedData.total_tokens,
           updated_at: updatedData.updated_at
@@ -1190,6 +1202,47 @@ export default function ProcessPage() {
       addLog('Error updating pack name');
     } finally {
       setIsEditingPackName(false);
+    }
+  };
+
+  const saveCustomPrompt = async () => {
+    if (!selectedPack) return;
+    if (!user) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    setIsSavingCustomPrompt(true);
+    setCustomPromptError(null);
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          custom_system_prompt: customSystemPrompt
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Failed to save prompt');
+      }
+
+      const updatedData = await response.json();
+      const updatedPack = {
+        ...selectedPack,
+        custom_system_prompt: updatedData.custom_system_prompt
+      };
+      setSelectedPack(updatedPack);
+      setCustomPromptSavedAt(Date.now());
+      addLog('Custom system prompt saved');
+      // Refresh packs so list view stays in sync
+      await loadPacks();
+    } catch (error: any) {
+      console.error('Error saving custom prompt:', error);
+      setCustomPromptError(error.message || 'Failed to save prompt');
+    } finally {
+      setIsSavingCustomPrompt(false);
     }
   };
 
@@ -2803,14 +2856,50 @@ export default function ProcessPage() {
               )}
             </div>
           </div>
-          {selectedPack && selectedPack.description && (
-            <p className="text-xs text-gray-500">{selectedPack.description}</p>
-          )}
-        </div>
+        {selectedPack && selectedPack.description && (
+          <p className="text-xs text-gray-500">{selectedPack.description}</p>
+        )}
 
-        {/* Sources Header */}
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-center justify-between mb-2">
+        {/* Pack Settings */}
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">Pack Settings</span>
+            {customPromptSavedAt && (
+              <span className="text-[10px] text-green-400">
+                Saved {new Date(customPromptSavedAt).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            <textarea
+              value={customSystemPrompt}
+              onChange={(e) => setCustomSystemPrompt(e.target.value)}
+              placeholder={`Custom System Prompt (optional)\nApplied to all LLM analysis for this pack.\nExample: "Do not store or summarize any personal identifiers."\n"Always mask PII before analyzing."\n"Focus only on business logic."`}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 px-3 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+              rows={4}
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] text-gray-500">
+                Content is redacted first, then your prompt is prepended for every analysis.
+              </p>
+              <button
+                onClick={saveCustomPrompt}
+                disabled={isSavingCustomPrompt || !selectedPack}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-600 text-gray-200 hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSavingCustomPrompt ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+            {customPromptError && (
+              <p className="text-[11px] text-red-400">{customPromptError}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Sources Header */}
+      <div className="p-4 border-b border-gray-800">
+        <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-gray-300">SOURCES</h3>
             {selectedPack && (
               <span className="text-xs text-gray-500">{packSources.length || 0}</span>

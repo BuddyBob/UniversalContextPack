@@ -13,9 +13,8 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 ALTER TABLE public.user_profiles 
   ALTER COLUMN credits_balance SET DEFAULT 10;
 
--- 3. Optional: Update existing free users who still have the old default (only if they have exactly 4 credits)
--- Uncomment the line below if you want to give existing users the new free credits
--- UPDATE public.user_profiles SET credits_balance = 10 WHERE payment_plan = 'credits' AND credits_balance = 4;
+-- 3. Update existing free users who have the old default (4 credits)
+UPDATE public.user_profiles SET credits_balance = 10 WHERE payment_plan = 'credits' AND credits_balance = 4;
 
 -- Verify the changes
 SELECT 

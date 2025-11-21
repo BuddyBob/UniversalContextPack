@@ -444,6 +444,7 @@ class StripePaymentIntentRequest(BaseModel):
 class CreatePackRequest(BaseModel):
     pack_name: str
     description: Optional[str] = None
+    custom_system_prompt: Optional[str] = None
 
 class AddSourceRequest(BaseModel):
     source_name: str
@@ -1647,10 +1648,6 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
                 text = page.extract_text()
                 if text and text.strip():
                     extracted_text.append(text)
-                    
-                # Log progress every 10 pages
-                if page_num % 10 == 0:
-                    print(f"  Extracted {page_num}/{total_pages} pages")
             except Exception as page_error:
                 print(f"  Warning: Could not extract text from page {page_num}: {page_error}")
                 continue
@@ -2478,7 +2475,20 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         }).execute()
         raise
 
-async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, user: AuthenticatedUser, max_chunks: int = None):
+def apply_redaction_filters(text: str) -> str:
+    """Lightweight redaction to mask obvious personal identifiers before analysis."""
+    try:
+        if not text:
+            return text
+        redacted = re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}', '[REDACTED_EMAIL]', text)
+        redacted = re.sub(r'\\b\\d{3}[-.\\s]?\\d{3}[-.\\s]?\\d{4}\\b', '[REDACTED_PHONE]', redacted)
+        redacted = re.sub(r'\\b\\d{13,16}\\b', '[REDACTED_NUMBER]', redacted)
+        return redacted
+    except Exception as redaction_error:
+        print(f"⚠️ Redaction filter failed: {redaction_error}")
+        return text
+
+async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, user: AuthenticatedUser, max_chunks: int = None, custom_system_prompt: Optional[str] = None):
     """Step 2: Analyze the chunks (OpenAI calls, deduct credits)
     
     Args:
@@ -2537,6 +2547,16 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         else:
             source_header = f"--- SOURCE: {filename} ---\n\n"
         
+        base_system_prompt = "You are a personal data analysis assistant analyzing user-owned documents. Extract key insights concisely and comprehensively."
+        if custom_system_prompt:
+            trimmed_custom_prompt = custom_system_prompt.strip()
+            # Prevent runaway prompts while allowing detailed guidance
+            if len(trimmed_custom_prompt) > 2000:
+                trimmed_custom_prompt = trimmed_custom_prompt[:2000]
+            system_prompt = f"{base_system_prompt}\n\nPack instructions:\n{trimmed_custom_prompt}"
+        else:
+            system_prompt = base_system_prompt
+        
         for idx, chunk in enumerate(chunks):
             # Check for cancellation at the start of each chunk
             if source_id in cancelled_jobs:
@@ -2553,8 +2573,10 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 return
             
             try:
+                content_message = None
+                redacted_chunk = apply_redaction_filters(chunk)
                 # Something smaller more importnat to prioratize content over preferences/goals/etc.
-                if chunks == 1:
+                if len(chunks) == 1:
                     prompt = """
 You are an expert data analyst.  
 Your job is to extract and understand the core content of this conversation, not just surface-level topics.
@@ -2582,6 +2604,7 @@ Produce a long, structured output that includes:
 
 Be thorough and factual. Go deep. This output will be used for content analysis and memory construction.
 """
+                    content_message = redacted_chunk
 
                 #Look for more of a user overview if looking at conversations.json
                 elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
@@ -2596,7 +2619,7 @@ Be thorough and factual. Go deep. This output will be used for content analysis 
 6. INTERACTION INSIGHTS: Communication preferences, response styles
 
 Extract key facts (10-30 bullets per category). Be concise but comprehensive. Redact sensitive credentials. Output 1,000-2,000 tokens max."""
-                    content_message = chunk
+                    content_message = redacted_chunk
                 
                 #Likely just a document or mixed data
                 else:
@@ -2608,15 +2631,15 @@ Analyze the content and produce a detailed output that includes:
 - Key facts, events, instructions, topics, questions, decisions
 Be factual This output will be used for content analysis and memory construction. Looking for 1k token output. 
 Document content:
-{chunk}
+{redacted_chunk}
 Provide your comprehensive analysis below:"""
 
-            
+
                 # Build messages array - use content_message if defined (separated content), otherwise prompt has content embedded
                 messages = [
                     {
                         "role": "system", 
-                        "content": "You are a personal data analysis assistant analyzing user-owned documents. Extract key insights concisely and comprehensively."
+                        "content": system_prompt
                     },
                     {
                         "role": "user", 
@@ -2625,7 +2648,7 @@ Provide your comprehensive analysis below:"""
                 ]
                 
                 # If content_message exists (for conversation analysis), add it as a separate message
-                if 'content_message' in locals() and content_message:
+                if content_message:
                     messages.append({
                         "role": "user",
                         "content": f"Content to analyze:\n\n{content_message}"
@@ -5043,6 +5066,9 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
             raise HTTPException(status_code=500, detail="Database not configured")
         
         pack_id = str(uuid.uuid4())
+        custom_prompt = request.custom_system_prompt.strip() if request.custom_system_prompt else None
+        if custom_prompt and len(custom_prompt) > 2000:
+            custom_prompt = custom_prompt[:2000]
         
         print(f"Creating new pack {pack_id} for user {user.email}")
         
@@ -5051,7 +5077,8 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
             "user_uuid": user.user_id,
             "target_pack_id": pack_id,
             "pack_name_param": request.pack_name,
-            "pack_description": request.description
+            "pack_description": request.description,
+            "custom_system_prompt_param": custom_prompt
         }).execute()
         
         if result.data and len(result.data) > 0:
@@ -5061,6 +5088,7 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
                 "pack_id": pack_id,
                 "pack_name": request.pack_name,
                 "description": request.description,
+                "custom_system_prompt": pack_data.get("custom_system_prompt"),
                 "total_sources": 0,
                 "total_tokens": 0,
                 "created_at": pack_data.get("created_at"),
@@ -5094,6 +5122,7 @@ async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):
                 "pack_id": pack["pack_id"],
                 "pack_name": pack["pack_name"],
                 "description": pack.get("description"),
+                "custom_system_prompt": pack.get("custom_system_prompt"),
                 "total_sources": pack.get("total_sources", 0),
                 "total_tokens": pack.get("total_tokens", 0),
                 "created_at": pack["created_at"],
@@ -5143,10 +5172,18 @@ async def update_pack_v2(pack_id: str, request: Request, user: AuthenticatedUser
         body = await request.json()
         pack_name = body.get("pack_name")
         description = body.get("description")
+        custom_system_prompt = body.get("custom_system_prompt")
+        
+        if custom_system_prompt is not None:
+            if not isinstance(custom_system_prompt, str):
+                raise HTTPException(status_code=400, detail="custom_system_prompt must be a string")
+            custom_system_prompt = custom_system_prompt.strip()
+            if len(custom_system_prompt) > 2000:
+                custom_system_prompt = custom_system_prompt[:2000]
         
         print(f"Updating pack {pack_id} for user {user.email}")
         
-        if not pack_name and not description:
+        if not pack_name and not description and custom_system_prompt is None:
             raise HTTPException(status_code=400, detail="No fields to update")
         
         # Update pack using RPC function (respects RLS policies)
@@ -5154,7 +5191,8 @@ async def update_pack_v2(pack_id: str, request: Request, user: AuthenticatedUser
             "user_uuid": user.user_id,
             "target_pack_id": pack_id,
             "pack_name_param": pack_name,
-            "pack_description": description
+            "pack_description": description,
+            "custom_system_prompt_param": custom_system_prompt
         }).execute()
         
         if result.data and len(result.data) > 0:
@@ -5164,6 +5202,7 @@ async def update_pack_v2(pack_id: str, request: Request, user: AuthenticatedUser
                 "pack_id": pack_data["pack_id"],
                 "pack_name": pack_data["pack_name"],
                 "description": pack_data.get("description"),
+                "custom_system_prompt": pack_data.get("custom_system_prompt"),
                 "total_sources": pack_data["total_sources"],
                 "total_tokens": pack_data["total_tokens"],
                 "updated_at": pack_data["updated_at"]
@@ -5483,6 +5522,13 @@ async def start_source_analysis(
         
         # Get filename from source data (already fetched above via RPC)
         filename = source.get("file_name", "unknown")
+        custom_system_prompt = None
+        try:
+            pack_settings = supabase.table("packs_v2").select("custom_system_prompt").eq("pack_id", pack_id).eq("user_id", user.user_id).single().execute()
+            if pack_settings.data:
+                custom_system_prompt = pack_settings.data.get("custom_system_prompt")
+        except Exception as pack_settings_error:
+            print(f"⚠️ Could not load custom system prompt for pack {pack_id}: {pack_settings_error}")
         
         print(f"🚀 Starting analysis: {chunks_to_analyze} of {total_chunks} chunks")
         
@@ -5501,7 +5547,8 @@ async def start_source_analysis(
                 source_id=source_id,
                 filename=filename,
                 user=user,
-                max_chunks=chunks_to_analyze
+                max_chunks=chunks_to_analyze,
+                custom_system_prompt=custom_system_prompt
             )
         )
         
