@@ -2880,7 +2880,7 @@ export default function ProcessPage() {
             />
             <div className="flex items-center justify-between">
               <p className="text-[11px] text-gray-500">
-                Content is redacted first, then your prompt is prepended for every analysis.
+                Content redacted first, then prompt is prepended for every analysis.
               </p>
               <button
                 onClick={saveCustomPrompt}
