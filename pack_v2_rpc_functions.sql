@@ -3,6 +3,21 @@
 
 -- Ensure packs_v2 table has storage for custom pack-level prompts
 ALTER TABLE public.packs_v2 ADD COLUMN IF NOT EXISTS custom_system_prompt TEXT;
+-- Ensure packs_v2 table tracks the R2 directory for pack assets
+ALTER TABLE public.packs_v2 ADD COLUMN IF NOT EXISTS r2_pack_directory TEXT;
+
+-- Backfill missing directories using the user's R2 folder + pack_id
+UPDATE public.packs_v2 p
+SET r2_pack_directory = concat_ws('/',
+  COALESCE(
+    (SELECT r2_user_directory FROM public.user_profiles u WHERE u.id = p.user_id),
+    'user_' || p.user_id::text
+  ),
+  p.pack_id
+)
+WHERE r2_pack_directory IS NULL;
+
+ALTER TABLE public.packs_v2 ALTER COLUMN r2_pack_directory SET NOT NULL;
 
 -- Create a new pack
 CREATE OR REPLACE FUNCTION create_pack_v2(
@@ -10,12 +25,24 @@ CREATE OR REPLACE FUNCTION create_pack_v2(
   target_pack_id TEXT,
   pack_name_param TEXT,
   pack_description TEXT DEFAULT NULL,
-  custom_system_prompt_param TEXT DEFAULT NULL
+  custom_system_prompt_param TEXT DEFAULT NULL,
+  r2_pack_directory_param TEXT DEFAULT NULL
 ) RETURNS SETOF public.packs_v2 AS $$
+DECLARE
+  user_r2_dir TEXT;
+  pack_dir TEXT;
 BEGIN
+  -- Build the pack directory (allow override, otherwise derive from user profile)
+  user_r2_dir := COALESCE(
+    NULLIF(r2_pack_directory_param, ''),
+    (SELECT r2_user_directory FROM public.user_profiles WHERE id = user_uuid),
+    'user_' || user_uuid::text
+  );
+  pack_dir := concat_ws('/', user_r2_dir, target_pack_id);
+
   RETURN QUERY
-  INSERT INTO public.packs_v2 (pack_id, user_id, pack_name, description, custom_system_prompt)
-  VALUES (target_pack_id, user_uuid, pack_name_param, pack_description, custom_system_prompt_param)
+  INSERT INTO public.packs_v2 (pack_id, user_id, pack_name, description, custom_system_prompt, r2_pack_directory)
+  VALUES (target_pack_id, user_uuid, pack_name_param, pack_description, custom_system_prompt_param, pack_dir)
   RETURNING *;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

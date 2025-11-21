@@ -5069,6 +5069,9 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
         custom_prompt = request.custom_system_prompt.strip() if request.custom_system_prompt else None
         if custom_prompt and len(custom_prompt) > 2000:
             custom_prompt = custom_prompt[:2000]
+        # Ensure we always provide an R2 directory for the pack (column is NOT NULL)
+        base_directory = (user.r2_directory or "").rstrip("/") or f"user_{user.user_id}"
+        pack_directory = f"{base_directory}/{pack_id}"
         
         print(f"Creating new pack {pack_id} for user {user.email}")
         
@@ -5078,7 +5081,8 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
             "target_pack_id": pack_id,
             "pack_name_param": request.pack_name,
             "pack_description": request.description,
-            "custom_system_prompt_param": custom_prompt
+            "custom_system_prompt_param": custom_prompt,
+            "r2_pack_directory_param": pack_directory
         }).execute()
         
         if result.data and len(result.data) > 0:
@@ -5092,6 +5096,7 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
                 "total_sources": 0,
                 "total_tokens": 0,
                 "created_at": pack_data.get("created_at"),
+                "r2_pack_directory": pack_data.get("r2_pack_directory") or pack_directory,
                 "status": "created"
             }
         else:
