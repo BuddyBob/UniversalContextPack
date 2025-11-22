@@ -15,7 +15,7 @@ export default function MaintenanceBanner() {
           <AlertTriangle className="h-5 w-5 flex-shrink-0" />
           <p className="text-sm font-medium">
             <strong>Supabase Maintenance:</strong> Authentication services may be temporarily unavailable due to scheduled Supabase maintenance.
-            Expected completion: <strong>Nov 23, 11:00 PM PST</strong>. Email thavasantonio@gmail.com for futher assistance.
+            Expected completion: <strong>Nov 23, 11:00 PM PST</strong>. Email thavasantonio@gmail.com for further assistance.
           </p>
         </div>
         <button
