@@ -2593,7 +2593,7 @@ export default function ProcessPage() {
               <textarea
                 value={customSystemPrompt}
                 onChange={(e) => setCustomSystemPrompt(e.target.value)}
-                placeholder={`Custom System Prompt (optional)\nApplied to all LLM analysis for this pack.\nExample: "Do not store or summarize any personal identifiers."\n"Always mask PII before analyzing."\n"Focus only on business logic."`}
+                placeholder={`Custom System Prompt (optional)\nExample: Focus only on business logic."`}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 px-3 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                 rows={4}
               />
@@ -3217,7 +3217,7 @@ export default function ProcessPage() {
                         className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
                       >
                         <MessageSquare className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
-                        <h3 className="font-semibold text-white mb-1">Chat Export</h3>
+                        <h3 className="font-semibold text-white mb-1">All AI Chats</h3>
                         <p className="text-sm text-gray-400">
                           <a
                             href="https://chatgpt.com/#settings/DataControls"

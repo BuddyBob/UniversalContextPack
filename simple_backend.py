@@ -2071,69 +2071,110 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 return
             
             try:
-                content_message = None
                 redacted_chunk = apply_redaction_filters(chunk)
-                # Something smaller more importnat to prioratize content over preferences/goals/etc.
+                # Scenario A: Single Chunk - Dynamic analysis
                 if len(chunks) == 1:
-                    prompt = """
-                    You are an expert data analyst.  
-                    Your job is to extract and understand the core content of this conversation, not just surface-level topics.
+                    prompt = f"""
+You are an expert analyst. Your task is to analyze this document segment.
 
-                    Focus on:
-                    1. The main facts, events, instructions, questions, and decisions made in the chat.
-                    2. Key technical details, workflows, and problem-solving steps.
-                    3. Important context the user relies on repeatedly.
-                    4. Any dependencies, constraints, or long-term threads.
+STEP 1 — Identify the document TYPE.  
+Choose the closest category (or a blend if needed):
+- Technical Specification / Engineering Doc
+- Product Requirements / Roadmap
+- Business / Strategy / Planning Document
+- Legal / Policy / Compliance
+- Personal Narrative / Reflective Writing
+- Creative Writing
+- Professional Communication (email, memo, instructions)
+- Research / Academic Explanation
+- Financial / Operational Data
+- Miscellaneous (explain if so)
 
-                    De-prioritize:
-                    – Personal preferences  
-                    – Goals  
-                    – Writing style  
-                    – Personality traits  
-                    (Only include these if they directly influence the content.)
+STEP 2 — Based on the type, extract the most relevant and high-value information:
+- For Technical/Engineering: architecture, APIs, workflows, constraints, decisions
+- For Product/Business: goals, KPIs, strategies, stakeholders, dependencies, risks
+- For Legal/Policy: rules, obligations, definitions, restrictions, implications
+- For Narrative/Reflective: themes, motivations, events, insights, conflicts
+- For Instructional/Operational: steps, responsibilities, conditions, requirements
+- For Research/Explanatory: concepts, claims, evidence, conclusions
+- For Financial: amounts, timelines, obligations, assumptions
 
-                    Produce a long, structured output that includes:
-                    • A high-detail summary of what the chat contains  
-                    • A breakdown of all major themes and subtopics  
-                    • Critical information that must be preserved for future reasoning  
-                    • Any relationships or references between parts of the text  
-                    • A list of unresolved questions or next steps  
-                    • A short “importance score” (1–10) for each major item to show how essential it is
+STEP 3 — Produce a comprehensive analysis:
 
-                    Be thorough and factual. Go deep. This output will be used for content analysis and memory construction.
-                    """
-                    content_message = redacted_chunk
+Write a detailed analysis (aim for 400-700 words) that includes:
 
-                #Look for more of a user overview if looking at conversations.json
+**Executive Summary:** A rich, narrative overview capturing the document's core purpose, main arguments, and key takeaways.
+
+**Key Themes & Concepts:** The major ideas, topics, or arguments presented in the document.
+
+**Critical Details:** Specific facts, decisions, data points, technical specifications, or actionable items that are essential to understanding or acting on this document.
+
+**Context & Implications:** Any implicit assumptions, constraints, dependencies, or strategic considerations that provide deeper understanding.
+
+Document content:
+{redacted_chunk}
+"""
+
+                # Scenario B: Conversations File - General overview
                 elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
-                    # Separate prompt from content for better token management
-                    prompt = """Analyze this conversation data and extract key insights in these 6 categories:
+                    prompt = f"""
+Analyze this conversation segment from a larger chat history.
 
-                    1. PERSONAL PROFILE: Demographics, preferences, goals, values, personality
-                    2. BEHAVIORAL PATTERNS: Communication style, problem-solving, learning, habits  
-                    3. KNOWLEDGE DOMAINS: Technical skills, expertise, academic background
-                    4. PROJECT PATTERNS: Workflow preferences, tool usage, collaboration style
-                    5. TIMELINE EVOLUTION: Skill development, milestones, interest changes
-                    6. INTERACTION INSIGHTS: Communication preferences, response styles
+Extract only persistent, high-level information about the user and their world, such as:
+- Background facts (roles, expertise, industries, education, locations)
+- Ongoing projects, long-term efforts, and workstreams
+- Technical ecosystem (tools, languages, platforms, workflows)
+- Behavioral patterns (how they approach problems, communicate, decide)
+- Preferences, constraints, recurring themes
+- Timelines, responsibilities, domains of knowledge
 
-                    Extract key facts (10-30 bullets per category). Be concise but comprehensive. Redact sensitive credentials. Output 1,000-2,000 tokens max."""
-                    content_message = redacted_chunk
+Do NOT extract minor or temporary conversational details.
+
+Output a concise but meaningful:
+1. High-level summary  
+2. List of stable facts and recurring patterns  
+3. Key long-term projects or responsibilities  
+4. Any cross-conversation themes that matter for future reasoning
+
+Conversation content:
+{redacted_chunk}
+"""
                 
-                #Likely just a document or mixed data
+                # Scenario C: Large Document (5+ chunks) - Broad analysis
+                elif len(chunks) >= 5:
+                    prompt = f"""
+Analyze this section of a large document.
+
+Your goal is to capture the high-level picture, not granular details.
+
+Extract:
+- Main themes and topics covered in this section
+- Major concepts, arguments, or components
+- How this section fits into the likely overall document
+- Structural patterns (e.g., chapters, phases, modules, workflows)
+
+Focus on clarity and breadth.  
+Do not dive into micro-details—this is just one piece of a much larger whole.
+
+Document content:
+{redacted_chunk}
+"""
+                
+                # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
                 else:
-                    prompt = f"""You are an expert data analyst.  
-                    Your job is to extract and understand the core content of the following document.
-                    Analyze the content and produce a detailed output that includes:
-                    • A high-detail summary of what the document contains  
-                    • Critical information that must be preserved for future reasoning   
-                    - Key facts, events, instructions, topics, questions, decisions
-                    Be factual This output will be used for content analysis and memory construction. Looking for 1k token output. 
+                    prompt = f"""
+                    Analyze this section of the document.
+                    First, infer the overall context and type of the document.
+                    Then, extract specific facts, key points, and important details relevant to that context.
+                    Since this is a relatively short document, aim for high density of information.
+                    Capture specific instructions, decisions, or factual claims made in this text.
+                    
                     Document content:
                     {redacted_chunk}
                     Provide your comprehensive analysis below:"""
 
 
-                # Build messages array - use content_message if defined (separated content), otherwise prompt has content embedded
+                # Build messages array
                 messages = [
                     {
                         "role": "system", 
@@ -2145,12 +2186,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                     }
                 ]
                 
-                # If content_message exists (for conversation analysis), add it as a separate message
-                if content_message:
-                    messages.append({
-                        "role": "user",
-                        "content": f"Content to analyze:\n\n{content_message}"
-                    })
+                print(f"DEBUG: Final messages count: {len(messages)}")
                 
                 response = await openai_call_with_retry(
                     openai_client,
@@ -2158,7 +2194,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                     model="gpt-4o-mini",
                     messages=messages,
                     temperature=0.3,
-                    max_completion_tokens=1500  # Reduced for concise analysis - saves tokens and costs
+                    max_completion_tokens=3000  # Increased for richer analysis
                 )
                 
                 analysis = response.choices[0].message.content
@@ -3675,12 +3711,14 @@ class PackSourceCreate(BaseModel):
     url: Optional[str] = None
     source_name: Optional[str] = None
     source_type: Optional[str] = "chat_export"
+    text_content: Optional[str] = None
 
 @app.post("/api/v2/packs/{pack_id}/sources")
 async def add_source_to_pack(
     pack_id: str, 
     file: UploadFile = File(None),  # Optional - either file OR url must be provided
     url: Optional[str] = Form(None),  # Optional - for shared conversation URLs
+    text_content: Optional[str] = Form(None),  # Optional - for pasted text
     source_name: Optional[str] = Form(None),
     source_type: Optional[str] = Form("chat_export"),
     payload: Optional[PackSourceCreate] = Body(None),  # Accept JSON for clients that can't send multipart
@@ -3699,6 +3737,8 @@ async def add_source_to_pack(
                 source_name = payload.source_name
             if not source_type and payload.source_type:
                 source_type = payload.source_type
+            if not text_content and payload.text_content:
+                text_content = payload.text_content
         
         # Normalize defaults
         source_type = source_type or "chat_export"
@@ -3752,8 +3792,46 @@ async def add_source_to_pack(
                 "message": f"URL source added, extracting {platform} conversation"
             }
         
+        elif text_content:
+            # Handle pasted text
+            print(f"DEBUG: Received pasted text content (length: {len(text_content)})")
+            source_id = str(uuid.uuid4())
+            source_type = "text"
+            source_name = source_name or f"Pasted Text ({datetime.now().strftime('%I:%M:%S %p')})"
+            
+            # Create source record
+            result = supabase.rpc("add_pack_source", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id,
+                "target_source_id": source_id,
+                "source_name_param": source_name,
+                "source_type_param": source_type,
+                "file_name_param": "pasted_text.txt",
+                "file_size_param": len(text_content)
+            }).execute()
+            
+            if not result.data or len(result.data) == 0:
+                raise HTTPException(status_code=500, detail="Failed to create source record")
+            
+            # Start background extraction
+            asyncio.create_task(extract_and_chunk_source(
+                pack_id=pack_id,
+                source_id=source_id,
+                file_content=text_content,
+                filename="pasted_text.txt",
+                user=user
+            ))
+            
+            return {
+                "pack_id": pack_id,
+                "source_id": source_id,
+                "source_name": source_name,
+                "status": "extracting",
+                "message": "Pasted text added, processing started"
+            }
+
         # Handle file-based sources 
-        else:
+        elif file:
             # Read file content
             content = await file.read()
             file_size = len(content)
@@ -3813,6 +3891,9 @@ async def add_source_to_pack(
                 "status": "extracting",
                 "message": "Source added, extraction and chunking started"
             }
+        
+        else:
+            raise HTTPException(status_code=400, detail="Must provide file, url, or text_content")
         
     except Exception as e:
         print(f"Error adding source to pack: {e}")
