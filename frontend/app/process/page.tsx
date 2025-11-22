@@ -63,7 +63,7 @@ export default function ProcessPage() {
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [lastProgressTimestamp, setLastProgressTimestamp] = useState<number>(0);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'warning'>('connected');
-  const [paymentLimits, setPaymentLimits] = useState<{canProcess: boolean, credits_balance: number, plan?: string, isUnlimited?: boolean} | null>(null);
+  const [paymentLimits, setPaymentLimits] = useState<{ canProcess: boolean, credits_balance: number, plan?: string, isUnlimited?: boolean } | null>(null);
   const [emailModeStartTime, setEmailModeStartTime] = useState<number | null>(null);
   const [paymentLimitsError, setPaymentLimitsError] = useState<boolean>(false);
   const [lastPaymentCheck, setLastPaymentCheck] = useState<number>(0);
@@ -73,12 +73,14 @@ export default function ProcessPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [currentProcessedChunks, setCurrentProcessedChunks] = useState<number>(0);
   const [showUploadOptions, setShowUploadOptions] = useState(false);
-  const [uploadMethod, setUploadMethod] = useState<'files' | 'url' | 'chat_export' | 'document' | null>(null);
+  const [uploadMethod, setUploadMethod] = useState<'files' | 'url' | 'chat_export' | 'document' | 'text' | null>(null);
   const [showCreditsTooltip, setShowCreditsTooltip] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [pastedText, setPastedText] = useState<string>('');
+  const [textError, setTextError] = useState<string | null>(null);
   const [isLogPanelCollapsed, setIsLogPanelCollapsed] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  
+
   // Pack-based workflow state
   const [showPackSelector, setShowPackSelector] = useState(false);
   const [selectedPack, setSelectedPack] = useState<Pack | null>(null);
@@ -108,7 +110,7 @@ export default function ProcessPage() {
   } | null>(null);
   const [analysisLimits, setAnalysisLimits] = useState<Record<string, number>>({});
   const [isAnalysisStarting, setIsAnalysisStarting] = useState<string | null>(null); // Track source ID that's starting analysis
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -119,11 +121,11 @@ export default function ProcessPage() {
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Payment notifications
-  const { 
-    notification, 
-    hideNotification, 
-    showLimitWarning, 
-    showNotification 
+  const {
+    notification,
+    hideNotification,
+    showLimitWarning,
+    showNotification
   } = usePaymentNotifications();
 
   // Load packs on mount (including sample packs for unauthenticated users)
@@ -139,10 +141,10 @@ export default function ProcessPage() {
   // Check for ready_for_analysis sources and restore modal if needed
   useEffect(() => {
     if (!selectedPack || !packSources.length) return;
-    
+
     // Find any source that's ready for analysis and not currently showing in modal
     const readySource = packSources.find((s: any) => s.status === 'ready_for_analysis');
-    
+
     if (readySource && !sourcePendingAnalysis && !isAnalysisStarting) {
       // Fetch credit check and open modal
       const fetchCreditCheck = async () => {
@@ -200,8 +202,8 @@ export default function ProcessPage() {
           }
 
           // Check if any source just completed
-          const justCompleted = sources.find((s: any) => 
-            s.status === 'completed' && 
+          const justCompleted = sources.find((s: any) =>
+            s.status === 'completed' &&
             !packSources.find((ps: any) => ps.source_id === s.source_id && ps.status === 'completed')
           );
           if (justCompleted) {
@@ -215,7 +217,7 @@ export default function ProcessPage() {
               }
               return prev;
             });
-            
+
             // Clear the pending analysis modal if this source was pending
             if (sourcePendingAnalysis && sourcePendingAnalysis.sourceId === justCompleted.source_id) {
               setSourcePendingAnalysis(null);
@@ -228,21 +230,21 @@ export default function ProcessPage() {
     };
 
     // Check if any sources are actively processing
-    const hasActiveProcessing = packSources.some((s: any) => 
+    const hasActiveProcessing = packSources.some((s: any) =>
       ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'pending'].includes(s.status?.toLowerCase())
     );
-    
+
     const shouldPoll = hasActiveProcessing || isAnalysisStarting;
-    
+
     // Clear any existing interval
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
-    
+
     // Always poll once immediately to check current status
     pollSourcesStatus();
-    
+
     // Set up continuous polling if there are active sources, waiting for analysis, or pending analysis modal
     if (shouldPoll) {
       // Poll every 2 seconds
@@ -259,15 +261,15 @@ export default function ProcessPage() {
 
   // Auto-create pack function
   const autoCreatePack = async () => {
-    const timestamp = new Date().toLocaleString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: 'numeric', 
+    const timestamp = new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
       minute: '2-digit',
-      hour12: true 
+      hour12: true
     });
     const defaultName = `New Pack - ${timestamp}`;
-    
+
     setIsCreatingPack(true);
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
@@ -298,16 +300,16 @@ export default function ProcessPage() {
   // Check for pack_id or create_new in URL params
   useEffect(() => {
     if (!user) return;
-    
+
     const packId = searchParams.get('pack_id');
     const createNew = searchParams.get('create_new');
-    
+
     if (createNew === 'true' && !hasHandledCreateNew) {
       // Show create pack modal when create_new=true in URL (only once per session)
       setShowCreatePack(true);
       setShowPackSelector(false);
       setHasHandledCreateNew(true);
-      
+
       // Remove the create_new parameter from URL to prevent re-showing modal on navigation
       const newUrl = new URL(window.location.href);
       newUrl.searchParams.delete('create_new');
@@ -328,7 +330,7 @@ export default function ProcessPage() {
   useEffect(() => {
     // Track process page view
     analytics.processPageView()
-    
+
     const savedSession = localStorage.getItem('ucp_process_session');
     if (savedSession) {
       try {
@@ -354,7 +356,7 @@ export default function ProcessPage() {
             setIsProcessing(true);
             startPollingAnalysisStatus(session.currentJobId);
             addLog(`Resumed monitoring analysis progress... (Start: ${session.analysisStartTime ? new Date(session.analysisStartTime).toLocaleTimeString() : 'unknown'}, Estimated: ${session.selectedChunksEstimatedTime || 0}s)`);
-            
+
             // Force update to restart progress interval for time-based progress
             setTimeout(() => {
               setForceUpdate(prev => prev + 1);
@@ -362,7 +364,7 @@ export default function ProcessPage() {
           }
         }
         addLog('Session restored from localStorage');
-        
+
         // Force a re-render after restoration to ensure progress bar updates
         setTimeout(() => {
           setForceUpdate(prev => prev + 1);
@@ -416,16 +418,16 @@ export default function ProcessPage() {
   useEffect(() => {
     const paymentSuccess = searchParams.get('payment_success');
     const sessionId = searchParams.get('session_id');
-    
+
     if (paymentSuccess === 'true' && sessionId && user) {
       addLog('Payment successful! Refreshing credit balance...');
-      
+
       // Show success notification
       showNotification(
         'upgrade_success',
         'Payment successful! Your credits have been added to your account.'
       );
-      
+
       // Refresh payment limits after a short delay to allow webhook processing
       setTimeout(() => {
         checkPaymentLimits()
@@ -441,12 +443,12 @@ export default function ProcessPage() {
             manualCreditVerification(sessionId);
           });
       }, 1000); // Wait 1 second first, then try the fallback verification
-      
+
       // Clean up URL parameters
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
-    
+
     const paymentCancelled = searchParams.get('payment_cancelled');
     if (paymentCancelled === 'true') {
       addLog('Payment was cancelled');
@@ -454,20 +456,20 @@ export default function ProcessPage() {
         'info',
         'Payment was cancelled. No charges were made.'
       );
-      
+
       // Clean up URL parameters
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
-    
+
     // Handle payment failures
     const paymentFailed = searchParams.get('payment_failed');
     if (paymentFailed === 'true') {
       const errorReason = searchParams.get('error_reason') || 'Payment processing failed';
       const errorCode = searchParams.get('error_code') || 'unknown_error';
-      
+
       addLog(`Payment failed: ${errorReason}`);
-      
+
       // Show appropriate notification based on error type
       if (errorCode === 'card_declined' || errorReason.toLowerCase().includes('card') || errorReason.toLowerCase().includes('declined')) {
         showNotification(
@@ -500,12 +502,12 @@ export default function ProcessPage() {
           `Payment failed: ${errorReason}. Please try again or contact support if the issue persists.`
         );
       }
-      
+
       // Clean up URL parameters
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
-    
+
     // Handle payment timeout/session expiry
     const paymentExpired = searchParams.get('payment_expired');
     if (paymentExpired === 'true') {
@@ -514,7 +516,7 @@ export default function ProcessPage() {
         'info',
         'Payment session expired. Please try again to complete your purchase.'
       );
-      
+
       // Clean up URL parameters
       const newUrl = window.location.pathname;
       window.history.replaceState({}, '', newUrl);
@@ -551,14 +553,14 @@ export default function ProcessPage() {
   // Update time-based progress every second during analysis
   useEffect(() => {
     let progressInterval: NodeJS.Timeout;
-    
+
     if (currentStep === 'analyzing' && analysisStartTime && selectedChunksEstimatedTime > 0) {
       progressInterval = setInterval(() => {
         // Force re-render to update progress bar
         setForceUpdate(prev => prev + 1);
       }, 1000);
     }
-    
+
     return () => {
       if (progressInterval) {
         clearInterval(progressInterval);
@@ -629,7 +631,7 @@ export default function ProcessPage() {
       setPendingExtraction(false);
       setShowAuthModal(false);
       addLog('Authentication successful! Continuing with extraction...');
-      
+
       // Automatically start extraction by calling the extraction logic directly
       performExtraction();
     }
@@ -650,7 +652,7 @@ export default function ProcessPage() {
   const manualCreditVerification = async (stripeSessionId: string) => {
     try {
       addLog('Verifying payment with Stripe session...');
-      
+
       // Try the new manual session processing endpoint first
       try {
         const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/process-stripe-session`, {
@@ -666,7 +668,7 @@ export default function ProcessPage() {
         if (response.ok) {
           const data = await response.json();
           addLog(`✅ ${data.message}`);
-          
+
           // Refresh payment limits
           const limits = await checkPaymentLimits();
           setPaymentLimits(limits);
@@ -680,21 +682,21 @@ export default function ProcessPage() {
       } catch (error) {
         addLog(`⚠️ Session processing failed: ${error}`);
       }
-      
+
       // Fallback: Check payment limits multiple times in case webhook is delayed
       addLog('Checking payment status with fallback method...');
       let attempts = 0;
       const maxAttempts = 5;
-      
+
       const checkWithDelay = async (delay: number) => {
         await new Promise(resolve => setTimeout(resolve, delay));
         attempts++;
-        
+
         try {
           const limits = await checkPaymentLimits();
           setPaymentLimits(limits);
           setPaymentLimitsError(false);
-          
+
           if (limits.credits_balance > 0 || attempts >= maxAttempts) {
             if (limits.credits_balance > 0) {
               addLog(`Payment processed! ${limits.isUnlimited || limits.plan === 'unlimited' ? 'Unlimited access activated' : `Credit balance: ${limits.credits_balance} credits available`}`);
@@ -703,7 +705,7 @@ export default function ProcessPage() {
             }
             return;
           }
-          
+
           // Try again with longer delay
           if (attempts < maxAttempts) {
             addLog(`Attempt ${attempts}/${maxAttempts}: Payment still processing...`);
@@ -716,10 +718,10 @@ export default function ProcessPage() {
           }
         }
       };
-      
+
       // Start with 5 second delay, then increase
       await checkWithDelay(5000);
-      
+
     } catch (error) {
       addLog(`Payment verification error: ${error}`);
       console.error('Payment verification error:', error);
@@ -742,7 +744,7 @@ export default function ProcessPage() {
 
     try {
       const headers: Record<string, string> = {};
-      
+
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
@@ -759,21 +761,21 @@ export default function ProcessPage() {
       }
 
       const data = await response.json();
-      
+
       // The extraction now happens in background, so we get a job_id and need to poll
       setJobId(data.job_id);
       setCurrentJobId(data.job_id);
       setCurrentStep('extracting');
       addLog(`Extraction started. Job ID: ${data.job_id}`);
-      
+
       // Start polling for extraction completion
       startPollingExtractionStatus(data.job_id);
     } catch (error) {
       console.error('File extraction failed:', error);
-      
+
       let errorMessage = 'File extraction failed';
       let showResetSuggestion = false;
-      
+
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         errorMessage = 'Connection failed: Unable to reach the extraction server. Please check your internet connection and try again.';
         showResetSuggestion = true;
@@ -784,9 +786,9 @@ export default function ProcessPage() {
           showResetSuggestion = true;
         }
       }
-      
+
       addLog(errorMessage);
-      
+
       if (showResetSuggestion) {
         showNotification(
           'warning',
@@ -798,7 +800,7 @@ export default function ProcessPage() {
           'Upload failed. Please try again.'
         );
       }
-      
+
       setCurrentStep('upload'); // Return to upload state so user can retry
     } finally {
       setIsProcessing(false);
@@ -812,7 +814,7 @@ export default function ProcessPage() {
   const fetchWithTimeout = (url: string, options: RequestInit = {}, timeoutMs: number = 10000) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    
+
     return fetch(url, {
       ...options,
       signal: controller.signal
@@ -826,7 +828,7 @@ export default function ProcessPage() {
     const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
     const minutes = Math.floor(elapsedSeconds / 60);
     const seconds = elapsedSeconds % 60;
-    
+
     if (minutes > 0) {
       return `${minutes}m ${seconds}s`;
     } else {
@@ -839,20 +841,20 @@ export default function ProcessPage() {
     if (!analysisStartTime || !selectedChunksEstimatedTime || currentStep !== 'analyzing') {
       return progress; // Fall back to chunk-based progress
     }
-    
+
     const elapsedSeconds = Math.floor((Date.now() - analysisStartTime) / 1000);
     const timeProgress = Math.min(100, (elapsedSeconds / selectedChunksEstimatedTime) * 100);
-    
+
     // Calculate chunk-based progress from processed chunks
-    const chunkProgress = currentProcessedChunks > 0 && selectedChunks.size > 0 
+    const chunkProgress = currentProcessedChunks > 0 && selectedChunks.size > 0
       ? Math.min(100, (currentProcessedChunks / selectedChunks.size) * 100)
       : progress;
-    
+
     // Use chunk progress if available, otherwise blend time and chunk progress
-    const finalProgress = currentProcessedChunks > 0 
-      ? chunkProgress 
+    const finalProgress = currentProcessedChunks > 0
+      ? chunkProgress
       : Math.max(progress, Math.round(timeProgress));
-    
+
     // Debug logging (remove in production)
     if (process.env.NODE_ENV === 'development') {
       console.log('Progress Debug:', {
@@ -867,7 +869,7 @@ export default function ProcessPage() {
         finalProgress: Math.round(finalProgress)
       });
     }
-    
+
     return Math.round(finalProgress);
   };
 
@@ -903,7 +905,7 @@ export default function ProcessPage() {
       setAvailablePacks(samplePacks);
       return;
     }
-    
+
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`);
       if (response.ok) {
@@ -924,21 +926,21 @@ export default function ProcessPage() {
         const packData = data.pack || data;
         const sources = data.sources || [];
         setSelectedPack(packData);
-      setPackSources(sources);
-      addLog(`Loaded pack: ${packData.pack_name} with ${sources.length} source(s)`);
-    }
-  } catch (error) {
-    console.error('Error loading pack details:', error);
+        setPackSources(sources);
+        addLog(`Loaded pack: ${packData.pack_name} with ${sources.length} source(s)`);
+      }
+    } catch (error) {
+      console.error('Error loading pack details:', error);
     }
   };
 
   const createPack = async () => {
-    
+
     if (!newPackName.trim()) {
       console.log('[DEBUG] Pack name is empty, aborting');
       return;
     }
-    
+
     // Check if user is authenticated
     if (!user) {
       console.log('[DEBUG] User not authenticated');
@@ -946,7 +948,7 @@ export default function ProcessPage() {
       addLog('Please sign in to create a pack');
       return;
     }
-    
+
     setIsCreatingPack(true);
     try {
       console.log('[DEBUG] Sending request to:', `${API_BASE_URL}/api/v2/packs`);
@@ -964,10 +966,10 @@ export default function ProcessPage() {
       if (response.ok) {
         const pack = await response.json();
         console.log('[DEBUG] Pack created successfully:', pack);
-        
+
         // Load packs first to refresh the list
         await loadPacks();
-        
+
         // Then set the newly created pack as selected
         setSelectedPack(pack);
         setCustomSystemPrompt(pack.custom_system_prompt || '');
@@ -978,7 +980,7 @@ export default function ProcessPage() {
         setCurrentStep('upload');
         setShowUploadOptions(true);
         addLog(`Created new pack: ${pack.pack_name}`);
-        
+
         // Update URL with pack_id so navigation back works correctly
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.set('pack_id', pack.pack_id);
@@ -1003,7 +1005,7 @@ export default function ProcessPage() {
       addLog('Please sign in to access this pack');
       return;
     }
-    
+
     setSelectedPack(pack);
     setShowPackSelector(false);
     addLog(`Selected pack: ${pack.pack_name}`);
@@ -1014,7 +1016,7 @@ export default function ProcessPage() {
       setIsEditingPackName(false);
       return;
     }
-    
+
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`, {
         method: 'PATCH',
@@ -1118,12 +1120,12 @@ export default function ProcessPage() {
     if (!sourcePendingAnalysis.hasUnlimited || chunksToProcess < totalChunks) {
       requestBody.max_chunks = chunksToProcess;
     }
-    
+
     // Close modal immediately for instant feedback
     setSourcePendingAnalysis(null);
     setIsAnalysisStarting(sourceId);
     setAnalysisLimits((prev) => ({ ...prev, [sourceId]: chunksToProcess }));
-    
+
     // Start analysis in background
     try {
       const response = await makeAuthenticatedRequest(
@@ -1143,7 +1145,7 @@ export default function ProcessPage() {
           data.message ||
           `Starting analysis of ${chunksToProcess} chunk${chunksToProcess === 1 ? '' : 's'}...`
         );
-        
+
         // Refresh pack sources in background (don't await)
         if (selectedPack) {
           makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`)
@@ -1156,10 +1158,10 @@ export default function ProcessPage() {
               if (packData) {
                 const sources = packData.sources || [];
                 setPackSources(sources);
-                
+
                 // Check if source is now analyzing
                 const analyzingStatuses = ['analyzing', 'processing', 'analyzing_chunks'];
-                const analyzingSource = sources.find((s: any) => 
+                const analyzingSource = sources.find((s: any) =>
                   s.source_id === sourceId && analyzingStatuses.includes(s.status?.toLowerCase())
                 );
                 if (analyzingSource) {
@@ -1195,25 +1197,25 @@ export default function ProcessPage() {
 
   const handleCancelAnalysis = async () => {
     if (!sourcePendingAnalysis || !selectedPack) return;
-    
+
     const sourceId = sourcePendingAnalysis.sourceId;
-    
+
     // Close the modal immediately for better UX
     setSourcePendingAnalysis(null);
-    
+
     try {
       // Delete the source from the backend (removes from pack)
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources/${sourceId}`,
         { method: 'DELETE' }
       );
-      
+
       if (response.ok) {
         showNotification('info', 'Source removed from pack');
-        
+
         // Immediately remove from local state to prevent modal from reopening
         setPackSources(prev => prev.filter((s: any) => s.source_id !== sourceId));
-        
+
         // Then refresh from server to ensure consistency
         const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
         if (packResponse.ok) {
@@ -1238,25 +1240,25 @@ export default function ProcessPage() {
       } catch (error) {
       }
     }
-    
+
     // Debounce: Don't check if we checked within the last 10 seconds, unless we don't have limits yet
     const now = Date.now()
     if (now - lastPaymentCheck < 10000 && paymentLimits) {
       return paymentLimits || { canProcess: false, credits_balance: 0 };
     }
-    
+
     // Create the request promise and store it
     const requestPromise = (async () => {
       try {
         setLastPaymentCheck(now)
-        
+
         const response = await makeAuthenticatedRequest(
           API_ENDPOINTS.userProfile,
           {
             method: 'GET'
           }
         );
-        
+
         if (response.ok) {
           const data = await response.json();
           const isUnlimited = data.payment_plan === 'unlimited';
@@ -1285,10 +1287,10 @@ export default function ProcessPage() {
         paymentLimitsRequestRef.current = null;
       }
     })();
-    
+
     // Store the request promise
     paymentLimitsRequestRef.current = requestPromise;
-    
+
     return requestPromise;
   };
 
@@ -1326,7 +1328,7 @@ export default function ProcessPage() {
         try {
           while (true) {
             const { done, value } = await reader.read();
-            
+
             if (done) {
               break;
             }
@@ -1339,7 +1341,7 @@ export default function ProcessPage() {
               if (line.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(line.slice(6)); // Remove 'data: ' prefix
-                  
+
                   if (data.type === 'complete') {
                     return;
                   } else if (data.type === 'error') {
@@ -1349,12 +1351,12 @@ export default function ProcessPage() {
                     // Regular progress update
                     const timestamp = new Date().toLocaleTimeString();
                     let message = data.message;
-                    
+
                     // Format message with chunk info if available
                     if (data.current_chunk && data.total_chunks) {
                       message = `Chunk ${data.current_chunk}/${data.total_chunks}: ${data.message}`;
                     }
-                    
+
                     // Add to logs (avoid duplicates)
                     setLogs(prev => {
                       const messageExists = prev.some(log => log.includes(data.message));
@@ -1363,7 +1365,7 @@ export default function ProcessPage() {
                       }
                       return prev;
                     });
-                    
+
                     // Update progress percentage
                     if (data.progress !== undefined) {
                       setProgress(data.progress);
@@ -1404,12 +1406,12 @@ export default function ProcessPage() {
       clearInterval(pollingInterval);
       setPollingInterval(null);
     }
-    
+
     let consecutiveFailures = 0;
     const maxFailures = 5; // Increased from 3 to handle more server issues
     const startTime = Date.now();
     const maxPollingDuration = 30 * 60 * 1000; // 30 minutes max
-    
+
     // Set up the status polling with exponential backoff and server warming
     const poll = async () => {
       // Check if we've been polling too long
@@ -1421,7 +1423,7 @@ export default function ProcessPage() {
         }
         return;
       }
-      
+
       try {
         // If we've had failures, try a health check first to warm the server
         if (consecutiveFailures > 0) {
@@ -1437,7 +1439,7 @@ export default function ProcessPage() {
                 signal: AbortSignal.timeout(healthTimeout)
               }
             );
-            
+
             if (healthResponse.ok) {
               const healthData = await healthResponse.json();
               console.log('Server warmed up, health status:', healthData.status);
@@ -1447,32 +1449,32 @@ export default function ProcessPage() {
             console.warn('Health check failed during retry:', healthError);
           }
         }
-        
+
         const statusResponse = await makeAuthenticatedRequest(
           `${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/status/${jobId}`,
           {
             method: 'GET'
           }
         );
-        
+
         if (!statusResponse.ok) {
           consecutiveFailures++;
           setConnectionStatus('warning');
-          
+
           // Add different retry delays based on failure count
           const retryDelay = Math.min(2000 * Math.pow(2, consecutiveFailures - 1), 30000); // Exponential backoff, max 30s
-          
+
           if (statusResponse.status === 403) {
             console.error('Authentication failed for status check - token may be expired');
             addLog('Warning: Authentication error checking status. You may need to refresh the page.');
           } else if (statusResponse.status === 408) {
             console.error('Request timeout - server may be stalled');
-            addLog(`⚠️ Server timeout detected (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
+            addLog(`⚠️ Server timeout detected (attempt ${consecutiveFailures}). Retrying in ${retryDelay / 1000}s...`);
           } else {
             console.error('Status check failed:', statusResponse.status, statusResponse.statusText);
-            addLog(`⚠️ Status check failed (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
+            addLog(`⚠️ Status check failed (attempt ${consecutiveFailures}). Retrying in ${retryDelay / 1000}s...`);
           }
-          
+
           // Stop polling after too many failures
           if (consecutiveFailures >= maxFailures) {
             setConnectionStatus('disconnected');
@@ -1483,31 +1485,31 @@ export default function ProcessPage() {
             }
             return;
           }
-          
+
           // Schedule retry with exponential backoff
           setTimeout(poll, retryDelay);
           return;
         }
-        
+
         // Reset failure count on success
         if (consecutiveFailures > 0) {
           addLog('✅ Server connection restored');
           consecutiveFailures = 0;
         }
         setConnectionStatus('connected');
-        
+
         const data = await statusResponse.json();
-        
+
         // Update progress if available from status
         if (data.progress !== undefined) {
           setProgress(data.progress);
         }
-        
+
         // Update processed chunks if available
         if (data.processed_chunks !== undefined) {
           setCurrentProcessedChunks(data.processed_chunks);
         }
-        
+
         if (data.status === 'completed') {
           if (pollingInterval) {
             clearInterval(pollingInterval);
@@ -1515,7 +1517,7 @@ export default function ProcessPage() {
           }
           setIsProcessing(false);
           setCurrentStep('analyzed');
-          
+
           // Reload pack details to get updated info
           if (selectedPack) {
             loadPackDetails(selectedPack.pack_id);
@@ -1529,7 +1531,7 @@ export default function ProcessPage() {
           setCurrentStep('analyzed');
           addLog(`✅ Analysis completed with ${data.processed_chunks}/${data.total_chunks} chunks`);
           addLog('Free tier limit reached. Upgrade to Pro for complete analysis.');
-          
+
           if (data.upgrade_required) {
             showLimitWarning(data.processed_chunks, data.chunks_to_process || 2);
           }
@@ -1540,7 +1542,7 @@ export default function ProcessPage() {
           }
           setIsProcessing(false);
           addLog('❌ Insufficient credits. Please purchase more credits to continue.');
-          
+
           showNotification(
             'limit_reached',
             'Insufficient credits! Purchase more credits to analyze all chunks.'
@@ -1569,7 +1571,7 @@ export default function ProcessPage() {
         } else {
           console.error('Status polling error:', error);
         }
-        
+
         // Stop polling after too many failures
         if (consecutiveFailures >= maxFailures) {
           if (pollingInterval) {
@@ -1580,20 +1582,20 @@ export default function ProcessPage() {
         }
       }
     };
-    
+
     // Initial poll
     poll();
-    
+
     // Set up interval with exponential backoff based on failures
     const getPollingInterval = () => {
       const baseInterval = 3000; // 3 seconds base for faster feedback
       return baseInterval * Math.min(Math.pow(1.5, consecutiveFailures), 8); // Max 24 seconds
     };
-    
+
     const statusInterval = setInterval(poll, getPollingInterval());
-    
+
     setPollingInterval(statusInterval);
-    
+
     // Disable SSE for now - causing conflicts with polling
     // Set up Server-Sent Events for real-time progress
     /*
@@ -1616,23 +1618,23 @@ export default function ProcessPage() {
 
   const startPollingExtractionStatus = (jobId: string) => {
 
-    
+
     // Cancel any existing polling
     if (extractionAbortControllerRef.current) {
       extractionAbortControllerRef.current.abort();
     }
-    
+
     // Create new abort controller for this polling session
     extractionAbortControllerRef.current = new AbortController();
     isExtractionPollingRef.current = true;
-    
-    
+
+
     // Poll for extraction completion with improved error handling
     let consecutiveFailures = 0;
     const maxFailures = 5;
     const startTime = Date.now();
     const maxPollingDuration = 10 * 60 * 1000; // 10 minutes max for extraction
-    
+
     const poll = async () => {
       // Check if polling was cancelled
       if (extractionAbortControllerRef.current?.signal.aborted) {
@@ -1640,14 +1642,14 @@ export default function ProcessPage() {
         isExtractionPollingRef.current = false;
         return;
       }
-      
+
       // Check if we've been polling too long
       if (Date.now() - startTime > maxPollingDuration) {
         addLog('⚠️ Extraction polling timed out. Please refresh the page to check status.');
         isExtractionPollingRef.current = false;
         return;
       }
-      
+
       try {
         // If we've had failures, try a health check first to warm the server
         if (consecutiveFailures > 0) {
@@ -1660,7 +1662,7 @@ export default function ProcessPage() {
                 signal: AbortSignal.timeout(15000)
               }
             );
-            
+
             if (healthResponse.ok) {
               console.log('Server warmed up for extraction check');
               addLog(`🔄 Server reconnected (attempt ${consecutiveFailures + 1})`);
@@ -1670,32 +1672,32 @@ export default function ProcessPage() {
             addLog(`⚠️ Server warming failed, retrying extraction check...`);
           }
         }
-        
+
         // Check if extraction is complete by checking source status
         const resultsResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v2/sources/${jobId}/status`, {
           method: 'GET',
           signal: extractionAbortControllerRef.current?.signal
         });
-        
+
         if (!resultsResponse.ok) {
           consecutiveFailures++;
           setConnectionStatus('warning');
-          
+
           const retryDelay = Math.min(3000 * Math.pow(2, consecutiveFailures - 1), 30000); // Start with 3s, max 30s
-          
+
           if (resultsResponse.status === 408) {
-            addLog(`⚠️ Server timeout during extraction check (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
+            addLog(`⚠️ Server timeout during extraction check (attempt ${consecutiveFailures}). Retrying in ${retryDelay / 1000}s...`);
           } else {
-            addLog(`⚠️ Extraction check failed (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
+            addLog(`⚠️ Extraction check failed (attempt ${consecutiveFailures}). Retrying in ${retryDelay / 1000}s...`);
           }
-          
+
           if (consecutiveFailures >= maxFailures) {
             setConnectionStatus('disconnected');
             addLog('❌ Too many failed attempts checking extraction. Please refresh the page.');
             isExtractionPollingRef.current = false;
             return;
           }
-          
+
           // Schedule retry with exponential backoff
           setTimeout(() => {
             if (!extractionAbortControllerRef.current?.signal.aborted) {
@@ -1704,16 +1706,16 @@ export default function ProcessPage() {
           }, retryDelay);
           return;
         }
-        
+
         // Reset failure count and connection status on success
         if (consecutiveFailures > 0) {
           addLog('✅ Server connection restored');
           consecutiveFailures = 0;
         }
         setConnectionStatus('connected');
-        
+
         const resultsData = await resultsResponse.json();
-        
+
         // Check if source failed
         if (resultsData.status === 'failed') {
           isExtractionPollingRef.current = false;
@@ -1722,16 +1724,16 @@ export default function ProcessPage() {
           addLog(`❌ Processing failed: ${resultsData.error_message || 'Unknown error occurred'}`);
           return;
         }
-        
+
         // Update progress and show detailed status
         const progress = resultsData.progress || 0;
         setProgress(progress);
-        
+
         // Show chunking progress with actual numbers
         if (resultsData.status === 'processing' && resultsData.total_chunks) {
           const lastChunkLog = logs[logs.length - 1];
           const currentProgressMsg = `✂️ Chunking: ${resultsData.total_chunks} chunks created (${progress}% complete)`;
-          
+
           // Only add if it's different from last message
           if (!lastChunkLog || !lastChunkLog.includes('Chunking:') || !lastChunkLog.includes(`${resultsData.total_chunks} chunks`)) {
             addLog(currentProgressMsg);
@@ -1741,16 +1743,16 @@ export default function ProcessPage() {
             addLog(`📝 Extracting text from ${file?.name || 'source'}...`);
           }
         }
-        
+
         // Check if ready for analysis (chunking completed)
         if (resultsData.status === 'ready_for_analysis') {
           isExtractionPollingRef.current = false;
           setIsProcessing(false);
           setCurrentStep('upload');
           setUploadMethod(null); // Ensure upload UI hides and analysis modal shows
-          
+
           // Show success notification for chunking completion
-          
+
           // Fetch credit check directly and show modal
           try {
             const creditCheck = await makeAuthenticatedRequest(
@@ -1759,7 +1761,7 @@ export default function ProcessPage() {
             if (creditCheck.ok) {
               const creditData = await creditCheck.json();
               setSourcePendingAnalysis(creditData);
-              
+
               // Also refresh pack sources to ensure UI is in sync
               if (selectedPack) {
                 const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
@@ -1772,27 +1774,27 @@ export default function ProcessPage() {
           } catch (error) {
             console.error('Error fetching credit check:', error);
           }
-          
+
           return;
         }
-        
+
         // Check if completed
         if (resultsData.status === 'completed' && progress >= 100) {
           isExtractionPollingRef.current = false;
           setIsProcessing(false);
           setCurrentStep('upload'); // Reset to upload state to allow adding more sources
-          
+
           // Show success notification for analysis completion
           showNotification('upgrade_success', `🎉 Analysis complete! ${resultsData.total_chunks || 0} chunks analyzed`);
           addLog(`✅ Processing complete! ${resultsData.total_chunks || 0} chunks analyzed`);
           addLog(`💰 Cost: $${(resultsData.total_input_tokens * 0.00015 / 1000 + resultsData.total_output_tokens * 0.0006 / 1000).toFixed(4)}`);
-          
+
           // Clear the file input to allow uploading another source
           setFile(null);
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
-          
+
           // Reload pack to show updated source with visual feedback
           if (selectedPack) {
             loadPackDetails(selectedPack.pack_id);
@@ -1804,14 +1806,14 @@ export default function ProcessPage() {
           }
           return;
         }
-        
+
         // Still processing, schedule next poll
-          setTimeout(() => {
-            if (!extractionAbortControllerRef.current?.signal.aborted) {
-              poll();
-            }
-          }, 5000); // 5 second interval for normal polling
-        
+        setTimeout(() => {
+          if (!extractionAbortControllerRef.current?.signal.aborted) {
+            poll();
+          }
+        }, 5000); // 5 second interval for normal polling
+
       } catch (error) {
         // Check if error is due to cancellation
         if (extractionAbortControllerRef.current?.signal.aborted) {
@@ -1819,29 +1821,29 @@ export default function ProcessPage() {
           isExtractionPollingRef.current = false;
           return;
         }
-        
+
         consecutiveFailures++;
         setConnectionStatus('warning');
-        
+
         // Handle authentication errors more gracefully
         if (error instanceof Error && error.message.includes('Authentication')) {
           addLog('Warning: Authentication error during extraction status check. You may need to refresh the page.');
           isExtractionPollingRef.current = false;
           return; // Stop polling on auth errors
         }
-        
+
         console.error('Error checking extraction status:', error);
-        
+
         const retryDelay = Math.min(3000 * Math.pow(2, consecutiveFailures - 1), 30000);
-        addLog(`⚠️ Error checking extraction status (attempt ${consecutiveFailures}). Retrying in ${retryDelay/1000}s...`);
-        
+        addLog(`⚠️ Error checking extraction status (attempt ${consecutiveFailures}). Retrying in ${retryDelay / 1000}s...`);
+
         if (consecutiveFailures >= maxFailures) {
           setConnectionStatus('disconnected');
           addLog('❌ Too many failed attempts. Please refresh the page.');
           isExtractionPollingRef.current = false;
           return;
         }
-        
+
         setTimeout(() => {
           if (!extractionAbortControllerRef.current?.signal.aborted) {
             poll();
@@ -1849,76 +1851,9 @@ export default function ProcessPage() {
         }, retryDelay);
       }
     };
-    
+
     // Start the polling
     poll();
-  };
-
-  const startEmailModeCompletionPolling = (jobId: string) => {
-    console.log('Starting email mode completion polling for job:', jobId);
-    
-    let consecutiveFailures = 0;
-    const maxFailures = 3;
-    const startTime = Date.now();
-    const maxPollingDuration = 4 * 60 * 60 * 1000; // 4 hours max (for very large jobs)
-    
-    const poll = async () => {
-      // Check if we've been polling too long
-      if (Date.now() - startTime > maxPollingDuration) {
-        addLog('⚠️ Email mode polling timed out. Your pack may still be processing - check your email or refresh the page.');
-        return;
-      }
-      
-      try {
-        // Check if source is complete by checking status
-        const resultsResponse = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v2/sources/${jobId}/status`, {
-          method: 'GET'
-        });
-        
-        if (resultsResponse.ok) {
-          const resultsData = await resultsResponse.json();
-          
-          // Check if analysis is complete
-          if (resultsData.status === 'completed' || resultsData.status === 'analyzed') {
-            console.log('Email mode job completed, showing completion state');
-            addLog('🎉 Analysis complete! Your Context Pack is ready!');
-            
-            // Update to completion state
-            setCurrentStep('email_completed');
-            
-            // Show completion notification
-            showNotification(
-              'info',
-              `Your Context Pack is ready! Processed ${resultsData.processed_chunks || 0} chunks.`
-            );
-            
-            return; // Stop polling
-          }
-        }
-        
-        // Reset failure count on successful check
-        consecutiveFailures = 0;
-        
-        // Schedule next poll (check every 30 seconds for email mode)
-        setTimeout(poll, 30000);
-        
-      } catch (error) {
-        consecutiveFailures++;
-        console.error('Error checking email mode completion:', error);
-        
-        if (consecutiveFailures >= maxFailures) {
-          addLog('⚠️ Unable to check completion status. Your pack may still be processing - check your email or refresh the page.');
-          return; // Stop polling after too many failures
-        }
-        
-        // Retry with exponential backoff
-        const retryDelay = Math.min(30000 * Math.pow(2, consecutiveFailures - 1), 120000); // 30s to 2min max
-        setTimeout(poll, retryDelay);
-      }
-    };
-    
-    // Start polling after initial delay (give job time to start)
-    setTimeout(poll, 60000); // Wait 1 minute before first check
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1930,10 +1865,10 @@ export default function ProcessPage() {
         showNotification('warning', 'Please select a pack before uploading files');
         return;
       }
-      
+
       // Validate file type based on upload method
       const fileName = selectedFile.name.toLowerCase();
-      
+
       if (uploadMethod === 'chat_export') {
         // Allow conversations.json or .zip files for chat export
         if (fileName !== 'conversations.json') {
@@ -1949,7 +1884,7 @@ export default function ProcessPage() {
           return;
         }
       }
-      
+
       await processSelectedFile(selectedFile);
       // Reset the file input
       if (event.target) {
@@ -1962,10 +1897,10 @@ export default function ProcessPage() {
     const files = event.target.files;
     if (files && files.length > 0) {
       // Look for conversations.json file in the uploaded folder
-      const conversationsFile = Array.from(files).find(file => 
+      const conversationsFile = Array.from(files).find(file =>
         file.name === 'conversations.json' || file.webkitRelativePath.endsWith('/conversations.json')
       );
-      
+
       if (conversationsFile) {
         addLog(`Found conversations.json in ChatGPT export folder`);
         await processSelectedFile(conversationsFile);
@@ -1973,7 +1908,7 @@ export default function ProcessPage() {
         addLog('Error: No conversations.json file found in the uploaded folder. Please make sure you\'re uploading a ChatGPT data export folder.');
         alert('No conversations.json found in folder. Upload exported AI folder');
       }
-      
+
       // Reset the file input
       if (event.target) {
         event.target.value = '';
@@ -1993,17 +1928,17 @@ export default function ProcessPage() {
     setIsProcessing(true);
     setCurrentStep('extracting');
     addLog(`Uploading source to pack: ${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
-    
+
     // Track file upload
     analytics.fileUpload(selectedFile.size);
-    
+
     try {
       // Upload source directly to pack via v2 API
       const formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('source_name', selectedFile.name);
       formData.append('source_type', selectedFile.name.includes('conversation') ? 'chat_export' : 'document');
-      
+
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources`,
         {
@@ -2018,18 +1953,18 @@ export default function ProcessPage() {
 
       const data = await response.json();
       const sourceId = data.source_id || data.job_id;
-      
+
       setJobId(sourceId);
       setCurrentJobId(sourceId);
       addLog(`Source uploaded successfully: ${sourceId}`);
       addLog('🔄 Extraction and chunking started...');
-      
+
       // Clear file state since it's now in packSources
       setFile(null);
-      
+
       // Start polling for extraction/chunking completion
       startPollingExtractionStatus(sourceId);
-      
+
     } catch (error) {
       console.error('Source upload failed:', error);
       addLog(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -2043,7 +1978,7 @@ export default function ProcessPage() {
     if (!url.trim()) {
       return { isValid: false, error: "URL is required" };
     }
-    
+
     // Only accept ChatGPT URLs for now
     if (!url.includes('chatgpt.com/share/')) {
       return { isValid: false, error: "Only ChatGPT shared conversation links are supported at this time" };
@@ -2076,16 +2011,16 @@ export default function ProcessPage() {
 
     // Clear any previous errors
     setUrlError(null);
-    
+
     setFile(null);
     setConversationUrl(url);
     setIsProcessing(true);
     setCurrentStep('extracting');
     addLog(`${validation.platform} URL ready: ${url}`);
-    
+
     // Track URL input
     analytics.fileUpload(0); // Size 0 for URL
-    
+
     try {
       // Upload source directly to pack via v2 API
       const formData = new FormData();
@@ -2094,7 +2029,7 @@ export default function ProcessPage() {
       formData.append('url', url);
       formData.append('source_name', `Conversation from ${validation.platform}`);
       formData.append('source_type', 'chat_export');
-      
+
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources`,
         {
@@ -2110,19 +2045,85 @@ export default function ProcessPage() {
 
       const data = await response.json();
       const sourceId = data.source_id
-      
+
       setJobId(sourceId);
       setCurrentJobId(sourceId);
       addLog('Extraction and chunking started...');
       setConversationUrl('');
       startPollingExtractionStatus(sourceId);
-      
+
     } catch (error) {
       console.error('URL extraction failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addLog(`Upload failed: ${errorMessage}`);
       setUrlError(errorMessage);
       showNotification('warning', 'URL extraction failed. Please try again.');
+      setCurrentStep('upload');
+      setIsProcessing(false);
+    }
+  };
+
+  const processPastedText = async (text: string) => {
+    if (!selectedPack || !user) {
+      addLog('Error: Please select or create a pack first');
+      showNotification('warning', 'Please select a pack before adding sources');
+      return;
+    }
+
+    if (!text.trim()) {
+      setTextError('Please enter some text');
+      return;
+    }
+
+    // Clear any previous errors
+    setTextError(null);
+
+    setFile(null);
+    setPastedText(text);
+    setIsProcessing(true);
+    setCurrentStep('extracting');
+    addLog(`Processing pasted text (${text.length} chars)`);
+
+    // Track text input
+    analytics.fileUpload(text.length);
+
+    try {
+      // Upload source directly to pack via v2 API
+      const formData = new FormData();
+      // Append empty file blob to satisfy FastAPI's multipart form validation
+      formData.append('file', new Blob([]), '');
+      formData.append('text_content', text);
+      formData.append('source_name', `Pasted Text (${new Date().toLocaleTimeString()})`);
+      formData.append('source_type', 'text');
+
+      const response = await makeAuthenticatedRequest(
+        `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources`,
+        {
+          method: 'POST',
+          body: formData
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Upload failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const sourceId = data.source_id
+
+      setJobId(sourceId);
+      setCurrentJobId(sourceId);
+      addLog('Text processing started...');
+      setPastedText('');
+      startPollingExtractionStatus(sourceId);
+
+    } catch (error) {
+      console.error('Text processing failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      addLog(`Processing failed: ${errorMessage}`);
+      setTextError(errorMessage);
+      showNotification('warning', 'Text processing failed. Please try again.');
       setCurrentStep('upload');
       setIsProcessing(false);
     }
@@ -2152,12 +2153,12 @@ export default function ProcessPage() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const droppedItems = e.dataTransfer.items;
     const droppedFiles = Array.from(e.dataTransfer.files);
-    
+
     console.log('Dropped items:', droppedItems.length, 'Dropped files:', droppedFiles.length);
-    
+
     // Check if we're dropping a folder (DataTransferItem with kind 'file' and webkitGetAsEntry)
     if (droppedItems && droppedItems.length > 0) {
       const firstItem = droppedItems[0];
@@ -2170,26 +2171,26 @@ export default function ProcessPage() {
         }
       }
     }
-    
+
     // First, check if there's a conversations.json file among the dropped files
-    const conversationsFile = droppedFiles.find(file => 
+    const conversationsFile = droppedFiles.find(file =>
       file.name === 'conversations.json' || file.webkitRelativePath?.endsWith('/conversations.json')
     );
-    
+
     if (conversationsFile) {
       addLog(`Found conversations.json in dropped files`);
       processSelectedFile(conversationsFile);
       return;
     }
-    
+
     // If multiple files were dropped (likely from a folder), search through them for conversations.json
     if (droppedFiles.length > 1) {
       addLog('Multiple files detected - searching for conversations.json...');
-      const foundConversationsFile = droppedFiles.find(file => 
-        file.name.toLowerCase() === 'conversations.json' || 
+      const foundConversationsFile = droppedFiles.find(file =>
+        file.name.toLowerCase() === 'conversations.json' ||
         file.webkitRelativePath?.toLowerCase().includes('conversations.json')
       );
-      
+
       if (foundConversationsFile) {
         addLog(`Found conversations.json in export folder!`);
         processSelectedFile(foundConversationsFile);
@@ -2200,14 +2201,14 @@ export default function ProcessPage() {
         return;
       }
     }
-    
+
     // Otherwise, look for any valid individual file
-    const validFile = droppedFiles.find(file => 
-      ['.json', '.txt', '.csv', '.zip', '.html', '.htm'].some(ext => 
+    const validFile = droppedFiles.find(file =>
+      ['.json', '.txt', '.csv', '.zip', '.html', '.htm'].some(ext =>
         file.name.toLowerCase().endsWith(ext)
       )
     );
-    
+
     if (validFile) {
       processSelectedFile(validFile);
     } else {
@@ -2217,14 +2218,14 @@ export default function ProcessPage() {
   };
 
 
-  
+
 
   const handleCancel = async () => {
     if (!currentJobId || isCancelling) return;
-    
+
     setIsCancelling(true);
     addLog('🚫 Requesting job cancellation...');
-    
+
     try {
       // Stop any active polling immediately
       if (pollingInterval) {
@@ -2232,31 +2233,31 @@ export default function ProcessPage() {
         setPollingInterval(null);
         addLog('⏹️ Stopped status polling');
       }
-      
+
       // Close any active EventSource connections
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
         addLog('🔌 Closed real-time connection');
       }
-      
+
       // Abort any ongoing extraction requests
       if (extractionAbortControllerRef.current) {
         extractionAbortControllerRef.current.abort();
         extractionAbortControllerRef.current = null;
         addLog('🛑 Aborted extraction requests');
       }
-      
+
       // Send cancellation request to backend
       const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/cancel/${currentJobId}`, {
         method: 'POST'
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         addLog('✅ Cancellation request sent successfully');
         addLog('⏱️ Stopping OpenAI requests and analysis...');
-        
+
         // Reset state immediately for better UX
         setIsProcessing(false);
         setProgress(0);
@@ -2267,20 +2268,20 @@ export default function ProcessPage() {
           const chunksToRemove = currentProcessedChunks;
           const remainingChunks = availableChunks.slice(chunksToRemove);
           setAvailableChunks(remainingChunks);
-          
+
           // Clear selected chunks since the indices have changed
           setSelectedChunks(new Set());
-          
+
           addLog(`💳 Removed ${chunksToRemove} processed chunks. ${remainingChunks.length} chunks remaining.`);
           addLog(`📊 Credits deducted for ${chunksToRemove} completed chunks`);
           showNotification('warning', `Job cancelled. ${chunksToRemove} chunks were processed and charged.`);
-          
+
           // Return to chunked state so user can reselect
           setCurrentStep('chunked');
         } else {
           addLog('🆓 Job cancelled before significant processing - no charges applied');
           showNotification('info', 'Job cancelled successfully. No charges applied.');
-          
+
           // Return to chunked state for reselection
           setCurrentStep('chunked');
         }
@@ -2288,7 +2289,7 @@ export default function ProcessPage() {
         // Reset processed chunks counter
         setCurrentProcessedChunks(0);
         setIsCancelling(false);
-        
+
         addLog('🔄 Ready to start a new analysis');
       } else {
         throw new Error(`Server responded with status ${response.status}`);
@@ -2298,7 +2299,7 @@ export default function ProcessPage() {
       addLog(`❌ Cancel request failed: ${error}`);
       setIsCancelling(false);
       showNotification('warning', 'Failed to cancel job. It may still be running on the server.');
-      
+
       // Even if cancel request fails, stop local polling and reset UI
       setIsProcessing(false);
       if (pollingInterval) {
@@ -2313,13 +2314,13 @@ export default function ProcessPage() {
     if (currentJobId && !isCancelling) {
       await handleCancel();
     }
-    
+
     // Stop any polling
     if (pollingInterval) {
       clearInterval(pollingInterval);
       setPollingInterval(null);
     }
-    
+
     // Reset all state
     if (conversationUrl) {
       setConversationUrl('');
@@ -2335,7 +2336,7 @@ export default function ProcessPage() {
     setCurrentJobId(null);
     setCurrentProcessedChunks(0);
     setAnalysisLimits({});
-    
+
     addLog('Reset complete - all processing cancelled');
   };
 
@@ -2363,25 +2364,25 @@ export default function ProcessPage() {
     // Use selectedPack.pack_id if available, otherwise fall back to currentJobId
     const packId = selectedPack?.pack_id || currentJobId;
     if (!packId || isDownloading) return;
-    
+
     setIsDownloading(true);
-    
+
     // Track download
     analytics.downloadPack();
-    
+
     try {
       addLog(`Starting ${type} pack download...`);
-      
+
       // Use authenticated fetch to download with proper headers
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/api/download/${packId}/${type}`,
         { method: 'GET' }
       );
-      
+
       if (!response.ok) {
         throw new Error(`Download failed: ${response.status}`);
       }
-      
+
       // Get the blob and create download link
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -2391,13 +2392,13 @@ export default function ProcessPage() {
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
-      
+
       // Clean up
       setTimeout(() => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       }, 100);
-      
+
       addLog('Pack download completed successfully');
     } catch (error) {
       addLog(`Pack download failed: ${error}`);
@@ -2408,25 +2409,25 @@ export default function ProcessPage() {
 
   const downloadChunks = async () => {
     if (!currentJobId || isDownloading) return;
-    
+
     setIsDownloading(true);
-    
+
     // Track download
     analytics.downloadPack();
-    
+
     try {
       addLog('Starting chunks download...');
-      
+
       // Use authenticated fetch to download with proper headers
       const response = await makeAuthenticatedRequest(
         `${API_BASE_URL}/api/download/${currentJobId}/chunks`,
         { method: 'GET' }
       );
-      
+
       if (!response.ok) {
         throw new Error(`Download failed: ${response.status}`);
       }
-      
+
       // Get the blob and create download link
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -2436,13 +2437,13 @@ export default function ProcessPage() {
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
-      
+
       // Clean up
       setTimeout(() => {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       }, 100);
-      
+
       addLog('Chunks download completed successfully');
     } catch (error) {
       addLog(`Chunks download failed: ${error}`);
@@ -2454,16 +2455,16 @@ export default function ProcessPage() {
   const cancelAnalysis = async () => {
     try {
       // Find analyzing source
-      const analyzingSource = packSources.find((s: any) => 
+      const analyzingSource = packSources.find((s: any) =>
         ['analyzing', 'processing', 'analyzing_chunks'].includes(s.status?.toLowerCase())
       );
-      
+
       if (analyzingSource) {
         const response = await makeAuthenticatedRequest(
           `${API_BASE_URL}/api/v2/sources/${analyzingSource.source_id}/cancel`,
           { method: 'POST' }
         );
-        
+
         if (response.ok) {
           addLog('Analysis Cancelling');
           showNotification('info', 'Analysis Cancelling');
@@ -2490,7 +2491,7 @@ export default function ProcessPage() {
       extractionAbortControllerRef.current = null;
     }
     isExtractionPollingRef.current = false;
-    
+
     setFile(null);
     setJobId(null);
     setCurrentJobId(null);
@@ -2506,15 +2507,15 @@ export default function ProcessPage() {
     setLogs([]);
     setAnalysisStartTime(null);
     setCurrentProcessedChunks(0);
-    
+
     if (pollingInterval) {
       clearInterval(pollingInterval);
       setPollingInterval(null);
     }
-    
+
     // Clear localStorage session
     localStorage.removeItem('ucp_process_session');
-    
+
     addLog('Process reset');
   };
 
@@ -2559,7 +2560,7 @@ export default function ProcessPage() {
                   className="text-sm font-semibold bg-gray-800 text-white px-2 py-1 rounded border border-gray-600 focus:border-gray-500 focus:outline-none flex-1 min-w-0"
                 />
               ) : (
-                <h2 
+                <h2
                   className="text-sm font-semibold text-white cursor-pointer hover:text-gray-300 transition-colors truncate"
                   onClick={() => {
                     if (selectedPack) {
@@ -2569,55 +2570,52 @@ export default function ProcessPage() {
                   }}
                   title="Click to edit"
                 >
-                {selectedPack ? selectedPack.pack_name : 'No Pack Selected'}
-              </h2>
+                  {selectedPack ? selectedPack.pack_name : 'No Pack Selected'}
+                </h2>
               )}
             </div>
           </div>
-        {selectedPack && selectedPack.description && (
-          <p className="text-xs text-gray-500">{selectedPack.description}</p>
-        )}
+          {selectedPack && selectedPack.description && (
+            <p className="text-xs text-gray-500">{selectedPack.description}</p>
+          )}
 
-        {/* Pack Settings */}
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">Pack Settings</span>
-            {customPromptSavedAt && (
-              <span className="text-[10px] text-green-400">
-                Saved {new Date(customPromptSavedAt).toLocaleTimeString()}
-              </span>
-            )}
-          </div>
-          <div className="space-y-2">
-            <textarea
-              value={customSystemPrompt}
-              onChange={(e) => setCustomSystemPrompt(e.target.value)}
-              placeholder={`Custom System Prompt (optional)\nApplied to all LLM analysis for this pack.\nExample: "Do not store or summarize any personal identifiers."\n"Always mask PII before analyzing."\n"Focus only on business logic."`}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 px-3 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-              rows={4}
-            />
+          {/* Pack Settings */}
+          <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-[11px] text-gray-500">
-                Content redacted first, then prompt is prepended for every analysis.
-              </p>
-              <button
-                onClick={saveCustomPrompt}
-                disabled={isSavingCustomPrompt || !selectedPack}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-600 text-gray-200 hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isSavingCustomPrompt ? 'Saving…' : 'Save'}
-              </button>
+              <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">Pack Settings</span>
+              {customPromptSavedAt && (
+                <span className="text-[10px] text-green-400">
+                  Saved {new Date(customPromptSavedAt).toLocaleTimeString()}
+                </span>
+              )}
             </div>
-            {customPromptError && (
-              <p className="text-[11px] text-red-400">{customPromptError}</p>
-            )}
+            <div className="space-y-2">
+              <textarea
+                value={customSystemPrompt}
+                onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                placeholder={`Custom System Prompt (optional)\nApplied to all LLM analysis for this pack.\nExample: "Do not store or summarize any personal identifiers."\n"Always mask PII before analyzing."\n"Focus only on business logic."`}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 px-3 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                rows={4}
+              />
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={saveCustomPrompt}
+                  disabled={isSavingCustomPrompt || !selectedPack}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-600 text-gray-200 hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isSavingCustomPrompt ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+              {customPromptError && (
+                <p className="text-[11px] text-red-400">{customPromptError}</p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Sources Header */}
-      <div className="p-4 border-b border-gray-800">
-        <div className="flex items-center justify-between mb-2">
+        {/* Sources Header */}
+        <div className="p-4 border-b border-gray-800">
+          <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-gray-300">SOURCES</h3>
             {selectedPack && (
               <span className="text-xs text-gray-500">{packSources.length || 0}</span>
@@ -2643,8 +2641,8 @@ export default function ProcessPage() {
             <div className="space-y-2 mt-6">
               {/* Show existing pack sources */}
               {packSources.map((source: any) => (
-                <div 
-                  key={source.source_id} 
+                <div
+                  key={source.source_id}
                   onClick={async () => {
                     if (source.status === 'ready_for_analysis') {
                       // Fetch credit check and open modal
@@ -2670,9 +2668,8 @@ export default function ProcessPage() {
                       }
                     }
                   }}
-                  className={`bg-gray-800 rounded-lg p-3 border border-gray-700 ${
-                    source.status === 'ready_for_analysis' ? 'cursor-pointer hover:bg-gray-750 hover:border-gray-600 transition-colors' : ''
-                  }`}
+                  className={`bg-gray-800 rounded-lg p-3 border border-gray-700 ${source.status === 'ready_for_analysis' ? 'cursor-pointer hover:bg-gray-750 hover:border-gray-600 transition-colors' : ''
+                    }`}
                 >
                   <div className="flex items-start gap-2">
                     <FileText className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
@@ -2682,13 +2679,13 @@ export default function ProcessPage() {
                         {(source.status === 'extracting' || source.status === 'processing') && `Extracting and chunking... ${source.progress || 0}%`}
                         {source.status === 'ready_for_analysis' && `Ready (${source.total_chunks || 0} chunks) - Click to analyze`}
                         {source.status === 'analyzing' && (
-                          source.processed_chunks && source.total_chunks 
-                            ? `Analyzing chunk ${source.processed_chunks}/${source.total_chunks}` 
+                          source.processed_chunks && source.total_chunks
+                            ? `Analyzing chunk ${source.processed_chunks}/${source.total_chunks}`
                             : `Analyzing... ${source.progress || 0}%`
                         )}
                         {source.status === 'processing' && (
-                          source.processed_chunks && source.total_chunks 
-                            ? `Processing chunk ${source.processed_chunks}/${source.total_chunks}` 
+                          source.processed_chunks && source.total_chunks
+                            ? `Processing chunk ${source.processed_chunks}/${source.total_chunks}`
                             : `Processing... ${source.progress || 0}%`
                         )}
                         {source.status === 'completed' && `Complete (${source.total_chunks || 0} chunks)`}
@@ -2718,41 +2715,41 @@ export default function ProcessPage() {
                   )}
                 </div>
               ))}
-              
+
               {/* Show currently uploading file */}
               {file && (
-              <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-                <div className="flex items-start gap-2">
-                  <FileText className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white truncate">{file.name}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {currentStep === 'extracting' && 'Extracting...'}
-                      {currentStep === 'extracted' && 'Extracted'}
-                      {currentStep === 'chunking' && 'Chunking...'}
-                      {currentStep === 'chunked' && `${availableChunks.length} chunks`}
-                      {currentStep === 'analyzing' && `Analyzing... ${progress}%`}
-                      {currentStep === 'analyzed' && 'Complete'}
-                    </p>
+                <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+                  <div className="flex items-start gap-2">
+                    <FileText className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{file.name}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {currentStep === 'extracting' && 'Extracting...'}
+                        {currentStep === 'extracted' && 'Extracted'}
+                        {currentStep === 'chunking' && 'Chunking...'}
+                        {currentStep === 'chunked' && `${availableChunks.length} chunks`}
+                        {currentStep === 'analyzing' && `Analyzing... ${progress}%`}
+                        {currentStep === 'analyzed' && 'Complete'}
+                      </p>
+                    </div>
+                    {currentStep === 'analyzing' && (
+                      <Loader className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+                    )}
+                    {currentStep === 'analyzed' && (
+                      <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    )}
                   </div>
-                  {currentStep === 'analyzing' && (
-                    <Loader className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
-                  )}
-                  {currentStep === 'analyzed' && (
-                    <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  {(currentStep === 'analyzing' || currentStep === 'chunking' || currentStep === 'extracting') && (
+                    <div className="mt-2">
+                      <div className="w-full bg-gray-700 rounded-full h-1">
+                        <div
+                          className="bg-blue-500 h-1 rounded-full transition-all duration-300"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
-                {(currentStep === 'analyzing' || currentStep === 'chunking' || currentStep === 'extracting') && (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-700 rounded-full h-1">
-                      <div
-                        className="bg-blue-500 h-1 rounded-full transition-all duration-300"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
               )}
             </div>
           ) : (
@@ -2770,22 +2767,20 @@ export default function ProcessPage() {
           {/* Connection Status */}
           {isProcessing && (
             <div className="mb-4 flex items-center justify-center space-x-2 text-sm">
-              <div className={`w-2 h-2 rounded-full ${
-                connectionStatus === 'connected' ? 'bg-green-500' :
+              <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' :
                 connectionStatus === 'connecting' ? 'bg-green-500 animate-pulse' :
-                connectionStatus === 'warning' ? 'bg-orange-500 animate-pulse' :
-                'bg-red-500'
-              }`}></div>
-              <span className={`${
-                connectionStatus === 'connected' ? 'text-green-400' :
+                  connectionStatus === 'warning' ? 'bg-orange-500 animate-pulse' :
+                    'bg-red-500'
+                }`}></div>
+              <span className={`${connectionStatus === 'connected' ? 'text-green-400' :
                 connectionStatus === 'connecting' ? 'text-green-400' :
-                connectionStatus === 'warning' ? 'text-orange-400' :
-                'text-red-400'
-              }`}>
+                  connectionStatus === 'warning' ? 'text-orange-400' :
+                    'text-red-400'
+                }`}>
                 {connectionStatus === 'connected' ? 'Connected' :
-                 connectionStatus === 'connecting' ? 'Connecting' :
-                 connectionStatus === 'warning' ? 'Connection issues' :
-                 'Disconnected'}
+                  connectionStatus === 'connecting' ? 'Connecting' :
+                    connectionStatus === 'warning' ? 'Connection issues' :
+                      'Disconnected'}
               </span>
             </div>
           )}
@@ -2808,12 +2803,16 @@ export default function ProcessPage() {
               <div className="w-full max-w-3xl">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-white">{uploadMethod === 'url' ? 'One Chat' : 'Add sources'}</h2>
-                <button
+                  <button
                     onClick={() => {
                       if (uploadMethod === 'url') {
                         setUploadMethod(null);
                         setConversationUrl('');
                         setUrlError(null);
+                      } else if (uploadMethod === 'text') {
+                        setUploadMethod(null);
+                        setPastedText('');
+                        setTextError(null);
                       } else {
                         setShowUploadOptions(false);
                       }
@@ -2821,13 +2820,13 @@ export default function ProcessPage() {
                     className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
                   >
                     <X className="w-5 h-5 text-gray-400" />
-                </button>
+                  </button>
                 </div>
 
                 {/* Show analyzing indicator instead of upload area when analyzing */}
                 {(() => {
                   const analyzingStatuses = ['analyzing', 'processing', 'analyzing_chunks'];
-                  const hasAnalyzingSource = packSources.some((s: any) => 
+                  const hasAnalyzingSource = packSources.some((s: any) =>
                     analyzingStatuses.includes(s.status?.toLowerCase())
                   );
                   const isStarting = isAnalysisStarting !== null;
@@ -2863,18 +2862,18 @@ export default function ProcessPage() {
                           </p>
                         </div>
                       </div>
-                <button
+                      <button
                         onClick={cancelAnalysis}
                         className="text-sm text-gray-300 hover:text-white px-3 py-1 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
-                >
+                      >
                         Cancel
-                </button>
-              </div>
+                      </button>
+                    </div>
 
                     {/* Analysis Progress */}
                     {(() => {
                       const analyzingStatuses = ['analyzing', 'processing', 'analyzing_chunks'];
-                      const analyzingSources = packSources.filter((s: any) => 
+                      const analyzingSources = packSources.filter((s: any) =>
                         analyzingStatuses.includes(s.status?.toLowerCase())
                       );
                       if (isAnalysisStarting && analyzingSources.length === 0) {
@@ -2892,7 +2891,7 @@ export default function ProcessPage() {
                                   ? `${plannedChunks}/${totalChunks} chunks`
                                   : `${plannedChunks} chunks`}
                               </span>
-            </div>
+                            </div>
                             <div className="w-full bg-gray-700 rounded-full h-1.5">
                               <div className="bg-gray-500 h-1.5 rounded-full" style={{ width: '10%' }} />
                             </div>
@@ -2905,7 +2904,7 @@ export default function ProcessPage() {
                         const plannedChunks = analysisLimits[source.source_id];
                         // If we have a limit set, show that. Otherwise show total chunks.
                         const chunksToShow = plannedChunks ?? totalChunks;
-                        
+
                         // Show progress as "Analyzing chunk X/Y" if we have processed_chunks
                         let chunkLabel = '';
                         if (processedChunks > 0 && plannedChunks) {
@@ -2919,7 +2918,7 @@ export default function ProcessPage() {
                         } else {
                           chunkLabel = `${chunksToShow} chunks`;
                         }
-                        
+
                         return (
                           <div key={source.source_id} className="space-y-3">
                             <div className="flex justify-between items-center text-sm">
@@ -2929,7 +2928,7 @@ export default function ProcessPage() {
                               <span className="text-gray-400 whitespace-nowrap">{source.progress || 0}%</span>
                             </div>
                             <div className="w-full bg-gray-700 rounded-full h-1.5">
-                              <div 
+                              <div
                                 className="bg-gray-400 h-1.5 rounded-full transition-all duration-300"
                                 style={{ width: `${source.progress || 0}%` }}
                               />
@@ -2948,7 +2947,7 @@ export default function ProcessPage() {
                     </div>
 
                     <h3 className="text-xl font-medium text-white mb-4">Paste ChatGPT Conversation URL</h3>
-                    
+
                     <p className="text-gray-400 text-sm mb-10 max-w-md mx-auto leading-relaxed">
                       Ran out of space. Don't restart. Drop the link here, we'll pull the context and keep going.
                     </p>
@@ -2963,38 +2962,93 @@ export default function ProcessPage() {
                             <h4 className="text-red-400 font-medium text-sm mb-1">Invalid URL</h4>
                             <p className="text-red-300 text-xs">{urlError}</p>
                           </div>
-                  <button
+                          <button
                             onClick={() => setUrlError(null)}
                             className="text-red-400 hover:text-red-300 transition-colors"
-                  >
+                          >
                             <X className="w-4 h-4" />
-                  </button>
-            </div>
-          )}
+                          </button>
+                        </div>
+                      )}
 
-                      <input type="url" value={conversationUrl} onChange={(e) => { setConversationUrl(e.target.value);if (urlError) setUrlError(null);}}
+                      <input type="url" value={conversationUrl} onChange={(e) => { setConversationUrl(e.target.value); if (urlError) setUrlError(null); }}
                         placeholder="https://chatgpt.com/share/..."
-                        className={`w-full px-4 py-4 bg-gray-800 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                          urlError 
-                            ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' 
-                            : 'border-gray-600 focus:border-purple-500 focus:ring-purple-500/20'
-                        }`}
+                        className={`w-full px-4 py-4 bg-gray-800 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${urlError
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : 'border-gray-600 focus:border-purple-500 focus:ring-purple-500/20'
+                          }`}
                       />
-                      
-                  <button
+
+                      <button
                         onClick={() => processConversationUrl(conversationUrl)}
                         disabled={!conversationUrl.trim()}
                         className="w-full bg-black-600 border-2 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/25 disabled:shadow-none transform hover:scale-[1.02] disabled:transform-none"
-                  >
+                      >
                         Start Extraction
-                  </button>
+                      </button>
 
-                      
+
                       <p className="text-xs text-gray-500 flex items-center justify-center gap-1 mt-2">
                         <Lock className="h-3 w-3" />
                         We never store your data. Files are processed securely in your session.
                       </p>
-                </div>
+                    </div>
+                  </div>
+                ) : uploadMethod === 'text' ? (
+                  /* Paste Text Input */
+                  <div className="bg-gray-900/80 border-2 border-gray-600 hover:border-gray-500 rounded-2xl p-10 text-center transition-all duration-300 hover:bg-gray-900/90">
+                    <div className="w-20 h-20 rounded-xl bg-gray-700 flex items-center justify-center mx-auto mb-8">
+                      <FileText className="h-10 w-10 text-gray-300" />
+                    </div>
+
+                    <h3 className="text-xl font-medium text-white mb-4">Paste Text Content</h3>
+
+                    <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto leading-relaxed">
+                      Paste any text content directly here. We'll analyze it just like a file.
+                    </p>
+                    <div className="space-y-6 max-w-2xl mx-auto">
+                      {/* Error Alert */}
+                      {textError && (
+                        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 flex items-start gap-3">
+                          <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <X className="w-3 h-3 text-white" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <h4 className="text-red-400 font-medium text-sm mb-1">Invalid Input</h4>
+                            <p className="text-red-300 text-xs">{textError}</p>
+                          </div>
+                          <button
+                            onClick={() => setTextError(null)}
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+
+                      <textarea
+                        value={pastedText}
+                        onChange={(e) => { setPastedText(e.target.value); if (textError) setTextError(null); }}
+                        placeholder="Paste your text here..."
+                        className={`w-full px-4 py-4 bg-gray-800 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all min-h-[200px] resize-y ${textError
+                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                          : 'border-gray-600 focus:border-purple-500 focus:ring-purple-500/20'
+                          }`}
+                      />
+
+                      <button
+                        onClick={() => processPastedText(pastedText)}
+                        disabled={!pastedText.trim()}
+                        className="w-full bg-black-600 border-2 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/25 disabled:shadow-none transform hover:scale-[1.02] disabled:transform-none"
+                      >
+                        Process Text
+                      </button>
+
+                      <p className="text-xs text-gray-500 flex items-center justify-center gap-1 mt-2">
+                        <Lock className="h-3 w-3" />
+                        Content is processed securely in your session.
+                      </p>
+                    </div>
                   </div>
                 ) : sourcePendingAnalysis ? (() => {
                   // Add safe defaults for all values
@@ -3002,71 +3056,55 @@ export default function ProcessPage() {
                   const userCredits = sourcePendingAnalysis.userCredits || 0;
                   const hasUnlimited = sourcePendingAnalysis.hasUnlimited || false;
                   const creditsNeeded = sourcePendingAnalysis.creditsNeeded || 0;
-                  
+
                   const allowedChunks = hasUnlimited
                     ? totalChunks
                     : Math.min(userCredits, totalChunks);
-                  
+
                   return (
-                  /* Credit Confirmation Card - Replaces Upload Area */
-                  <div className="bg-gray-900/90 border-blue-500/50 rounded-2xl p-8 shadow-md mb-6">
-                    <div className="flex items-center space-x-4 mb-6">
-                      <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
-                        <Brain className="h-6 w-6 text-white" />
+                    /* Credit Confirmation Card - Replaces Upload Area */
+                    <div className="bg-gray-900/90 border-blue-500/50 rounded-2xl p-8 shadow-md mb-6">
+                      <div className="flex items-center space-x-4 mb-6">
+                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                          <Brain className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-semibold text-white">Ready to Analyze</h3>
+                          <p className="text-gray-400">
+                            {hasUnlimited
+                              ? "You're all set—every chunk will be analyzed."
+                              : allowedChunks < totalChunks
+                                ? `We'll analyze ${allowedChunks}/${totalChunks} chunks with your current credits. Buy more anytime to process the rest.`
+                                : "You're all set—every chunk will be analyzed."}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="text-xl font-semibold text-white">Ready to Analyze</h3>
-                        <p className="text-gray-400">
-                          {hasUnlimited
-                            ? "You're all set—every chunk will be analyzed."
-                            : allowedChunks < totalChunks
-                              ? `We'll analyze ${allowedChunks}/${totalChunks} chunks with your current credits. Buy more anytime to process the rest.`
-                              : "You're all set—every chunk will be analyzed."}
-                        </p>
-                      </div>
-                    </div>
 
-                    {/* Credit Stats */}
-                    <div className="bg-gray-800/50 rounded-xl p-6 mb-6 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-400">Total chunks:</span>
-                        <span className="text-lg font-medium text-white">{totalChunks}</span>
+                      {/* Credit Stats */}
+                      <div className="bg-gray-800/50 rounded-xl p-6 mb-6 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-400">Total chunks:</span>
+                          <span className="text-lg font-medium text-white">{totalChunks}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-400">Your credits:</span>
+                          <span className="text-lg font-medium text-white">
+                            {hasUnlimited ? 'Unlimited' : userCredits}
+                          </span>
+                        </div>
+                        {!hasUnlimited && creditsNeeded > 0 && (
+                          <p className="text-xs text-gray-500 pt-2 border-t border-gray-700">
+                            Add {creditsNeeded} more credit{creditsNeeded === 1 ? '' : 's'} to unlock every chunk.
+                          </p>
+                        )}
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-400">Your credits:</span>
-                        <span className="text-lg font-medium text-white">
-                          {hasUnlimited ? 'Unlimited' : userCredits}
-                        </span>
-                      </div>
-                      {!hasUnlimited && creditsNeeded > 0 && (
-                        <p className="text-xs text-gray-500 pt-2 border-t border-gray-700">
-                          Add {creditsNeeded} more credit{creditsNeeded === 1 ? '' : 's'} to unlock every chunk.
-                        </p>
-                      )}
-                    </div>
 
-                    {/* Action Buttons */}
-                    {sourcePendingAnalysis.canProceed ? (
-                      <div className="flex gap-3">
-                        <button
-                          onClick={handleCancelAnalysis}
-                          className="flex-1 px-6 py-3 rounded-xl border-2 border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => startSourceAnalysis(allowedChunks)}
-                          className="flex-1 px-6 py-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors"
-                        >
-                          Start Analysis ({allowedChunks} chunks)
-                        </button>
-                      </div>
-                    ) : sourcePendingAnalysis.userCredits > 0 ? (
-                      <div className="space-y-3">
+                      {/* Action Buttons */}
+                      {sourcePendingAnalysis.canProceed ? (
                         <div className="flex gap-3">
                           <button
                             onClick={handleCancelAnalysis}
-                            className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
+                            className="flex-1 px-6 py-3 rounded-xl border-2 border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
                           >
                             Cancel
                           </button>
@@ -3074,100 +3112,115 @@ export default function ProcessPage() {
                             onClick={() => startSourceAnalysis(allowedChunks)}
                             className="flex-1 px-6 py-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors"
                           >
-                            Analyze {allowedChunks} Chunks
+                            Start Analysis ({allowedChunks} chunks)
                           </button>
                         </div>
-                        <button
-                          onClick={handleBuyCredits}
-                          className="w-full px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
-                        >
-                          Buy {sourcePendingAnalysis.creditsNeeded} More Credits
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <p className="text-sm text-gray-400">
-                          You need {sourcePendingAnalysis.creditsNeeded} credits to analyze this file.
-                        </p>
-                        <div className="flex gap-3">
-                          <button
-                            onClick={handleCancelAnalysis}
-                            className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
-                          >
-                            Cancel
-                          </button>
+                      ) : sourcePendingAnalysis.userCredits > 0 ? (
+                        <div className="space-y-3">
+                          <div className="flex gap-3">
+                            <button
+                              onClick={handleCancelAnalysis}
+                              className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => startSourceAnalysis(allowedChunks)}
+                              className="flex-1 px-6 py-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors"
+                            >
+                              Analyze {allowedChunks} Chunks
+                            </button>
+                          </div>
                           <button
                             onClick={handleBuyCredits}
-                            className="flex-1 px-6 py-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors"
+                            className="w-full px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
                           >
-                            Buy Credits
+                            Buy {sourcePendingAnalysis.creditsNeeded} More Credits
                           </button>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-sm text-gray-400">
+                            You need {sourcePendingAnalysis.creditsNeeded} credits to analyze this file.
+                          </p>
+                          <div className="flex gap-3">
+                            <button
+                              onClick={handleCancelAnalysis}
+                              className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleBuyCredits}
+                              className="flex-1 px-6 py-3 rounded-xl bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors"
+                            >
+                              Buy Credits
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })() : (
                   /* File Upload Area */
                   <>
-                <div
-                  onDragOver={handleDragOver}
-                  onDragEnter={handleDragEnter}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-2xl p-12 mb-6 text-center transition-all ${
-                    isDragOver
-                      ? 'border-blue-500 bg-blue-500/5'
-                      : 'border-gray-700 bg-gray-900/50'
-                  }`}
-                >
-                  <div className="w-20 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Upload className="w-8 h-8 text-blue-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-white mb-2">Upload sources</h3>
-                  <p className="text-sm text-gray-400 mb-4">
-                   Choose one of the three options below to add sources to your pack for analysis. <br/> Large files will be processed and emailed when done.
-                  </p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json,.txt,.csv,.zip,.html,.htm,.pdf"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <input
-                    ref={folderInputRef}
-                    type="file"
-                    {...({ webkitdirectory: 'true' } as any)}
-                    multiple
-                    onChange={handleFolderSelect}
-                    className="hidden"
-                  />
-                </div>
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragEnter={handleDragEnter}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`border-2 border-dashed rounded-2xl p-12 mb-6 text-center transition-all ${isDragOver
+                        ? 'border-blue-500 bg-blue-500/5'
+                        : 'border-gray-700 bg-gray-900/50'
+                        }`}
+                    >
+                      <div className="w-20 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Upload className="w-8 h-8 text-blue-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-white mb-2">Upload sources</h3>
+                      <p className="text-sm text-gray-400 mb-4">
+                        Choose one of the three options below to add sources to your pack for analysis. <br /> Large files will be processed and emailed when done.
+                      </p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json,.txt,.csv,.zip,.html,.htm,.pdf"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      <input
+                        ref={folderInputRef}
+                        type="file"
+                        {...({ webkitdirectory: 'true' } as any)}
+                        multiple
+                        onChange={handleFolderSelect}
+                        className="hidden"
+                      />
+                    </div>
 
-                {/* Source Type Tabs */}
-                <div className="grid grid-cols-3 gap-4">
-                  {/* Chat Exports */}
-                  <button
-                    onClick={() => {
-                      if (!user) {
-                        setShowAuthModal(true);
-                        return;
-                      }
-                      setUploadMethod('chat_export');
-                      // Update file input to accept conversations.json or zip
-                      if (fileInputRef.current) {
-                        fileInputRef.current.accept = '.json,.zip';
-                      }
-                      fileInputRef.current?.click();
-                    }}
-                    className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
-                  >
-                    <MessageSquare className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
+                    {/* Source Type Tabs */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Chat Exports */}
+                      <button
+                        onClick={() => {
+                          if (!user) {
+                            setShowAuthModal(true);
+                            return;
+                          }
+                          setUploadMethod('chat_export');
+                          // Update file input to accept conversations.json or zip
+                          if (fileInputRef.current) {
+                            fileInputRef.current.accept = '.json,.zip';
+                          }
+                          fileInputRef.current?.click();
+                        }}
+                        className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
+                      >
+                        <MessageSquare className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
                         <h3 className="font-semibold text-white mb-1">Chat Export</h3>
                         <p className="text-sm text-gray-400">
-                          <a 
-                            href="https://chatgpt.com/#settings/DataControls" 
+                          <a
+                            href="https://chatgpt.com/#settings/DataControls"
                             target="_blank"
                             className="text-blue-300 underline hover:text-blue-400 hover:underline transition-colors"
                             onClick={(e) => {
@@ -3177,163 +3230,179 @@ export default function ProcessPage() {
                             conversations.json
                           </a>
                         </p>
-                  </button>
+                      </button>
 
-                  {/* One Chat */}
-                  <button
-                    onClick={() => {
-                      if (!user) {
-                        setShowAuthModal(true);
-                        return;
-                      }
-                      setUploadMethod('url');
-                    }}
-                    className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
-                  >
-                    <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
-                    <h3 className="font-semibold text-white mb-1">One Chat</h3>
-                    <p className="text-sm text-gray-400">Import single conversation URL</p>
-                  </button>
+                      {/* One Chat */}
+                      <button
+                        onClick={() => {
+                          if (!user) {
+                            setShowAuthModal(true);
+                            return;
+                          }
+                          setUploadMethod('url');
+                        }}
+                        className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
+                      >
+                        <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
+                        <h3 className="font-semibold text-white mb-1">One Chat</h3>
+                        <p className="text-sm text-gray-400">Import single conversation URL</p>
+                      </button>
 
-                  {/* Document */}
-                  <button
-                    onClick={() => {
-                      if (!user) {
-                        setShowAuthModal(true);
-                        return;
-                      }
-                      setUploadMethod('document');
-                      // Update file input to accept documents including Google Docs exports
-                      if (fileInputRef.current) {
-                        fileInputRef.current.accept = '.pdf,.txt,.md,.doc,.docx';
-                      }
-                      fileInputRef.current?.click();
-                    }}
-                    className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
-                  >
-                    <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
-                    <h3 className="font-semibold text-white mb-1">Document</h3>
-                        <p className="text-sm text-gray-400">PDF, TXT, Markdown, or Word/Google Docs</p>
-                  </button>
-                </div>
+                      {/* Document */}
+                      <button
+                        onClick={() => {
+                          if (!user) {
+                            setShowAuthModal(true);
+                            return;
+                          }
+                          setUploadMethod('document');
+                          // Update file input to accept documents including Google Docs exports
+                          if (fileInputRef.current) {
+                            fileInputRef.current.accept = '.pdf,.txt,.md,.doc,.docx';
+                          }
+                          fileInputRef.current?.click();
+                        }}
+                        className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
+                      >
+                        <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
+                        <h3 className="font-semibold text-white mb-1">Document</h3>
+                        <p className="text-sm text-gray-400">PDF, TXT, HTML, CSV</p>
+                      </button>
+
+                      {/* Paste Text */}
+                      <button
+                        onClick={() => {
+                          if (!user) {
+                            setShowAuthModal(true);
+                            return;
+                          }
+                          setUploadMethod('text');
+                        }}
+                        className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
+                      >
+                        <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
+                        <h3 className="font-semibold text-white mb-1">Paste Text</h3>
+                        <p className="text-sm text-gray-400">Direct text input</p>
+                      </button>
+                    </div>
                   </>
                 )}
-                </div>
               </div>
-            )}
+            </div>
+          )}
 
           {/* Processing Steps (extracting, chunking, analyzing, etc.) */}
           {currentStep !== 'upload' && (
             <div>
-            {/* File or URL Selected */}
-            {(file || conversationUrl) && currentStep === 'uploaded' && (
-              <div className="max-w-6xl mx-auto">
-                <div className="bg-gray-800 border border-gray-700 rounded-2xl p-9 shadow-xl">
-                  {/* Success Header */}
-                  <div className="flex items-center space-x-4 mb-6">
-                    <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center shadow-lg">
-                      <CheckCircle className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-white">
-                        {conversationUrl ? 'Conversation URL Loaded' : 'File Selected'}
-                      </h3>
-                      <p className="text-gray-400 text-sm">Ready for processing</p>
-                    </div>
-                  </div>
-                  <div className="bg-gray-900/50 border border-gray-400 rounded-xl p-6 mb-6">
-                    <div className="flex items-start space-x-4">
-                      <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
-                        {conversationUrl ? (
-                          <ExternalLink className="h-6 w-6 text-white" />
-                        ) : (
-                          <FileText className="h-6 w-6 text-white" />
-                        )}
+              {/* File or URL Selected */}
+              {(file || conversationUrl) && currentStep === 'uploaded' && (
+                <div className="max-w-6xl mx-auto">
+                  <div className="bg-gray-800 border border-gray-700 rounded-2xl p-9 shadow-xl">
+                    {/* Success Header */}
+                    <div className="flex items-center space-x-4 mb-6">
+                      <div className="w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center shadow-lg">
+                        <CheckCircle className="h-6 w-6 text-white" />
                       </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        {conversationUrl ? (
-                          <>
-                            <h4 className="font-medium text-white mb-2">
-                              {conversationUrl.includes('chatgpt.com') ? 'ChatGPT' : 'Claude'} Conversation
-                            </h4>
-                            <p className="text-sm text-gray-400 break-all bg-gray-800 px-3 py-2 rounded-lg font-mono">
-                              {conversationUrl}
-                            </p>
-                          </>
-                        ) : file ? (
-                          <>
-                            <h4 className="font-medium text-white mb-2">{file.name}</h4>
-                            <div className="flex items-center space-x-4 text-sm text-gray-400">
-                              <span>Size: {(file.size / 1024 / 1024).toFixed(2)} MB</span>
-                              <span>Type: {file.type || 'Unknown'}</span>
-                            </div>
-                          </>
-                        ) : null}
+                      <div>
+                        <h3 className="text-xl font-semibold text-white">
+                          {conversationUrl ? 'Conversation URL Loaded' : 'File Selected'}
+                        </h3>
+                        <p className="text-gray-400 text-sm">Ready for processing</p>
                       </div>
                     </div>
-                    
-                    {/* Time Estimates */}
-                    {timeEstimate && (
-                      <div className="mt-6 pt-6 border-t border-gray-700">
-                        <h5 className="text-sm font-medium text-gray-300 mb-3">Estimated Processing Time</h5>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="bg-gray-800/50 px-4 py-3 rounded-lg">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-400">Extraction</span>
-                              <span className="text-sm font-medium text-white">{timeEstimate.time_estimates.extraction.formatted}</span>
-                            </div>
-                          </div>
-                          {timeEstimate.time_estimates.analysis && (
-                            <div className="bg-gray-800/50 px-4 py-3 rounded-lg">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-400">Analysis</span>
-                                <span className="text-sm font-medium text-white">{timeEstimate.time_estimates.analysis.formatted}</span>
-                              </div>
-                            </div>
+                    <div className="bg-gray-900/50 border border-gray-400 rounded-xl p-6 mb-6">
+                      <div className="flex items-start space-x-4">
+                        <div className="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                          {conversationUrl ? (
+                            <ExternalLink className="h-6 w-6 text-white" />
+                          ) : (
+                            <FileText className="h-6 w-6 text-white" />
                           )}
                         </div>
+
+                        <div className="flex-1 min-w-0">
+                          {conversationUrl ? (
+                            <>
+                              <h4 className="font-medium text-white mb-2">
+                                {conversationUrl.includes('chatgpt.com') ? 'ChatGPT' : 'Claude'} Conversation
+                              </h4>
+                              <p className="text-sm text-gray-400 break-all bg-gray-800 px-3 py-2 rounded-lg font-mono">
+                                {conversationUrl}
+                              </p>
+                            </>
+                          ) : file ? (
+                            <>
+                              <h4 className="font-medium text-white mb-2">{file.name}</h4>
+                              <div className="flex items-center space-x-4 text-sm text-gray-400">
+                                <span>Size: {(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                                <span>Type: {file.type || 'Unknown'}</span>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
-                    )}
+
+                      {/* Time Estimates */}
+                      {timeEstimate && (
+                        <div className="mt-6 pt-6 border-t border-gray-700">
+                          <h5 className="text-sm font-medium text-gray-300 mb-3">Estimated Processing Time</h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="bg-gray-800/50 px-4 py-3 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-400">Extraction</span>
+                                <span className="text-sm font-medium text-white">{timeEstimate.time_estimates.extraction.formatted}</span>
+                              </div>
+                            </div>
+                            {timeEstimate.time_estimates.analysis && (
+                              <div className="bg-gray-800/50 px-4 py-3 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-400">Analysis</span>
+                                  <span className="text-sm font-medium text-white">{timeEstimate.time_estimates.analysis.formatted}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Extracting Progress */}
-            {currentStep === 'extracting' && (
-              <div className="max-w-4xl mx-auto">
-                <div className="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-2xl p-8 shadow-xl">
-                  <div className="flex items-center space-x-4 mb-6">
-                    <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center">
-                      <div className="animate-spin h-6 w-6 border-2 border-white border-t-transparent rounded-full" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold text-white">Extracting Content</h3>
-                      <p className="text-gray-400">Extracting content and creating semantic chunks... (1-2 minutes)</p>
-                    </div>
-                  </div>
-                  
-                  {/* Loading Skeleton */}
-                  <div className="space-y-4">
-                    <div className="bg-gray-700/20 border border-gray-600/50 rounded-xl p-4">
-                      <div className="flex items-center space-x-2 mb-3">
-                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                        <span className="text-purple-300 font-medium">Processing conversation data</span>
+              {/* Extracting Progress */}
+              {currentStep === 'extracting' && (
+                <div className="max-w-4xl mx-auto">
+                  <div className="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-2xl p-8 shadow-xl">
+                    <div className="flex items-center space-x-4 mb-6">
+                      <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center">
+                        <div className="animate-spin h-6 w-6 border-2 border-white border-t-transparent rounded-full" />
                       </div>
-                      <div className="space-y-2">
-                        <div className="h-3 bg-gray-600 rounded skeleton"></div>
-                        <div className="h-3 bg-gray-600 rounded w-3/4 skeleton"></div>
-                        <div className="h-3 bg-gray-600 rounded w-1/2 skeleton"></div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-white">Extracting Content</h3>
+                        <p className="text-gray-400">Extracting content and creating semantic chunks... (1-2 minutes)</p>
+                      </div>
+                    </div>
+
+                    {/* Loading Skeleton */}
+                    <div className="space-y-4">
+                      <div className="bg-gray-700/20 border border-gray-600/50 rounded-xl p-4">
+                        <div className="flex items-center space-x-2 mb-3">
+                          <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                          <span className="text-purple-300 font-medium">Processing conversation data</span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-3 bg-gray-600 rounded skeleton"></div>
+                          <div className="h-3 bg-gray-600 rounded w-3/4 skeleton"></div>
+                          <div className="h-3 bg-gray-600 rounded w-1/2 skeleton"></div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-          </div>
-        )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -3342,9 +3411,9 @@ export default function ProcessPage() {
         <div className="p-4 border-b border-gray-800">
           <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pack Actions</h3>
         </div>
-        
+
         <div className="flex-1 p-4 space-y-4">
-          
+
           {/* Download Options */}
           {selectedPack && packSources.some((s: any) => s.status === 'completed') && (
             <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
@@ -3356,15 +3425,14 @@ export default function ProcessPage() {
                   <p className="text-md text-white">{selectedPack.pack_name}</p>
                 </div>
               </div>
-              
+
               <button
                 onClick={() => downloadPack('complete')}
                 disabled={isDownloading}
-                className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${
-                  !isDownloading && packSources.some(s => s.status === 'completed')
-                    ? 'after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-gradient-to-r after:from-transparent after:via-green-400 after:to-transparent after:animate-shimmer-slide'
-                    : ''
-                }`}
+                className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${!isDownloading && packSources.some(s => s.status === 'completed')
+                  ? 'after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-gradient-to-r after:from-transparent after:via-green-400 after:to-transparent after:animate-shimmer-slide'
+                  : ''
+                  }`}
               >
                 {isDownloading ? (
                   <>
@@ -3380,8 +3448,8 @@ export default function ProcessPage() {
               </button>
             </div>
           )}
-          
-          
+
+
         </div>
       </div>
 
@@ -3495,7 +3563,7 @@ export default function ProcessPage() {
 
       {/* Auth Modal */}
       {showAuthModal && (
-        <AuthModal 
+        <AuthModal
           isOpen={showAuthModal}
           onClose={() => {
             setShowAuthModal(false);

@@ -2076,32 +2076,32 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 # Something smaller more importnat to prioratize content over preferences/goals/etc.
                 if len(chunks) == 1:
                     prompt = """
-You are an expert data analyst.  
-Your job is to extract and understand the core content of this conversation, not just surface-level topics.
+                    You are an expert data analyst.  
+                    Your job is to extract and understand the core content of this conversation, not just surface-level topics.
 
-Focus on:
-1. The main facts, events, instructions, questions, and decisions made in the chat.
-2. Key technical details, workflows, and problem-solving steps.
-3. Important context the user relies on repeatedly.
-4. Any dependencies, constraints, or long-term threads.
+                    Focus on:
+                    1. The main facts, events, instructions, questions, and decisions made in the chat.
+                    2. Key technical details, workflows, and problem-solving steps.
+                    3. Important context the user relies on repeatedly.
+                    4. Any dependencies, constraints, or long-term threads.
 
-De-prioritize:
-– Personal preferences  
-– Goals  
-– Writing style  
-– Personality traits  
-(Only include these if they directly influence the content.)
+                    De-prioritize:
+                    – Personal preferences  
+                    – Goals  
+                    – Writing style  
+                    – Personality traits  
+                    (Only include these if they directly influence the content.)
 
-Produce a long, structured output that includes:
-• A high-detail summary of what the chat contains  
-• A breakdown of all major themes and subtopics  
-• Critical information that must be preserved for future reasoning  
-• Any relationships or references between parts of the text  
-• A list of unresolved questions or next steps  
-• A short “importance score” (1–10) for each major item to show how essential it is
+                    Produce a long, structured output that includes:
+                    • A high-detail summary of what the chat contains  
+                    • A breakdown of all major themes and subtopics  
+                    • Critical information that must be preserved for future reasoning  
+                    • Any relationships or references between parts of the text  
+                    • A list of unresolved questions or next steps  
+                    • A short “importance score” (1–10) for each major item to show how essential it is
 
-Be thorough and factual. Go deep. This output will be used for content analysis and memory construction.
-"""
+                    Be thorough and factual. Go deep. This output will be used for content analysis and memory construction.
+                    """
                     content_message = redacted_chunk
 
                 #Look for more of a user overview if looking at conversations.json
@@ -2109,28 +2109,28 @@ Be thorough and factual. Go deep. This output will be used for content analysis 
                     # Separate prompt from content for better token management
                     prompt = """Analyze this conversation data and extract key insights in these 6 categories:
 
-1. PERSONAL PROFILE: Demographics, preferences, goals, values, personality
-2. BEHAVIORAL PATTERNS: Communication style, problem-solving, learning, habits  
-3. KNOWLEDGE DOMAINS: Technical skills, expertise, academic background
-4. PROJECT PATTERNS: Workflow preferences, tool usage, collaboration style
-5. TIMELINE EVOLUTION: Skill development, milestones, interest changes
-6. INTERACTION INSIGHTS: Communication preferences, response styles
+                    1. PERSONAL PROFILE: Demographics, preferences, goals, values, personality
+                    2. BEHAVIORAL PATTERNS: Communication style, problem-solving, learning, habits  
+                    3. KNOWLEDGE DOMAINS: Technical skills, expertise, academic background
+                    4. PROJECT PATTERNS: Workflow preferences, tool usage, collaboration style
+                    5. TIMELINE EVOLUTION: Skill development, milestones, interest changes
+                    6. INTERACTION INSIGHTS: Communication preferences, response styles
 
-Extract key facts (10-30 bullets per category). Be concise but comprehensive. Redact sensitive credentials. Output 1,000-2,000 tokens max."""
+                    Extract key facts (10-30 bullets per category). Be concise but comprehensive. Redact sensitive credentials. Output 1,000-2,000 tokens max."""
                     content_message = redacted_chunk
                 
                 #Likely just a document or mixed data
                 else:
                     prompt = f"""You are an expert data analyst.  
-Your job is to extract and understand the core content of the following document.
-Analyze the content and produce a detailed output that includes:
-• A high-detail summary of what the document contains  
-• Critical information that must be preserved for future reasoning   
-- Key facts, events, instructions, topics, questions, decisions
-Be factual This output will be used for content analysis and memory construction. Looking for 1k token output. 
-Document content:
-{redacted_chunk}
-Provide your comprehensive analysis below:"""
+                    Your job is to extract and understand the core content of the following document.
+                    Analyze the content and produce a detailed output that includes:
+                    • A high-detail summary of what the document contains  
+                    • Critical information that must be preserved for future reasoning   
+                    - Key facts, events, instructions, topics, questions, decisions
+                    Be factual This output will be used for content analysis and memory construction. Looking for 1k token output. 
+                    Document content:
+                    {redacted_chunk}
+                    Provide your comprehensive analysis below:"""
 
 
                 # Build messages array - use content_message if defined (separated content), otherwise prompt has content embedded
@@ -2993,87 +2993,6 @@ async def download_chunked_ucp_part(job_id: str, part_number: int, user: Authent
         )
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Chunked UCP part {part_number} not found")
-
-@app.get("/api/ucp-info/{job_id}")
-async def get_ucp_info(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Get information about available UCP formats and their sizes."""
-    try:
-        import tiktoken
-        tokenizer = tiktoken.get_encoding("cl100k_base")
-        
-        def count_tokens(text: str) -> int:
-            return len(tokenizer.encode(text))
-        
-        # Check which UCP versions are available
-        available_formats = {}
-        
-        # Complete UCP
-        complete_content = download_from_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt")
-        if complete_content:
-            available_formats["complete"] = {
-                "name": "Complete UCP",
-                "description": "Full detailed analysis with all insights",
-                "token_count": count_tokens(complete_content),
-                "best_for": "Comprehensive context, research purposes",
-                "compatibility": "May exceed context limits of some LLMs"
-            }
-        
-        # Ultra-compact UCP
-        ultra_content = download_from_r2(f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt")
-        if ultra_content:
-            available_formats["ultra_compact"] = {
-                "name": "Ultra-Compact UCP",
-                "description": "Essential context only (~50k tokens)",
-                "token_count": count_tokens(ultra_content),
-                "best_for": "Quick context transfer, fits any LLM",
-                "compatibility": "Works with all LLMs (GPT, Claude, Gemini)"
-            }
-        
-        # Standard UCP
-        standard_content = download_from_r2(f"{user.r2_directory}/{job_id}/standard_ucp.txt")
-        if standard_content:
-            available_formats["standard"] = {
-                "name": "Standard UCP", 
-                "description": "Balanced detail (~100k tokens)",
-                "token_count": count_tokens(standard_content),
-                "best_for": "General use, good balance of detail and size",
-                "compatibility": "Works with most LLMs"
-            }
-        
-        # Chunked UCP
-        chunked_index = download_from_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_index.txt")
-        if chunked_index:
-            # Count chunked parts
-            part_num = 1
-            total_chunks = 0
-            while True:
-                part_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{part_num}.txt")
-                if not part_content:
-                    break
-                total_chunks += 1
-                part_num += 1
-            
-            available_formats["chunked"] = {
-                "name": "Chunked UCP",
-                "description": f"Complete UCP split into {total_chunks} manageable parts",
-                "parts": total_chunks,
-                "best_for": "When you need full detail but have context limits",
-                "compatibility": "Each part fits within standard context windows"
-            }
-        
-        return {
-            "job_id": job_id,
-            "available_formats": available_formats,
-            "recommendations": {
-                "claude": "Use Ultra-Compact or Standard (Claude has 200k context but strict limits)",
-                "gpt4": "Use Standard or Chunked (100k context window)",
-                "gpt3.5": "Use Ultra-Compact only (16k context window)",
-                "gemini": "Use Standard or Complete (1M context window)"
-            }
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get UCP info: {str(e)}")
 
 @app.get("/api/download/{job_id}/extracted")
 async def download_extracted_text(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):

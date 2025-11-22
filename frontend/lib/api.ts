@@ -18,7 +18,6 @@ export const API_ENDPOINTS = {
   downloadStandard: (ucpId: string) => `${API_BASE_URL}/api/download/${ucpId}/standard`,
   downloadChunked: (ucpId: string) => `${API_BASE_URL}/api/download/${ucpId}/chunked`,
   downloadChunkedPart: (ucpId: string, partNumber: number) => `${API_BASE_URL}/api/download/${ucpId}/chunked/${partNumber}`,
-  ucpInfo: (ucpId: string) => `${API_BASE_URL}/api/ucp-info/${ucpId}`,
   downloadResult: (ucpId: string, index: number) => {
     const paddedIndex = index.toString().padStart(3, '0');
     return `${API_BASE_URL}/api/download/${ucpId}/result_${paddedIndex}.json`;
