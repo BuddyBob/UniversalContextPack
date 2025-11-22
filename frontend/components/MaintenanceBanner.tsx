@@ -14,8 +14,8 @@ export default function MaintenanceBanner() {
         <div className="flex items-center gap-3 flex-1">
           <AlertTriangle className="h-5 w-5 flex-shrink-0" />
           <p className="text-sm font-medium">
-            <strong>Maintenance Mode:</strong> We're currently performing system maintenance. 
-            Service will resume at <strong>5-6 PM PST</strong>. Thank you for your patience!
+            <strong>Maintenance Mode:</strong> We're currently performing system maintenance. Some features may be working.
+            Service will resume at <strong>8-9 PM PST</strong>. Thank you for your patience!
           </p>
         </div>
         <button
