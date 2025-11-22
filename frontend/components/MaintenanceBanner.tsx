@@ -14,8 +14,8 @@ export default function MaintenanceBanner() {
         <div className="flex items-center gap-3 flex-1">
           <AlertTriangle className="h-5 w-5 flex-shrink-0" />
           <p className="text-sm font-medium">
-            <strong>Supabase Maintenance:</strong> some services may be temporarily unavailable due to scheduled Supabase maintenance.
-            Up until: <strong>Nov 23, 11:00 PM PST</strong>.
+            <strong>Maintenance:</strong> Working on some backend improvements. Service may be intermittent.
+            Up until: <strong>Nov 22, 4:00 PM PST</strong>.
           </p>
         </div>
         <button
