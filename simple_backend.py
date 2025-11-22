@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header, Request, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header, Request, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -1819,79 +1819,6 @@ async def detailed_health_check():
             "error": str(e)
         }
 
-async def extract_text_from_zip(zip_content: bytes, filename: str) -> str:
-    """Extract text content from uploaded ZIP file"""
-    import zipfile
-    import tempfile
-    import os
-    from pathlib import Path
-    
-    try:
-        # Create a temporary file to work with the ZIP
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
-            temp_zip.write(zip_content)
-            temp_zip_path = temp_zip.name
-        
-        extracted_text = ""
-        
-        # Extract and process ZIP contents
-        with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
-            # Create temporary directory for extraction
-            with tempfile.TemporaryDirectory() as temp_dir:
-                zip_ref.extractall(temp_dir)
-                
-                # Process extracted files
-                for root, dirs, files in os.walk(temp_dir):
-                    for file in files:
-                        file_path = Path(root) / file
-                        
-                        # Handle different file types
-                        if file.lower().endswith(('.txt', '.md', '.json', '.csv')):
-                            try:
-                                with open(file_path, 'r', encoding='utf-8') as f:
-                                    content = f.read()
-                                    extracted_text += f"\n\n=== {file} ===\n{content}"
-                            except UnicodeDecodeError:
-                                # Try different encodings
-                                for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
-                                    try:
-                                        with open(file_path, 'r', encoding=encoding) as f:
-                                            content = f.read()
-                                            extracted_text += f"\n\n=== {file} ===\n{content}"
-                                        break
-                                    except:
-                                        continue
-                        
-                        elif file.lower().endswith('.html'):
-                            try:
-                                with open(file_path, 'r', encoding='utf-8') as f:
-                                    html_content = f.read()
-                                    # Simple HTML stripping
-                                    import re
-                                    text_content = re.sub('<[^<]+?>', '', html_content)
-                                    extracted_text += f"\n\n=== {file} ===\n{text_content}"
-                            except:
-                                continue
-        
-        # Clean up temp file
-        os.unlink(temp_zip_path)
-        
-        if not extracted_text.strip():
-            raise ValueError("No readable text content found in ZIP file. Please ensure the ZIP contains text files (.txt, .md, .json, .csv, .html)")
-        
-        return extracted_text.strip()
-        
-    except zipfile.BadZipFile:
-        raise ValueError("Invalid ZIP file format")
-    except Exception as e:
-        # Clean up temp file if it exists
-        try:
-            if 'temp_zip_path' in locals():
-                os.unlink(temp_zip_path)
-        except:
-            pass
-        raise ValueError(f"Error processing ZIP file: {str(e)}")
-
 @app.post("/api/reload-env")
 async def reload_environment():
     """Reload environment variables from .env file"""
@@ -1908,438 +1835,9 @@ async def reload_environment():
         print(f"Error reloading environment: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to reload environment: {str(e)}")
 
-@app.post("/api/extract")
-async def extract_text(file: UploadFile = File(...), current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Step 1: Extract meaningful text from file - returns job_id immediately and processes in background."""
-    try:
-        job_id = str(uuid.uuid4())
-        
-        print(f"Starting text extraction for job {job_id} (user: {current_user.email})")
-        print(f"Extracting text from {file.filename}")
-        
-        # Create job in database
-        await create_job_in_db(
-            current_user, 
-            job_id, 
-            file.filename, 
-            len(await file.read()),  # Get file size
-            "extracting"
-        )
-        
-        # Reset file pointer after reading for size
-        await file.seek(0)
-        
-        # Initialize progress
-        update_job_progress(job_id, "extracting", 0, "Starting text extraction...")
-        
-        # Read file content
-        content = await file.read()
-        
-        # Handle different file types
-        try:
-            if file.filename.lower().endswith('.zip'):
-                # Handle ZIP files
-                file_content = await extract_text_from_zip(content, file.filename)
-            else:
-                # Try to decode as text with multiple encodings
-                try:
-                    file_content = content.decode('utf-8')
-                except UnicodeDecodeError:
-                    # Try other common encodings
-                    for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
-                        try:
-                            file_content = content.decode(encoding)
-                            print(f"Successfully decoded file using {encoding} encoding")
-                            break
-                        except UnicodeDecodeError:
-                            continue
-                    else:
-                        raise ValueError("Unable to decode file. Please ensure it's a valid text file or ZIP containing text files.")
-        except Exception as decode_error:
-            raise ValueError(f"Error processing file: {str(decode_error)}")
-        
-        # Start background processing with user context
-        asyncio.create_task(process_extraction_background(job_id, file_content, file.filename, current_user))
-        
-        # Return immediately so frontend can start polling
-        return {
-            "job_id": job_id,
-            "status": "processing",
-            "message": "Text extraction started. Use the job_id to poll for progress."
-        }
-        
-    except Exception as e:
-        print(f"Error starting text extraction: {e}")
-        # Update job status as failed if created
-        try:
-            await update_job_status_in_db(current_user, job_id, "failed", error_message=str(e))
-        except:
-            pass
-        raise HTTPException(status_code=500, detail=f"Failed to start extraction: {str(e)}")
-
 class ConversationURLRequest(BaseModel):
     url: str
 
-@app.post("/api/extract-conversation-url")
-async def extract_conversation_url(request: ConversationURLRequest, current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Extract conversation from shared URL (supports ChatGPT and Claude) and process it like a file."""
-    try:
-        job_id = str(uuid.uuid4())
-        
-        print(f"Starting conversation URL extraction for job {job_id} (user: {current_user.email})")
-        print(f"Extracting from URL: {request.url}")
-        
-        # Determine the platform based on URL
-        platform = None
-        if 'chatgpt.com/share/' in request.url:
-            platform = 'chatgpt'
-        elif 'claude.ai/share/' in request.url:
-            platform = 'claude'
-        elif 'grok.com/share/' in request.url:
-            platform = 'grok'
-        elif 'g.co/gemini/share/' in request.url:
-            platform = 'gemini'
-        else:
-            raise HTTPException(status_code=400, detail="Invalid conversation share URL. Must be a ChatGPT (chatgpt.com/share/), Claude (claude.ai/share/), Grok (grok.com/share/), or Gemini (g.co/gemini/share/) URL.")
-        
-        # Create job in database
-        await create_job_in_db(
-            current_user, 
-            job_id, 
-            f"{platform.title()}_conversation_{job_id}.json", 
-            0,  # Size unknown until extracted
-            "extracting"
-        )
-        
-        # Initialize progress
-        update_job_progress(job_id, "extracting", 0, f"Starting {platform.title()} URL extraction...")
-        
-        # Start background processing
-        asyncio.create_task(process_conversation_url_background(job_id, request.url, platform, current_user))
-        
-        # Return immediately so frontend can start polling
-        return {
-            "job_id": job_id,
-            "status": "processing",
-            "message": f"{platform.title()} URL extraction started. Use the job_id to poll for progress."
-        }
-        
-    except Exception as e:
-        print(f"Error starting conversation URL extraction: {e}")
-        # Update job status as failed if created
-        try:
-            await update_job_status_in_db(current_user, job_id, "failed", error_message=str(e))
-        except:
-            pass
-        raise HTTPException(status_code=500, detail=f"Failed to start conversation URL extraction: {str(e)}")
-
-# Keep the old ChatGPT endpoint for backward compatibility
-class ChatGPTURLRequest(BaseModel):
-    url: str
-
-@app.post("/api/extract-chatgpt-url")
-async def extract_chatgpt_url(request: ChatGPTURLRequest, current_user: AuthenticatedUser = Depends(get_current_user)):
-    """Extract ChatGPT conversation from shared URL and process it like a file. (Legacy endpoint - use /api/extract-conversation-url instead)"""
-    # Redirect to the new unified endpoint
-    conv_request = ConversationURLRequest(url=request.url)
-    return await extract_conversation_url(conv_request, current_user)
-
-async def process_conversation_url_background(job_id: str, url: str, platform: str, user: AuthenticatedUser):
-    """Background task for processing conversation URL extraction with progress updates (supports ChatGPT and Claude)."""
-    try:
-        print(f"🔄 Starting background extraction for {platform} URL: {url}")
-        print(f"Job ID: {job_id}, User: {user.email}")
-        
-        await update_job_status_in_db(user, job_id, "processing", 10, metadata={"step": "extracting_from_url"})
-        update_job_progress(job_id, "extracting", 10, "Setting up browser...")
-        print(f"✅ Status updated, starting browser setup...")
-        
-        # Import the appropriate extractor
-        try:
-            import sys
-            import os
-            # Add current directory to path to import extractors
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            if current_dir not in sys.path:
-                sys.path.append(current_dir)
-            
-            if platform == 'chatgpt':
-                from chatgpt_extractor import extract_chatgpt_conversation
-                extract_function = extract_chatgpt_conversation
-            else:
-                raise ValueError(f"Unsupported platform: {platform}")
-                
-        except ImportError as e:
-            print(f"Conversation extraction dependencies not available: {e}")
-            update_job_progress(job_id, "extracting", 0, f"Error: {platform.title()} extraction dependencies not installed (selenium, webdriver-manager)")
-            return
-        
-        update_job_progress(job_id, "extracting", 30, f"Extracting conversation from {platform.title()}...")
-        
-        # Extract conversation with better error handling and adaptive timeouts
-        try:
-            # Use longer timeout for ChatGPT due to heavy conversations
-            if platform == "chatgpt":
-                timeout = 45  # 45 seconds for ChatGPT (heavy conversations)
-            else:
-                timeout = 15  # 15 seconds for other platforms
-            print(f"Starting {platform} extraction with {timeout}s timeout...")
-            result = extract_function(url, timeout=timeout)
-            
-            if not result or not result.get('messages'):
-                print(f"No messages extracted from URL: {url}")
-                await update_job_status_in_db(user, job_id, "failed", error_message="No conversation found at the provided URL")
-                update_job_progress(job_id, "failed", 0, "Error: No conversation found at the provided URL")
-                return
-                
-        except ValueError as e:
-            print(f"URL validation error: {e}")
-            await update_job_status_in_db(user, job_id, "failed", error_message=f"Invalid URL: {str(e)}")
-            update_job_progress(job_id, "failed", 0, f"Error: {str(e)}")
-            return
-        except Exception as e:
-            print(f"{platform.title()} extraction failed: {e}")
-            await update_job_status_in_db(user, job_id, "failed", error_message=f"Failed to extract conversation: {str(e)}")
-            update_job_progress(job_id, "failed", 0, f"Error: Failed to extract conversation - {str(e)}")
-            return
-        
-        message_count = len(result['messages'])
-        update_job_progress(job_id, "extracting", 70, f"Extracted {message_count} messages from conversation")
-        
-        # Convert to the format expected by the rest of the pipeline
-        extracted_texts = []
-        for i, message in enumerate(result['messages']):
-            formatted_message = f"[{message['role'].upper()}]: {message['content']}"
-            extracted_texts.append(formatted_message)
-        
-        if not extracted_texts:
-            update_job_progress(job_id, "extracting", 0, f"Error: No messages found in {platform.title()} conversation")
-            return
-
-        print(f"Extracted {len(extracted_texts)} messages from {platform.title()} conversation")
-        update_job_progress(job_id, "extracting", 80, f"Processing {len(extracted_texts)} messages")
-
-        # Save extracted text to R2 (same format as file extraction)
-        update_job_progress(job_id, "extracting", 85, "Saving extracted conversation to storage...")
-        
-        # Create content
-        extracted_content_parts = []
-        total_size = 0
-        max_size = 200 * 1024 * 1024  # 200MB limit
-        
-        for i, text in enumerate(extracted_texts):
-            part = f"{i+1}. {text}"
-            if total_size + len(part) > max_size:
-                break
-            extracted_content_parts.append(part)
-            total_size += len(part)
-        
-        extracted_content = '\n\n'.join(extracted_content_parts)
-        print(f"Created content of {len(extracted_content)} characters from {len(extracted_content_parts)} messages")
-        
-        update_job_progress(job_id, "extracting", 90, "Uploading to storage...")
-        upload_success = upload_to_r2(f"{user.r2_directory}/{job_id}/extracted.txt", extracted_content)
-        
-        if not upload_success:
-            print("Upload failed, setting error status")
-            update_job_progress(job_id, "extracting", 0, "Error: Failed to save extracted conversation to storage")
-            return
-        
-        print("Upload successful, proceeding...")
-        update_job_progress(job_id, "extracted", 100, f"{platform.title()} conversation extraction completed successfully")
-        
-        # Create job summary
-        job_summary = {
-            "job_id": job_id,
-            "created_at": datetime.utcnow().isoformat(),
-            "status": "extracted",
-            "source_type": f"{platform}_url",
-            "source_url": url,
-            "conversation_id": result.get('conversation_id'),
-            "extracted_count": len(extracted_texts),
-            "message_count": message_count,
-            "platform": platform,
-            "file_size": len(extracted_content),
-            "content_preview": extracted_content[:500] + "..." if len(extracted_content) > 500 else extracted_content
-        }
-        
-        # Store job summary and pass extracted_count as processed_chunks for database tracking
-        job_summary["processed_chunks"] = len(extracted_texts)  # Add to metadata for consistency
-        await update_job_status_in_db(user, job_id, "extracted", 100, metadata=job_summary)
-        
-        # ALSO create summary.json for the results endpoint to find (same format as analysis results)
-        extraction_summary = {
-            "job_id": job_id,
-            "user_id": user.user_id,
-            "extraction_results": {
-                "conversation_id": result.get('conversation_id'),
-                "messages": result['messages'],
-                "platform": platform,
-                "source_url": url,
-                "extracted_at": result.get('extracted_at'),
-                "message_count": message_count
-            },
-            "total_conversations": 1,
-            "total_messages": message_count,
-            "performance_metrics": {
-                "extraction_time": "< 1 minute",
-                "file_size": len(extracted_content),
-                "platform": platform
-            },
-            "processed_at": datetime.utcnow().isoformat(),
-            "status": "completed"
-        }
-        
-        # Upload extraction summary (NOT as summary.json - that's reserved for final completion)
-        # Use extraction_summary.json instead so it doesn't trigger frontend completion
-        summary_json = json.dumps(extraction_summary, indent=2)
-        upload_to_r2(f"{user.r2_directory}/{job_id}/extraction_summary.json", summary_json)
-        
-        print(f"Background processing completed successfully for job {job_id}")
-        
-    except Exception as e:
-        print(f"Error in background processing for job {job_id}: {e}")
-        traceback.print_exc()
-        
-        try:
-            await update_job_status_in_db(user, job_id, "failed", error_message=str(e))
-            update_job_progress(job_id, "failed", 0, f"Error: {str(e)}")
-        except Exception as update_error:
-            print(f"Failed to update job status: {update_error}")
-
-# Keep the old ChatGPT background function for any existing references
-async def process_chatgpt_url_background(job_id: str, url: str, user: AuthenticatedUser):
-    """Legacy background task for ChatGPT URL processing - redirects to unified function."""
-    return await process_conversation_url_background(job_id, url, 'chatgpt', user)
-
-async def process_extraction_background(job_id: str, file_content: str, filename: str, user: AuthenticatedUser):
-    """Background task for processing text extraction with progress updates."""
-    try:
-        await update_job_status_in_db(user, job_id, "processing", 10, metadata={"step": "parsing_content"})
-        
-        extracted_texts = []
-        
-        # Check if it's an HTML file first
-        if filename.lower().endswith('.html') or filename.lower().endswith('.htm'):
-            print("Processing HTML chat export...")
-            update_job_progress(job_id, "extracting", 20, "Processing HTML chat export...")
-            extracted_texts = extract_from_html_content(file_content)
-        else:
-            try:
-                # Try parsing as JSON first
-                json_data = json.loads(file_content)
-                print("Processing JSON data structure...")
-                update_job_progress(job_id, "extracting", 20, "Processing JSON data structure...")
-                
-                def progress_callback(message):
-                    # OPTIMIZED: Significantly reduced progress update frequency
-                    if "Processing item" in message and "%" in message:
-                        try:
-                            percent_part = message.split("(")[1].split("%")[0]
-                            percent = float(percent_part)
-                            item_part = message.split("Processing item ")[1].split("/")[0]
-                            item_num = int(item_part)
-                            
-                            # OPTIMIZED: Only send updates every 500 items OR every 10% progress (much less frequent)
-                            last_percent = getattr(progress_callback, 'last_percent', 0)
-                            last_item = getattr(progress_callback, 'last_item', 0)
-                            
-                            should_update = (
-                                item_num % 500 == 0 or  # Every 500 items instead of 100
-                                int(percent) >= int(last_percent) + 10 or  # Every 10% instead of 5%
-                                percent >= 99.0 or  # Final completion
-                                item_num == 1 or  # First item
-                                item_num - last_item >= 1000  # Fallback: every 1000 items minimum
-                            )
-                            
-                            if should_update:
-                                # Scale from 20% to 80% (extraction phase)
-                                scaled_progress = 20 + (percent * 0.6)
-                                update_job_progress(job_id, "extracting", scaled_progress, message)
-                                progress_callback.last_percent = percent
-                                progress_callback.last_item = item_num
-                        except Exception:
-                            # Silently skip progress parsing errors to avoid slowdown
-                            pass
-                    # Remove other progress message logging to reduce overhead
-                
-                extracted_texts = extract_text_from_structure(json_data, progress_callback=progress_callback)
-            except json.JSONDecodeError:
-                # Fallback to text processing using enhanced function
-                print("Processing as text content...")
-                update_job_progress(job_id, "extracting", 30, "Processing as text content...")
-                extracted_texts = extract_from_text_content(file_content)
-
-        if not extracted_texts:
-            update_job_progress(job_id, "extracting", 0, "Error: No meaningful text found in file")
-            return
-
-        print(f"Extracted {len(extracted_texts)} meaningful text entries")
-        update_job_progress(job_id, "extracting", 80, f"Extracted {len(extracted_texts)} meaningful text entries")
-
-        # Save extracted text to R2
-        print("Saving extracted text to storage...")
-        print(f"First few texts: {[text[:50] + '...' if len(text) > 50 else text for text in extracted_texts[:3]]}")
-        update_job_progress(job_id, "extracting", 85, "Saving extracted text to storage...")
-        
-        # Limit the content size to prevent memory issues - increased limits for comprehensive extraction
-        max_texts = 100000  # Increased from 50,000
-        limited_texts = extracted_texts[:max_texts]
-        
-        # OPTIMIZED: Create content with early size checking to avoid processing too much
-        extracted_content_parts = []
-        total_size = 0
-        max_size = 200 * 1024 * 1024  # 200MB limit
-        max_texts = min(100000, len(limited_texts))  # Don't process more than needed
-        
-        for i, text in enumerate(limited_texts[:max_texts]):
-            # OPTIMIZED: Early size check to avoid string operations on oversized content
-            if total_size > max_size * 0.9:  # Stop at 90% to leave room for formatting
-                print(f"Content size limit reached at {i+1} texts, stopping processing")
-                break
-                
-            part = f"{i+1}. {text[:8000]}"  # Keep increased char limit for comprehensiveness
-            if total_size + len(part) <= max_size:
-                extracted_content_parts.append(part)
-                total_size += len(part)
-            else:
-                print(f"Size limit would be exceeded, stopping at {i+1} texts")
-                break
-        
-        extracted_content = '\n\n'.join(extracted_content_parts)
-        print(f"Created content of {len(extracted_content)} characters from {len(extracted_content_parts)} texts")
-        
-        print("=== CALLING UPLOAD FUNCTION ===")
-        update_job_progress(job_id, "extracting", 90, "Uploading to R2 storage...")
-        upload_success = upload_to_r2(f"{user.r2_directory}/{job_id}/extracted.txt", extracted_content)
-        
-        if not upload_success:
-            print("Upload failed, setting error status")
-            update_job_progress(job_id, "extracting", 0, "Error: Failed to save extracted text to storage")
-            return
-        
-        print("Upload successful, proceeding...")
-        update_job_progress(job_id, "extracted", 100, "Text extraction completed successfully")
-        
-        # Create job summary for better organization
-        job_summary = {
-            "job_id": job_id,
-            "created_at": datetime.utcnow().isoformat(),
-            "status": "extracted",
-            "extracted_count": len(extracted_texts),
-            "content_size": len(extracted_content),
-            "preview": extracted_texts[:3] if len(extracted_texts) > 3 else extracted_texts,
-            "processed_chunks": len(extracted_texts)  # Add for database consistency
-        }
-        upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
-        
-        # Store job summary and update database with extraction stats
-        await update_job_status_in_db(user, job_id, "extracted", 100, metadata=job_summary)
-        
-        
-    except Exception as e:
-        print(f"Error in background extraction for job {job_id}: {e}")
-        update_job_progress(job_id, "extracting", 0, f"Error: {str(e)}")
 
 async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: str, filename: str, user: AuthenticatedUser):
     """Step 1: Extract and chunk the source (NO OpenAI calls, NO credit deduction)"""
@@ -2960,145 +2458,6 @@ async def estimate_processing_cost(job_id: str, user: AuthenticatedUser = Depend
         print(f"Error estimating cost for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to estimate cost: {str(e)}")
 
-@app.post("/api/chunk/{job_id}")
-async def chunk_text(job_id: str, request: ChunkRequest, user: AuthenticatedUser = Depends(get_current_user)):
-    """Step 2: Create chunks from extracted text."""
-    try:
-        print(f"Starting chunking for job {job_id} for user {user.user_id}")
-        print(f"Chunk parameters: size={request.chunk_size}, overlap={request.overlap}")
-        # Remove redundant update_progress calls - use only update_job_progress
-        update_job_progress(job_id, "chunking", 0, "Creating semantic chunks...")
-        
-        # Download extracted text from R2 using user directory
-        extracted_content = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt")
-        if not extracted_content:
-            raise HTTPException(status_code=404, detail="Extracted text not found")
-        
-        print(f"Extracted content length: {len(extracted_content)} characters")
-        
-        # Use the chunk_size from request (characters) and convert to approximate tokens
-        # Rough conversion: 4 characters per token
-        max_tokens = min(request.chunk_size // 4, 150000)  # Cap at 150k tokens - safe margin below GPT's 200k limit
-        chunks = []
-        
-        # Split by conversation entries
-        conversations = extracted_content.split('\n\n')
-        
-        current_chunk = []
-        current_tokens = 0
-        total_conversations = len(conversations)
-        
-        # Update progress less frequently for better performance
-        update_job_progress(job_id, "chunking", 20, f"Processing {total_conversations} conversations...")
-        
-        # Update progress only every 500 conversations or at end (reduce frequency)
-        for i, conv in enumerate(conversations):
-            # Update progress less frequently for performance
-            if i % 500 == 0 or i == total_conversations - 1:
-                progress_percent = 20 + (i / total_conversations * 60)  # 20% to 80%
-                update_job_progress(job_id, "chunking", progress_percent, f"Processing conversation {i+1}/{total_conversations}")
-            
-            conv = conv.strip()
-            if not conv:
-                continue
-                
-            conv_tokens = count_tokens(conv)
-            
-            if conv_tokens > max_tokens:
-                # Save current chunk
-                if current_chunk:
-                    chunks.append('\n\n'.join(current_chunk))
-                    current_chunk = []
-                    current_tokens = 0
-                
-                # Split large conversation
-                words = conv.split(' ')
-                temp_chunk = []
-                temp_tokens = 0
-                
-                for word in words:
-                    word_tokens = count_tokens(word)
-                    if temp_tokens + word_tokens > max_tokens:
-                        if temp_chunk:
-                            chunks.append(' '.join(temp_chunk))
-                        temp_chunk = [word]
-                        temp_tokens = word_tokens
-                    else:
-                        temp_chunk.append(word)
-                        temp_tokens += word_tokens
-                
-                if temp_chunk:
-                    chunks.append(' '.join(temp_chunk))
-            
-            elif current_tokens + conv_tokens > max_tokens:
-                chunks.append('\n\n'.join(current_chunk))
-                current_chunk = [conv]
-                current_tokens = conv_tokens
-            else:
-                current_chunk.append(conv)
-                current_tokens += conv_tokens
-        
-        # Add final chunk
-        if current_chunk:
-            chunks.append('\n\n'.join(current_chunk))
-        
-        update_job_progress(job_id, "chunking", 80, f"Created {len(chunks)} chunks, saving to storage...")
-        
-        # Save chunks to R2 - reduce progress update frequency
-        chunk_info = []
-        for i, chunk in enumerate(chunks):
-            # Update progress only every 10 chunks or last chunk for better performance
-            if i % 10 == 0 or i == len(chunks) - 1:
-                progress_percent = 80 + ((i + 1) / len(chunks) * 15)  # 80% to 95%
-                update_job_progress(job_id, "chunking", progress_percent, f"Uploading chunk {i+1}/{len(chunks)}")
-            
-            upload_to_r2(f"{user.r2_directory}/{job_id}/chunk_{i+1:03d}.txt", chunk)
-            chunk_info.append({
-                "chunk_number": i + 1,
-                "token_count": count_tokens(chunk),
-                "preview": chunk[:200] + "..." if len(chunk) > 200 else chunk
-            })
-        
-        update_job_progress(job_id, "chunking", 95, "Saving chunk metadata...")
-        
-        # Save chunk metadata
-        chunk_metadata = {
-            "job_id": job_id,
-            "total_chunks": len(chunks),
-            "chunks": chunk_info,
-            "chunked_at": datetime.utcnow().isoformat(),
-            "max_tokens_per_chunk": max_tokens
-        }
-        upload_to_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", json.dumps(chunk_metadata, indent=2))
-        
-        # Update job summary - combine into single operation for efficiency
-        job_summary = {
-            "job_id": job_id,
-            "created_at": datetime.utcnow().isoformat(),
-            "status": "chunked",
-            "total_chunks": len(chunks),
-            "chunked_at": datetime.utcnow().isoformat()
-        }
-        upload_to_r2(f"{user.r2_directory}/{job_id}/job_summary.json", json.dumps(job_summary, indent=2))
-        
-        # Update job status in database with total_chunks count
-        await update_job_chunks_in_db(user, job_id, len(chunks))
-        await update_job_status_in_db(user, job_id, "chunked", 100, 
-                                     metadata={"total_chunks": len(chunks)})
-        
-        update_job_progress(job_id, "chunked", 100, f"Chunking complete! Created {len(chunks)} chunks ready for analysis", total_chunks=len(chunks))
-        
-        return {
-            "job_id": job_id,
-            "status": "chunked",
-            "total_chunks": len(chunks),
-            "chunks": chunk_info
-        }
-        
-    except Exception as e:
-        print(f" Error chunking text: {e}")
-        raise HTTPException(status_code=500, detail=f"Chunking failed: {str(e)}")
-
 @app.get("/api/payment/status")
 async def get_payment_status(user: AuthenticatedUser = Depends(get_current_user)):
     """Get user's current payment status and chunk limits"""
@@ -3261,950 +2620,8 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             "error": str(e)
         }
 
-@app.post("/api/analyze/{job_id}")
-async def analyze_chunks(job_id: str, request: AnalyzeRequest, user: AuthenticatedUser = Depends(get_current_user)):
-    """Step 3: Analyze chunks with AI - returns immediately and processes in background."""
-    try:
-        print(f"🚀 Starting analysis for job {job_id}, user: {user.user_id}")
-        print(f"📋 Requested chunks to analyze: {request.selected_chunks}")
-        if request.max_chunks:
-            print(f"🔢 Maximum chunks limit: {request.max_chunks}")
-        
-        # Quick validation checks
-        chunk_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json")
-        if not chunk_metadata_content:
-            print(f"❌ Chunk metadata not found for job {job_id}")
-            raise HTTPException(status_code=404, detail="Chunk metadata not found")
-        
-        chunk_metadata = json.loads(chunk_metadata_content)
-        total_chunks = chunk_metadata["total_chunks"]
-        
-        # Quick payment status check
-        payment_status = await get_user_payment_status(user.user_id)
-        available_credits = payment_status.get("credits_balance", 0)
-        payment_plan = payment_status.get("plan", "credits")
-        
-        # Determine which chunks to analyze
-        if request.selected_chunks:
-            selected_chunks = [chunk_idx + 1 for chunk_idx in request.selected_chunks]
-        else:
-            selected_chunks = list(range(1, total_chunks + 1))
-        
-        # Apply max_chunks limit if specified
-        if request.max_chunks and request.max_chunks > 0:
-            if len(selected_chunks) > request.max_chunks:
-                selected_chunks = selected_chunks[:request.max_chunks]
-                print(f" Limited to first {request.max_chunks} chunks: {selected_chunks}")
-        
-        chunks_to_process = len(selected_chunks)
-        
-        # Check if user has unlimited plan
-        if payment_plan == "unlimited":
-            # Unlimited plan - can process all chunks
-            chunks_to_process = len(selected_chunks)
-            print(f"🌟 Unlimited plan detected - processing all {chunks_to_process} chunks")
-        else:
-            # Credit-based plan - limit by available credits
-            chunks_to_process = min(available_credits, len(selected_chunks))
-            if payment_plan == "free" and chunks_to_process > get_new_user_credits():
-                chunks_to_process = get_new_user_credits()
-            print(f"💳 Credit plan - processing {chunks_to_process} chunks (available credits: {available_credits})")
-        
-        # Only block if credit plan with no credits
-        if chunks_to_process <= 0 and payment_plan != "unlimited":
-            return {
-                "job_id": job_id,
-                "status": "limit_reached", 
-                "message": "No credits available. Purchase credits to analyze chunks.",
-                "credits_balance": available_credits,
-                "payment_plan": payment_plan
-            }
-
-        # Check if this is a large job (3+ chunks) - use email notification instead of real-time progress
-        is_large_job = chunks_to_process >= 3
-        
-        if is_large_job:
-            # For large jobs, use email notification mode
-            estimated_time_minutes = max(5, chunks_to_process * 1.0)  # Estimate 1 minute per chunk
-            estimated_completion_time = datetime.now() + timedelta(minutes=estimated_time_minutes)
-            
-            # Update job progress to indicate email mode
-            update_job_progress(job_id, "email_mode", 0, f"Large job detected ({chunks_to_process} chunks). Processing in background. You will receive an email when complete.")
-            
-            # Start background processing with email notification
-            asyncio.create_task(process_analysis_background(
-                job_id, user, selected_chunks[:chunks_to_process], 
-                payment_status, chunk_metadata, email_on_completion=True, upload_method=request.upload_method
-            ))
-            
-            return {
-                "job_id": job_id,
-                "status": "email_mode",
-                "message": f"Large job ({chunks_to_process} chunks) started. You will receive an email when analysis is complete.",
-                "chunks_to_process": chunks_to_process,
-                "estimated_time_minutes": estimated_time_minutes,
-                "estimated_completion_time": estimated_completion_time.isoformat(),
-                "total_chunks": total_chunks,
-                "email_notification": True
-            }
-        else:
-            # For smaller jobs, use real-time progress tracking
-            update_job_progress(job_id, "analyzing", 0, "Starting analysis...")
-            
-            # Start background processing - don't await it!
-            asyncio.create_task(process_analysis_background(
-                job_id, user, selected_chunks[:chunks_to_process], 
-                payment_status, chunk_metadata, email_on_completion=False, upload_method=request.upload_method
-            ))
-            
-            # Return immediately so client can start polling for progress
-            estimated_time_minutes = max(1, (chunks_to_process / 3) * 1.2)
-            
-            return {
-                "job_id": job_id,
-                "status": "started",
-                "message": f"Analysis started for {chunks_to_process} chunks. Use progress polling to track status.",
-                "chunks_to_process": chunks_to_process,
-                "estimated_time_minutes": estimated_time_minutes,
-                "total_chunks": total_chunks,
-                "email_notification": False
-            }
-        
-    except Exception as e:
-        print(f"❌ Error starting analysis: {e}")
-        update_job_progress(job_id, "error", 0, f"Failed to start: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to start analysis: {str(e)}")
-
 # Global job cancellation tracking
 cancelled_jobs = set()
-
-async def process_analysis_background(job_id: str, user: AuthenticatedUser, selected_chunks: List[int], payment_status: dict, chunk_metadata: dict, email_on_completion: bool = False, upload_method: str = None):
-    """Background task for processing analysis with optimized parallel processing and caching."""
-    try:
-        chunks_to_process = len(selected_chunks)
-        total_chunks = chunk_metadata["total_chunks"]
-        
-        # Check if job was cancelled before starting
-        if job_id in cancelled_jobs:
-            print(f"🚫 Job {job_id} was cancelled before analysis started")
-            update_job_progress(job_id, "cancelled", 0, "Job was cancelled before processing started")
-            await update_job_status_in_db(user, job_id, "cancelled", 0, "Cancelled by user before processing")
-            cancelled_jobs.discard(job_id)
-            return
-        
-        # Update database status
-        await update_job_status_in_db(user, job_id, "analyzing", 5)
-        
-        # Get OpenAI client
-        update_job_progress(job_id, "analyzing", 10, "Initializing AI client...")
-        print(f"🔧 Initializing OpenAI client for job {job_id}")
-        openai_client = get_openai_client()
-        print(f"✅ OpenAI client initialized successfully for job {job_id}")
-        
-        # Determine analysis type based on upload method from frontend
-        # 'url' = user used ChatGPT URL tab (single conversation analysis for 1 chunk)
-        # 'files' = user used Upload Export tab (always full analysis, even for 1 chunk)
-        is_url_extraction = upload_method == 'url'
-        
-        # Check if this is a single conversation for different analysis style
-        # Only use single conversation analysis for URL extractions with 1 chunk
-        # For file uploads (Upload Export tab), always use multi-conversation analysis
-        is_single_conversation = chunks_to_process == 1 and total_chunks == 1 and is_url_extraction
-        print(f"📊 Job {job_id}: Processing {chunks_to_process} chunks")
-        print(f"📊 Upload method: {upload_method or 'unknown'} ({'URL extraction' if is_url_extraction else 'File upload'})")
-        print(f"📊 Analysis type: {'Single conversation' if is_single_conversation else 'Multi-conversation/full dataset'}")
-
-        if is_single_conversation:
-            # Expanded single-conversation analysis prompt: request structured + narrative output and prioritize specifics
-            system_prompt = """You are an expert conversation analyst. You will analyze a single chat conversation and produce two complementary outputs:
-
-1) A machine-friendly, structured JSON object containing exhaustive extracted specifics, metadata and clear, discrete facts.
-2) A human-readable narrative that tells the story of the conversation and highlights the most important practical takeaways.
-
-PRIORITY:
-- Prioritize extracting concrete specifics (names, dates, timestamps, exact quoted passages, decisions, action items, configuration values, numeric values, links, code snippets, settings) over broad personality inferences.
-- If details are present in the chat (e.g., versions, config flags, error messages, email addresses, names, project identifiers), capture them verbatim and include source pointers (message index or short quote).
-
-REQUIRED METADATA (include if available):
-- platform/source (ChatGPT/Claude/Gemini/etc.), conversation id or shared link, participants and their roles (user / assistant / system), total message count, approximate start/end timestamps, message indices for quoted items.
-
-STRUCTURED OUTPUT (JSON):
-Return a top-level JSON object with the following keys. Use these exact keys and types when possible.
-
-{
-    "metadata": { },
-    "entities": { },
-    "facts": [],
-    "decisions": [],
-    "action_items": [],
-    "configuration_values": [],
-    "quotes": [],
-    "timeline": [],
-    "sentiment_summary": {},
-    "uncertainties": [],
-    "suggested_followups": [],
-    "summary_1_sentence": "",
-    "summary_3_bullets": ["", "", ""]
-}
-
-GUIDELINES FOR STRUCTURED FIELDS:
-- For every fact, include a confidence score (high/medium/low) and the source reference (message index or a short verbatim quote). If exact timestamps or message indices are not available, indicate proximity (e.g., "early", "middle", "end").
-- Preserve numeric values and code-like strings exactly as they appear (do not normalize unless a clear conversion is requested).
-- For entities, include canonical forms where possible and list aliases.
-
-NARRATIVE OUTPUT:
-- After the JSON object, produce a clear, human-readable narrative (2-6 short paragraphs) that tells the conversation story: context, goals, key moments, resolutions, and recommended next steps.
-- Include 2-4 short quoted excerpts (verbatim) that are most representative or critical, with speaker attribution and index.
-- Keep tone neutral, precise, and action-oriented. Avoid speculative judgments unless explicitly supported by clear evidence in the chat, and label any speculative interpretation as such.
-
-LENGTH & COMPLETENESS:
-- Be thorough: the structured JSON should aim to include every discrete, extractable piece of information present in the conversation. If the conversation is long, expand the output accordingly—do not compress meaningful specifics just to keep the summary short.
-- If a field would be empty, return an empty array or null rather than omitting the key.
-
-OUTPUT FORMAT RULES:
-- First output the JSON block only (no surrounding commentary) so it can be parsed programmatically.
-- After the JSON block, output a human-readable narrative separated by a clear divider line (e.g., "---\nNarrative:\n").
-
-PRIVACY & SAFETY:
-- Redact or mark as sensitive any content that appears to be passwords, API keys, or tokens. Indicate in the JSON when such items were found and provide the exact location (message index) but do not include full secret values—replace with "<REDACTED>".
-
-FINAL NOTE:
-- Remember: prioritize extracting exact specifics and actionable items. The narrative is important, but the structured JSON is the priority for downstream consumption. Provide both in full.
-"""
-        else:
-            # Comprehensive analysis style for multiple conversations/chunks
-            system_prompt = """You are an expert data analyst specializing create context about people, their activities, interests, projects, studies and more from conversation data. Your task is to analyze conversation data and extract ALL unique facts to build a comprehensive Universal Context Pack.
-
-ANALYSIS FRAMEWORK:
-Provide detailed analysis in these six primary categories:
-
-1. PERSONAL PROFILE ANALYSIS
-   - Demographics, preferences, goals, values, life context, personality traits, health
-
-2. BEHAVIORAL PATTERNS DISCOVERY  
-   - Communication style, problem-solving approach, learning patterns, decision-making, stress response, work habits
-
-3. KNOWLEDGE DOMAINS MAPPING
-   - Technical skills, professional expertise, academic background, hobby knowledge, soft skills
-
-4. PROJECT PATTERNS IDENTIFICATION
-   - Workflow preferences, tool usage, collaboration style, quality standards, resource management
-
-5. TIMELINE EVOLUTION TRACKING
-   - Skill development, career milestones, interest evolution, goal achievement over time
-
-6. INTERACTION INSIGHTS ANALYSIS
-   - Communication preferences, response styles, engagement patterns, feedback reception
-
-EXTRACTION REQUIREMENTS:
-- Extract EVERY unique fact, preference, skill, and behavioral pattern with meticulous attention to detail
-- Cross-reference information across categories for comprehensive understanding
-- Preserve temporal context and evolution indicators
-- Look for recurring themes and developmental patterns
-- Identify unique characteristics that distinguish this individual
-
-OUTPUT FORMAT:
-Structure your analysis clearly with detailed subsections for each category. Use bullet points for discrete facts and longer paragraphs for complex patterns. Always cite specific examples from the conversation data to support your analysis.
-
-The conversation data you will analyze follows this message. Provide your comprehensive Universal Context Pack analysis."""
-        
-        # Adaptive batch size for optimal performance and OpenAI rate limits
-        # Check average chunk size to avoid TPM (tokens per minute) limits
-        
-        # Get chunk metadata to estimate token usage
-        chunks_metadata_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", silent_404=True)
-        chunk_stats = json.loads(chunks_metadata_content) if chunks_metadata_content else {}
-        avg_chunk_chars = chunk_stats.get("average_size", 500000)  # Default estimate
-        estimated_tokens_per_chunk = avg_chunk_chars // 4  # Rough estimate: 4 chars per token
-        
-        # OpenAI gpt-5-nano has 200k TPM limit
-        max_tpm = 180000  # Use 180k to leave buffer
-        
-        if estimated_tokens_per_chunk > 100000:  # Very large chunks (>100k tokens each)
-            batch_size = 1  # Process one at a time to avoid rate limits
-            print(f"🔍 Large chunks detected (~{estimated_tokens_per_chunk:,} tokens each) - using batch size 1 to avoid rate limits")
-        elif estimated_tokens_per_chunk > 50000:  # Large chunks (>50k tokens each)
-            batch_size = min(2, max_tpm // estimated_tokens_per_chunk)  # Calculate safe batch size
-            print(f"🔍 Medium-large chunks detected (~{estimated_tokens_per_chunk:,} tokens each) - using batch size {batch_size}")
-        elif chunks_to_process <= 2:
-            batch_size = 2  # Small jobs can handle 2 parallel chunks
-        elif chunks_to_process <= 15:
-            batch_size = 2  # Medium jobs - conservative 2 parallel  
-        else:
-            batch_size = 2  # Large jobs - keep it safe but faster than sequential
-        
-        print(f"🚀 Using parallel processing with batch size {batch_size} for {chunks_to_process} chunks (~{estimated_tokens_per_chunk:,} tokens each)")
-        
-        # Send keep-alive every 30 seconds to prevent timeouts
-        last_keepalive = time.time()
-        
-        results = []
-        total_input_tokens = 0
-        total_output_tokens = 0
-        total_cached_tokens = 0
-        total_cost = 0.0
-        failed_chunks = []
-        
-        async def process_single_chunk(chunk_num: int, idx: int, total_chunks: int):
-            """Process a single chunk with full error handling and performance optimization"""
-            try:
-                # Check for cancellation before processing each chunk
-                if job_id in cancelled_jobs:
-                    return {"cancelled": True, "chunk_num": chunk_num}
-                
-                print(f"🔄 Chunk {chunk_num} ({idx+1}/{total_chunks})")
-                chunk_key = f"{user.r2_directory}/{job_id}/chunk_{chunk_num:03d}.txt"
-                
-                chunk_content = download_from_r2(chunk_key)
-                
-                if not chunk_content:
-                    print(f"❌ Chunk {chunk_num} content not found at {chunk_key}")
-                    return {"error": f"Chunk {chunk_num} not found", "chunk_num": chunk_num}
-                
-                print(f"✅ Chunk {chunk_num}: {len(chunk_content)} chars")
-                
-                # Process with OpenAI using full content (no truncation) and optimized parameters
-                chunk_start_time = time.time()
-                
-                # Minimal delay to prevent rate limiting when processing multiple chunks
-                if idx > 0:  # Don't delay the first chunk
-                    await asyncio.sleep(0.1)  # Reduced from 500ms to 100ms
-                
-                try:
-                    ai_response = await openai_call_with_retry(
-                        openai_client,
-                        job_id=job_id,  # Pass job_id for cancellation checking
-                        model="gpt-5-nano-2025-08-07",  # Primary model for UCP analysis
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": f"Conversation data to analyze:\n\n{chunk_content}"}  # Full content, no truncation
-                        ],
-                        # Note: temperature parameter removed - gpt-5-nano-2025-08-07 only supports default (1)
-                        max_completion_tokens=15000,  # Allow comprehensive analysis
-                        timeout=120  # 2 minute timeout per chunk
-                    )
-                except Exception as openai_error:
-                    print(f"❌ OpenAI API error for chunk {chunk_num}: {openai_error}")
-                    print(f"🔍 Error type: {type(openai_error).__name__}")
-                    print(f"📋 Error details: {str(openai_error)}")
-                    
-                    # Check for specific error types
-                    if "content_policy" in str(openai_error).lower():
-                        print(f"🚫 Content policy violation detected for chunk {chunk_num}")
-                        return {
-                            "error": "content_policy_violation", 
-                            "chunk_num": chunk_num,
-                            "message": "Content violates OpenAI's usage policies"
-                        }
-                    elif "context_length" in str(openai_error).lower():
-                        print(f"📏 Context length exceeded for chunk {chunk_num}")
-                        return {
-                            "error": "context_length_exceeded", 
-                            "chunk_num": chunk_num,
-                            "message": f"Content too long for processing ({len(chunk_content)} chars)"
-                        }
-                    else:
-                        raise openai_error  # Re-raise to be caught by outer exception handler
-                
-                chunk_duration = time.time() - chunk_start_time
-                
-                print(f"✅ Chunk {chunk_num} done ({chunk_duration:.1f}s)")
-                
-                # Extract usage data for performance tracking
-                usage = ai_response.usage
-                input_tokens = usage.prompt_tokens
-                output_tokens = usage.completion_tokens
-                
-                # Try to get cached token info (may not be available in all models)
-                cached_tokens = 0
-                try:
-                    if hasattr(usage, 'prompt_tokens_details') and hasattr(usage.prompt_tokens_details, 'cached_tokens'):
-                        cached_tokens = usage.prompt_tokens_details.cached_tokens
-                except:
-                    pass
-                
-                cache_hit_rate = (cached_tokens / input_tokens * 100) if input_tokens > 0 else 0
-                
-                print(f"📊 Tokens: {output_tokens} out, {input_tokens} in")
-                if cached_tokens > 0:
-                    print(f"⚡ Cache: {cached_tokens}/{input_tokens} ({cache_hit_rate:.1f}%)")
-                
-                # Save to R2
-                # Calculate cost (gpt-5-nano-2025-08-07 pricing)
-                non_cached_input_tokens = input_tokens - cached_tokens
-                input_cost = (non_cached_input_tokens / 1_000_000) * 0.050  # $0.050 per 1M input tokens
-                cached_cost = (cached_tokens / 1_000_000) * 0.0125  # 75% discount on cached tokens
-                output_cost = (output_tokens / 1_000_000) * 0.400  # $0.400 per 1M output tokens
-                chunk_cost = input_cost + cached_cost + output_cost
-                
-                # Save individual chunk result to R2 for debugging and caching
-                chunk_result = {
-                    "chunk_number": chunk_num,
-                    "analysis": ai_response.choices[0].message.content,
-                    "tokens": {
-                        "input": input_tokens,
-                        "output": output_tokens,
-                        "cached": cached_tokens,
-                        "cache_hit_rate": round(cache_hit_rate, 1)
-                    },
-                    "cost": round(chunk_cost, 6),
-                    "processed_at": datetime.utcnow().isoformat()
-                }
-                
-                # Save individual result to R2 for incremental progress
-                result_key = f"{user.r2_directory}/{job_id}/result_{chunk_num:03d}.json"
-                upload_to_r2(result_key, json.dumps(chunk_result, indent=2))
-                
-                return chunk_result
-                
-            except Exception as e:
-                print(f"❌ Error processing chunk {chunk_num}: {e}")
-                error_str = str(e).lower()
-                
-                # Handle rate limits vs quota issues differently
-                if "rate limit reached" in error_str and "429" in str(e):
-                    # This is a rate limit - should be retried
-                    wait_time = 30  # Default wait time
-                    if "try again in" in error_str:
-                        try:
-                            # Extract wait time from error message
-                            import re
-                            match = re.search(r'try again in (\d+(?:\.\d+)?)', error_str)
-                            if match:
-                                wait_time = max(int(float(match.group(1)) + 1), 30)  # Add 1 second buffer, minimum 30s
-                        except:
-                            pass
-                    
-                    return {
-                        "error": "rate_limit", 
-                        "chunk_num": chunk_num,
-                        "wait_time": wait_time,
-                        "message": f"Rate limit reached. Should retry in {wait_time} seconds."
-                    }
-                elif "quota" in error_str or "insufficient_quota" in error_str:
-                    # This is a quota/billing issue - should fail
-                    return {
-                        "error": "quota_exceeded", 
-                        "chunk_num": chunk_num,
-                        "message": "OpenAI API quota exceeded. Please check your billing."
-                    }
-                return {"error": str(e), "chunk_num": chunk_num}
-        
-        # For large chunks (>150k tokens), process sequentially with rate limiting
-        # to avoid hitting OpenAI's 200k TPM limit
-        if estimated_tokens_per_chunk > 150000:
-            batch_size = 1
-            print(f"⚠️ Large chunks detected (~{estimated_tokens_per_chunk:,} tokens). Using sequential processing with rate limiting.")
-        
-        # Process chunks in optimized parallel batches
-        update_job_progress(job_id, "analyzing", 15, f"Processing {chunks_to_process} chunks in batches of {batch_size}...")
-        
-        # Split chunks into batches for parallel processing
-        total_batches = (chunks_to_process + batch_size - 1) // batch_size
-        print(f"🚀 Starting batch processing: {total_batches} batches of {batch_size} chunks each")
-        
-        for batch_start in range(0, chunks_to_process, batch_size):
-            # Rate limiting for large chunks to avoid TPM limits
-            if batch_start > 0 and estimated_tokens_per_chunk > 150000:
-                print(f"⏱️ Rate limiting: waiting 3 seconds before next chunk...")
-                await asyncio.sleep(3)
-            
-            # Check for cancellation before each batch
-            if job_id in cancelled_jobs:
-                chunks_completed = len(results)
-                print(f"🚫 Job {job_id} cancelled after processing {chunks_completed} chunks")
-                
-                # Deduct credits if 10+ chunks were processed
-                new_balance = await handle_cancellation_with_credit_deduction(user.user_id, job_id, chunks_completed)
-                
-                cancellation_message = f"Analysis cancelled by user after {chunks_completed} chunks processed"
-                if chunks_completed >= 10:
-                    if new_balance is not None:
-                        cancellation_message += f". {chunks_completed} credits deducted. New balance: {new_balance}"
-                    else:
-                        cancellation_message += f". Credit deduction failed"
-                
-                update_job_progress(job_id, "cancelled", 0, cancellation_message)
-                await update_job_status_in_db(user, job_id, "cancelled", 0, cancellation_message, 
-                                             metadata={"processed_chunks": chunks_completed})
-                cancelled_jobs.discard(job_id)
-                return
-                
-            batch_end = min(batch_start + batch_size, chunks_to_process)
-            batch_chunks = selected_chunks[batch_start:batch_end]
-            batch_num = batch_start//batch_size + 1
-            
-            print(f"� ===== STARTING BATCH {batch_num}/{total_batches} =====")
-            print(f"�🔄 STARTING BATCH {batch_num}/{total_batches}: Processing chunks {batch_chunks}")
-            print(f"🚀 ===== BATCH {batch_num} INITIATED =====")
-            update_job_progress(job_id, "analyzing", 15 + int((batch_start / chunks_to_process) * 70), 
-                              f"Batch {batch_num}/{total_batches}: Starting chunks {batch_chunks}")
-            
-            # Create tasks for parallel processing of this batch
-            tasks = []
-            for i, chunk_num in enumerate(batch_chunks):
-                global_idx = batch_start + i
-                task = asyncio.create_task(process_single_chunk(chunk_num, global_idx, chunks_to_process))
-                tasks.append(task)
-            
-            batch_start_time = time.time()
-            
-            # Wait for all tasks in this batch to complete with timeout
-            try:
-                batch_results = await asyncio.wait_for(
-                    asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=180  # 3 minute timeout per batch (reduced from 5 minutes)
-                )
-                batch_duration = time.time() - batch_start_time
-                print(f"✅ Batch {batch_num} completed in {batch_duration:.1f}s")
-                
-                # Adaptive batch sizing: if batch took too long, reduce future batch sizes
-                avg_time_per_chunk = batch_duration / len(batch_chunks)
-                if avg_time_per_chunk > 90 and batch_size > 1:  # If over 1.5 minutes per chunk
-                    print(f"⚠️ Batch performance degraded ({avg_time_per_chunk:.1f}s per chunk), consider reducing batch size")
-                elif avg_time_per_chunk < 45 and batch_size < 3:  # If under 45s per chunk
-                    print(f"🚀 Good batch performance ({avg_time_per_chunk:.1f}s per chunk), could increase batch size")
-                    
-            except asyncio.TimeoutError:
-                batch_duration = time.time() - batch_start_time
-                print(f"❌ Batch {batch_num} timed out after {batch_duration:.1f} seconds")
-                for task in tasks:
-                    task.cancel()
-                failed_chunks.extend([{"error": "Batch timeout", "chunk_num": chunk} for chunk in batch_chunks])
-                continue
-            
-            # Process batch results
-            successful_in_batch = 0
-            failed_in_batch = 0
-            for i, result in enumerate(batch_results):
-                chunk_num = batch_chunks[i] if i < len(batch_chunks) else "unknown"
-                
-                if isinstance(result, Exception):
-                    print(f"❌ Batch {batch_num} - Chunk {chunk_num} failed with exception: {result}")
-                    failed_chunks.append({"error": str(result), "chunk_num": chunk_num})
-                    failed_in_batch += 1
-                    continue
-                
-                if isinstance(result, dict):
-                    if result.get("cancelled"):
-                        print(f"🚫 Batch {batch_num} - Chunk {chunk_num} was cancelled")
-                        return
-                    elif result.get("error") == "quota_exceeded":
-                        print(f"💳 OpenAI quota exceeded during batch {batch_num}, chunk {chunk_num} - stopping analysis")
-                        # Immediately stop processing on quota error
-                        update_job_progress(job_id, "error", 0, "OpenAI API quota exceeded. Please check your billing.")
-                        await update_job_status_in_db(user, job_id, "failed", 0, "API quota exceeded")
-                        return
-                    elif result.get("error") == "rate_limit":
-                        wait_time = result.get("wait_time", 60)
-                        print(f"⏳ Rate limit hit during batch {batch_num}, chunk {chunk_num} - waiting {wait_time}s before continuing")
-                        update_job_progress(job_id, "analyzing", 
-                                          int((len(results) / chunks_to_process) * 100), 
-                                          f"Rate limit reached. Waiting {wait_time}s before continuing...")
-                        
-                        # Wait for the specified time, then continue processing
-                        await asyncio.sleep(wait_time)
-                        
-                        # Add this chunk back to be retried in the next batch
-                        print(f"🔄 Retrying chunk {chunk_num} after rate limit wait")
-                        # For now, mark as failed and continue - we could implement retry logic here
-                        failed_chunks.append(result)
-                        failed_in_batch += 1
-                    elif result.get("error"):
-                        print(f"❌ Batch {batch_num} - Chunk {chunk_num} failed: {result.get('error')}")
-                        failed_chunks.append(result)
-                        failed_in_batch += 1
-                    else:
-                        results.append(result)
-                        successful_in_batch += 1
-                        # Update performance counters
-                        if "tokens" in result:
-                            total_input_tokens += result["tokens"]["input"]
-                            total_output_tokens += result["tokens"]["output"]
-                            total_cached_tokens += result["tokens"]["cached"]
-                        if "cost" in result:
-                            total_cost += result["cost"]
-            
-            print(f"📊 Batch {batch_num}: {successful_in_batch} ok, {failed_in_batch} failed")
-            
-            # Update progress after each batch
-            progress_percent = 15 + int((batch_end / chunks_to_process) * 70)
-            success_rate = len(results) / (len(results) + len(failed_chunks)) * 100 if (results or failed_chunks) else 100
-            update_job_progress(job_id, "analyzing", progress_percent, 
-                              f"Batch {batch_num}/{total_batches} complete - {len(results)}/{chunks_to_process} chunks processed ({success_rate:.1f}% success)")
-            
-            print(f"Overall progress: {len(results)}/{chunks_to_process} chunks completed ({progress_percent}%)")
-            
-            # Send keep-alive every 30 seconds
-            current_time = time.time()
-            if current_time - last_keepalive > 30:
-                cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
-                print(f"💓 Keep-alive: {len(results)}/{chunks_to_process} processed, cache hit rate: {cache_hit_rate:.1f}%")
-                update_job_progress(job_id, "analyzing", progress_percent, 
-                                  f"Keep-alive: {len(results)}/{chunks_to_process} processed, {cache_hit_rate:.1f}% cache hit rate")
-                last_keepalive = current_time
-            
-            # Minimal delay between batches to allow for cancellation checks
-            if batch_end < chunks_to_process:
-                print(f"⏸️  Brief pause before starting batch {batch_num + 1}...")
-                await asyncio.sleep(0.2)  # Reduced from 1 second to 200ms for speed
-        
-        # Final cancellation check before saving results
-        if job_id in cancelled_jobs:
-            chunks_completed = len(results)
-            print(f"🚫 Job {job_id} cancelled before saving results after processing {chunks_completed} chunks")
-            
-            # Deduct credits if 10+ chunks were processed
-            new_balance = await handle_cancellation_with_credit_deduction(user.user_id, job_id, chunks_completed)
-            
-            cancellation_message = f"Cancelled before saving results after {chunks_completed} chunks processed"
-            if chunks_completed >= 10:
-                if new_balance is not None:
-                    cancellation_message += f". {chunks_completed} credits deducted. New balance: {new_balance}"
-                else:
-                    cancellation_message += f". Credit deduction failed"
-            
-            update_job_progress(job_id, "cancelled", 0, cancellation_message)
-            await update_job_status_in_db(user, job_id, "cancelled", 0, cancellation_message,
-                                         metadata={"processed_chunks": chunks_completed})
-            cancelled_jobs.discard(job_id)
-            return
-        
-        if not results:
-            update_job_progress(job_id, "error", 0, "No chunks could be processed successfully")
-            await update_job_status_in_db(user, job_id, "failed", 0, "All chunks failed to process")
-            return
-        
-        # Save comprehensive final analysis with performance metrics
-        update_job_progress(job_id, "analyzing", 90, "Saving comprehensive analysis results...")
-        
-        # Calculate performance metrics
-        cache_hit_rate = (total_cached_tokens / total_input_tokens * 100) if total_input_tokens > 0 else 0
-        cost_savings = (total_cached_tokens / 1_000_000) * 0.1125  # 75% discount savings
-        
-        # Don't show misleading success rate if limited by free plan
-        if len(results) == get_new_user_credits() and chunks_to_process > get_new_user_credits():
-            success_rate = 100.0  # All requested chunks within limit were processed
-        else:
-            success_rate = len(results) / chunks_to_process * 100
-        
-        final_analysis = {
-                "job_id": job_id,
-                "user_id": user.user_id,
-                "analysis_results": results,
-                "total_chunks_processed": len(results),
-                "chunks_requested": len(selected_chunks) if len(results) != get_new_user_credits() or chunks_to_process <= get_new_user_credits() else len(results),  # Hide original total if limited by credits
-                "failed_chunks": failed_chunks,
-                "performance_metrics": {
-                    "total_input_tokens": total_input_tokens,
-                    "total_output_tokens": total_output_tokens,
-                    "total_cached_tokens": total_cached_tokens,
-                    "cache_hit_rate": round(cache_hit_rate, 1),
-                    "cost_savings_from_cache": round(cost_savings, 4),
-                    "total_cost": round(total_cost, 4),
-                    "success_rate": round(success_rate, 1),
-                    "batch_size_used": batch_size,
-                    "parallel_processing": True,
-                    "processing_time_seconds": int(time.time() - last_keepalive)
-                },
-                "processed_at": datetime.utcnow().isoformat(),
-                "metadata": chunk_metadata
-            }
-        
-        # Upload comprehensive analysis to R2
-        analysis_json = json.dumps(final_analysis, indent=2)
-        upload_to_r2(f"{user.r2_directory}/{job_id}/analysis_results.json", analysis_json)
-        
-        # NOTE: Do NOT upload summary.json yet - wait until everything is complete
-        # The frontend checks for summary.json to determine completion
-        
-        # Create complete UCP text file for download
-        try:
-            # Use different format for single conversation vs multiple chunks
-            if is_single_conversation:
-                complete_text = f"""CONVERSATION SUMMARY
-Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
-Job ID: {job_id}
-User ID: {user.user_id}
-
-PROCESSING DETAILS:
-==================
-Processing Cost: ${total_cost:.4f}
-Cache Hit Rate: {cache_hit_rate:.1f}%
-Input Tokens: {total_input_tokens:,}
-Output Tokens: {total_output_tokens:,}
-
-CONVERSATION ANALYSIS:
-=====================
-
-"""
-                # For single conversations, just add the analysis content directly
-                if results and len(results) > 0:
-                    analysis_content = results[0].get('analysis', 'No analysis content found')
-                    complete_text += analysis_content + "\n\n"
-                else:
-                    complete_text += "[No analysis content available]\n\n"
-                    
-                complete_text += f"""
-Generated by Universal Context Pack (UCP)
-Optimized for Single Conversation Analysis
-"""
-            else:
-                # Multiple chunks - use the comprehensive format
-                # Don't show total chunks if only limited credits were processed (free plan limitation)
-                if len(results) == get_new_user_credits() and chunks_to_process > get_new_user_credits():
-                    chunks_display = f"{len(results)}"
-                else:
-                    chunks_display = f"{len(results)}/{chunks_to_process}"
-                
-                complete_text = f"""UNIVERSAL CONTEXT PACK
-Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
-Job ID: {job_id}
-User ID: {user.user_id}
-
-ANALYSIS SUMMARY:
-================
-Total Chunks Processed: {chunks_display}
-Success Rate: {success_rate:.1f}%
-Processing Cost: ${total_cost:.4f}
-Cache Hit Rate: {cache_hit_rate:.1f}%
-
-DETAILED ANALYSIS:
-==================
-
-"""
-                
-                print(f"📝 Creating complete UCP with {len(results)} chunk results")
-                
-                # Add each chunk's analysis in readable format
-                for i, result in enumerate(results):
-                    chunk_num = result.get('chunk_number', i + 1)
-                    analysis_content = result.get('analysis', 'No analysis content found')
-                    
-                    complete_text += f"CHUNK {chunk_num} ANALYSIS:\n"
-                    complete_text += "=" * 50 + "\n"
-                    
-                    # Ensure we have the actual analysis content
-                    if analysis_content and analysis_content != 'No analysis content found':
-                        complete_text += analysis_content + "\n\n"
-                        print(f"📄 Added chunk {chunk_num} analysis ({len(analysis_content)} characters)")
-                    else:
-                        complete_text += f"[Analysis content not available for chunk {chunk_num}]\n\n"
-                        print(f"⚠️ No analysis content found for chunk {chunk_num}")
-                        
-                # Add failed chunks info if any
-                if failed_chunks:
-                    complete_text += f"\nFAILED CHUNKS:\n"
-                    complete_text += "=" * 50 + "\n"
-                    for failed in failed_chunks:
-                        chunk_num = failed.get('chunk_num', 'unknown')
-                        error = failed.get('error', 'Unknown error')
-                        complete_text += f"Chunk {chunk_num}: {error}\n"
-                    complete_text += "\n"
-                        
-                complete_text += f"""
-METADATA:
-=========
-Total Input Tokens: {total_input_tokens:,}
-Total Output Tokens: {total_output_tokens:,}
-Cached Tokens: {total_cached_tokens:,}
-Processing Time: {int(time.time() - last_keepalive)} seconds
-Batch Size Used: {batch_size}
-Parallel Processing: Yes
-
-Generated by Universal Context Pack (UCP)
-"""
-            
-            # Upload complete text file
-            upload_to_r2(f"{user.r2_directory}/{job_id}/complete_ucp.txt", complete_text)
-            print(f"📄 Complete UCP text file created: complete_ucp.txt ({len(complete_text)} characters)")
-            
-            # Create ultra-compact version (~28k tokens for very large models)
-            ultra_compact_text = complete_text[:112000]  # ~28k tokens
-            if len(complete_text) > 112000:
-                ultra_compact_text += "\n\n[...CONTENT TRUNCATED FOR ULTRA-COMPACT VERSION...]\n"
-                ultra_compact_text += f"\nFull version contains {len(complete_text)} characters. This ultra-compact version shows the first ~28k tokens."
-            upload_to_r2(f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt", ultra_compact_text)
-            print(f"Ultra-compact UCP created: {len(ultra_compact_text)} characters")
-            
-            # Create standard version (~100k tokens for most AI models)
-            standard_text = complete_text[:400000]  # ~100k tokens
-            if len(complete_text) > 400000:
-                standard_text += "\n\n[...CONTENT TRUNCATED FOR STANDARD VERSION...]\n"
-                standard_text += f"\nFull version contains {len(complete_text)} characters. This standard version shows the first ~100k tokens."
-            upload_to_r2(f"{user.r2_directory}/{job_id}/standard_ucp.txt", standard_text)
-            print(f"📄 Standard UCP created: {len(standard_text)} characters")
-            
-            # Create chunked version for very large contexts
-            print(f"📄 Creating chunked UCP...")
-            chunk_size = 300000  # ~75k tokens per chunk
-            chunks = []
-            for i in range(0, len(complete_text), chunk_size):
-                chunk = complete_text[i:i + chunk_size]
-                chunks.append(chunk)
-            
-            # Create chunked index
-            chunked_index = f"""UNIVERSAL CONTEXT PACK - CHUNKED VERSION
-=============================================
-
-This pack has been split into {len(chunks)} chunks for easier processing.
-
-USAGE INSTRUCTIONS:
-- Load chunks sequentially: chunked_ucp_part_1.txt, chunked_ucp_part_2.txt, etc.
-- Each chunk contains ~75k tokens
-- Total content: {len(complete_text)} characters across {len(chunks)} chunks
-
-CHUNK OVERVIEW:
-"""
-            for i, chunk in enumerate(chunks, 1):
-                chunked_index += f"Part {i}: {len(chunk)} characters (~{len(chunk)//4} tokens)\n"
-            
-            chunked_index += f"\nGenerated by Universal Context Pack (UCP)"
-            upload_to_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_index.txt", chunked_index)
-            
-            # Upload individual chunk parts
-            for i, chunk in enumerate(chunks, 1):
-                chunk_content = f"""UNIVERSAL CONTEXT PACK - PART {i} of {len(chunks)}
-================================================
-
-{chunk}
-
-[End of Part {i}]
-"""
-                upload_to_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{i}.txt", chunk_content)
-            
-            print(f"📄 Chunked UCP created: {len(chunks)} parts, index file, and individual chunks")
-            
-        except Exception as e:
-            print(f"⚠️ Failed to create complete UCP text file: {e}")
-            import traceback
-            print(f"📍 Traceback: {traceback.format_exc()}")
-            # Don't fail the entire analysis if complete file creation fails
-        
-        # IMPORTANT: Create pack record in Supabase BEFORE updating final status
-        # This ensures pack is available when frontend polls for completion
-        print(f"📦 Creating pack record in database for job {job_id}...")
-        try:
-            pack_name = f"UCP-{job_id[:8]}"
-            # Only create pack if we have actual results
-            if len(results) > 0:
-                pack_record = await create_pack_in_db(
-                    user=user,
-                    job_id=job_id,
-                    pack_name=pack_name,
-                    r2_pack_path=f"{user.r2_directory}/{job_id}/",
-                    extraction_stats=chunk_metadata,
-                    analysis_stats={
-                        "total_input_tokens": total_input_tokens,
-                        "total_output_tokens": total_output_tokens,
-                        "total_cost": total_cost,
-                        "processed_chunks": len(results),
-                        "success_rate": success_rate,
-                        "cache_hit_rate": cache_hit_rate
-                    }
-                )
-                if pack_record:
-                    print(f"✅ Pack record created in Supabase for job {job_id}")
-                else:
-                    print(f"⚠️ Pack record creation returned None for job {job_id}")
-            else:
-                print(f"⚠️ Skipping pack creation - no results to pack for job {job_id}")
-        except Exception as pack_error:
-            print(f"⚠️ Failed to create pack record for job {job_id}: {pack_error}")
-            import traceback
-            print(f"📍 Pack creation traceback: {traceback.format_exc()}")
-            # Don't fail the entire analysis if pack creation fails
-        
-        # Update job status with completion AFTER pack is created
-        cache_msg = f"with {cache_hit_rate:.1f}% cache hit rate" if cache_hit_rate > 0 else ""
-        completion_message = f"Universal Context Pack created! Processed {len(results)}/{chunks_to_process} chunks {cache_msg}. Cost: ${total_cost:.4f}"
-        
-        # Update both progress tracking and database status
-        update_job_progress(job_id, "completed", 100, completion_message)
-        await update_job_status_in_db(user, job_id, "analyzed", 100, 
-                                     metadata={"processed_chunks": len(results)})
-        
-        # FINAL STEP: Upload summary.json to signal completion to frontend
-        # This must be the very last step so frontend knows everything is ready
-        print(f"📤 Uploading summary.json to signal completion...")
-        upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", analysis_json)
-        print(f"✅ Summary.json uploaded - frontend will now detect completion")
-        
-        # Also upload a completion signal file for additional frontend detection
-        completion_signal = {
-            "status": "completed",
-            "job_id": job_id,
-            "completion_time": datetime.utcnow().isoformat(),
-            "message": completion_message,
-            "redirect_to": "/packs",
-            "chunks_processed": len(results),
-            "total_chunks": chunks_to_process,
-            "email_sent": email_on_completion
-        }
-        upload_to_r2(f"{user.r2_directory}/{job_id}/completion.json", json.dumps(completion_signal, indent=2))
-        
-        # Send email notification for large jobs
-        if email_on_completion:
-            print(f"📧 Sending completion email notification to {user.email}")
-            email_sent = await send_email_notification(
-                user_email=user.email,
-                job_id=job_id,
-                chunks_processed=len(results),
-                total_chunks=chunks_to_process,
-                success=True
-            )
-            if email_sent:
-                print(f"✅ Email notification sent successfully to {user.email}")
-            else:
-                print(f"⚠️ Failed to send email notification to {user.email}")
-        
-        # Final progress update to ensure frontend knows job is fully complete
-        final_message = f"✅ Pack creation complete! Your Universal Context Pack is ready at /packs. Processed {len(results)}/{chunks_to_process} chunks."
-        update_job_progress(job_id, "pack_ready", 100, final_message)
-        # Verify all essential files are available
-        essential_files = [
-            "complete_ucp.txt",
-            "ultra_compact_ucp.txt", 
-            "standard_ucp.txt",
-            "chunked_ucp_index.txt"
-        ]
-        
-        for file in essential_files:
-            test_content = download_from_r2(f"{user.r2_directory}/{job_id}/{file}", silent_404=True)
-            if test_content:
-                print(f"✅ Verified {file} is available")
-            else:
-                print(f"⚠️ Warning: {file} may not be available yet")
-        
-        print(f"✅ Universal Context Pack fully created and available for job {job_id}")
-        print(f"📊 Performance: {len(results)}/{chunks_to_process} chunks ({success_rate:.1f}% success)")
-        print(f"💰 Cost: ${total_cost:.4f} with {cache_hit_rate:.1f}% cache hit rate (${cost_savings:.4f} saved)")
-        print(f"🚀 Parallel processing with batch size {batch_size} used")
-        
-    except Exception as e:
-        print(f"❌ Background analysis failed for job {job_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        update_job_progress(job_id, "error", 0, f"Analysis failed: {str(e)}")
-        await update_job_status_in_db(user, job_id, "failed", 0, str(e))
-        
-        # Send email notification for failed large jobs
-        if email_on_completion:
-            print(f"📧 Sending failure email notification to {user.email}")
-            email_sent = await send_email_notification(
-                user_email=user.email,
-                job_id=job_id,
-                chunks_processed=len(results) if 'results' in locals() else 0,
-                total_chunks=chunks_to_process if 'chunks_to_process' in locals() else 0,
-                success=False
-            )
-            if email_sent:
-                print(f"✅ Failure email notification sent successfully to {user.email}")
-            else:
-                print(f"⚠️ Failed to send failure email notification to {user.email}")
-        
-        # Clean up from cancelled jobs set if it was there
-        cancelled_jobs.discard(job_id)
 
 @app.post("/api/cancel/{job_id}")
 async def cancel_job(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -5055,6 +3472,119 @@ async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
     return await list_packs_v2(user)
 
 # ============================================================================
+# PACK V2 HELPER FUNCTIONS
+# ============================================================================
+
+async def process_conversation_url_for_pack(pack_id: str, source_id: str, url: str, platform: str, user: AuthenticatedUser):
+    """Background task for extracting conversation from URL for Pack V2 sources."""
+    try:
+        print(f"🔗 Starting URL extraction for source {source_id} in pack {pack_id}")
+        
+        if not supabase:
+            raise Exception("Database not configured")
+        
+        # Update source status to extracting
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "processing",  # align with DB constraint
+            "progress_param": 10
+        }).execute()
+        
+        # Import the appropriate extractor
+        try:
+            import sys
+            import os
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.append(current_dir)
+            
+            from chatgpt_extractor import extract_chatgpt_conversation
+            extract_function = extract_chatgpt_conversation
+                
+        except ImportError as e:
+            print("Could not import gpt extractor module")
+            supabase.rpc("update_source_status", {"user_uuid": user.user_id,"target_source_id": source_id,"status_param": "failed","progress_param": 0,"error_message_param": error_msg}).execute()
+            return
+        
+        # Update progress
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "processing",  # align with DB constraint
+            "progress_param": 30
+        }).execute()
+        
+        # Extract conversation
+        try:
+            timeout = 30
+            print(f"Starting {platform} extraction with {timeout}s timeout...")
+            result = extract_function(url, timeout=timeout)
+            
+            if not result or not result.get('messages'):
+                error_msg = "No conversation found at the provided URL"
+                print(f"❌ {error_msg}")
+                supabase.rpc("update_source_status", {"target_source_id": source_id,"status_param": "failed","user_uuid": user.user_id,"progress_param": 0,"error_message_param": error_msg}).execute()
+                return
+                
+        except Exception as e:
+            error_msg = f"Failed to extract conversation: {str(e)}"
+            print(f"❌ {error_msg}")
+            supabase.rpc("update_source_status", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id,
+                "status_param": "failed",
+                "progress_param": 0,
+                "error_message_param": error_msg
+            }).execute()
+            return
+        
+        message_count = len(result['messages'])
+        print(f"✅ Extracted {message_count} messages from {platform} conversation")
+        
+        # Update progress
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "processing",  # align with DB constraint
+            "progress_param": 70
+        }).execute()
+        
+        # Convert to text format
+        extracted_texts = []
+        for message in result['messages']:
+            formatted_message = f"[{message['role'].upper()}]: {message['content']}"
+            extracted_texts.append(formatted_message)
+        
+        extracted_content = '\n\n'.join(extracted_texts)
+        
+        # Continue with chunking (just like file-based sources)
+        print(f"Starting chunking for source {source_id}...")
+        await extract_and_chunk_source(
+            pack_id=pack_id,
+            source_id=source_id,
+            file_content=extracted_content,
+            filename=f"{platform}_conversation.txt",
+            user=user
+        )
+
+
+        
+    except Exception as e:
+        print(f"❌ Error processing URL for source {source_id}: {e}")
+        traceback.print_exc()
+        try:
+            supabase.rpc("update_source_status", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id,
+                "status_param": "failed",
+                "progress_param": 0,
+                "error_message_param": str(e)
+            }).execute()
+        except Exception as update_error:
+            print(f"Failed to update source status: {update_error}")
+
+# ============================================================================
 # PACK V2 API ENDPOINTS (NotebookLM-style)
 # ============================================================================
 
@@ -5221,84 +3751,149 @@ async def update_pack_v2(pack_id: str, request: Request, user: AuthenticatedUser
         print(f"Error updating pack: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update pack: {str(e)}")
 
+class PackSourceCreate(BaseModel):
+    """Allow JSON payloads for creating pack sources when multipart isn't used"""
+    url: Optional[str] = None
+    source_name: Optional[str] = None
+    source_type: Optional[str] = "chat_export"
+
 @app.post("/api/v2/packs/{pack_id}/sources")
 async def add_source_to_pack(
     pack_id: str, 
-    file: UploadFile = File(...),
-    source_name: str = Form(...),
-    source_type: str = Form("chat_export"),
+    file: UploadFile = File(None),  # Optional - either file OR url must be provided
+    url: Optional[str] = Form(None),  # Optional - for shared conversation URLs
+    source_name: Optional[str] = Form(None),
+    source_type: Optional[str] = Form("chat_export"),
+    payload: Optional[PackSourceCreate] = Body(None),  # Accept JSON for clients that can't send multipart
     user: AuthenticatedUser = Depends(get_current_user)
 ):
-    """Add a new source (file/chat export) to an existing pack"""
+    """Add a new source (file/chat export OR URL) to an existing pack"""
     try:
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
+
+        # Merge JSON payload values when request isn't multipart/form-data
+        if payload:
+            if not url:
+                url = payload.url
+            if not source_name:
+                source_name = payload.source_name
+            if not source_type and payload.source_type:
+                source_type = payload.source_type
+        
+        # Normalize defaults
+        source_type = source_type or "chat_export"
+        
+        if not source_name:
+            source_name = file.filename if file else None
+        if not source_name:
+            raise HTTPException(status_code=400, detail="source_name is required")
         
         source_id = str(uuid.uuid4())
         
         print(f"Adding source {source_id} to pack {pack_id} for user {user.email}")
         
-        # Read file content
-        content = await file.read()
-        file_size = len(content)
-        
-        # Handle different file types
-        file_content_str = ""
-        filename_lower = file.filename.lower()
-        
-        if filename_lower.endswith('.zip') and source_type == 'chat_export':
-            # Extract chat export from ZIP
-            try:
-                print(f"📦 Extracting conversations.json from ZIP: {file.filename}")
-                file_content_str = extract_conversations_from_zip(content)
-                print(f"✅ Successfully extracted conversations.json ({len(file_content_str)} bytes)")
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
-        elif filename_lower.endswith('.pdf'):
-            # Extract text from PDF
-            try:
-                print(f"📄 Extracting text from PDF: {file.filename}")
-                file_content_str = extract_text_from_pdf(content)
-                print(f"✅ Successfully extracted PDF text ({len(file_content_str)} bytes)")
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
-        else:
-            # Plain text or other format
-            file_content_str = content.decode('utf-8') if source_type == 'chat_export' else content.decode('utf-8', errors='ignore')
-        
-        # Create source record in database
-        result = supabase.rpc("add_pack_source", {
-            "user_uuid": user.user_id,
-            "target_pack_id": pack_id,
-            "target_source_id": source_id,
-            "source_name_param": source_name,
-            "source_type_param": source_type,
-            "file_name_param": file.filename,
-            "file_size_param": file_size
-        }).execute()
-        
-        if not result.data or len(result.data) == 0:
-            raise HTTPException(status_code=500, detail="Failed to create source record")
-        
-        # Start background extraction and chunking (NO analysis yet, NO credit deduction)
-        asyncio.create_task(
-            extract_and_chunk_source(
-                pack_id=pack_id,
-                source_id=source_id,
-                file_content=file_content_str,
-                filename=file.filename,
-                user=user
+        # Handle URL-based sources (ChatGPT shared conversations)
+        if url:
+            # Normalize source type for DB constraint
+            source_type = "url"
+            # Detect platform from URL
+            platform = 'ChatGPT'
+            
+            # Create source record in database with URL
+            result = supabase.rpc("add_pack_source", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id,
+                "target_source_id": source_id,
+                "source_name_param": source_name,
+                "source_type_param": source_type,  # Use allowed source type for constraint
+                "file_name_param": url,  # Store URL in file_name field
+                "file_size_param": 0
+            }).execute()
+            
+            if not result.data or len(result.data) == 0:
+                raise HTTPException(status_code=500, detail="Failed to create source record")
+            
+            # Start background URL extraction and chunking
+            asyncio.create_task(
+                process_conversation_url_for_pack(
+                    pack_id=pack_id,
+                    source_id=source_id,
+                    url=url,
+                    platform=platform,
+                    user=user
+                )
             )
-        )
+            
+            return {
+                "pack_id": pack_id,
+                "source_id": source_id,
+                "source_name": source_name,
+                "status": "extracting",
+                "message": f"URL source added, extracting {platform} conversation"
+            }
         
-        return {
-            "pack_id": pack_id,
-            "source_id": source_id,
-            "job_id": source_id,  # For frontend compatibility
-            "source_name": source_name,
-            "status": "extracting",
-            "message": "Source added, extraction and chunking started"
-        }
+        # Handle file-based sources 
+        else:
+            # Read file content
+            content = await file.read()
+            file_size = len(content)
+            
+            # Handle different file types
+            file_content_str = ""
+            filename_lower = file.filename.lower()
+            
+            if filename_lower.endswith('.zip') and source_type == 'chat_export':
+                # Extract chat export from ZIP
+                try:
+                    print("Zip file extraction")
+                    file_content_str = extract_conversations_from_zip(content)
+                except ValueError as e:
+                    raise HTTPException(status_code=400, detail=str(e))
+                
+            elif filename_lower.endswith('.pdf'):
+                # Extract text from PDF
+                try:
+                    print("PDF file extraction")
+                    file_content_str = extract_text_from_pdf(content)
+                except ValueError as e:
+                    raise HTTPException(status_code=400, detail=str(e))
+            else:
+                # Plain text or other format
+                file_content_str = content.decode('utf-8') if source_type == 'chat_export' else content.decode('utf-8', errors='ignore')
+            
+            # Create source record in database
+            result = supabase.rpc("add_pack_source", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id,
+                "target_source_id": source_id,
+                "source_name_param": source_name,
+                "source_type_param": source_type,
+                "file_name_param": file.filename,
+                "file_size_param": file_size
+            }).execute()
+            
+            if not result.data or len(result.data) == 0:
+                raise HTTPException(status_code=500, detail="Failed to create source record")
+            
+            # Start background extraction and chunking (NO analysis yet, NO credit deduction)
+            asyncio.create_task(
+                extract_and_chunk_source(
+                    pack_id=pack_id,
+                    source_id=source_id,
+                    file_content=file_content_str,
+                    filename=file.filename,
+                    user=user
+                )
+            )
+            
+            return {
+                "pack_id": pack_id,
+                "source_id": source_id,
+                "source_name": source_name,
+                "status": "extracting",
+                "message": "Source added, extraction and chunking started"
+            }
         
     except Exception as e:
         print(f"Error adding source to pack: {e}")
