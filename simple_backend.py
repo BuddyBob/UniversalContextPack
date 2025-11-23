@@ -2105,7 +2105,6 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         # Prepare paths for saving analysis
         pack_analyzed_path = f"{user.r2_directory}/{pack_id}/complete_analyzed.txt"
         analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
-        facts_path = f"{user.r2_directory}/{pack_id}/{source_id}/facts.json"
         
         # Get existing pack content (if any)
         existing_pack_content = download_from_r2(pack_analyzed_path, silent_404=True) or ""
@@ -2116,7 +2115,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         else:
             source_header = f"--- SOURCE: {filename} ---\n\n"
         
-        base_system_prompt = "You are a personal data analysis assistant analyzing user-owned documents. You MUST output your analysis in valid JSON format."
+        base_system_prompt = "You are a personal data analysis assistant analyzing user-owned documents. Extract key insights concisely and comprehensively."
         if custom_system_prompt:
             trimmed_custom_prompt = custom_system_prompt.strip()
             # Prevent runaway prompts while allowing detailed guidance
@@ -2143,21 +2142,6 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             
             try:
                 redacted_chunk = apply_redaction_filters(chunk)
-                
-                # Common JSON instruction for all scenarios
-                json_instruction = """
-Output strictly valid JSON with no markdown formatting. The JSON must have this structure:
-{
-  "summary": "The narrative analysis text (executive summary, key themes, etc.) using markdown formatting within the string",
-  "facts": [
-    {
-      "category": "Identity/Preferences/Projects/etc",
-      "content": "Specific extracted fact or trait"
-    }
-  ]
-}
-"""
-                
                 # Scenario A: Single Chunk - Dynamic analysis
                 if len(chunks) == 1:
                     prompt = f"""
@@ -2185,20 +2169,20 @@ STEP 2 — Based on the type, extract the most relevant and high-value informati
 - For Research/Explanatory: concepts, claims, evidence, conclusions
 - For Financial: amounts, timelines, obligations, assumptions
 
-STEP 3 — Produce a comprehensive analysis in JSON format.
+STEP 3 — Produce a comprehensive analysis:
 
-For the "summary" field: Write a detailed analysis (aim for 400-700 words) that includes:
+Write a detailed analysis (aim for 400-700 words) that includes:
+
 **Executive Summary:** A rich, narrative overview capturing the document's core purpose, main arguments, and key takeaways.
-**Key Themes & Concepts:** The major ideas, topics, or arguments presented in the document.
-**Critical Details:** Specific facts, decisions, data points, technical specifications, or actionable items that are essential to understanding or acting on this document.
-**Context & Implications:** Any implicit assumptions, constraints, dependencies, or strategic considerations that provide deeper understanding.
 
-For the "facts" field: Extract atomic, standalone facts, traits, or preferences found in the text.
+**Key Themes & Concepts:** The major ideas, topics, or arguments presented in the document.
+
+**Critical Details:** Specific facts, decisions, data points, technical specifications, or actionable items that are essential to understanding or acting on this document.
+
+**Context & Implications:** Any implicit assumptions, constraints, dependencies, or strategic considerations that provide deeper understanding.
 
 Document content:
 {redacted_chunk}
-
-{json_instruction}
 """
 
                 # Scenario B: Conversations File - General overview
@@ -2206,17 +2190,7 @@ Document content:
                     prompt = f"""
 Analyze this conversation segment from a larger chat history.
 
-Extract only persistent, high-level information about the user and their world.
-
-For the "summary" field:
-Output a concise but meaningful narrative covering:
-1. High-level summary  
-2. List of stable facts and recurring patterns  
-3. Key long-term projects or responsibilities  
-4. Any cross-conversation themes that matter for future reasoning
-
-For the "facts" field:
-Extract specific items such as:
+Extract only persistent, high-level information about the user and their world, such as:
 - Background facts (roles, expertise, industries, education, locations)
 - Ongoing projects, long-term efforts, and workstreams
 - Technical ecosystem (tools, languages, platforms, workflows)
@@ -2226,10 +2200,14 @@ Extract specific items such as:
 
 Do NOT extract minor or temporary conversational details.
 
+Output a concise but meaningful:
+1. High-level summary  
+2. List of stable facts and recurring patterns  
+3. Key long-term projects or responsibilities  
+4. Any cross-conversation themes that matter for future reasoning
+
 Conversation content:
 {redacted_chunk}
-
-{json_instruction}
 """
                 
                 # Scenario C: Large Document (5+ chunks) - Broad analysis
@@ -2239,22 +2217,17 @@ Analyze this section of a large document.
 
 Your goal is to capture the high-level picture, not granular details.
 
-For the "summary" field:
 Extract:
 - Main themes and topics covered in this section
 - Major concepts, arguments, or components
 - How this section fits into the likely overall document
 - Structural patterns (e.g., chapters, phases, modules, workflows)
 
-Focus on clarity and breadth. Do not dive into micro-details—this is just one piece of a much larger whole.
-
-For the "facts" field:
-Extract key definitions, specific dates, or critical constraints mentioned in this section.
+Focus on clarity and breadth.  
+Do not dive into micro-details—this is just one piece of a much larger whole.
 
 Document content:
 {redacted_chunk}
-
-{json_instruction}
 """
                 
                 # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
@@ -2264,18 +2237,11 @@ Document content:
                     First, infer the overall context and type of the document.
                     Then, extract specific facts, key points, and important details relevant to that context.
                     Since this is a relatively short document, aim for high density of information.
-                    
-                    For the "summary" field:
                     Capture specific instructions, decisions, or factual claims made in this text.
-                    
-                    For the "facts" field:
-                    Extract every specific fact, requirement, or data point as a separate item.
                     
                     Document content:
                     {redacted_chunk}
-                    
-                    {json_instruction}
-                    """
+                    Provide your comprehensive analysis below:"""
 
 
                 # Build messages array
@@ -2298,26 +2264,15 @@ Document content:
                     model="gpt-4o-mini",
                     messages=messages,
                     temperature=0.3,
-                    max_completion_tokens=3000,
-                    response_format={"type": "json_object"}  # Enforce JSON mode
+                    max_completion_tokens=3000  # Increased for richer analysis
                 )
                 
-                analysis_content = response.choices[0].message.content
+                analysis = response.choices[0].message.content
                 
                 # Check if OpenAI refused to analyze due to content policy
-                if analysis_content and ("cannot assist" in analysis_content.lower() or "i'm sorry" in analysis_content.lower()[:50]):
+                if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
                     raise Exception(f"Content policy refusal: OpenAI declined to analyze this content. This may occur with documents containing sensitive personal information.")
                 
-                # Parse JSON response
-                try:
-                    analysis_json = json.loads(analysis_content)
-                    narrative_summary = analysis_json.get("summary", "")
-                    extracted_facts = analysis_json.get("facts", [])
-                except json.JSONDecodeError:
-                    print(f"⚠️ Failed to parse JSON from chunk {idx}. Falling back to raw text.")
-                    narrative_summary = analysis_content
-                    extracted_facts = []
-
                 # Track tokens and cost
                 input_tokens = response.usage.prompt_tokens
                 output_tokens = response.usage.completion_tokens
@@ -2330,39 +2285,17 @@ Document content:
                 # Append this chunk's analysis to files
                 chunk_sep = f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
                 
-                # Append to pack file (Narrative Summary)
+                # Append to pack file
                 if idx == 0:
                     # First chunk - add source header
-                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + narrative_summary)
+                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis)
                 else:
                     current = download_from_r2(pack_analyzed_path) or ""
-                    upload_to_r2(pack_analyzed_path, current + chunk_sep + narrative_summary)
+                    upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis)
                 
-                # Append to individual source file (Narrative Summary)
+                # Append to individual source file
                 current_source = download_from_r2(analyzed_path, silent_404=True) or ""
-                upload_to_r2(analyzed_path, current_source + chunk_sep + narrative_summary)
-                
-                # Append to facts file (Structured Data)
-                # We store this as a list of lists (one list of facts per chunk) or just append to a growing list
-                # Let's append to a JSON list in the file
-                current_facts_json = download_from_r2(facts_path, silent_404=True)
-                if current_facts_json:
-                    try:
-                        all_facts = json.loads(current_facts_json)
-                    except:
-                        all_facts = []
-                else:
-                    all_facts = []
-                
-                # Add new facts with chunk metadata
-                for fact in extracted_facts:
-                    if isinstance(fact, dict):
-                        fact['chunk_index'] = idx
-                        all_facts.append(fact)
-                    elif isinstance(fact, str):
-                        all_facts.append({"content": fact, "category": "General", "chunk_index": idx})
-                
-                upload_to_r2(facts_path, json.dumps(all_facts, indent=2))
+                upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
                 
                 
                 # Update progress with chunk count (more reliable than percentage for large files)
@@ -4445,129 +4378,15 @@ async def download_pack_zip_v2(pack_id: str, user: AuthenticatedUser = Depends(g
         print(f"Error creating pack ZIP: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create ZIP: {str(e)}")
 
-async def aggregate_and_compress_pack(pack_id: str, user: AuthenticatedUser):
-    """Step 6 & 7: Aggregate facts from all sources and compress into a concise pack"""
-    try:
-        print(f"🔄 Starting aggregation and compression for pack {pack_id}")
-        
-        # Get all sources for this pack
-        pack_result = supabase.rpc("get_pack_details", {
-            "user_uuid": user.user_id,
-            "target_pack_id": pack_id
-        }).execute()
-        
-        if not pack_result.data:
-            raise Exception("Pack not found")
-            
-        sources = pack_result.data.get("sources", [])
-        all_facts = []
-        
-        # Step 6: Aggregation - Collect facts from all sources
-        for source in sources:
-            source_id = source["source_id"]
-            facts_path = f"{user.r2_directory}/{pack_id}/{source_id}/facts.json"
-            
-            facts_content = download_from_r2(facts_path, silent_404=True)
-            if facts_content:
-                try:
-                    source_facts = json.loads(facts_content)
-                    # Add source context to facts
-                    for fact in source_facts:
-                        fact['source_name'] = source['source_name']
-                    all_facts.extend(source_facts)
-                except json.JSONDecodeError:
-                    print(f"⚠️ Failed to parse facts for source {source_id}")
-        
-        if not all_facts:
-            return "No structured facts found to compress. Please ensure sources have been analyzed with the latest version."
-            
-        # Deduplication (simple string matching on content)
-        unique_facts = {}
-        for fact in all_facts:
-            content = fact.get('content', '').strip()
-            if content and content not in unique_facts:
-                unique_facts[content] = fact
-        
-        deduplicated_facts = list(unique_facts.values())
-        print(f"📊 Aggregated {len(all_facts)} facts into {len(deduplicated_facts)} unique items")
-        
-        # Step 7: Compression - Send to LLM
-        # Group facts by category for better context
-        facts_by_category = defaultdict(list)
-        for fact in deduplicated_facts:
-            category = fact.get('category', 'General')
-            facts_by_category[category].append(fact.get('content'))
-            
-        # Build prompt
-        facts_text = ""
-        for category, items in facts_by_category.items():
-            facts_text += f"\n## {category}\n"
-            for item in items:
-                facts_text += f"- {item}\n"
-                
-        prompt = f"""
-You are an expert synthesizer. Your goal is to create a "Universal Context Pack" - a highly compressed, high-density summary of a user's digital life based on the provided facts.
-
-Input Data (Aggregated Facts):
-{facts_text}
-
-Instructions:
-1. **Synthesize & Condense**: Merge related facts. If the user "lives in Austin" and "is based in Texas", combine them.
-2. **Remove Redundancy**: Eliminate duplicate or highly similar information.
-3. **Structure**: Organize the output into clear, logical sections (e.g., Identity, Professional, Technical, Preferences).
-4. **Format**: Use concise bullet points. Avoid fluffy language. Every word should add value.
-5. **Goal**: The output should be a "cheat sheet" that another AI could read to perfectly understand this user.
-
-Output Format:
-# Universal Context Pack
-
-## Identity & Core Context
-(Who they are, where they are, key roles)
-
-## Technical Ecosystem & Skills
-(Languages, tools, platforms, workflows)
-
-## Projects & Goals
-(Active workstreams, long-term objectives)
-
-## Miscellaneous / Other
-(Anything else important)
-"""
-
-        openai_client = get_openai_client()
-        response = await openai_call_with_retry(
-            openai_client,
-            max_retries=3,
-            model="gpt-4o-mini", # Use stronger model for final synthesis
-            messages=[
-                {"role": "system", "content": "You are a precise and efficient synthesizer of information."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_completion_tokens=4000
-        )
-        
-        compressed_content = response.choices[0].message.content
-        
-        # Save to R2
-        compressed_path = f"{user.r2_directory}/{pack_id}/compressed_pack.txt"
-        upload_to_r2(compressed_path, compressed_content)
-        
-        return compressed_content
-
-    except Exception as e:
-        print(f"❌ Error in aggregation/compression: {e}")
-        raise e
-
 @app.get("/api/v2/packs/{pack_id}/export/{export_type}")
 async def download_pack_export_v2(
     pack_id: str, 
     export_type: str,
     user: AuthenticatedUser = Depends(get_current_user)
 ):
-    """Download a pack export (compact/standard/complete/compressed)"""
+    """Download a pack export (compact/standard/complete)"""
     try:
-        if export_type not in ['compact', 'standard', 'complete', 'compressed']:
+        if export_type not in ['compact', 'standard', 'complete']:
             raise HTTPException(status_code=400, detail="Invalid export type")
         
         # Check if it's a v2 pack or legacy
@@ -4588,32 +4407,10 @@ async def download_pack_export_v2(
                 return await download_ultra_compact_ucp(pack_id, user)
             elif export_type == 'standard':
                 return await download_standard_ucp(pack_id, user)
-            elif export_type == 'compressed':
-                 # Legacy packs might not have facts.json, so we might need to fallback or error
-                 # For now, let's try to generate it from existing analysis if possible, or just return standard
-                 return await download_standard_ucp(pack_id, user)
             else:
                 return await download_complete_ucp(pack_id, user)
         
-        # Handle Compressed Pack Request
-        if export_type == "compressed":
-            # Check if compressed pack already exists
-            compressed_path = f"{user.r2_directory}/{pack_id}/compressed_pack.txt"
-            compressed_content = download_from_r2(compressed_path, silent_404=True)
-            
-            if not compressed_content:
-                # Generate it on the fly
-                compressed_content = await aggregate_and_compress_pack(pack_id, user)
-                
-            return StreamingResponse(
-                iter([compressed_content.encode('utf-8')]),
-                media_type="text/plain",
-                headers={
-                    "Content-Disposition": f"attachment; filename=compressed_pack_{pack_id}.txt"
-                }
-            )
-
-        # For v2 packs, combine all sources (Standard/Complete/Compact logic)
+        # For v2 packs, combine all sources
         sources = pack_data.get("sources", [])
         
         # Combine all analyzed content from sources
@@ -4622,8 +4419,14 @@ async def download_pack_export_v2(
             if source["status"] == "completed":
                 # Download analyzed content from R2
                 analyzed_path = source.get("r2_analyzed_path")
-                if analyzed_path:
+                if not analyzed_path:
+                    source_id = source.get("source_id")
+                    analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
+                
+                print(f"Downloading analyzed content from: {analyzed_path}")
+                if analyzed_path: # Still check in case source_id was also missing or path construction failed
                     content = download_from_r2(analyzed_path)
+                    print(content)
                     if content:
                         combined_content.append(f"=== Source: {source['source_name']} ===\n\n{content}\n\n")
         

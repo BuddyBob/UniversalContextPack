@@ -2360,7 +2360,7 @@ export default function ProcessPage() {
     }
   };
 
-  const downloadPack = async (type: 'complete' | 'ultra-compact' | 'standard' | 'compressed' = 'complete') => {
+  const downloadPack = async (type: 'complete' | 'ultra-compact' | 'standard') => {
     // Use selectedPack.pack_id if available, otherwise fall back to currentJobId
     const packId = selectedPack?.pack_id || currentJobId;
     if (!packId || isDownloading) return;
@@ -2408,50 +2408,6 @@ export default function ProcessPage() {
     }
   };
 
-  const downloadChunks = async () => {
-    if (!currentJobId || isDownloading) return;
-
-    setIsDownloading(true);
-
-    // Track download
-    analytics.downloadPack();
-
-    try {
-      addLog('Starting chunks download...');
-
-      // Use authenticated fetch to download with proper headers
-      const response = await makeAuthenticatedRequest(
-        `${API_BASE_URL}/api/download/${currentJobId}/chunks`,
-        { method: 'GET' }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
-      }
-
-      // Get the blob and create download link
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `ucp_chunks_${currentJobId}.zip`;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }, 100);
-
-      addLog('Chunks download completed successfully');
-    } catch (error) {
-      addLog(`Chunks download failed: ${error}`);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
 
   const cancelAnalysis = async () => {
     try {
@@ -3447,18 +3403,6 @@ export default function ProcessPage() {
                   </>
                 )}
               </button>
-
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={() => downloadPack('compressed')}
-                  disabled={isDownloading}
-                  className="flex-1 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors border border-gray-600 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Download a concise, aggregated summary of all sources"
-                >
-                  <FileText className="h-4 w-4" />
-                  <span>Compressed</span>
-                </button>
-              </div>
             </div>
           )}
 
