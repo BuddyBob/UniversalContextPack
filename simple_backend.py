@@ -1835,6 +1835,76 @@ async def reload_environment():
         print(f"Error reloading environment: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to reload environment: {str(e)}")
 
+class FeedbackRequest(BaseModel):
+    feedback: str
+
+@app.post("/api/feedback")
+async def submit_feedback(request: FeedbackRequest):
+    """Anonymous feedback submission endpoint"""
+    try:
+        feedback_text = request.feedback.strip()
+        
+        if not feedback_text:
+            raise HTTPException(status_code=400, detail="Feedback cannot be empty")
+        
+        if len(feedback_text) > 1000:
+            raise HTTPException(status_code=400, detail="Feedback is too long (max 1000 characters)")
+        
+        # Send email to admin
+        RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+        admin_email = "thavasantonio@gmail.com"
+        
+        if RESEND_API_KEY:
+            try:
+                import requests
+                from datetime import datetime
+                
+                # Use verified domain for from address (same as notification emails)
+                from_email = "noreply@context-pack.com"
+                
+                response = requests.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {RESEND_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "from": f"Context Pack Feedback <{from_email}>",
+                        "to": [admin_email],
+                        "subject": f"💡 New Feedback/Feature Request - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                        "text": f"""New anonymous feedback received:
+
+{feedback_text}
+
+---
+Submitted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+Source: Context Pack Website Feedback Banner
+"""
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    print(f"✅ Feedback email sent successfully to {admin_email}")
+                    return {"success": True, "message": "Thank you for your feedback!"}
+                else:
+                    print(f"❌ Failed to send feedback email: {response.status_code} - {response.text}")
+                    raise HTTPException(status_code=500, detail="Failed to send feedback")
+                    
+            except Exception as email_error:
+                print(f"❌ Error sending feedback email: {email_error}")
+                raise HTTPException(status_code=500, detail="Failed to send feedback")
+        else:
+            # Fallback: just log it if no email service configured
+            print(f"💡 FEEDBACK (no email service): {feedback_text}")
+            return {"success": True, "message": "Thank you for your feedback!"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error processing feedback: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process feedback")
+
 class ConversationURLRequest(BaseModel):
     url: str
 

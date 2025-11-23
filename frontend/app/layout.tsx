@@ -4,6 +4,7 @@ import { AuthProvider } from '@/components/AuthProvider'
 import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
 import MaintenanceBanner from '@/components/MaintenanceBanner'
+import FeedbackBanner from '@/components/FeedbackBanner'
 import Script from 'next/script'
 import { GA_TRACKING_ID } from '@/lib/analytics'
 import { Analytics } from '@vercel/analytics/next'
@@ -173,6 +174,7 @@ export default function RootLayout({
         
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
+            <FeedbackBanner />
             {/* <MaintenanceBanner /> */}
             <Navigation />
             <main className="flex-1">{children}</main>
