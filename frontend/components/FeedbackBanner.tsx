@@ -48,7 +48,7 @@ export default function FeedbackBanner() {
     localStorage.setItem('feedbackBannerDismissed', 'true')
   }
 
-  if (typeof window !== 'undefined' && localStorage.getItem('feedbackBannerDismissed') === 'true') {
+  if (localStorage.getItem('feedbackBannerDismissed') === 'true') {
     return null
   }
 
@@ -60,7 +60,7 @@ export default function FeedbackBanner() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <span className="text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
-              �� Feedback
+               Taking feedback and requests Nov 21 - Nov 26! 
             </span>
             <form onSubmit={handleSubmit} className="flex items-center gap-2 flex-1 min-w-0">
               <input
