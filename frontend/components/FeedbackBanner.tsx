@@ -1,12 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function FeedbackBanner() {
   const [feedback, setFeedback] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isVisible, setIsVisible] = useState(true)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    // Check if banner was previously dismissed
+    if (typeof window !== 'undefined' && localStorage.getItem('feedbackBannerDismissed') === 'true') {
+      setIsVisible(false)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,14 +54,13 @@ export default function FeedbackBanner() {
 
   const handleDismiss = () => {
     setIsVisible(false)
-    localStorage.setItem('feedbackBannerDismissed', 'true')
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('feedbackBannerDismissed', 'true')
+    }
   }
 
-  if (localStorage.getItem('feedbackBannerDismissed') === 'true') {
-    return null
-  }
-
-  if (!isVisible) return null
+  // Don't render on server or if not visible
+  if (!mounted || !isVisible) return null
 
   return (
     <div className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
@@ -60,7 +68,7 @@ export default function FeedbackBanner() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <span className="text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap">
-               Taking feedback and requests Nov 21 - Nov 26! 
+               Taking feedback and requests Nov 21 - Nov 26!
             </span>
             <form onSubmit={handleSubmit} className="flex items-center gap-2 flex-1 min-w-0">
               <input
