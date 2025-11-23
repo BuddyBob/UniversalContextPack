@@ -27,6 +27,7 @@ export const API_ENDPOINTS = {
   createCheckoutSession: `${API_BASE_URL}/api/create-checkout-session`,
   addCreditsManual: `${API_BASE_URL}/api/add-credits-manual`,
   paymentStatus: `${API_BASE_URL}/api/payment/status`,
+  downloadPackV2: (packId: string, type: string) => `${API_BASE_URL}/api/v2/packs/${packId}/export/${type}`,
 };
 
 export default API_BASE_URL;
