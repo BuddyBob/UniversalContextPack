@@ -2033,7 +2033,6 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         return len(chunks)
         
     except Exception as e:
-        print("hi")
         print(f"❌ Error extracting/chunking source {source_id}: {e}")
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
@@ -4426,7 +4425,6 @@ async def download_pack_export_v2(
                 print(f"Downloading analyzed content from: {analyzed_path}")
                 if analyzed_path: # Still check in case source_id was also missing or path construction failed
                     content = download_from_r2(analyzed_path)
-                    print(content)
                     if content:
                         combined_content.append(f"=== Source: {source['source_name']} ===\n\n{content}\n\n")
         
