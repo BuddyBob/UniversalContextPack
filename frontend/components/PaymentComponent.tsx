@@ -256,7 +256,7 @@ export default function PaymentComponent({
             e.currentTarget.style.backgroundColor = isAtLimit ? 'var(--status-error)' : 'var(--accent-primary)'
           }}
         >
-          {isAtLimit ? 'Upgrade Required - $9.99' : 'Upgrade to Pro - $9.99'}
+          {isAtLimit ? 'Upgrade Required - $2.99' : 'Upgrade to Pro - $2.99'}
         </button>
       )}
 
