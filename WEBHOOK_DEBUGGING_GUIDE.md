@@ -29,7 +29,7 @@ Users purchasing the $4.99 unlimited plan but not receiving unlimited access. We
 ```json
 {
   "user_id": "optional-user-id",
-  "amount": 2.99,
+  "amount": 3.99,
   "session_id": "optional-session-id"
 }
 ```
@@ -81,7 +81,7 @@ Updated `grant_unlimited_access()` with:
    ```
 
 ### 2. Real Purchase Test
-1. Make a test purchase with the $2.99 unlimited plan
+1. Make a test purchase with the $3.99 unlimited plan
 2. Monitor backend logs for webhook events
 3. Check for these specific log messages:
    - `🛒 [webhook_id] Checkout session completed`
