@@ -31,35 +31,32 @@ export default function HolidayBanner() {
   if (!mounted || !isVisible) return null
 
   return (
-    <div className="bg-gradient-to-r from-red-600 via-green-600 to-red-600 border-b border-red-700">
+    <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-emerald-900 border-b border-emerald-700/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <span className="text-xl animate-pulse">🎄</span>
-            <button
-              onClick={handleClick}
-              className="flex-1 text-left hover:opacity-90 transition-opacity"
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-bold text-white whitespace-nowrap">
-                  🎁 Limited Holiday Deal:
-                </span>
-                <span className="text-sm text-white/90">
-                  Unlimited Plan for just
-                </span>
-                <span className="text-lg font-bold text-yellow-300">
-                  $2.99
-                </span>
-                <span className="text-xs text-white/80 bg-white/20 px-2 py-0.5 rounded-full">
-                  Save 25%
-                </span>
-              </div>
-            </button>
-          </div>
+          <button
+            onClick={handleClick}
+            className="flex-1 text-left group transition-all"
+          >
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-sm font-medium text-emerald-100">
+                Holiday Offer
+              </span>
+              <span className="text-sm text-emerald-200/80">
+                Unlimited Plan —
+              </span>
+              <span className="text-base font-semibold text-white">
+                $2.99
+              </span>
+              <span className="text-xs text-emerald-300/60">
+                (25% off)
+              </span>
+            </div>
+          </button>
           
           <button
             onClick={handleDismiss}
-            className="text-white/80 hover:text-white transition-colors p-1 flex-shrink-0"
+            className="text-emerald-300/60 hover:text-emerald-200 transition-colors p-1 flex-shrink-0"
             aria-label="Dismiss holiday banner"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
