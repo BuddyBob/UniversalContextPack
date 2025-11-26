@@ -1940,11 +1940,12 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         # Step 2: Dynamic chunking based on actual token counts
         print(f"✂️ Chunking text for source {source_id}")
         chunks = []
-        # Target: 50k tokens per chunk - maximize chunk size while staying safe
-        # 128k limit - 1k prompt - 1.5k output = 125.5k available, using 50k = 75k headroom
-        max_tokens_per_chunk = 50000
-        initial_chunk_size = 200000  # Start with ~50k tokens (4 chars/token average)
-        overlap = 10000  # Overlap for context continuity
+        # Target: 100k tokens per chunk - maximize efficiency, minimize API calls
+        # 128k context window - 2k prompt - 3k output = 123k available
+        # Using 100k = plenty of headroom, half the API calls = half the cost
+        max_tokens_per_chunk = 100000
+        initial_chunk_size = 400000  # Start with ~100k tokens (4 chars/token average)
+        overlap = 20000  # Overlap for context continuity
         
         # Combine all extracted text into one piece
         combined_text = "\n\n".join(extracted_texts)
