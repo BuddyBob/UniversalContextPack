@@ -266,7 +266,6 @@ export default function PricingPageClient() {
             </div>
 
             {/* Social proof */}
-            <div className="text-center text-sm text-gray-500">113 users choose Unlimited</div>
 
           {/* Content based on selection */}
           {isUnlimitedSelected ? (
@@ -280,7 +279,7 @@ export default function PricingPageClient() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Unlimited Access</h3>
                 <p className="text-gray-600 mb-6 text-sm">
-                  Process unlimited conversations with priority support
+                  Unlimited tokens & Unlimited conversations
                 </p>
                 <div className="mb-8">
                   <span className="text-4xl font-semibold text-gray-900">$3.99</span>
@@ -439,6 +438,7 @@ export default function PricingPageClient() {
 
         {/* Security Notice */}
         <div className="text-center mt-8 pt-8 border-t border-gray-200">
+          <div className="text-center text-sm text-gray-500">220+ users choose Unlimited</div>
           <div className="flex items-center justify-center text-sm text-gray-500">
             <Shield className="h-4 w-4 mr-2" />
             Payments secured by Stripe
