@@ -175,7 +175,7 @@ export default function RootLayout({
 
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
-            <HolidayBanner />
+            {/* <HolidayBanner /> */}
             {/* <FeedbackBanner /> */}
             {/* <MaintenanceBanner /> */}
             <Navigation />
