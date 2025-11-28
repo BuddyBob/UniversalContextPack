@@ -450,6 +450,10 @@ class AddSourceRequest(BaseModel):
     source_name: str
     source_type: str = "chat_export"  # chat_export, document, url, text
 
+class AddMemoryRequest(BaseModel):
+    text: str
+    source: str = "MCP Tool"
+
 # User model for authentication
 class AuthenticatedUser:
     def __init__(self, user_id: str, email: str, r2_directory: str):
@@ -3782,6 +3786,43 @@ class PackSourceCreate(BaseModel):
     source_name: Optional[str] = None
     source_type: Optional[str] = "chat_export"
     text_content: Optional[str] = None
+
+@app.post("/api/memory/add")
+async def add_memory(request: AddMemoryRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    """Add a memory to the user's pack."""
+    try:
+        memory_text = request.text.strip()
+        if not memory_text:
+            raise HTTPException(status_code=400, detail="Memory text cannot be empty")
+        
+        # Define the path for the memories file
+        memories_path = f"{user.r2_directory}/memories.txt"
+        
+        # Download existing memories (if any)
+        existing_content = download_from_r2(memories_path, silent_404=True) or ""
+        
+        # Format the new memory entry
+        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        new_entry = f"\n\n--- Memory added via {request.source} on {timestamp} ---\n{memory_text}"
+        
+        # Append and upload
+        updated_content = existing_content + new_entry
+        success = upload_to_r2(memories_path, updated_content)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to save memory to storage")
+            
+        return {
+            "status": "success",
+            "message": "Memory added successfully",
+            "size": len(updated_content)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error adding memory: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add memory: {str(e)}")
 
 @app.post("/api/v2/packs/{pack_id}/sources")
 async def add_source_to_pack(

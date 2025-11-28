@@ -1,0 +1,33 @@
+{
+    "name": "ucp-memory-mcp",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "MCP Server for adding memories to Universal Context Pack",
+    "main": "build/index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node build/index.js",
+        "dev": "wrangler dev src/worker.ts",
+        "deploy": "wrangler deploy --minify src/worker.ts"
+    },
+    "keywords": [
+        "mcp",
+        "context-pack",
+        "memory"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@cloudflare/workers-types": "^4.20251128.0",
+        "@modelcontextprotocol/sdk": "^0.6.0",
+        "axios": "^1.6.0",
+        "dotenv": "^16.0.0",
+        "hono": "^4.10.7"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "ts-node": "^10.9.0",
+        "typescript": "^5.0.0",
+        "wrangler": "^4.51.0"
+    }
+}

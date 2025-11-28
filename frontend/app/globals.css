@@ -767,15 +767,16 @@
   }
   
   .nav-container {
-    max-width: 80rem !important;
+    max-width: 100rem !important;
     margin: 0 auto !important;
     padding: 1rem 1.5rem !important;
   }
   
   .nav-content {
     display: flex !important;
-    justify-content: space-between !important;
+    justify-content: flex-start !important;
     align-items: center !important;
+    gap: 2rem !important;
   }
   
   .nav-brand {
@@ -815,26 +816,37 @@
   .nav-links {
     display: flex !important;
     align-items: center !important;
-    gap: 2rem !important;
+    gap: 1.5rem !important;
   }
   
   .nav-link {
-    color: var(--text-secondary) !important;
+    color: #9ca3af !important; /* text-gray-400 */
     text-decoration: none !important;
     font-weight: 500 !important;
-    padding: 0.5rem 1rem !important;
+    font-size: 1rem !important;
+    padding: 0.5rem 0.75rem !important;
+    transition: color 0.2s ease !important;
+  }
+  
+  .nav-link:hover, .nav-link.active {
+    color: #ffffff !important;
+    background-color: transparent !important;
+  }
+
+  .btn-white {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    font-weight: 500 !important;
+    padding: 0.5rem 1.25rem !important;
     border-radius: 6px !important;
+    font-size: 0.9rem !important;
     transition: all 0.2s ease !important;
+    border: 1px solid #ffffff !important;
   }
-  
-  .nav-link:hover {
-    color: var(--text-primary) !important;
-    background-color: var(--bg-card-hover) !important;
-  }
-  
-  .nav-link.active {
-    color: var(--accent-primary) !important;
-    background-color: var(--bg-card-elevated) !important;
+
+  .btn-white:hover {
+    background-color: #e5e5e5 !important;
+    border-color: #e5e5e5 !important;
   }
   
   .nav-user-section {
@@ -847,12 +859,7 @@
     display: flex !important;
     align-items: center !important;
     gap: 1rem !important;
-  }
-  
-  .nav-right-section {
-    display: flex !important;
-    align-items: center !important;
-    gap: 1rem !important;
+    margin-left: auto !important;
   }
   
   .nav-user-dropdown {

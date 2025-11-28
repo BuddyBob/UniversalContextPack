@@ -85,39 +85,39 @@ export default function Navigation() {
               <Image
                 src="/Logo.png"
                 alt="UCP Logo"
-                width={32}
-                height={32}
+                width={25}
+                height={25}
                 className="nav-logo-img"
               />
-              <h1 className="nav-title">Universal Context Pack</h1>
+              <h1 className="nav-title font-medium text-lg tracking-tight">UCP</h1>
             </Link>
 
             {/* Desktop Navigation Links */}
             <nav className="nav-links hidden md:flex">
-              <Link 
-                href="/" 
+              <Link
+                href="/"
                 className={`nav-link ${pathname === '/' ? 'active' : ''}`}
               >
                 Home
               </Link>
-              <Link 
-                href="/packs" 
+              <Link
+                href="/packs"
                 className={`nav-link ${pathname === '/packs' ? 'active' : ''}`}
               >
                 Packs
               </Link>
-              <Link 
-                href="/pricing" 
-                className={`nav-link ${pathname === '/pricing' ? 'active' : ''}`}
-              >
-                Pricing
-              </Link>
-              <Link 
-                href="/how-to-port" 
+              <Link
+                href="/how-to-port"
                 className={`nav-link ${pathname === '/how-to-port' ? 'active' : ''}`}
               >
                 Docs
               </Link>
+              {/* <Link
+                href="/developer"
+                className={`nav-link ${pathname === '/developer' ? 'active' : ''}`}
+              >
+                Developer
+              </Link> */}
             </nav>
 
             {/* Right Side Navigation */}
@@ -127,81 +127,75 @@ export default function Navigation() {
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
               </Link>
 
-              {/* Theme Toggle */}
-              <div className="nav-theme-toggle">
-                <button
-                  onClick={toggleTheme}
-                  className="nav-theme-btn"
-                  title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-                >
-                  {theme === 'dark' ? (
-                    <Sun className="h-5 w-5" />
-                  ) : (
-                    <Moon className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
 
               {/* Desktop User Menu */}
               <div className="nav-user-section hidden md:flex items-center gap-3">
                 {user ? (
                   <>
-                  <div className="relative" ref={dropdownRef}>
-                    <div 
-                      className="nav-user-dropdown"
-                      onClick={() => setShowUserDropdown(!showUserDropdown)}
-                    >
-                      {userProfile?.avatar_url && (
-                        <img
-                          src={userProfile.avatar_url}
-                          alt={userProfile.full_name || 'User'}
-                          className="nav-user-avatar"
-                        />
-                      )}
-                      <div className="nav-user-info">
-                        <p className="nav-user-name">
-                          {userProfile?.full_name || user.email?.split('@')[0]}
-                        </p>
-                        <p className="nav-user-email">{user.email}</p>
+                    <div className="relative" ref={dropdownRef}>
+                      <div
+                        className="nav-user-dropdown"
+                        onClick={() => setShowUserDropdown(!showUserDropdown)}
+                      >
+                        {userProfile?.avatar_url && (
+                          <img
+                            src={userProfile.avatar_url}
+                            alt={userProfile.full_name || 'User'}
+                            className="nav-user-avatar"
+                          />
+                        )}
+                        <div className="nav-user-info">
+                          <p className="nav-user-name">
+                            {userProfile?.full_name || user.email?.split('@')[0]}
+                          </p>
+                          <p className="nav-user-email">{user.email}</p>
+                        </div>
                       </div>
-                    </div>
-                    
 
-                    {showUserDropdown && (
-                      <div className="nav-dropdown-menu">
-                        <button
-                          onClick={signOut}
-                          className="nav-dropdown-item"
-                        >
-                          <LogOut className="h-4 w-4" />
-                          Sign Out
-                        </button>
-                      </div>
-                    )}
-                    
-                  </div>
-                  {user && (
-                  <a 
-                    href="/pricing"
-                    className="flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all ml-auto"
-                    title="Buy more credits"
-                  >
-                    <CreditCard className="w-5 h-5 text-gray-400" />
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 uppercase tracking-wide">Credits</span>
-                      <span className="text-lg font-semibold text-white">
-                        {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance || userProfile?.credits_balance)?.toLocaleString() || '0'}
-                      </span>
+
+                      {showUserDropdown && (
+                        <div className="nav-dropdown-menu">
+                          <Link
+                            href="/profile"
+                            className="nav-dropdown-item"
+                            onClick={() => setShowUserDropdown(false)}
+                          >
+                            <User className="h-4 w-4" />
+                            Profile
+                          </Link>
+                          <button
+                            onClick={signOut}
+                            className="nav-dropdown-item"
+                          >
+                            <LogOut className="h-4 w-4" />
+                            Sign Out
+                          </button>
+                        </div>
+                      )}
+
                     </div>
-                  </a>
-                )}
-                </>
+                    {user && (
+                      <a
+                        href="/pricing"
+                        className="flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all ml-auto"
+                        title="Buy more credits"
+                      >
+                        <CreditCard className="w-5 h-5 text-gray-400" />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 uppercase tracking-wide">Credits</span>
+                          <span className="text-lg font-semibold text-white">
+                            {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance || userProfile?.credits_balance)?.toLocaleString() || '0'}
+                          </span>
+                        </div>
+                      </a>
+                    )}
+                  </>
                 ) : (
                   <button
                     onClick={() => setShowAuthModal(true)}
-                    className="nav-sign-in-btn group relative"
+                    className="btn-white"
                   >
-                    <span>Sign In</span>
+                    Get Started
                   </button>
                 )}
               </div>
@@ -225,35 +219,35 @@ export default function Navigation() {
           {showMobileMenu && (
             <div className="md:hidden mt-4 pb-4 border-t border-border-primary">
               <nav className="flex flex-col space-y-2 pt-4">
-                <Link 
-                  href="/" 
+                <Link
+                  href="/"
                   className={`mobile-nav-link ${pathname === '/' ? 'active' : ''}`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Home
                 </Link>
-                <Link 
-                  href="/packs" 
+                <Link
+                  href="/packs"
                   className={`mobile-nav-link ${pathname === '/packs' ? 'active' : ''}`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Packs
                 </Link>
-                <Link 
-                  href="/pricing" 
+                <Link
+                  href="/pricing"
                   className={`mobile-nav-link ${pathname === '/pricing' ? 'active' : ''}`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Pricing
                 </Link>
-                <Link 
-                  href="/how-to-port" 
+                <Link
+                  href="/how-to-port"
                   className={`mobile-nav-link ${pathname === '/how-to-port' ? 'active' : ''}`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Docs
                 </Link>
-                
+
                 {/* Mobile User Section */}
                 <div className="pt-4 border-t border-border-primary mt-4">
                   {user ? (
@@ -273,6 +267,14 @@ export default function Navigation() {
                           <p className="text-text-muted text-xs">{user.email}</p>
                         </div>
                       </div>
+                      <Link
+                        href="/profile"
+                        className="flex items-center space-x-2 w-full text-left px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-card-hover rounded-md transition-colors"
+                        onClick={() => setShowMobileMenu(false)}
+                      >
+                        <User className="h-4 w-4" />
+                        <span>Profile</span>
+                      </Link>
                       <button
                         onClick={() => {
                           signOut()
@@ -302,9 +304,9 @@ export default function Navigation() {
         </div>
       </header>
 
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
       />
     </>
   )

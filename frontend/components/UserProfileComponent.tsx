@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { User, CreditCard, BarChart3, Calendar, RefreshCw } from 'lucide-react'
+import { User, CreditCard, BarChart3, Calendar, RefreshCw, Copy, Check, Terminal } from 'lucide-react'
 import PaymentComponent from './PaymentComponent'
+import { useAuth } from './AuthProvider'
 
 interface UserProfile {
   id: string
@@ -23,38 +24,40 @@ interface UserProfileComponentProps {
   className?: string
 }
 
-export default function UserProfileComponent({ 
-  onUpgrade, 
-  className = "" 
+export default function UserProfileComponent({
+  onUpgrade,
+  className = ""
 }: UserProfileComponentProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const { session, user, loading: authLoading, makeAuthenticatedRequest } = useAuth()
   const supabase = createClientComponentClient()
 
   const fetchUserProfile = async () => {
+    // If auth is still loading, wait
+    if (authLoading) return
+
     try {
       setLoading(true)
       setError(null)
 
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser()
+      // Use user from hook
       if (!user) {
-        throw new Error('User not authenticated')
+        return
       }
 
-      // Fetch profile from Supabase
-      const { data, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
+      // Fetch profile from Backend API instead of Supabase directly
+      // This avoids RLS issues and uses the service role on the backend
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/user/profile`)
 
-      if (profileError) {
-        throw new Error(`Profile fetch failed: ${profileError.message}`)
+      if (!response.ok) {
+        throw new Error(`Profile fetch failed: ${response.statusText}`)
       }
 
+      const data = await response.json()
       setProfile(data)
     } catch (err) {
       console.error('Error fetching user profile:', err)
@@ -72,7 +75,7 @@ export default function UserProfileComponent({
 
   useEffect(() => {
     fetchUserProfile()
-  }, [])
+  }, [user, authLoading])
 
   if (loading) {
     return (
@@ -98,7 +101,7 @@ export default function UserProfileComponent({
     return (
       <div className={`bg-red-50 border border-red-200 rounded-lg p-6 ${className}`}>
         <p className="text-red-700 mb-3">Error: {error}</p>
-        <button 
+        <button
           onClick={fetchUserProfile}
           className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
         >
@@ -125,9 +128,9 @@ export default function UserProfileComponent({
           <div className="flex items-center space-x-4">
             <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
               {profile.avatar_url ? (
-                <img 
-                  src={profile.avatar_url} 
-                  alt="Profile" 
+                <img
+                  src={profile.avatar_url}
+                  alt="Profile"
                   className="w-16 h-16 rounded-full object-cover"
                 />
               ) : (
@@ -148,9 +151,9 @@ export default function UserProfileComponent({
             className="p-2 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
             title="Refresh profile"
           >
-            <RefreshCw 
-              size={20} 
-              className={refreshing ? 'animate-spin' : ''} 
+            <RefreshCw
+              size={20}
+              className={refreshing ? 'animate-spin' : ''}
             />
           </button>
         </div>
@@ -216,12 +219,14 @@ export default function UserProfileComponent({
       {/* Payment Component */}
       <div className="p-6 border-t border-gray-100">
         <h3 className="font-medium text-gray-900 mb-4">Plan Management</h3>
-        <PaymentComponent 
+        <PaymentComponent
           onUpgrade={onUpgrade}
           showUpgradeButton={profile.payment_plan === 'free'}
           className="shadow-none border-0 bg-gray-50"
         />
       </div>
+
+
 
       {/* Usage History (Future Enhancement) */}
       {profile.chunks_analyzed > 0 && (
@@ -231,7 +236,7 @@ export default function UserProfileComponent({
             <div className="bg-blue-50 rounded-lg p-3">
               <p className="text-sm text-blue-600">Average per session</p>
               <p className="text-lg font-semibold text-blue-900">
-                {Math.round(profile.chunks_analyzed / Math.max(1, 
+                {Math.round(profile.chunks_analyzed / Math.max(1,
                   Math.ceil((Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24 * 7))
                 ))}
               </p>
