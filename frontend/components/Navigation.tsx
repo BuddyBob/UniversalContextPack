@@ -89,7 +89,7 @@ export default function Navigation() {
                 height={25}
                 className="nav-logo-img"
               />
-              <h1 className="nav-title font-medium text-lg tracking-tight">UCP</h1>
+              <h1 className="nav-title font-medium text-lg tracking-tight">Context Pack</h1>
             </Link>
 
             {/* Desktop Navigation Links */}
