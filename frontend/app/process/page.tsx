@@ -3456,30 +3456,33 @@ export default function ProcessPage() {
 
       {/* Pack Selector Modal */}
       {showPackSelector && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-2xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col border-2 border-gray-800">
-            <div className="flex justify-between items-center p-6 border-b border-gray-800">
-              <h2 className="text-2xl font-bold text-white">Select or Create Pack</h2>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-[#0C0C0C] rounded-xl max-w-3xl w-full mx-4 max-h-[80vh] flex flex-col border border-white/10 shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-6 border-b border-white/5">
+              <div>
+                <h2 className="text-xl font-semibold text-white mb-1">Select or Create Pack</h2>
+                <p className="text-sm text-gray-400">Choose a workspace for your analysis</p>
+              </div>
               <button
                 onClick={() => setShowPackSelector(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-500 hover:text-white transition-colors"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 {/* Create New Pack Card */}
                 <div
                   onClick={() => setShowCreatePack(true)}
-                  className="bg-gray-800 border-2 border-gray-700 border-dashed rounded-xl p-6 cursor-pointer transition-all hover:bg-gray-750 hover:border-gray-600 flex flex-col items-center justify-center min-h-[180px]"
+                  className="bg-transparent border border-dashed border-white/10 rounded-lg p-6 cursor-pointer transition-all duration-200 hover:bg-white/[0.02] hover:border-white/20 flex flex-col items-center justify-center min-h-[160px] group"
                 >
-                  <div className="w-14 h-14 bg-gray-700 rounded-xl flex items-center justify-center mb-3">
-                    <Plus className="w-7 h-7 text-gray-300" />
+                  <div className="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center mb-4 group-hover:bg-white/10 transition-all duration-200">
+                    <Plus className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors" />
                   </div>
-                  <h3 className="text-lg font-bold text-gray-200 mb-2">Create New Pack</h3>
-                  <p className="text-gray-400 text-sm text-center">
+                  <h3 className="text-base font-medium text-gray-300 group-hover:text-white mb-1 transition-colors">Create New Pack</h3>
+                  <p className="text-gray-500 text-sm text-center">
                     Start a new context pack
                   </p>
                 </div>
@@ -3489,17 +3492,30 @@ export default function ProcessPage() {
                   <div
                     key={pack.pack_id}
                     onClick={() => selectPack(pack)}
-                    className="bg-gray-800 border-2 border-gray-700 rounded-xl p-6 cursor-pointer transition-all hover:border-gray-600 hover:shadow-lg flex flex-col min-h-[180px]"
+                    className="bg-[#161616] border border-white/5 rounded-lg p-6 cursor-pointer transition-all duration-200 hover:border-white/10 hover:bg-[#1A1A1A] flex flex-col min-h-[160px] group"
                   >
                     <div className="flex-1">
-                      <h3 className="text-lg font-bold text-white mb-2">{pack.pack_name}</h3>
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="text-base font-medium text-white group-hover:text-gray-200 transition-colors line-clamp-1">{pack.pack_name}</h3>
+                        {pack.created_at && (
+                          <span className="text-xs text-gray-600 font-mono">
+                            {new Date(pack.created_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                       {pack.description && (
-                        <p className="text-gray-400 text-sm mb-3">{pack.description}</p>
+                        <p className="text-gray-500 text-sm mb-3 line-clamp-2">{pack.description}</p>
                       )}
                     </div>
-                    <div className="flex justify-between text-sm text-gray-500 mt-auto pt-3 border-t border-gray-700">
-                      <span>{pack.total_sources} sources</span>
-                      <span>{(pack.total_tokens / 1000).toFixed(0)}k tokens</span>
+                    <div className="flex justify-between text-xs text-gray-600 mt-auto pt-4 border-t border-white/5">
+                      <span className="flex items-center gap-1.5">
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        {pack.total_sources} sources
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Brain className="w-3.5 h-3.5" />
+                        {(pack.total_tokens / 1000).toFixed(0)}k tokens
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -3511,51 +3527,65 @@ export default function ProcessPage() {
 
       {/* Create Pack Modal */}
       {showCreatePack && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full mx-4 border-2 border-gray-800">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white">Create New Pack</h2>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-[#0C0C0C] rounded-xl p-8 max-w-md w-full mx-4 border border-white/10 shadow-2xl transform transition-all scale-100 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-start mb-8">
+              <div>
+                <h2 className="text-xl font-semibold text-white mb-1">Create New Pack</h2>
+                <p className="text-sm text-gray-400">Organize your chats and documents</p>
+              </div>
               <button
                 onClick={() => setShowCreatePack(false)}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-500 hover:text-white transition-colors"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Pack Name *
+                  Pack Name <span className="text-purple-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={newPackName}
                   onChange={(e) => setNewPackName(e.target.value)}
-                  placeholder="My Research Project"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gray-600"
+                  placeholder="e.g., Q4 Research Project"
+                  className="w-full bg-[#161616] border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 transition-all duration-200"
+                  autoFocus
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Description (optional)
+                  Description <span className="text-gray-500 text-xs font-normal ml-1">(Optional)</span>
                 </label>
                 <textarea
                   value={newPackDescription}
                   onChange={(e) => setNewPackDescription(e.target.value)}
-                  placeholder="A collection of conversations and documents about..."
+                  placeholder="What's this pack about?"
                   rows={3}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-gray-600"
+                  className="w-full bg-[#161616] border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 transition-all duration-200 resize-none"
                 />
               </div>
 
               <button
                 onClick={createPack}
                 disabled={!newPackName.trim() || isCreatingPack}
-                className="w-full bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 text-white px-6 py-3 rounded-xl font-semibold transition-colors"
+                className="w-full bg-[#1F2937] hover:bg-[#374151] disabled:bg-[#111827] disabled:text-gray-600 text-white px-6 py-3.5 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2 border border-white/5"
               >
-                {isCreatingPack ? 'Creating...' : 'Create Pack'}
+                {isCreatingPack ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    <span>Creating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    <span>Create Pack</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell } from 'lucide-react'
+import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell, Sparkles } from 'lucide-react'
 import { analytics } from '@/lib/analytics'
 import Image from 'next/image'
 import DemoVideoPopover from './DemoVideoPopover'
@@ -47,86 +47,60 @@ const ExportGuide = () => {
 
   return (
     <div className="min-h-screen bg-[#090909] text-white relative overflow-hidden">
-      {/* Very subtle purple hint in background */}
-      <div className="absolute inset-0 pointer-events-none z-0">
-        <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-purple-600/[0.025] rounded-full blur-3xl"></div>
-        <div className="absolute bottom-1/3 right-1/4 w-96 h-96 bg-purple-500/[0.02] rounded-full blur-3xl"></div>
-        <div className="absolute top-1/2 left-1/2 w-[800px] h-[800px] bg-purple-600/[0.015] rounded-full blur-3xl"></div>
+      {/* Floating star particles - Very faint */}
+      <div className="absolute inset-0 pointer-events-none">
+        {[...Array(30)].map((_, i) => {
+          const positions = [
+            { left: 10, top: 20, delay: 0, size: 1 },
+            { left: 85, top: 15, delay: 1.2, size: 1.5 },
+            { left: 25, top: 80, delay: 2.4, size: 1 },
+            { left: 70, top: 60, delay: 0.8, size: 2 },
+            { left: 50, top: 30, delay: 3.6, size: 1 },
+            { left: 15, top: 70, delay: 1.8, size: 1.5 },
+            { left: 90, top: 45, delay: 4.2, size: 1 },
+            { left: 35, top: 85, delay: 0.6, size: 1 },
+            { left: 75, top: 25, delay: 2.8, size: 1.5 },
+            { left: 55, top: 75, delay: 3.2, size: 1 },
+            { left: 20, top: 40, delay: 1.5, size: 2 },
+            { left: 80, top: 70, delay: 4.0, size: 1 },
+            { left: 45, top: 10, delay: 2.2, size: 1.5 },
+            { left: 65, top: 55, delay: 0.4, size: 1 },
+            { left: 30, top: 65, delay: 3.8, size: 1 },
+            { left: 85, top: 35, delay: 1.0, size: 1.5 },
+            { left: 40, top: 90, delay: 2.6, size: 1 },
+            { left: 75, top: 20, delay: 4.4, size: 2 },
+            { left: 60, top: 50, delay: 1.4, size: 1 },
+            { left: 25, top: 35, delay: 3.0, size: 1.5 },
+            { left: 5, top: 50, delay: 0.5, size: 1 },
+            { left: 95, top: 80, delay: 3.5, size: 1.5 },
+            { left: 50, top: 5, delay: 2.0, size: 1 },
+            { left: 12, top: 90, delay: 4.5, size: 1 },
+            { left: 88, top: 25, delay: 1.8, size: 2 },
+            { left: 42, top: 68, delay: 2.5, size: 1 },
+            { left: 68, top: 42, delay: 3.8, size: 1.5 },
+            { left: 33, top: 15, delay: 1.2, size: 1 },
+            { left: 78, top: 88, delay: 4.8, size: 1 },
+            { left: 58, top: 92, delay: 2.8, size: 1.5 }
+          ];
+          const pos = positions[i] || { left: 50, top: 50, delay: 0, size: 1 };
+
+          return (
+            <div
+              key={i}
+              className="absolute bg-white/10 rounded-full"
+              style={{
+                width: `${pos.size}px`,
+                height: `${pos.size}px`,
+                left: `${pos.left}%`,
+                top: `${pos.top}%`,
+                animation: `float 8s ease-in-out infinite ${pos.delay}s`,
+                boxShadow: '0 0 2px rgba(255, 255, 255, 0.1)'
+              }}
+            />
+          );
+        })}
       </div>
 
-      {/* Dynamic Background - Very subtle purple hint */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div
-          className="absolute w-96 h-96 bg-gradient-to-r from-purple-600/[0.04] to-transparent rounded-full blur-3xl"
-          style={{
-            left: mousePosition.x - 192,
-            top: mousePosition.y - 192,
-            transition: 'all 0.3s ease-out'
-          }}
-        />
-        <div
-          className="absolute w-64 h-64 bg-gradient-to-l from-purple-500/[0.025] to-transparent rounded-full blur-2xl"
-          style={{
-            left: mousePosition.x - 128,
-            top: mousePosition.y + 100,
-            transition: 'all 0.5s ease-out'
-          }}
-        />
-
-        {/* Floating star particles - Very faint */}
-        <div className="absolute inset-0">
-          {[...Array(30)].map((_, i) => {
-            const positions = [
-              { left: 10, top: 20, delay: 0, size: 1 },
-              { left: 85, top: 15, delay: 1.2, size: 1.5 },
-              { left: 25, top: 80, delay: 2.4, size: 1 },
-              { left: 70, top: 60, delay: 0.8, size: 2 },
-              { left: 50, top: 30, delay: 3.6, size: 1 },
-              { left: 15, top: 70, delay: 1.8, size: 1.5 },
-              { left: 90, top: 45, delay: 4.2, size: 1 },
-              { left: 35, top: 85, delay: 0.6, size: 1 },
-              { left: 75, top: 25, delay: 2.8, size: 1.5 },
-              { left: 55, top: 75, delay: 3.2, size: 1 },
-              { left: 20, top: 40, delay: 1.5, size: 2 },
-              { left: 80, top: 70, delay: 4.0, size: 1 },
-              { left: 45, top: 10, delay: 2.2, size: 1.5 },
-              { left: 65, top: 55, delay: 0.4, size: 1 },
-              { left: 30, top: 65, delay: 3.8, size: 1 },
-              { left: 85, top: 35, delay: 1.0, size: 1.5 },
-              { left: 40, top: 90, delay: 2.6, size: 1 },
-              { left: 75, top: 20, delay: 4.4, size: 2 },
-              { left: 60, top: 50, delay: 1.4, size: 1 },
-              { left: 25, top: 35, delay: 3.0, size: 1.5 },
-              { left: 5, top: 50, delay: 0.5, size: 1 },
-              { left: 95, top: 80, delay: 3.5, size: 1.5 },
-              { left: 50, top: 5, delay: 2.0, size: 1 },
-              { left: 12, top: 90, delay: 4.5, size: 1 },
-              { left: 88, top: 25, delay: 1.8, size: 2 },
-              { left: 42, top: 68, delay: 2.5, size: 1 },
-              { left: 68, top: 42, delay: 3.8, size: 1.5 },
-              { left: 33, top: 15, delay: 1.2, size: 1 },
-              { left: 78, top: 88, delay: 4.8, size: 1 },
-              { left: 58, top: 92, delay: 2.8, size: 1.5 }
-            ];
-            const pos = positions[i] || { left: 50, top: 50, delay: 0, size: 1 };
-
-            return (
-              <div
-                key={i}
-                className="absolute bg-white/10 rounded-full"
-                style={{
-                  width: `${pos.size}px`,
-                  height: `${pos.size}px`,
-                  left: `${pos.left}%`,
-                  top: `${pos.top}%`,
-                  animation: `float 8s ease-in-out infinite ${pos.delay}s`,
-                  boxShadow: '0 0 2px rgba(255, 255, 255, 0.1)'
-                }}
-              />
-            );
-          })}
-        </div>
-      </div>
 
       {/* Floating Value Proposition - Always visible on desktop, positioned on left */}
 
@@ -186,23 +160,70 @@ const ExportGuide = () => {
 
         </section>
 
+        {/* Cross Platform Section */}
+        <section className="py-24 px-6 relative overflow-hidden">
+          <div className="max-w-7xl mx-auto relative z-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-16 items-center">
+              {/* Left Column: Visual Representation */}
+              <div className="relative lg:col-span-3">
+                <ScrollReveal delay={0.3}>
+                  <div className="relative">
+                    <Image
+                      src="/main3-image.png"
+                      alt="Move chats across platforms"
+                      width={1200}
+                      height={1200}
+                      className="w-full h-auto scale-110 animate-float-subtle"
+                    />
+                  </div>
+                </ScrollReveal>
+              </div>
+
+              {/* Right Column: Text Content */}
+              <div className="lg:col-span-2">
+                <ScrollReveal>
+                  <h2 className="text-4xl md:text-6xl font-bold text-white mb-8 leading-tight">
+                    Move Chats <br />
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 animate-text-shimmer bg-[length:200%_auto]">Across Platforms.</span>
+                  </h2>
+                </ScrollReveal>
+
+                <ScrollReveal delay={0.4}>
+                  <div className="space-y-4">
+
+                    <div className="flex items-center gap-4 p-4 -mx-4 rounded-xl hover:bg-white/5 transition-all duration-300 group cursor-default">
+                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
+                        <Zap className="h-6 w-6 text-gray-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-white mb-1">Seamless Migration</h3>
+                        <p className="text-gray-400">Switch from ChatGPT to Claude or Gemini without losing context.</p>
+                      </div>
+                    </div>
+                  </div>
+                </ScrollReveal>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Fading Memory Section */}
         <section className="py-24 px-6 relative overflow-hidden">
-          <div className="max-w-6xl mx-auto relative z-10">
+          <div className="max-w-7xl mx-auto relative z-10">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
               {/* Left Column: Text Content */}
               <div>
                 <ScrollReveal>
                   <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 leading-tight">
                     Your AI Memories <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600">Fade Away.</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 animate-text-shimmer bg-[length:200%_auto]">Fade Away.</span>
                   </h2>
                 </ScrollReveal>
 
                 <ScrollReveal delay={0.4}>
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 p-4 -mx-4 rounded-xl hover:bg-white/5 transition-all duration-300 group cursor-default">
+                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
                         <Database className="h-6 w-6 text-gray-400" />
                       </div>
                       <div>
@@ -211,13 +232,14 @@ const ExportGuide = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-                        <Zap className="h-6 w-6 text-gray-400" />
+
+                    <div className="flex items-center gap-4 p-4 -mx-4 rounded-xl hover:bg-white/5 transition-all duration-300 group cursor-default">
+                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
+                        <Sparkles className="h-6 w-6 text-gray-400" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-white mb-1">Disconnected Chats</h3>
-                        <p className="text-gray-400">Chats are scattered and disconnected.</p>
+                        <h3 className="text-lg font-semibold text-white mb-1">The Solution</h3>
+                        <p className="text-gray-400">Context Pack manages your chats</p>
                       </div>
                     </div>
                   </div>
@@ -227,49 +249,15 @@ const ExportGuide = () => {
               {/* Right Column: Visual Representation */}
               <div className="relative">
                 <ScrollReveal delay={0.3}>
-                  <div className="relative rounded-2xl bg-gradient-to-b from-white/[0.05] to-transparent p-1 border border-white/10">
-                    <div className="absolute inset-0 bg-purple-500/20 blur-3xl rounded-full opacity-20"></div>
-                    <div className="relative bg-[#0A0A0A] rounded-xl p-8 overflow-hidden">
-                      {/* Chat Bubbles Fading Effect */}
-                      <div className="space-y-4 relative">
-                        {/* Overlay gradient to simulate fading */}
-                        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#0A0A0A] to-transparent z-10"></div>
-
-                        <div className="flex gap-4 animate-memory-fade-3">
-                          <div className="w-8 h-8 rounded-full bg-gray-700"></div>
-                          <div className="flex-1 bg-gray-800 rounded-2xl rounded-tl-none p-4">
-                            <div className="h-2 bg-gray-700 rounded w-3/4 mb-2"></div>
-                            <div className="h-2 bg-gray-700 rounded w-1/2"></div>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-4 animate-memory-fade-2">
-                          <div className="w-8 h-8 rounded-full bg-gray-700"></div>
-                          <div className="flex-1 bg-gray-800 rounded-2xl rounded-tl-none p-4">
-                            <div className="h-2 bg-gray-700 rounded w-full mb-2"></div>
-                            <div className="h-2 bg-gray-700 rounded w-2/3"></div>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-4 animate-memory-fade-1">
-                          <div className="w-8 h-8 rounded-full bg-gray-700"></div>
-                          <div className="flex-1 bg-gray-800 rounded-2xl rounded-tl-none p-4">
-                            <div className="h-2 bg-gray-700 rounded w-5/6 mb-2"></div>
-                            <div className="h-2 bg-gray-700 rounded w-3/4"></div>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                          <div className="w-8 h-8 rounded-full bg-purple-600"></div>
-                          <div className="flex-1 bg-gray-800 rounded-2xl rounded-tl-none p-4 border border-purple-500/30">
-                            <p className="text-gray-300 text-sm">Context Pack is reliable context storage for chats, notes, and research.</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-8 pt-8 border-t border-white/10 text-center">
-                        <p className="text-sm text-gray-500">Save your digital self.</p>
-                      </div>
+                  <div className="relative rounded-2xl bg-gradient-to-b from-white/[0.05] to-transparent p-1">
+                    <div className="relative bg-[#0A0A0A] rounded-xl overflow-hidden">
+                      <Image
+                        src="/main2-image.png"
+                        alt="AI Memories Fading"
+                        width={800}
+                        height={600}
+                        className="w-full h-auto animate-float-subtle"
+                      />
                     </div>
                   </div>
                 </ScrollReveal>
@@ -366,6 +354,15 @@ const ExportGuide = () => {
 
       {/* Custom Styles */}
       <style jsx>{`
+        @keyframes textShimmer {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animate-text-shimmer {
+          background-size: 200% auto;
+          animation: textShimmer 3s linear infinite;
+        }
         @keyframes float {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
           33% { transform: translateY(-10px) rotate(120deg); }
@@ -432,7 +429,7 @@ const ExportGuide = () => {
           animation: fadeAway 4s ease-in-out infinite alternate 2s;
         }
       `}</style>
-    </div>
+    </div >
   )
 }
 
