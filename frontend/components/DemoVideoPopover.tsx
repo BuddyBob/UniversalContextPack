@@ -40,7 +40,7 @@ export default function DemoVideoPopover() {
     const handleScroll = () => {
       const scrollPosition = window.scrollY
       const windowHeight = window.innerHeight
-      
+
       // Hide after scrolling 2 viewport heights
       if (scrollPosition > windowHeight * 2) {
         setIsVisible(false)
@@ -57,24 +57,18 @@ export default function DemoVideoPopover() {
     <>
       {/* Minimal floating help button */}
       <div
-        className={`fixed bottom-8 right-8 z-50 transition-all duration-500 ${
-          isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20 pointer-events-none'
-        }`}
+        className={`fixed bottom-8 right-8 z-50 transition-all duration-500 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20 pointer-events-none'
+          }`}
       >
         <div className="relative">
-          {/* Animated purple border */}
-          <div className="absolute inset-0 rounded-full p-[2px] bg-gradient-to-r from-purple-500 via-purple-400 to-purple-500 animate-spin-border">
-            <div className="absolute inset-[2px] rounded-full bg-[#1a1a1a]" />
-          </div>
-          
           <button
             onClick={handleOpen}
-            className="relative group bg-[#1a1a1a] hover:bg-[#252525] text-gray-400 hover:text-white rounded-full px-5 py-3 shadow-lg transition-all duration-200 flex items-center gap-2.5 z-10"
+            className="relative group bg-[#1a1a1a] hover:bg-[#252525] text-gray-400 hover:text-white rounded-full px-5 py-3 transition-all duration-200 flex items-center gap-2.5 z-10 animate-glow border border-transparent"
             aria-label="Watch demo video"
           >
             {/* Icon */}
             <Play className="w-4 h-4" />
-            
+
             {/* Text Label */}
             <span className="text-sm font-medium">Watch Demo</span>
           </button>
@@ -177,6 +171,21 @@ export default function DemoVideoPopover() {
 
         .animate-scaleIn {
           animation: scaleIn 0.3s ease-out;
+        }
+
+        @keyframes glow {
+          0%, 100% {
+            box-shadow: 0 0 5px rgba(168, 85, 247, 0.1);
+            border-color: rgba(168, 85, 247, 0.1);
+          }
+          50% {
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+            border-color: rgba(168, 85, 247, 0.3);
+          }
+        }
+
+        .animate-glow {
+          animation: glow 3s ease-in-out infinite;
         }
 
         kbd {

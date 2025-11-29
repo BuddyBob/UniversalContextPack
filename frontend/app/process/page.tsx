@@ -80,6 +80,7 @@ export default function ProcessPage() {
   const [textError, setTextError] = useState<string | null>(null);
   const [isLogPanelCollapsed, setIsLogPanelCollapsed] = useState(true);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [shouldHighlightOptions, setShouldHighlightOptions] = useState(false);
 
   // Pack-based workflow state
   const [showPackSelector, setShowPackSelector] = useState(false);
@@ -2477,6 +2478,11 @@ export default function ProcessPage() {
   };
 
 
+  const handleUploadAreaClick = () => {
+    setShouldHighlightOptions(true);
+    setTimeout(() => setShouldHighlightOptions(false), 1000);
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 flex">
       {/* Payment Notification */}
@@ -3122,6 +3128,7 @@ export default function ProcessPage() {
                   /* File Upload Area */
                   <>
                     <div
+                      onClick={handleUploadAreaClick}
                       onDragOver={handleDragOver}
                       onDragEnter={handleDragEnter}
                       onDragLeave={handleDragLeave}
@@ -3138,25 +3145,26 @@ export default function ProcessPage() {
                       <p className="text-sm text-gray-400 mb-4">
                         Choose one of the three options below to add sources to your pack for analysis. <br /> Large files will be processed and emailed when done.
                       </p>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".json,.txt,.csv,.zip,.html,.htm,.pdf"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                      <input
-                        ref={folderInputRef}
-                        type="file"
-                        {...({ webkitdirectory: 'true' } as any)}
-                        multiple
-                        onChange={handleFolderSelect}
-                        className="hidden"
-                      />
                     </div>
 
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json,.txt,.csv,.zip,.html,.htm,.pdf"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    <input
+                      ref={folderInputRef}
+                      type="file"
+                      {...({ webkitdirectory: 'true' } as any)}
+                      multiple
+                      onChange={handleFolderSelect}
+                      className="hidden"
+                    />
+
                     {/* Source Type Tabs */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`grid grid-cols-2 gap-4 transition-all duration-300 ${shouldHighlightOptions ? 'animate-shake ring-2 ring-blue-500/50 rounded-xl p-1' : ''}`}>
                       {/* Chat Exports */}
                       <button
                         onClick={() => {
@@ -3171,22 +3179,31 @@ export default function ProcessPage() {
                           }
                           fileInputRef.current?.click();
                         }}
-                        className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
+                        className="group relative text-left h-full"
                       >
-                        <MessageSquare className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
-                        <h3 className="font-semibold text-white mb-1">All AI Chats</h3>
-                        <p className="text-sm text-gray-400">
-                          <a
-                            href="https://chatgpt.com/#settings/DataControls"
-                            target="_blank"
-                            className="text-blue-300 underline hover:text-blue-400 hover:underline transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                            }}
-                          >
-                            conversations.json
-                          </a>
-                        </p>
+                        <div className="relative h-full p-6 rounded-2xl bg-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-300">
+                          <div className="mb-4">
+                            <div className="w-12 h-12 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:scale-105 group-hover:bg-white/[0.08] transition-all duration-300">
+                              <MessageSquare className="h-6 w-6 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
+                            </div>
+                          </div>
+                          <h3 className="text-lg font-bold text-white mb-2">All AI Chats</h3>
+                          <p className="text-gray-400 text-sm leading-relaxed">
+                            <a
+                              href="https://chatgpt.com/#settings/DataControls"
+                              target="_blank"
+                              className="text-blue-300 underline hover:text-blue-400 hover:underline transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                            >
+                              conversations.json
+                            </a>
+                          </p>
+                          <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
+                            <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
+                          </div>
+                        </div>
                       </button>
 
                       {/* One Chat */}
@@ -3198,11 +3215,20 @@ export default function ProcessPage() {
                           }
                           setUploadMethod('url');
                         }}
-                        className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
+                        className="group relative text-left h-full"
                       >
-                        <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
-                        <h3 className="font-semibold text-white mb-1">One Chat</h3>
-                        <p className="text-sm text-gray-400">Import single conversation URL</p>
+                        <div className="relative h-full p-6 rounded-2xl bg-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-300">
+                          <div className="mb-4">
+                            <div className="w-12 h-12 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:scale-105 group-hover:bg-white/[0.08] transition-all duration-300">
+                              <FileText className="h-6 w-6 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
+                            </div>
+                          </div>
+                          <h3 className="text-lg font-bold text-white mb-2">One Chat</h3>
+                          <p className="text-gray-400 text-sm leading-relaxed">Import single conversation URL</p>
+                          <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
+                            <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
+                          </div>
+                        </div>
                       </button>
 
                       {/* Document */}
@@ -3219,11 +3245,20 @@ export default function ProcessPage() {
                           }
                           fileInputRef.current?.click();
                         }}
-                        className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
+                        className="group relative text-left h-full"
                       >
-                        <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
-                        <h3 className="font-semibold text-white mb-1">Document</h3>
-                        <p className="text-sm text-gray-400">PDF, TXT, HTML, CSV</p>
+                        <div className="relative h-full p-6 rounded-2xl bg-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-300">
+                          <div className="mb-4">
+                            <div className="w-12 h-12 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:scale-105 group-hover:bg-white/[0.08] transition-all duration-300">
+                              <FileText className="h-6 w-6 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
+                            </div>
+                          </div>
+                          <h3 className="text-lg font-bold text-white mb-2">Document</h3>
+                          <p className="text-gray-400 text-sm leading-relaxed">PDF, TXT, HTML, CSV</p>
+                          <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
+                            <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
+                          </div>
+                        </div>
                       </button>
 
                       {/* Paste Text */}
@@ -3235,11 +3270,20 @@ export default function ProcessPage() {
                           }
                           setUploadMethod('text');
                         }}
-                        className="p-6 bg-gray-800 hover:bg-gray-750 border-2 border-gray-700 hover:border-gray-600 rounded-xl text-left transition-all group"
+                        className="group relative text-left h-full"
                       >
-                        <FileText className="w-8 h-8 text-gray-400 group-hover:text-gray-300 mb-3" />
-                        <h3 className="font-semibold text-white mb-1">Paste Text</h3>
-                        <p className="text-sm text-gray-400">Direct text input</p>
+                        <div className="relative h-full p-6 rounded-2xl bg-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-300">
+                          <div className="mb-4">
+                            <div className="w-12 h-12 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:scale-105 group-hover:bg-white/[0.08] transition-all duration-300">
+                              <FileText className="h-6 w-6 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
+                            </div>
+                          </div>
+                          <h3 className="text-lg font-bold text-white mb-2">Paste Text</h3>
+                          <p className="text-gray-400 text-sm leading-relaxed">Direct text input</p>
+                          <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
+                            <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
+                          </div>
+                        </div>
                       </button>
                     </div>
                   </>
@@ -3536,6 +3580,17 @@ export default function ProcessPage() {
         onClose={freeCreditsPrompt.closePrompt}
         feature="document processing"
       />
+
+      <style jsx global>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+          20%, 40%, 60%, 80% { transform: translateX(4px); }
+        }
+        .animate-shake {
+          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+      `}</style>
 
     </div>
   );
