@@ -3189,15 +3189,19 @@ export default function ProcessPage() {
                           </div>
                           <h3 className="text-lg font-bold text-white mb-2">All AI Chats</h3>
                           <p className="text-gray-400 text-sm leading-relaxed">
+                            conversations.json
+                          </p>
+                          <p className="text-gray-500 text-xs mt-2">
                             <a
                               href="https://chatgpt.com/#settings/DataControls"
                               target="_blank"
-                              className="text-blue-300 underline hover:text-blue-400 hover:underline transition-colors"
+                              rel="noopener noreferrer"
+                              className="text-blue-400/70 hover:text-blue-400 transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
                               }}
                             >
-                              conversations.json
+                              How to download →
                             </a>
                           </p>
                           <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">

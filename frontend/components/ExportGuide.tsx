@@ -276,9 +276,16 @@ const ExportGuide = () => {
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
                 Export Your Conversations
               </h2>
-              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
                 One click to download your entire chat history
               </p>
+              
+              {/* How to get chats info */}
+              <div className="max-w-xl mx-auto p-4 rounded-xl bg-white/[0.02] border border-white/10 backdrop-blur-sm">
+                <p className="text-sm text-gray-400">
+                  Click your platform below → Settings → Export Data → Check your email in 5-10 minutes
+                </p>
+              </div>
             </div>
 
             {/* Glass cards */}
