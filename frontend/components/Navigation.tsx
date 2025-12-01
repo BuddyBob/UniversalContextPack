@@ -107,17 +107,17 @@ export default function Navigation() {
                 Packs
               </Link>
               <Link
+                href="/pricing"
+                className={`nav-link ${pathname === '/pricing' ? 'active' : ''}`}
+              >
+                Pricing
+              </Link>
+              <Link
                 href="/how-to-port"
                 className={`nav-link ${pathname === '/how-to-port' ? 'active' : ''}`}
               >
                 Docs
               </Link>
-              {/* <Link
-                href="/developer"
-                className={`nav-link ${pathname === '/developer' ? 'active' : ''}`}
-              >
-                Developer
-              </Link> */}
             </nav>
 
             {/* Right Side Navigation */}
