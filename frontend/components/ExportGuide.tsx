@@ -125,7 +125,7 @@ const ExportGuide = () => {
               </h1>
 
               <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                Take control of your AI memory
+                Migrate or Backup Your AI Memory
               </p>
               {/*If the user is not signed in, send them to /process if they are signed in send them to /packs */}
               <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
