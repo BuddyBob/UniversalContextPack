@@ -120,7 +120,7 @@ const ExportGuide = () => {
               </div>
 
               <h1 className="text-4xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                AI Chats Forget.<br />
+                AI Chats Forget<br />
                 Context Packs Remember
               </h1>
 
