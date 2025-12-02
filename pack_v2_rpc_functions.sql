@@ -47,7 +47,51 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- List all v2 packs for user
+-- List all v2 packs for user with aggregated statistics
+CREATE OR REPLACE FUNCTION get_user_packs_v2_with_stats(
+  user_uuid UUID
+) RETURNS TABLE(
+  pack_id TEXT,
+  user_id UUID,
+  pack_name TEXT,
+  description TEXT,
+  custom_system_prompt TEXT,
+  r2_pack_directory TEXT,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ,
+  total_sources BIGINT,
+  total_chunks BIGINT,
+  processed_chunks BIGINT,
+  total_input_tokens BIGINT,
+  total_output_tokens BIGINT,
+  total_cost NUMERIC
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.pack_id,
+    p.user_id,
+    p.pack_name,
+    p.description,
+    p.custom_system_prompt,
+    p.r2_pack_directory,
+    p.created_at,
+    p.updated_at,
+    COALESCE(COUNT(s.source_id), 0)::BIGINT as total_sources,
+    COALESCE(SUM(s.total_chunks), 0)::BIGINT as total_chunks,
+    COALESCE(SUM(s.processed_chunks), 0)::BIGINT as processed_chunks,
+    COALESCE(SUM(s.total_input_tokens), 0)::BIGINT as total_input_tokens,
+    COALESCE(SUM(s.total_output_tokens), 0)::BIGINT as total_output_tokens,
+    COALESCE(SUM(s.total_cost), 0)::NUMERIC as total_cost
+  FROM public.packs_v2 p
+  LEFT JOIN public.pack_sources s ON s.pack_id = p.pack_id AND s.user_id = p.user_id
+  WHERE p.user_id = user_uuid
+  GROUP BY p.pack_id, p.user_id, p.pack_name, p.description, p.custom_system_prompt, p.r2_pack_directory, p.created_at, p.updated_at
+  ORDER BY p.created_at DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- List all v2 packs for user (simple version without stats)
 CREATE OR REPLACE FUNCTION get_user_packs_v2(
   user_uuid UUID
 ) RETURNS SETOF public.packs_v2 AS $$

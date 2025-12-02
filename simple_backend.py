@@ -3692,42 +3692,30 @@ async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
         
-        # Use RPC function to get packs (bypasses RLS with SECURITY DEFINER)
-        result = supabase.rpc("get_user_packs_v2", {
+        # Use RPC function with aggregated stats (bypasses RLS with SECURITY DEFINER)
+        result = supabase.rpc("get_user_packs_v2_with_stats", {
             "user_uuid": user.user_id
         }).execute()
         
         if not result.data:
             return []
         
+        # Transform the data to match expected format
         packs = []
         for pack in result.data:
-            # Get aggregated statistics from pack_sources
-            stats_result = supabase.from_("pack_sources").select(
-                "processed_chunks, total_chunks, total_input_tokens, total_output_tokens, total_cost"
-            ).eq("pack_id", pack["pack_id"]).eq("user_id", str(user.user_id)).execute()
-            
-            # Calculate totals
-            total_sources = len(stats_result.data) if stats_result.data else 0
-            total_chunks = sum(s.get("total_chunks", 0) for s in (stats_result.data or []))
-            processed_chunks = sum(s.get("processed_chunks", 0) for s in (stats_result.data or []))
-            total_input_tokens = sum(s.get("total_input_tokens", 0) for s in (stats_result.data or []))
-            total_output_tokens = sum(s.get("total_output_tokens", 0) for s in (stats_result.data or []))
-            total_cost = sum(s.get("total_cost", 0) for s in (stats_result.data or []))
-            
             pack_data = {
                 "pack_id": pack["pack_id"],
                 "pack_name": pack["pack_name"],
                 "description": pack.get("description"),
                 "custom_system_prompt": pack.get("custom_system_prompt"),
-                "total_sources": total_sources,
-                "total_chunks": total_chunks,
-                "processed_chunks": processed_chunks,
-                "total_input_tokens": total_input_tokens,
-                "total_output_tokens": total_output_tokens,
-                "total_cost": total_cost,
+                "total_sources": pack.get("total_sources", 0),
+                "total_chunks": pack.get("total_chunks", 0),
+                "processed_chunks": pack.get("processed_chunks", 0),
+                "total_input_tokens": pack.get("total_input_tokens", 0),
+                "total_output_tokens": pack.get("total_output_tokens", 0),
+                "total_cost": float(pack.get("total_cost", 0)),
                 "created_at": pack["created_at"],
-                "last_updated": pack.get("last_updated") or pack.get("updated_at"),
+                "last_updated": pack.get("updated_at"),
                 "pack_version": "v2"
             }
             packs.append(pack_data)
