@@ -286,7 +286,6 @@ export default function Navigation() {
                           <p className="text-white font-semibold text-base truncate">
                             {userProfile?.full_name || user.email?.split('@')[0]}
                           </p>
-                          <p className="text-gray-400 text-sm truncate">{user.email}</p>
                         </div>
                       </div>
 
