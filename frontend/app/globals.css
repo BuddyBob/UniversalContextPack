@@ -764,6 +764,8 @@
     background-color: var(--bg-secondary) !important;
     border-bottom: 1px solid var(--border-primary) !important;
     backdrop-filter: blur(10px) !important;
+    position: relative !important;
+    z-index: 100 !important;
   }
   
   .nav-container {
@@ -843,11 +845,12 @@
     background-color: #ffffff !important;
     color: #000000 !important;
     font-weight: 500 !important;
-    padding: 0.5rem 1.25rem !important;
+    padding: 0.5rem 2rem !important;
     border-radius: 6px !important;
     font-size: 0.9rem !important;
     transition: all 0.2s ease !important;
     border: 1px solid #ffffff !important;
+    white-space: nowrap !important;
   }
 
   .btn-white:hover {
@@ -896,6 +899,8 @@
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
+    max-width: 180px !important;
+    min-width: 0 !important;
   }
   
   .nav-user-name {
@@ -909,6 +914,10 @@
     font-size: 0.75rem !important;
     color: var(--text-muted) !important;
     line-height: 1.2 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
   }
   
   .nav-dropdown-menu {
