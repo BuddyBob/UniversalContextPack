@@ -2666,7 +2666,7 @@ async def purchase_credits(request: CreditPurchaseRequest, user: AuthenticatedUs
 
 @app.get("/api/user/profile")
 async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
-    """Get user's profile including credit balance"""
+    """Get user's profile including credit balance and actual usage statistics"""
     try:
         if not supabase:
             # Legacy mode - return default values
@@ -2674,7 +2674,8 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
                 "credits_balance": get_new_user_credits(),
                 "can_process": True,
                 "email": user.email if hasattr(user, 'email') else "unknown@example.com",
-                "payment_plan": "legacy"
+                "payment_plan": "legacy",
+                "chunks_analyzed": 0
             }
         
         # Get user profile using database function
@@ -2682,12 +2683,26 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
         
         if result.data:
             profile = result.data
+            
+            # Calculate actual chunks analyzed from credit transactions
+            usage_result = supabase.from_("credit_transactions").select("credits").eq(
+                "user_id", str(user.user_id)
+            ).eq("transaction_type", "usage").execute()
+            
+            chunks_analyzed = 0
+            if usage_result.data:
+                # Sum up all usage transactions (they're negative, so we negate them)
+                chunks_analyzed = abs(sum(t.get("credits", 0) for t in usage_result.data))
+            
             return {
+                "id": profile.get("id"),
                 "credits_balance": profile.get("credits_balance", 0),
                 "can_process": profile.get("payment_plan") == "unlimited" or profile.get("credits_balance", 0) > 0,
                 "email": profile.get("email", "unknown@example.com"),
                 "payment_plan": profile.get("payment_plan", "credits"),
-                "chunks_analyzed": profile.get("chunks_analyzed", 0),
+                "chunks_analyzed": chunks_analyzed,
+                "subscription_status": profile.get("subscription_status"),
+                "plan_start_date": profile.get("plan_start_date"),
                 "created_at": profile.get("created_at"),
                 "updated_at": profile.get("updated_at")
             }
@@ -2702,11 +2717,14 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             if create_result.data:
                 profile = create_result.data
                 return {
+                    "id": profile.get("id"),
                     "credits_balance": profile.get("credits_balance", get_new_user_credits()),
                     "can_process": True,
                     "email": profile.get("email", "unknown@example.com"),
                     "payment_plan": profile.get("payment_plan", "credits"),
-                    "chunks_analyzed": profile.get("chunks_analyzed", 0),
+                    "chunks_analyzed": 0,
+                    "subscription_status": profile.get("subscription_status"),
+                    "plan_start_date": profile.get("plan_start_date"),
                     "created_at": profile.get("created_at"),
                     "updated_at": profile.get("updated_at")
                 }
@@ -2716,7 +2734,8 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
                     "credits_balance": get_new_user_credits(),
                     "can_process": True,
                     "email": getattr(user, 'email', "unknown@example.com"),
-                    "payment_plan": "credits"
+                    "payment_plan": "credits",
+                    "chunks_analyzed": 0
                 }
         
     except Exception as e:
@@ -2727,6 +2746,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             "can_process": False,
             "email": getattr(user, 'email', "unknown@example.com"),
             "payment_plan": "credits",
+            "chunks_analyzed": 0,
             "error": str(e)
         }
 
@@ -3667,7 +3687,7 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
 
 @app.get("/api/v2/packs")
 async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):
-    """List all v2 packs for user"""
+    """List all v2 packs for user with aggregated statistics"""
     try:
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
@@ -3682,13 +3702,30 @@ async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):
         
         packs = []
         for pack in result.data:
+            # Get aggregated statistics from pack_sources
+            stats_result = supabase.from_("pack_sources").select(
+                "processed_chunks, total_chunks, total_input_tokens, total_output_tokens, total_cost"
+            ).eq("pack_id", pack["pack_id"]).eq("user_id", str(user.user_id)).execute()
+            
+            # Calculate totals
+            total_sources = len(stats_result.data) if stats_result.data else 0
+            total_chunks = sum(s.get("total_chunks", 0) for s in (stats_result.data or []))
+            processed_chunks = sum(s.get("processed_chunks", 0) for s in (stats_result.data or []))
+            total_input_tokens = sum(s.get("total_input_tokens", 0) for s in (stats_result.data or []))
+            total_output_tokens = sum(s.get("total_output_tokens", 0) for s in (stats_result.data or []))
+            total_cost = sum(s.get("total_cost", 0) for s in (stats_result.data or []))
+            
             pack_data = {
                 "pack_id": pack["pack_id"],
                 "pack_name": pack["pack_name"],
                 "description": pack.get("description"),
                 "custom_system_prompt": pack.get("custom_system_prompt"),
-                "total_sources": pack.get("total_sources", 0),
-                "total_tokens": pack.get("total_tokens", 0),
+                "total_sources": total_sources,
+                "total_chunks": total_chunks,
+                "processed_chunks": processed_chunks,
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens,
+                "total_cost": total_cost,
                 "created_at": pack["created_at"],
                 "last_updated": pack.get("last_updated") or pack.get("updated_at"),
                 "pack_version": "v2"

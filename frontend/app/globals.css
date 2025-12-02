@@ -814,9 +814,15 @@
   }
   
   .nav-links {
-    display: flex !important;
     align-items: center !important;
     gap: 1.5rem !important;
+  }
+  
+  /* Only show nav links on desktop */
+  @media (min-width: 768px) {
+    .nav-links {
+      display: flex !important;
+    }
   }
   
   .nav-link {

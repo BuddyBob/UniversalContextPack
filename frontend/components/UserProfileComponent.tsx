@@ -160,7 +160,7 @@ export default function UserProfileComponent({
       </div>
 
       {/* Stats Grid */}
-      <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Plan Status */}
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-2">
@@ -184,35 +184,11 @@ export default function UserProfileComponent({
             <h3 className="font-medium text-gray-900">Usage</h3>
           </div>
           <p className="text-2xl font-semibold text-gray-900">
-            {profile.chunks_analyzed.toLocaleString()}
+            {profile.chunks_analyzed?.toLocaleString() || 0}
           </p>
           <p className="text-sm text-gray-500">
             Chunks analyzed
           </p>
-        </div>
-
-        {/* Plan Duration */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <Calendar size={16} className="text-blue-600" />
-            <h3 className="font-medium text-gray-900">Plan Period</h3>
-          </div>
-          {profile.plan_start_date ? (
-            <div>
-              <p className="text-sm font-medium text-gray-900">
-                Started: {new Date(profile.plan_start_date).toLocaleDateString()}
-              </p>
-              {profile.plan_end_date && (
-                <p className="text-sm text-gray-500">
-                  Renews: {new Date(profile.plan_end_date).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-500">
-              Free plan - no billing cycle
-            </p>
-          )}
         </div>
       </div>
 
@@ -221,35 +197,10 @@ export default function UserProfileComponent({
         <h3 className="font-medium text-gray-900 mb-4">Plan Management</h3>
         <PaymentComponent
           onUpgrade={onUpgrade}
-          showUpgradeButton={profile.payment_plan === 'free'}
+          showUpgradeButton={profile.payment_plan === 'free' || profile.payment_plan === 'credits'}
           className="shadow-none border-0 bg-gray-50"
         />
       </div>
-
-
-
-      {/* Usage History (Future Enhancement) */}
-      {profile.chunks_analyzed > 0 && (
-        <div className="p-6 border-t border-gray-100">
-          <h3 className="font-medium text-gray-900 mb-2">Quick Stats</h3>
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div className="bg-blue-50 rounded-lg p-3">
-              <p className="text-sm text-blue-600">Average per session</p>
-              <p className="text-lg font-semibold text-blue-900">
-                {Math.round(profile.chunks_analyzed / Math.max(1,
-                  Math.ceil((Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24 * 7))
-                ))}
-              </p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-3">
-              <p className="text-sm text-green-600">Total sessions</p>
-              <p className="text-lg font-semibold text-green-900">
-                {Math.ceil(profile.chunks_analyzed / 2)}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

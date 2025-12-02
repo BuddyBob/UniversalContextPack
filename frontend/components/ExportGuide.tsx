@@ -145,8 +145,8 @@ const ExportGuide = () => {
               </div>
             </div>
 
-            {/* Main Visual */}
-            <div className="max-w-5xl mx-auto pl-16 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+            {/* Main Visual - Hidden on mobile */}
+            <div className="hidden md:block max-w-5xl mx-auto md:pl-16 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
               <Image
                 src="/main-image.png"
                 alt="Memory Fading vs Organized Memory"
@@ -161,11 +161,11 @@ const ExportGuide = () => {
         </section>
 
         {/* Cross Platform Section */}
-        <section className="py-24 px-6 relative overflow-hidden">
+        <section className="py-12 md:py-24 px-6 relative overflow-hidden">
           <div className="max-w-7xl mx-auto relative z-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-16 items-center">
-              {/* Left Column: Visual Representation */}
-              <div className="relative lg:col-span-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 md:gap-16 items-center">
+              {/* Left Column: Visual Representation - Hidden on mobile */}
+              <div className="hidden md:block relative lg:col-span-3">
                 <ScrollReveal delay={0.3}>
                   <div className="relative">
                     <Image
@@ -180,9 +180,9 @@ const ExportGuide = () => {
               </div>
 
               {/* Right Column: Text Content */}
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 md:col-span-2">
                 <ScrollReveal>
-                  <h2 className="text-4xl md:text-6xl font-bold text-white mb-8 leading-tight">
+                  <h2 className="text-3xl md:text-4xl lg:text-6xl font-bold text-white mb-8 leading-tight text-center md:text-left">
                     Move Chats <br />
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 animate-text-shimmer bg-[length:200%_auto]">Across Platforms.</span>
                   </h2>
@@ -208,13 +208,13 @@ const ExportGuide = () => {
         </section>
 
         {/* Fading Memory Section */}
-        <section className="py-24 px-6 relative overflow-hidden">
+        <section className="py-12 md:py-24 px-6 relative overflow-hidden">
           <div className="max-w-7xl mx-auto relative z-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
               {/* Left Column: Text Content */}
-              <div>
+              <div className="text-center md:text-left">
                 <ScrollReveal>
-                  <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 leading-tight">
+                  <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
                     Your AI Memories <br />
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 animate-text-shimmer bg-[length:200%_auto]">Fade Away.</span>
                   </h2>
@@ -246,8 +246,8 @@ const ExportGuide = () => {
                 </ScrollReveal>
               </div>
 
-              {/* Right Column: Visual Representation */}
-              <div className="relative">
+              {/* Right Column: Visual Representation - Hidden on mobile */}
+              <div className="hidden md:block relative">
                 <ScrollReveal delay={0.3}>
                   <div className="relative rounded-2xl bg-gradient-to-b from-white/[0.05] to-transparent p-1">
                     <div className="relative bg-[#0A0A0A] rounded-xl overflow-hidden">
@@ -265,9 +265,9 @@ const ExportGuide = () => {
             </div>
           </div>
         </section>
-        <section id="export" className="py-32 px-6 relative overflow-hidden">
+        <section id="export" className="py-16 md:py-32 px-6 relative overflow-hidden">
           <div className="max-w-6xl mx-auto relative z-10">
-            <div className="text-center mb-20">
+            <div className="text-center mb-12 md:mb-20">
               <div className="inline-block mb-4">
                 <span className="px-4 py-2 rounded-full bg-white/5 border border-white/10 text-gray-400 text-sm font-medium">
                   Step 1

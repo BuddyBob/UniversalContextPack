@@ -81,16 +81,31 @@ export default function Navigation() {
       <header className="nav-header">
         <div className="nav-container">
           <div className="nav-content">
-            <Link href="/" className="nav-brand">
-              <Image
-                src="/Logo.png"
-                alt="UCP Logo"
-                width={25}
-                height={25}
-                className="nav-logo-img"
-              />
-              <h1 className="nav-title font-medium text-lg tracking-tight">Context Pack</h1>
-            </Link>
+            <div className="flex items-center justify-between w-full">
+              <Link href="/" className="nav-brand">
+                <Image
+                  src="/Logo.png"
+                  alt="UCP Logo"
+                  width={25}
+                  height={25}
+                  className="nav-logo-img"
+                />
+                <h1 className="nav-title font-medium text-lg tracking-tight">Context Pack</h1>
+              </Link>
+
+              {/* Mobile Hamburger - Always visible on mobile */}
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="md:hidden p-2 rounded-md text-white hover:bg-gray-800 transition-colors ml-auto"
+                aria-label="Toggle mobile menu"
+              >
+                {showMobileMenu ? (
+                  <X className="h-6 w-6" />
+                ) : (
+                  <Menu className="h-6 w-6" />
+                )}
+              </button>
+            </div>
 
             {/* Desktop Navigation Links */}
             <nav className="nav-links hidden md:flex">
@@ -120,16 +135,15 @@ export default function Navigation() {
               </Link>
             </nav>
 
-            {/* Right Side Navigation */}
-            <div className="nav-right-section">
-              {/* Status Indicator - Just a dot */}
+            {/* Desktop Right Side Navigation */}
+            <div className="hidden md:flex items-center gap-4">
+              {/* Status Indicator */}
               <Link href="/status" className="flex items-center text-sm hover:opacity-80 transition-opacity" title="System Status">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
               </Link>
 
-
               {/* Desktop User Menu */}
-              <div className="nav-user-section hidden md:flex items-center gap-3">
+              <div className="nav-user-section flex items-center gap-3">
                 {user ? (
                   <>
                     <div className="relative" ref={dropdownRef}>
@@ -199,90 +213,116 @@ export default function Navigation() {
                   </button>
                 )}
               </div>
-
-              {/* Mobile Hamburger Button */}
-              <button
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="md:hidden p-2 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-card-hover transition-colors"
-                aria-label="Toggle mobile menu"
-              >
-                {showMobileMenu ? (
-                  <X className="h-6 w-6" />
-                ) : (
-                  <Menu className="h-6 w-6" />
-                )}
-              </button>
             </div>
           </div>
 
           {/* Mobile Menu */}
           {showMobileMenu && (
-            <div className="md:hidden mt-4 pb-4 border-t border-border-primary">
-              <nav className="flex flex-col space-y-2 pt-4">
+            <div className="md:hidden mt-2 pb-6 border-t border-gray-800/50">
+              <nav className="flex flex-col pt-6 px-2 space-y-1">
                 <Link
                   href="/"
-                  className={`mobile-nav-link ${pathname === '/' ? 'active' : ''}`}
+                  className={`px-4 py-3 rounded-xl font-medium transition-all ${
+                    pathname === '/' 
+                      ? 'bg-white/10 text-white' 
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Home
                 </Link>
                 <Link
                   href="/packs"
-                  className={`mobile-nav-link ${pathname === '/packs' ? 'active' : ''}`}
+                  className={`px-4 py-3 rounded-xl font-medium transition-all ${
+                    pathname === '/packs' 
+                      ? 'bg-white/10 text-white' 
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Packs
                 </Link>
                 <Link
                   href="/pricing"
-                  className={`mobile-nav-link ${pathname === '/pricing' ? 'active' : ''}`}
+                  className={`px-4 py-3 rounded-xl font-medium transition-all ${
+                    pathname === '/pricing' 
+                      ? 'bg-white/10 text-white' 
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Pricing
                 </Link>
                 <Link
                   href="/how-to-port"
-                  className={`mobile-nav-link ${pathname === '/how-to-port' ? 'active' : ''}`}
+                  className={`px-4 py-3 rounded-xl font-medium transition-all ${
+                    pathname === '/how-to-port' 
+                      ? 'bg-white/10 text-white' 
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Docs
                 </Link>
 
                 {/* Mobile User Section */}
-                <div className="pt-4 border-t border-border-primary mt-4">
+                <div className="pt-6 mt-4 border-t border-gray-800/50">
                   {user ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-3 px-3 py-2">
-                        {userProfile?.avatar_url && (
+                    <div className="space-y-2">
+                      {/* User Info Card */}
+                      <div className="flex items-center space-x-3 px-4 py-4 rounded-xl bg-white/[0.02] border border-white/10 backdrop-blur-xl">
+                        {userProfile?.avatar_url ? (
                           <img
                             src={userProfile.avatar_url}
                             alt={userProfile.full_name || 'User'}
-                            className="w-8 h-8 rounded-full"
+                            className="w-12 h-12 rounded-full object-cover"
                           />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+                            <User className="w-6 h-6 text-white" />
+                          </div>
                         )}
-                        <div>
-                          <p className="text-text-primary font-medium text-sm">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-semibold text-base truncate">
                             {userProfile?.full_name || user.email?.split('@')[0]}
                           </p>
-                          <p className="text-text-muted text-xs">{user.email}</p>
+                          <p className="text-gray-400 text-sm truncate">{user.email}</p>
                         </div>
                       </div>
+
+                      {/* Credits Display */}
                       <Link
-                        href="/profile"
-                        className="flex items-center space-x-2 w-full text-left px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-card-hover rounded-md transition-colors"
+                        href="/pricing"
+                        className="flex items-center justify-between px-4 py-4 rounded-xl bg-white/[0.02] border border-white/10 hover:bg-white/[0.05] hover:border-white/20 transition-all backdrop-blur-xl"
                         onClick={() => setShowMobileMenu(false)}
                       >
-                        <User className="h-4 w-4" />
-                        <span>Profile</span>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center">
+                            <CreditCard className="w-5 h-5 text-gray-400" />
+                          </div>
+                          <span className="text-base font-medium text-gray-300">Credits</span>
+                        </div>
+                        <span className="text-2xl font-bold text-white">
+                          {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance)?.toLocaleString() || '0'}
+                        </span>
+                      </Link>
+                      
+                      <Link
+                        href="/profile"
+                        className="flex items-center space-x-3 w-full text-left px-4 py-3 text-gray-300 hover:text-white hover:bg-white/5 rounded-xl font-medium transition-all"
+                        onClick={() => setShowMobileMenu(false)}
+                      >
+                        <Settings className="h-5 w-5" />
+                        <span>Profile Settings</span>
                       </Link>
                       <button
                         onClick={() => {
                           signOut()
                           setShowMobileMenu(false)
                         }}
-                        className="flex items-center space-x-2 w-full text-left px-3 py-2 text-text-secondary hover:text-text-primary hover:bg-bg-card-hover rounded-md transition-colors"
+                        className="flex items-center space-x-3 w-full text-left px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl font-medium transition-all"
                       >
-                        <LogOut className="h-4 w-4" />
+                        <LogOut className="h-5 w-5" />
                         <span>Sign Out</span>
                       </button>
                     </div>
@@ -292,9 +332,9 @@ export default function Navigation() {
                         setShowAuthModal(true)
                         setShowMobileMenu(false)
                       }}
-                      className="w-full text-left px-3 py-2 text-accent-primary font-medium hover:bg-bg-card-hover rounded-md transition-colors"
+                      className="w-full px-6 py-3 bg-white text-black font-semibold hover:bg-gray-100 rounded-xl transition-all shadow-lg"
                     >
-                      Sign In
+                      Get Started
                     </button>
                   )}
                 </div>

@@ -129,10 +129,10 @@ export default function PacksPage() {
           pack_name: pack.pack_name,
           description: pack.description,
           status: 'completed',
-          total_chunks: pack.total_sources || 0,
-          total_input_tokens: 0,
-          total_output_tokens: 0,
-          total_cost: pack.stats?.total_cost || 0,
+          total_chunks: pack.total_chunks || pack.processed_chunks || 0,
+          total_input_tokens: pack.total_input_tokens || 0,
+          total_output_tokens: pack.total_output_tokens || 0,
+          total_cost: pack.total_cost || 0,
           completedAt: pack.created_at,
           savedAt: pack.created_at
         }))
