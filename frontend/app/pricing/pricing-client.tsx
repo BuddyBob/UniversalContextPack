@@ -231,7 +231,7 @@ export default function PricingPageClient() {
           <div className="space-y-6">
             {/* Plan Toggle */}
             <div className="flex justify-center">
-              <div className="inline-flex border border-gray-200 rounded-lg p-1 bg-gray-50">
+              <div className="inline-flex border border-gray-200/60 rounded-lg p-1 bg-gray-50/50">
                 <button
                   onClick={() => {
                     setIsUnlimitedSelected(false)
@@ -239,12 +239,12 @@ export default function PricingPageClient() {
                   }}
                   className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
                     !isUnlimitedSelected
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-700 hover:text-gray-900'
+                      ? 'bg-white text-gray-700 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-700'
                   }`}
                 >
-                  <div className="text-gray-900">Pay per use</div>
-                  <div className="text-xs text-gray-500 mt-0.5">From $0.10/credit</div>
+                  <div className="text-gray-700">Pay per use</div>
+                  <div className="text-xs text-gray-500/80 mt-0.5">From $0.10/credit</div>
                 </button>
                 <button
                   onClick={() => {
@@ -253,14 +253,14 @@ export default function PricingPageClient() {
                   }}
                   className={`px-5 py-2 rounded-md text-sm font-medium transition-all relative ${
                     isUnlimitedSelected
-                      ? 'bg-gray-900 text-white shadow-sm'
-                      : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
+                      ? 'bg-gray-700 text-white shadow-sm'
+                      : 'text-gray-600 hover:text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-center">
                     <span className="font-semibold">Unlimited</span>
                   </div>
-                  <div className={`text-xs mt-0.5 ${isUnlimitedSelected ? 'text-gray-300' : 'text-gray-600'}`}>One-time $4.99</div>
+                  <div className={`text-xs mt-0.5 ${isUnlimitedSelected ? 'text-gray-300' : 'text-gray-500'}`}>One-time $4.99</div>
                 </button>
               </div>
             </div>
@@ -271,24 +271,24 @@ export default function PricingPageClient() {
           {isUnlimitedSelected ? (
             /* Unlimited Plan */
             <div className="max-w-md mx-auto">
-              <div className="border border-gray-200 rounded-lg p-8 text-center bg-white">
+              <div className="border border-gray-200/60 rounded-lg p-8 text-center bg-white">
                 <div className="mb-3">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200/60">
                     Recommended
                   </span>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Unlimited Access</h3>
-                <p className="text-gray-600 mb-6 text-sm">
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">Unlimited Access</h3>
+                <p className="text-gray-500 mb-6 text-sm">
                   Unlimited tokens & Unlimited conversations
                 </p>
                 <div className="mb-8">
-                  <span className="text-4xl font-semibold text-gray-900">$4.99</span>
-                  <span className="text-gray-600 ml-2">one-time</span>
+                  <span className="text-4xl font-semibold text-gray-700">$4.99</span>
+                  <span className="text-gray-500 ml-2">one-time</span>
                 </div>
                 <button
                   onClick={handlePurchase}
                   disabled={processingPurchase}
-                  className="w-full bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
+                  className="w-full bg-gray-700 hover:bg-gray-600 disabled:bg-gray-300 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
                 >
                   {processingPurchase ? (
                     <>
