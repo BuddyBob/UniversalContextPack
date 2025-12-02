@@ -71,6 +71,7 @@ export default function ProcessPage() {
   const [showFileTypes, setShowFileTypes] = useState(false);
   const [conversationUrl, setConversationUrl] = useState<string>('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isCancellingSource, setIsCancellingSource] = useState(false);
   const [currentProcessedChunks, setCurrentProcessedChunks] = useState<number>(0);
   const [showUploadOptions, setShowUploadOptions] = useState(false);
   const [uploadMethod, setUploadMethod] = useState<'files' | 'url' | 'chat_export' | 'document' | 'text' | null>(null);
@@ -1197,12 +1198,18 @@ export default function ProcessPage() {
   };
 
   const handleCancelAnalysis = async () => {
-    if (!sourcePendingAnalysis || !selectedPack) return;
+    if (!sourcePendingAnalysis || !selectedPack || isCancellingSource) return;
 
     const sourceId = sourcePendingAnalysis.sourceId;
 
+    // Prevent multiple clicks
+    setIsCancellingSource(true);
+
     // Close the modal immediately for better UX
     setSourcePendingAnalysis(null);
+
+    // Immediately remove from local state to prevent modal from reopening
+    setPackSources(prev => prev.filter((s: any) => s.source_id !== sourceId));
 
     try {
       // Delete the source from the backend (removes from pack)
@@ -1214,22 +1221,26 @@ export default function ProcessPage() {
       if (response.ok) {
         showNotification('info', 'Source removed from pack');
 
-        // Immediately remove from local state to prevent modal from reopening
-        setPackSources(prev => prev.filter((s: any) => s.source_id !== sourceId));
-
-        // Then refresh from server to ensure consistency
+        // Refresh from server to ensure consistency
         const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
         if (packResponse.ok) {
           const packData = await packResponse.json();
           setPackSources(packData.sources || []);
         }
       } else {
-        const errorText = await response.text();
+        // Rollback optimistic update on error
+        const packResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}`);
+        if (packResponse.ok) {
+          const packData = await packResponse.json();
+          setPackSources(packData.sources || []);
+        }
         throw new Error('Failed to remove source');
       }
     } catch (error) {
       console.error('Error removing source:', error);
       showNotification('warning', 'Failed to remove source. Please try again.');
+    } finally {
+      setIsCancellingSource(false);
     }
   };
 
@@ -3067,9 +3078,10 @@ export default function ProcessPage() {
                         <div className="flex gap-3">
                           <button
                             onClick={handleCancelAnalysis}
-                            className="flex-1 px-6 py-3 rounded-xl border-2 border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
+                            disabled={isCancellingSource}
+                            className="flex-1 px-6 py-3 rounded-xl border-2 border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            Cancel
+                            {isCancellingSource ? 'Cancelling...' : 'Cancel'}
                           </button>
                           <button
                             onClick={() => startSourceAnalysis(allowedChunks)}
@@ -3083,9 +3095,10 @@ export default function ProcessPage() {
                           <div className="flex gap-3">
                             <button
                               onClick={handleCancelAnalysis}
-                              className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
+                              disabled={isCancellingSource}
+                              className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              Cancel
+                              {isCancellingSource ? 'Cancelling...' : 'Cancel'}
                             </button>
                             <button
                               onClick={() => startSourceAnalysis(allowedChunks)}
@@ -3109,9 +3122,10 @@ export default function ProcessPage() {
                           <div className="flex gap-3">
                             <button
                               onClick={handleCancelAnalysis}
-                              className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors"
+                              disabled={isCancellingSource}
+                              className="flex-1 px-6 py-3 rounded-xl border border-gray-600 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              Cancel
+                              {isCancellingSource ? 'Cancelling...' : 'Cancel'}
                             </button>
                             <button
                               onClick={handleBuyCredits}

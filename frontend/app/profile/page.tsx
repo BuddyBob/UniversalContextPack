@@ -25,7 +25,7 @@ export default function ProfilePage() {
 
   return (
     <AuthWrapper>
-      <div className="min-h-screen bg-black">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         {/* Payment Notification */}
         <PaymentNotification
           show={notification.show}
@@ -38,11 +38,11 @@ export default function ProfilePage() {
           autoHide={notification.type === 'upgrade_success'}
         />
 
-        <div className="max-w-4xl mx-auto px-6 py-12">
+        <div className="max-w-5xl mx-auto px-6 py-12">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Profile Settings</h1>
-            <p className="text-gray-400">Manage your account and billing</p>
+          <div className="mb-10">
+            <h1 className="text-4xl font-bold text-gray-800 mb-3">Profile Settings</h1>
+            <p className="text-gray-500 text-lg">Manage your account and billing</p>
           </div>
 
           {/* Profile Content */}
@@ -50,15 +50,19 @@ export default function ProfilePage() {
             {/* User Profile Component */}
             <UserProfileComponent 
               onUpgrade={handleUpgrade}
-              className="bg-gray-950 border-gray-800"
             />
             
             {/* Sign Out Section */}
-            <div className="bg-gray-950 rounded-2xl border border-gray-800 p-6">
-              <h2 className="text-xl font-semibold text-white mb-4">Account Actions</h2>
+            <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span>Account Actions</span>
+              </h2>
               <button
                 onClick={signOut}
-                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+                className="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-xl font-medium transition-all hover:shadow-lg"
               >
                 Sign Out
               </button>

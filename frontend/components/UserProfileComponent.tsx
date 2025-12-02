@@ -121,34 +121,38 @@ export default function UserProfileComponent({
   })
 
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 ${className}`}>
-      {/* Header */}
-      <div className="p-6 border-b border-gray-100">
+    <div className={`max-w-4xl mx-auto space-y-6 ${className}`}>
+      {/* Header Card with Gradient */}
+      <div className="bg-gradient-to-br from-gray-800 via-gray-700 to-gray-600 rounded-2xl p-8 text-white shadow-xl">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center">
-              {profile.avatar_url ? (
-                <img
-                  src={profile.avatar_url}
-                  alt="Profile"
-                  className="w-16 h-16 rounded-full object-cover"
-                />
-              ) : (
-                <User size={24} className="text-white" />
-              )}
+          <div className="flex items-center space-x-6">
+            <div className="relative">
+              <div className="w-20 h-20 bg-white/10 backdrop-blur-xl rounded-full flex items-center justify-center ring-4 ring-white/20">
+                {profile.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt="Profile"
+                    className="w-20 h-20 rounded-full object-cover"
+                  />
+                ) : (
+                  <User size={32} className="text-white" />
+                )}
+              </div>
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className="text-2xl font-bold mb-1">
                 {profile.full_name || 'User'}
               </h2>
-              <p className="text-gray-600">{profile.email}</p>
-              <p className="text-sm text-gray-500">Member since {memberSince}</p>
+              <p className="text-gray-200 text-sm mb-2">{profile.email}</p>
+              <p className="text-xs text-gray-300 bg-white/10 px-3 py-1 rounded-full inline-block">
+                Member since {memberSince}
+              </p>
             </div>
           </div>
           <button
             onClick={refreshProfile}
             disabled={refreshing}
-            className="p-2 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+            className="p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all disabled:opacity-50 backdrop-blur-sm"
             title="Refresh profile"
           >
             <RefreshCw
@@ -159,31 +163,42 @@ export default function UserProfileComponent({
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Plan Status */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <CreditCard size={16} className="text-purple-600" />
-            <h3 className="font-medium text-gray-900">Current Plan</h3>
+      {/* Stats Grid - Modern Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Plan Status Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-purple-50 rounded-xl">
+                <CreditCard size={24} className="text-purple-600" />
+              </div>
+              <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">Current Plan</h3>
+            </div>
           </div>
-          <p className="text-2xl font-semibold capitalize text-gray-900">
+          <p className="text-4xl font-bold capitalize text-gray-800 mb-2">
             {profile.payment_plan}
           </p>
           {profile.subscription_status && (
-            <p className="text-sm text-gray-500 capitalize">
-              Status: {profile.subscription_status}
-            </p>
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${profile.subscription_status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+              <p className="text-sm text-gray-500 capitalize">
+                Status: {profile.subscription_status}
+              </p>
+            </div>
           )}
         </div>
 
-        {/* Usage Stats */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <div className="flex items-center space-x-2 mb-2">
-            <BarChart3 size={16} className="text-green-600" />
-            <h3 className="font-medium text-gray-900">Usage</h3>
+        {/* Usage Stats Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-green-50 rounded-xl">
+                <BarChart3 size={24} className="text-green-600" />
+              </div>
+              <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">Usage</h3>
+            </div>
           </div>
-          <p className="text-2xl font-semibold text-gray-900">
+          <p className="text-4xl font-bold text-gray-800 mb-2">
             {profile.chunks_analyzed?.toLocaleString() || 0}
           </p>
           <p className="text-sm text-gray-500">
@@ -192,13 +207,18 @@ export default function UserProfileComponent({
         </div>
       </div>
 
-      {/* Payment Component */}
-      <div className="p-6 border-t border-gray-100">
-        <h3 className="font-medium text-gray-900 mb-4">Plan Management</h3>
+      {/* Payment Component - Clean Section */}
+      <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-100">
+        <div className="flex items-center space-x-3 mb-6">
+          <div className="p-2 bg-gray-100 rounded-lg">
+            <CreditCard size={20} className="text-gray-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800">Plan Management</h3>
+        </div>
         <PaymentComponent
           onUpgrade={onUpgrade}
           showUpgradeButton={profile.payment_plan === 'free' || profile.payment_plan === 'credits'}
-          className="shadow-none border-0 bg-gray-50"
+          className="shadow-none border-0"
         />
       </div>
     </div>
