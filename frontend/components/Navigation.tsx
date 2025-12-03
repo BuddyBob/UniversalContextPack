@@ -169,14 +169,6 @@ export default function Navigation() {
 
                       {showUserDropdown && (
                         <div className="nav-dropdown-menu">
-                          <Link
-                            href="/profile"
-                            className="nav-dropdown-item"
-                            onClick={() => setShowUserDropdown(false)}
-                          >
-                            <User className="h-4 w-4" />
-                            Profile
-                          </Link>
                           <button
                             onClick={signOut}
                             className="nav-dropdown-item"
