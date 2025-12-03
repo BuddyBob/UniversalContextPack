@@ -110,66 +110,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request timeout and connection handling middleware
-@app.middleware("http")
-async def timeout_middleware(request: Request, call_next):
-    """Add request timeout handling to prevent server stalling"""
-    import asyncio
-    import time
-    
-    start_time = time.time()
-    
-    # Set different timeouts based on endpoint
-    request_path = str(request.url.path) if hasattr(request.url, 'path') else str(request.url)
-    
-    if "/api/analyze/" in request_path or "/api/extract" in request_path:
-        timeout_seconds = 3600  # 60 minutes for analysis/extraction (increased from 30)
-    elif "/api/progress-stream/" in request_path:
-        timeout_seconds = 1800   # 30 minutes for streaming endpoints (increased from 15)
-    elif "/api/health" in request_path or request_path == "/":
-        timeout_seconds = 10    # 10 seconds for health checks
-    else:
-        timeout_seconds = 300   # 5 minutes for other endpoints (increased from 2)
-    
-    try:
-        # Execute request with timeout
-        response = await asyncio.wait_for(
-            call_next(request),
-            timeout=timeout_seconds
-        )
-        
-        # Add processing time header
-        process_time = time.time() - start_time
-        response.headers["X-Process-Time"] = str(round(process_time, 4))
-        
-        return response
-        
-    except asyncio.TimeoutError:
-        print(f"Request timeout after {timeout_seconds}s for {request.url}")
-        # More user-friendly timeout messages based on endpoint
-        if "/api/analyze/" in request_path:
-            detail_msg = f"Analysis timeout after {timeout_seconds//60} minutes. This may happen with very large files or during high server load. Please try again or contact support."
-        elif "/api/extract" in request_path:
-            detail_msg = f"Text extraction timeout after {timeout_seconds//60} minutes. Please try with a smaller file or contact support."
-        else:
-            detail_msg = f"Request timeout after {timeout_seconds} seconds. Please try again."
-            
-        return JSONResponse(
-            status_code=408,
-            content={
-                "detail": detail_msg,
-                "timeout_seconds": timeout_seconds,
-                "endpoint": str(request.url),
-                "suggestion": "Try refreshing the page and starting the process again. For large files, consider splitting them into smaller chunks."
-            }
-        )
-    except Exception as e:
-        print(f"Request middleware error: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": f"Server error: {str(e)}"}
-        )
-
 # Authentication
 security = HTTPBearer()
 
@@ -592,46 +532,6 @@ async def update_user_chunks_used(user_id: str, chunks_processed: int):
     # when a job is marked as 'analyzed' with processed_chunks set
 
     pass
-
-async def handle_cancellation_with_credit_deduction(user_id: str, job_id: str, chunks_processed: int):
-    """Handle job cancellation and deduct credits if 10+ chunks were processed"""
-    try:
-        if chunks_processed >= 10:
-            print(f"💳 Checking credit deduction for cancellation: {chunks_processed} chunks processed for user {user_id}")
-            
-            if not supabase:
-                print("Warning: Supabase not available - cannot deduct credits")
-                return
-            
-            # Check user's payment plan first
-            user_result = supabase.table("user_profiles").select("payment_plan").eq("id", user_id).execute()
-            
-            if user_result.data and user_result.data[0].get("payment_plan") == "unlimited":
-                print(f"🌟 Unlimited plan user - no credits deducted for {chunks_processed} chunks")
-                return None
-            
-            print(f"💳 Deducting credits for credit-plan user: {chunks_processed} chunks processed")
-            
-            # Use the database function to deduct credits for processed chunks
-            result = supabase.rpc("add_credits_to_user", {
-                "user_uuid": user_id,
-                "credits_to_add": -chunks_processed,  # Negative to deduct
-                "transaction_description": f"Credits deducted for cancelled job {job_id} - {chunks_processed} chunks processed"
-            }).execute()
-            
-            if result.data and result.data != -1:
-                print(f"✅ Deducted {chunks_processed} credits from user {user_id}. New balance: {result.data}")
-                return result.data
-            else:
-                print(f"❌ Failed to deduct credits from user {user_id}. Error: {result}")
-                return None
-        else:
-            print(f"📋 No credit deduction needed: only {chunks_processed} chunks processed (threshold: 10)")
-            return None
-            
-    except Exception as e:
-        print(f"❌ Error handling cancellation credit deduction for user {user_id}: {e}")
-        return None
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
     """Validate JWT token and return authenticated user"""
@@ -1412,59 +1312,6 @@ def clean_text(text: str) -> str:
     # Strip leading/trailing whitespace
     return text.strip()
 
-class ChatHTMLParser(HTMLParser):
-    """HTML parser specifically designed for ChatGPT HTML exports"""
-    
-    def __init__(self):
-        super().__init__()
-        self.conversations = []
-        self.current_text = ""
-        self.in_conversation = False
-        self.current_speaker = None
-        self.current_content = []
-        
-    def handle_starttag(self, tag, attrs):
-        # Look for conversation boundaries or speaker indicators
-        if tag in ['div', 'p', 'article', 'section']:
-            # Check for class names that might indicate conversation structure
-            for name, value in attrs:
-                if name == 'class' and any(keyword in value.lower() for keyword in 
-                    ['conversation', 'message', 'user', 'assistant', 'chat', 'turn']):
-                    self.in_conversation = True
-                    break
-    
-    def handle_endtag(self, tag):
-        if tag in ['div', 'p', 'article', 'section'] and self.in_conversation:
-            if self.current_text.strip():
-                self.conversations.append(self.current_text.strip())
-                self.current_text = ""
-            self.in_conversation = False
-        elif tag in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            # Headers might indicate conversation titles
-            if self.current_text.strip():
-                self.conversations.append(f"TITLE: {self.current_text.strip()}")
-                self.current_text = ""
-    
-    def handle_data(self, data):
-        cleaned_data = clean_text(data)
-        if cleaned_data and len(cleaned_data) > 5:  # Filter out very short text
-            if self.in_conversation:
-                self.current_text += cleaned_data + " "
-            else:
-                # Check if this might be a conversation turn even without explicit markup
-                # Look for patterns like "User" or "ChatGPT" at the start
-                if any(cleaned_data.lower().startswith(prefix) for prefix in 
-                    ['user', 'chatgpt', 'assistant', 'human', 'ai', 'you:', 'me:']):
-                    self.conversations.append(cleaned_data)
-                elif len(cleaned_data) > 20:  # Longer text is likely conversation content
-                    self.current_text += cleaned_data + " "
-    
-    def close(self):
-        super().close()
-        # Add any remaining text
-        if self.current_text.strip():
-            self.conversations.append(self.current_text.strip())
-
 def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progress_callback=None, total_items=None, current_item=None, seen_objects=None, text_set=None) -> List[str]:
     """Recursively extract meaningful text from any data structure - OPTIMIZED for speed"""
     if extracted_texts is None:
@@ -1966,13 +1813,12 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
                     actual_chunk_size = len(chunk)
                     # Only log dense chunks occasionally to avoid console spam
                     if chunk_count % 20 == 0:
-                        print(chunk)
+                        print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
 
                 else:
                     # Log every 20 chunks for normal content
                     if chunk_count % 20 == 0:
                         print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
-                        print(chunk)
 
                 chunks.append(chunk)
                 chunk_count += 1
@@ -2046,91 +1892,28 @@ def apply_redaction_filters(text: str) -> str:
         return text
 
 async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, user: AuthenticatedUser, max_chunks: int = None, custom_system_prompt: Optional[str] = None):
-    """Step 2: Analyze the chunks (OpenAI calls, deduct credits)
+    """Step 2: Analyze the chunks (OpenAI calls, deduct credits) - WITH BOUNDED CONCURRENCY
     
     Args:
         max_chunks: Optional limit on number of chunks to analyze (for partial analysis with limited credits)
     """
-    try:
-        print(f"Starting analysis for source {source_id}")
-        
-        # Update status to analyzing
-        supabase.rpc("update_source_status", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id,
-            "status_param": "analyzing",
-            "progress_param": 10
-        }).execute()
-        
-        # Load chunks from R2
-        chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
-        chunks_data = download_from_r2(chunked_path, silent_404=False)
-        if not chunks_data:
-            print(f"❌ Failed to download chunks from: {chunked_path}")
-            raise Exception("Chunks not found - extraction may have failed")
-        
-        all_chunks = json.loads(chunks_data)
-        
-        # Limit chunks if max_chunks is specified
-        if max_chunks is not None and max_chunks < len(all_chunks):
-            chunks = all_chunks[:max_chunks]
-            print(f"📦 Loaded {len(all_chunks)} chunks, analyzing first {len(chunks)} chunks (limited by credits)")
-        else:
-            chunks = all_chunks
-            print(f"📦 Loaded {len(chunks)} chunks from storage")
-        
-        
-        # Check if this is a large job that needs email notification
-        is_large_job = len(chunks) >= 10
-        
-        if is_large_job:
-            print(f"📧 Large job detected ({len(chunks)} chunks). Will send email notification on completion.")
-        
-        openai_client = get_openai_client()
-        total_input_tokens = 0
-        total_output_tokens = 0
-        total_cost = 0.0
-        
-        # Prepare paths for saving analysis
-        pack_analyzed_path = f"{user.r2_directory}/{pack_id}/complete_analyzed.txt"
-        analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
-        
-        # Get existing pack content (if any)
-        existing_pack_content = download_from_r2(pack_analyzed_path, silent_404=True) or ""
-        
-        # Add source separator
-        if existing_pack_content:
-            source_header = f"\n\n--- SOURCE: {filename} ---\n\n"
-        else:
-            source_header = f"--- SOURCE: {filename} ---\n\n"
-        
-        base_system_prompt = "You are a personal data analysis assistant analyzing user-owned documents. Extract key insights concisely and comprehensively."
-        if custom_system_prompt:
-            trimmed_custom_prompt = custom_system_prompt.strip()
-            # Prevent runaway prompts while allowing detailed guidance
-            if len(trimmed_custom_prompt) > 2000:
-                trimmed_custom_prompt = trimmed_custom_prompt[:2000]
-            system_prompt = f"{base_system_prompt}\n\nPack instructions:\n{trimmed_custom_prompt}"
-        else:
-            system_prompt = base_system_prompt
-        
-        for idx, chunk in enumerate(chunks):
-            # Check for cancellation at the start of each chunk
+    
+    # Shared state for tracking progress across concurrent tasks
+    completed_count = {'value': 0}  # Use dict for mutability in nested function
+    progress_lock = asyncio.Lock()  # Prevent race conditions on progress updates
+    
+    # Helper function to process a single chunk with semaphore
+    async def process_single_chunk(idx: int, chunk: str, sem: asyncio.Semaphore):
+        """Process one chunk with rate limiting via semaphore"""
+        async with sem:  # Acquire semaphore slot
+            # Check for cancellation
             if source_id in cancelled_jobs:
-                print(f"🛑 Cancellation detected for source {source_id}. Stopping at chunk {idx+1}/{len(chunks)}")
-                # Update status to cancelled
-                supabase.rpc("update_source_status", {
-                    "user_uuid": user.user_id,
-                    "target_source_id": source_id,
-                    "status_param": "cancelled",
-                    "progress_param": 0,
-                    "processed_chunks_param": idx  # Save how many were processed before cancel
-                }).execute()
-                cancelled_jobs.discard(source_id)
-                return
+                print(f"🛑 Cancellation detected for source {source_id} at chunk {idx+1}")
+                return None
             
             try:
                 redacted_chunk = apply_redaction_filters(chunk)
+                
                 # Scenario A: Single Chunk - Dynamic analysis
                 if len(chunks) == 1:
                     prompt = f"""
@@ -2173,9 +1956,8 @@ Write a detailed analysis (aim for 400-700 words) that includes:
 Document content:
 {redacted_chunk}
 """
-
                 # Scenario B: Conversations File - General overview
-                elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
+                elif "conversations" in filename.lower() or filename.lower().endswith('.json') or filename.lower().endswith('.txt'):
                     prompt = f"""
 Analyze this conversation segment from a larger chat history.
 
@@ -2198,7 +1980,6 @@ Output a concise but meaningful:
 Conversation content:
 {redacted_chunk}
 """
-                
                 # Scenario C: Large Document (5+ chunks) - Broad analysis
                 elif len(chunks) >= 5:
                     prompt = f"""
@@ -2218,7 +1999,6 @@ Do not dive into micro-details—this is just one piece of a much larger whole.
 Document content:
 {redacted_chunk}
 """
-                
                 # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
                 else:
                     prompt = f"""
@@ -2232,20 +2012,11 @@ Document content:
                     {redacted_chunk}
                     Provide your comprehensive analysis below:"""
 
-
                 # Build messages array
                 messages = [
-                    {
-                        "role": "system", 
-                        "content": system_prompt
-                    },
-                    {
-                        "role": "user", 
-                        "content": prompt
-                    }
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
                 ]
-                
-                print(f"DEBUG: Final messages count: {len(messages)}")
                 
                 response = await openai_call_with_retry(
                     openai_client,
@@ -2253,51 +2024,49 @@ Document content:
                     model="gpt-4o-mini",
                     messages=messages,
                     temperature=0.3,
-                    max_completion_tokens=3000  # Increased for richer analysis
+                    max_completion_tokens=3000
                 )
                 
                 analysis = response.choices[0].message.content
                 
                 # Check if OpenAI refused to analyze due to content policy
                 if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
-                    raise Exception(f"Content policy refusal: OpenAI declined to analyze this content. This may occur with documents containing sensitive personal information.")
+                    raise Exception(f"Content policy refusal: OpenAI declined to analyze this content.")
                 
-                # Track tokens and cost
+                # Track tokens
                 input_tokens = response.usage.prompt_tokens
                 output_tokens = response.usage.completion_tokens
-                total_input_tokens += input_tokens
-                total_output_tokens += output_tokens
-                total_cost += (input_tokens * 0.00015 / 1000) + (output_tokens * 0.0006 / 1000)
+                cost = (input_tokens * 0.00015 / 1000) + (output_tokens * 0.0006 / 1000)
                 
                 print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed: {output_tokens} tokens out, {input_tokens} tokens in")
                 
-                # Append this chunk's analysis to files
-                chunk_sep = f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
+                # Update progress in database (with lock to prevent race conditions)
+                async with progress_lock:
+                    completed_count['value'] += 1
+                    # Progress: 10% start + 70% for analysis + 20% for writing
+                    # So analysis phase = 10-80%
+                    progress = 10 + int((completed_count['value'] / len(chunks)) * 70)
+                    try:
+                        supabase.rpc("update_source_status", {
+                            "user_uuid": user.user_id,
+                            "target_source_id": source_id,
+                            "status_param": "analyzing",
+                            "progress_param": progress,
+                            "processed_chunks_param": completed_count['value']
+                        }).execute()
+                        print(f"📊 Real-time progress: {progress}% ({completed_count['value']}/{len(chunks)} chunks analyzed)")
+                    except Exception as progress_error:
+                        # Don't fail the whole analysis if progress update fails
+                        print(f"⚠️ Failed to update progress: {progress_error}")
                 
-                # Append to pack file
-                if idx == 0:
-                    # First chunk - add source header
-                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis)
-                else:
-                    current = download_from_r2(pack_analyzed_path) or ""
-                    upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis)
-                
-                # Append to individual source file
-                current_source = download_from_r2(analyzed_path, silent_404=True) or ""
-                upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
-                
-                
-                # Update progress with chunk count (more reliable than percentage for large files)
-                progress = 50 + int((idx + 1) / len(chunks) * 40)
-                supabase.rpc("update_source_status", {
-                    "user_uuid": user.user_id,
-                    "target_source_id": source_id,
-                    "status_param": "processing",
-                    "progress_param": progress,
-                    "processed_chunks_param": idx + 1  # Current chunk number for frontend display
-                }).execute()
-                
-                print(f"📊 Progress updated: {progress}% (chunk {idx+1}/{len(chunks)} complete)")
+                return {
+                    'idx': idx,
+                    'analysis': analysis,
+                    'input_tokens': input_tokens,
+                    'output_tokens': output_tokens,
+                    'cost': cost,
+                    'error': None
+                }
                 
             except Exception as e:
                 error_msg = str(e)
@@ -2305,23 +2074,183 @@ Document content:
                 
                 # Check if this is a content policy refusal
                 if "cannot assist" in error_msg.lower() or "content policy" in error_msg.lower() or "safety" in error_msg.lower():
-                    print(f"🚫 Content policy refusal detected. This may be due to sensitive information in the document.")
-                    # Save a placeholder for this chunk
+                    print(f"🚫 Content policy refusal detected for chunk {idx+1}")
                     error_analysis = f"[Chunk {idx+1} could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records.]"
-                    current_source = download_from_r2(analyzed_path, silent_404=True) or ""
-                    upload_to_r2(analyzed_path, current_source + f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" + error_analysis)
+                    
+                    # Still update progress for failed chunks
+                    async with progress_lock:
+                        completed_count['value'] += 1
+                        progress = 10 + int((completed_count['value'] / len(chunks)) * 70)
+                        try:
+                            supabase.rpc("update_source_status", {
+                                "user_uuid": user.user_id,
+                                "target_source_id": source_id,
+                                "status_param": "analyzing",
+                                "progress_param": progress,
+                                "processed_chunks_param": completed_count['value']
+                            }).execute()
+                        except:
+                            pass
+                    
+                    return {
+                        'idx': idx,
+                        'analysis': error_analysis,
+                        'input_tokens': 0,
+                        'output_tokens': 0,
+                        'cost': 0,
+                        'error': error_msg
+                    }
                 
-                continue
+                # Return error result (still update progress)
+                async with progress_lock:
+                    completed_count['value'] += 1
+                
+                return {
+                    'idx': idx,
+                    'analysis': None,
+                    'input_tokens': 0,
+                    'output_tokens': 0,
+                    'cost': 0,
+                    'error': error_msg
+                }
+    
+    # Main function starts here
+    try:
+        print(f"Starting analysis for source {source_id} with bounded concurrency")
         
-        # Update source status to completed (whether full or partial analysis)
-        # If user had limited credits, they successfully completed what they could afford
+        # Update status to analyzing
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "analyzing",
+            "progress_param": 10
+        }).execute()
+        
+        # Load chunks from R2
+        chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
+        chunks_data = download_from_r2(chunked_path, silent_404=False)
+        if not chunks_data:
+            print(f"❌ Failed to download chunks from: {chunked_path}")
+            raise Exception("Chunks not found - extraction may have failed")
+        
+        all_chunks = json.loads(chunks_data)
+        
+        # Limit chunks if max_chunks is specified
+        if max_chunks is not None and max_chunks < len(all_chunks):
+            chunks = all_chunks[:max_chunks]
+            print(f"📦 Loaded {len(all_chunks)} chunks, analyzing first {len(chunks)} chunks (limited by credits)")
+        else:
+            chunks = all_chunks
+            print(f"📦 Loaded {len(chunks)} chunks from storage")
+        
+        # Check if this is a large job that needs email notification
+        is_large_job = len(chunks) >= 10
+        if is_large_job:
+            print(f"📧 Large job detected ({len(chunks)} chunks). Will send email notification on completion.")
+        
+        openai_client = get_openai_client()
+        
+        # Prepare paths for saving analysis
+        pack_analyzed_path = f"{user.r2_directory}/{pack_id}/complete_analyzed.txt"
+        analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
+        
+        # Get existing pack content (if any)
+        existing_pack_content = download_from_r2(pack_analyzed_path, silent_404=True) or ""
+        
+        # Add source separator
+        if existing_pack_content:
+            source_header = f"\n\n--- SOURCE: {filename} ---\n\n"
+        else:
+            source_header = f"--- SOURCE: {filename} ---\n\n"
+        
+        # Build system prompt
+        base_system_prompt = "You are a personal data analysis assistant analyzing user-owned documents. Extract key insights concisely and comprehensively."
+        if custom_system_prompt:
+            trimmed_custom_prompt = custom_system_prompt.strip()
+            if len(trimmed_custom_prompt) > 2000:
+                trimmed_custom_prompt = trimmed_custom_prompt[:2000]
+            system_prompt = f"{base_system_prompt}\n\nPack instructions:\n{trimmed_custom_prompt}"
+        else:
+            system_prompt = base_system_prompt
+        
+        # Create semaphore for rate limiting (max 3 concurrent OpenAI calls)
+        sem = asyncio.Semaphore(3)
+        
+        # Process all chunks concurrently with bounded concurrency
+        print(f"🚀 Starting bounded concurrent analysis (max 3 parallel requests)")
+        tasks = [process_single_chunk(i, chunk, sem) for i, chunk in enumerate(chunks)]
+        results = await asyncio.gather(*tasks)
+        
+        # Filter out None results (from cancellation)
+        if source_id in cancelled_jobs:
+            print(f"🛑 Cancellation detected, stopping analysis")
+            supabase.rpc("update_source_status", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id,
+                "status_param": "cancelled",
+                "progress_param": 0
+            }).execute()
+            cancelled_jobs.discard(source_id)
+            return
+        
+        # Sort results by index to maintain order
+        results = [r for r in results if r is not None]
+        results.sort(key=lambda x: x['idx'])
+        
+        # Aggregate token counts and costs
+        total_input_tokens = sum(r['input_tokens'] for r in results)
+        total_output_tokens = sum(r['output_tokens'] for r in results)
+        total_cost = sum(r['cost'] for r in results)
+        
+        print(f"📊 All chunks analyzed. Total: {total_input_tokens} input tokens, {total_output_tokens} output tokens, ${total_cost:.4f}")
+        
+        # =====================================================================
+        # OPTIMIZED WRITE: Accumulate in memory, write once (was O(n²), now O(n))
+        # This eliminates 20-30s bottleneck from downloading/uploading file 12x
+        # =====================================================================
+        print(f"📝 Writing {len(results)} chunk analyses to R2...")
+        
+        # Build complete content in memory (fast)
+        pack_content = existing_pack_content + source_header
+        source_content = ""
+        
+        for i, result in enumerate(results):
+            if result['analysis'] is None:
+                continue  # Skip failed chunks
+            
+            # Add chunk separator (same as before)
+            chunk_sep = f"\n\n--- Chunk {i+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
+            
+            # Accumulate content (no I/O)
+            pack_content += chunk_sep + result['analysis']
+            source_content += chunk_sep + result['analysis']
+        
+        # Single atomic write for pack file (1 write instead of 12!)
+        upload_to_r2(pack_analyzed_path, pack_content)
+        print(f"✅ Pack file written: {len(pack_content)} chars")
+        
+        # Single atomic write for source file
+        upload_to_r2(analyzed_path, source_content)
+        print(f"✅ Source file written: {len(source_content)} chars")
+        
+        # Update final progress
+        supabase.rpc("update_source_status", {
+            "user_uuid": user.user_id,
+            "target_source_id": source_id,
+            "status_param": "processing",
+            "progress_param": 95,
+            "processed_chunks_param": len(results)
+        }).execute()
+        print(f"📊 Write complete (95%)")
+        
+        # Update source status to completed
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
             "status_param": "completed",
             "progress_param": 100,
-            "total_chunks_param": len(all_chunks),  # Total chunks available in source
-            "processed_chunks_param": len(chunks),   # Chunks actually analyzed
+            "total_chunks_param": len(all_chunks),
+            "processed_chunks_param": len(chunks),
             "total_input_tokens_param": total_input_tokens,
             "total_output_tokens_param": total_output_tokens,
             "total_cost_param": total_cost
@@ -2330,7 +2259,7 @@ Document content:
         if max_chunks is not None and len(chunks) < len(all_chunks):
             print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks (limited by available credits)")
         else:
-            print(f"✅ Source {source_id} analyzed successfully")
+            print(f"✅ Source {source_id} analyzed successfully with bounded concurrency")
         
         # Send email notification if it was a large job
         if is_large_job:
@@ -2735,7 +2664,31 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             "error": str(e)
         }
 
-# Global job cancellation tracking
+# ============================================================================
+# GLOBAL JOB CANCELLATION TRACKING
+# ============================================================================
+# CONCURRENCY SEMANTICS:
+#   - Thread-safe: Python's set operations (add, discard, in) are atomic
+#   - Asyncio-safe: Single event loop, no race conditions between coroutines
+#   - Multi-process UNSAFE: In-memory set is NOT shared across uvicorn workers
+#
+# CURRENT DEPLOYMENT:
+#   - Single-process mode (one uvicorn worker): SAFE ✓
+#   - Multi-process mode (multiple workers): UNSAFE ✗ (cancellation won't propagate)
+#
+# MIGRATION PATH FOR MULTI-PROCESS:
+#   Option 1: Use Redis set for shared state across workers
+#   Option 2: Add 'cancel_requested' column to pack_sources table (recommended)
+#   Option 3: Use shared memory (complex, not recommended)
+#
+# USAGE:
+#   - Jobs check 'if source_id in cancelled_jobs' during processing
+#   - API endpoint adds to set via 'cancelled_jobs.add(source_id)'
+#   - Job cleanup uses 'cancelled_jobs.discard(source_id)' after handling
+#
+# NOTE: For production multi-process deployments, migrate to database-based
+#       cancellation by checking pack_sources.status = 'cancelled' instead
+# ============================================================================
 cancelled_jobs = set()
 
 @app.post("/api/cancel/{job_id}")
@@ -4918,6 +4871,7 @@ async def add_credits_manual(
     except Exception as e:
         print(f"❌ Error in manual credit addition: {e}")
         raise HTTPException(status_code=500, detail="Failed to add credits manually")
+    
 
 @app.post("/api/stripe-webhook")
 async def stripe_webhook(request: Request):
@@ -5747,208 +5701,6 @@ async def get_recent_webhook_events(user: AuthenticatedUser = Depends(get_curren
     except Exception as e:
         print(f"❌ [Debug] Error fetching webhook events: {e}")
         raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
-
-@app.post("/api/migrate-missing-packs")
-async def migrate_missing_packs(user: AuthenticatedUser = Depends(get_current_user)):
-    """Migration endpoint to create pack records for completed jobs that don't have them"""
-    try:
-        migrated_jobs = []
-        failed_jobs = []
-        
-        # Check for completed jobs in R2 that have analysis_results.json or summary.json
-        try:
-            # Use R2 API to list objects in the user's directory
-            import boto3
-            from botocore.config import Config
-            
-            # Initialize R2 client
-            session = boto3.Session()
-            r2_client = session.client(
-                's3',
-                endpoint_url=R2_ENDPOINT,
-                aws_access_key_id=R2_ACCESS_KEY,
-                aws_secret_access_key=R2_SECRET_KEY,
-                config=Config(signature_version='s3v4')
-            )
-            
-            # List objects with user's directory prefix
-            prefix = f"{user.r2_directory.lstrip('/')}/"
-            response = r2_client.list_objects_v2(
-                Bucket=R2_BUCKET,
-                Prefix=prefix
-            )
-            
-            if 'Contents' not in response:
-                return {"message": "No objects found in user directory", "migrated": [], "failed": []}
-            
-            # Group files by job_id
-            jobs = {}
-            for obj in response['Contents']:
-                key = obj['Key']
-                # Extract job_id from path: user_xxx/job_id/file.json
-                path_parts = key.split('/')
-                if len(path_parts) >= 3:
-                    job_id = path_parts[-2]  # Second to last part is job_id
-                    filename = path_parts[-1]  # Last part is filename
-                    
-                    if job_id not in jobs:
-                        jobs[job_id] = []
-                    jobs[job_id].append(filename)
-            
-            # Check each job for completion and missing pack record
-            for job_id, files in jobs.items():
-                # Skip if not a completed job (must have analysis_results.json or summary.json)
-                if not ('analysis_results.json' in files or 'summary.json' in files):
-                    continue
-                
-                try:
-                    # Check if pack record already exists in Supabase
-                    if supabase:
-                        existing_pack = supabase.table("packs").select("*").eq("pack_job_id", job_id).execute()
-                        if existing_pack.data:
-                            continue  # Pack record already exists, skip
-                    
-                    # Try to get analysis data
-                    analysis_stats = {}
-                    extraction_stats = {}
-                    
-                    # Try to load analysis results or summary
-                    analysis_content = download_from_r2(f"{user.r2_directory}/{job_id}/analysis_results.json", silent_404=True)
-                    if not analysis_content:
-                        analysis_content = download_from_r2(f"{user.r2_directory}/{job_id}/summary.json", silent_404=True)
-                    
-                    if analysis_content:
-                        try:
-                            analysis_data = json.loads(analysis_content)
-                            performance_metrics = analysis_data.get("performance_metrics", {})
-                            analysis_stats = {
-                                "total_input_tokens": performance_metrics.get("total_input_tokens", 0),
-                                "total_output_tokens": performance_metrics.get("total_output_tokens", 0),
-                                "total_cost": performance_metrics.get("total_cost", 0),
-                                "processed_chunks": len(analysis_data.get("results", [])),
-                                "cache_hit_rate": performance_metrics.get("cache_hit_rate", 0)
-                            }
-                        except:
-                            pass
-                    
-                    # Try to load chunk metadata
-                    chunks_content = download_from_r2(f"{user.r2_directory}/{job_id}/chunks_metadata.json", silent_404=True)
-                    if chunks_content:
-                        try:
-                            chunks_data = json.loads(chunks_content)
-                            extraction_stats = {
-                                "total_chunks": chunks_data.get("total_chunks", 0),
-                                "processed_chunks": len(chunks_data.get("chunks", []))
-                            }
-                        except:
-                            pass
-                    
-                    # Create pack record
-                    pack_name = f"UCP-{job_id[:8]}"
-                    pack_record = await create_pack_in_db(
-                        user=user,
-                        job_id=job_id,
-                        pack_name=pack_name,
-                        r2_pack_path=f"{user.r2_directory}/{job_id}/",
-                        extraction_stats=extraction_stats,
-                        analysis_stats=analysis_stats
-                    )
-                    
-                    if pack_record:
-                        migrated_jobs.append(job_id)
-                        print(f"✅ Created pack record for job {job_id}")
-                    
-                except Exception as e:
-                    failed_jobs.append({"job_id": job_id, "error": str(e)})
-                    print(f"❌ Failed to create pack record for job {job_id}: {e}")
-        
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to list R2 objects: {str(e)}")
-        
-        return {
-            "message": f"Pack migration completed. {len(migrated_jobs)} pack records created, {len(failed_jobs)} failed.",
-            "migrated": migrated_jobs,
-            "failed": failed_jobs
-        }
-        
-    except Exception as e:
-        print(f"Pack migration error: {e}")
-        raise HTTPException(status_code=500, detail=f"Pack migration failed: {str(e)}")
-
-@app.post("/api/migrate-missing-summaries")
-async def migrate_missing_summaries(user: AuthenticatedUser = Depends(get_current_user)):
-    """Migration endpoint to fix jobs that have analysis_results.json but missing summary.json"""
-    try:
-        migrated_jobs = []
-        failed_jobs = []
-        
-        # List all files in user's R2 directory
-        try:
-            # Use R2 API to list objects in the user's directory
-            import boto3
-            from botocore.config import Config
-            
-            # Initialize R2 client
-            session = boto3.Session()
-            r2_client = session.client(
-                's3',
-                endpoint_url=R2_ENDPOINT,
-                aws_access_key_id=R2_ACCESS_KEY,
-                aws_secret_access_key=R2_SECRET_KEY,
-                config=Config(signature_version='s3v4')
-            )
-            
-            # List objects with user's directory prefix
-            prefix = f"{user.r2_directory.lstrip('/')}/"
-            response = r2_client.list_objects_v2(
-                Bucket=R2_BUCKET,
-                Prefix=prefix
-            )
-            
-            if 'Contents' not in response:
-                return {"message": "No objects found in user directory", "migrated": [], "failed": []}
-            
-            # Group files by job_id
-            jobs = {}
-            for obj in response['Contents']:
-                key = obj['Key']
-                # Extract job_id from path: user_xxx/job_id/file.json
-                path_parts = key.split('/')
-                if len(path_parts) >= 3:
-                    job_id = path_parts[-2]  # Second to last part is job_id
-                    filename = path_parts[-1]  # Last part is filename
-                    
-                    if job_id not in jobs:
-                        jobs[job_id] = []
-                    jobs[job_id].append(filename)
-            
-            # Check each job for analysis_results.json but missing summary.json
-            for job_id, files in jobs.items():
-                if 'analysis_results.json' in files and 'summary.json' not in files:
-                    try:
-                        # Download analysis_results.json
-                        analysis_content = download_from_r2(f"{user.r2_directory}/{job_id}/analysis_results.json", silent_404=True)
-                        if analysis_content:
-                            # Upload as summary.json
-                            upload_to_r2(f"{user.r2_directory}/{job_id}/summary.json", analysis_content)
-                            migrated_jobs.append(job_id)
-                            print(f"✅ Migrated job {job_id}: Created summary.json from analysis_results.json")
-                    except Exception as e:
-                        failed_jobs.append({"job_id": job_id, "error": str(e)})
-                        print(f"❌ Failed to migrate job {job_id}: {e}")
-        
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to list R2 objects: {str(e)}")
-        
-        return {
-            "message": f"Migration completed. {len(migrated_jobs)} jobs migrated, {len(failed_jobs)} failed.",
-            "migrated": migrated_jobs,
-            "failed": failed_jobs
-        }
-        
-    except Exception as e:
-        print(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 if __name__ == "__main__":
     import sys
