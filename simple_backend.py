@@ -1335,17 +1335,21 @@ _CONVERSATION_ID_PATTERN = re.compile(r'^[a-f0-9]{12,20}-[A-Z]{3}$', re.IGNORECA
 _GENERIC_ID_PATTERN = re.compile(r'^[a-f0-9]{8,}$', re.IGNORECASE)
 # Line numbers/conversation indices like "22.", "23.", etc.
 _LINE_NUMBER_PATTERN = re.compile(r'^\d{1,3}\.?\s*$')
+# File references: UUIDs with extensions, random file IDs, screenshot filenames
+_FILE_REFERENCE_PATTERN = re.compile(r'^([a-f0-9\-]{30,}|file-[a-zA-Z0-9]{15,}|screenshot\s+\d{4}-\d{2}-\d{2}\s+at\s+[\d\.\s:]+\s*(am|pm)?)\.(jpe?g|png|pdf|gif|webp|mp4|mov)$', re.IGNORECASE)
 
 # Pre-define technical patterns set for faster lookup
 _TECHNICAL_PATTERNS = {
-    'http://', 'https://', '.com', '.org', '.net', '.json', '.txt', '.py',
+    'http://', 'https://', '.com', '.org', '.net', '.json', '.txt', '.py', '.edu', '.gov',
     'client-created', 'message_type', 'model_slug', 'gpt-', 'claude-',
     'request_id', 'timestamp_', 'content_type', 'conversation_id',
     'finished_successfully', 'absolute', 'metadata', 'system',
     'user_editable_context', 'is_visually_hidden', 'role:', 'author:',
     'create_time', 'update_time', 'parent_id', 'children', 'mapping',
     'finish_details', 'stop_tokens', 'citations', 'content_references', 'file-service://',
-    '-lhr', '-iad', '-syd', '-fra'  # Common ChatGPT server suffixes
+    '-lhr', '-iad', '-syd', '-fra',  # Common ChatGPT server suffixes
+    '[pdf]', 'citeturn', 'common data set', 'self service', 'catalog',
+    'annual report', 'financial report', 'mediafiles', 'eventreg'
 }
 
 # Pre-define common JSON elements set
@@ -1366,7 +1370,7 @@ def is_meaningful_text(text: str) -> bool:
     # OPTIMIZED: Use pre-compiled patterns - filter out conversation IDs and other technical identifiers
     if (_NUMBERS_PATTERN.match(text) or _UUID_PATTERN.match(text) or 
         _CONVERSATION_ID_PATTERN.match(text) or _GENERIC_ID_PATTERN.match(text) or
-        _LINE_NUMBER_PATTERN.match(text)):
+        _LINE_NUMBER_PATTERN.match(text) or _FILE_REFERENCE_PATTERN.match(text)):
         return False
     
     # OPTIMIZED: Use set lookup instead of list iteration
@@ -1460,74 +1464,6 @@ class ChatHTMLParser(HTMLParser):
         # Add any remaining text
         if self.current_text.strip():
             self.conversations.append(self.current_text.strip())
-
-def extract_from_html_content(file_content: str) -> List[str]:
-    """Extract conversations from HTML chat export files"""
-    extracted_texts = []
-    
-    try:
-        # For HTML files, we need to be more selective to avoid excessive chunks
-        print(f"Processing HTML file of {len(file_content)} characters")
-        
-        # Remove HTML tags entirely and get plain text
-        text_only = re.sub(r'<[^>]+>', ' ', file_content)
-        text_only = clean_text(text_only)
-        
-        print(f"After HTML tag removal: {len(text_only)} characters")
-        
-        # Split by conversation patterns to identify actual chat content
-        # Look for patterns like "User" followed by "ChatGPT" or "Assistant"
-        conversation_pattern = r'(?i)(?:^|\n\s*)((?:user|human|you)[\s:]+.*?)(?=(?:\n\s*(?:chatgpt|assistant|ai|gpt)[\s:])|$)'
-        assistant_pattern = r'(?i)(?:^|\n\s*)((?:chatgpt|assistant|ai|gpt)[\s:]+.*?)(?=(?:\n\s*(?:user|human|you)[\s:])|$)'
-        
-        # Extract user messages
-        user_messages = re.findall(conversation_pattern, text_only, re.DOTALL)
-        assistant_messages = re.findall(assistant_pattern, text_only, re.DOTALL)
-        
-        # Combine and clean messages
-        all_messages = user_messages + assistant_messages
-        
-        for message in all_messages:
-            cleaned_message = clean_text(message)
-            if cleaned_message and len(cleaned_message) > 50:  # Filter short messages
-                # Remove common HTML artifacts and navigation text
-                if not any(artifact in cleaned_message.lower() for artifact in [
-                    'copy code', 'share', 'regenerate', 'continue', 'new conversation',
-                    'upgrade', 'settings', 'history', 'menu', 'sidebar'
-                ]):
-                    extracted_texts.append(cleaned_message)
-        
-        # If conversation pattern matching didn't work well, fall back to paragraph splitting
-        if len(extracted_texts) < 10:
-            print("Falling back to paragraph-based extraction...")
-            # Split by multiple line breaks but be more aggressive about filtering
-            chunks = re.split(r'\n\s*\n\s*\n|\r\n\s*\r\n\s*\r\n', text_only)
-            extracted_texts = []
-            
-            for chunk in chunks:
-                cleaned_chunk = clean_text(chunk)
-                # More restrictive filtering for HTML to avoid UI elements
-                if (cleaned_chunk and 
-                    len(cleaned_chunk) > 100 and  # Longer threshold for HTML
-                    len(cleaned_chunk.split()) > 10 and  # At least 10 words
-                    not any(artifact in cleaned_chunk.lower() for artifact in [
-                        'copy code', 'share', 'regenerate', 'continue', 'new conversation',
-                        'upgrade', 'settings', 'history', 'menu', 'sidebar', 'chatgpt',
-                        'openai', 'terms', 'privacy', 'help', 'support'
-                    ])):
-                    extracted_texts.append(cleaned_chunk)
-        
-        # Log the total amount of extracted content for debugging
-        total_chars = sum(len(text) for text in extracted_texts)
-        print(f"HTML extraction found {len(extracted_texts)} text segments, total {total_chars} characters")
-        print(f"Reduction ratio: {len(file_content)} -> {total_chars} ({total_chars/len(file_content)*100:.1f}%)")
-        
-        return extracted_texts
-        
-    except Exception as e:
-        print(f"Error in HTML extraction: {e}")
-        # Fallback to basic text extraction
-        return extract_from_text_content(re.sub(r'<[^>]+>', ' ', file_content))
 
 def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progress_callback=None, total_items=None, current_item=None, seen_objects=None, text_set=None) -> List[str]:
     """Recursively extract meaningful text from any data structure - OPTIMIZED for speed"""
@@ -1645,8 +1581,6 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
         extracted_text = []
         total_pages = len(pdf_reader.pages)
         
-        print(f"📄 Extracting text from PDF ({total_pages} pages)")
-        
         for page_num, page in enumerate(pdf_reader.pages, 1):
             try:
                 text = page.extract_text()
@@ -1665,9 +1599,10 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
         raise ValueError(f"Failed to extract PDF content: {str(e)}")
 
 def extract_from_text_content(file_content: str) -> List[str]:
-    """OPTIMIZED: Extract meaningful text from plain text content"""
+    """OPTIMIZED: Extract meaningful text from plain text content with better context preservation"""
     extracted_texts = []
-    text_set = set()  # Use set for O(1) duplicate checking
+    text_set = set()  # For exact duplicate checking
+    semantic_set = set()  # For semantic duplicate detection
     
     try:
         # Try to detect if it's actually structured data in text format
@@ -1679,28 +1614,111 @@ def extract_from_text_content(file_content: str) -> List[str]:
             except:
                 pass  # Continue with text processing
         
-        # OPTIMIZED: Split by common delimiters and patterns in one operation
-        chunks = re.split(r'\n\s*\n|\r\n\s*\r\n|\.{3,}|---+|\*{3,}', file_content)
+        # Filter patterns for metadata and navigation elements
+        metadata_patterns = [
+            r'^\[PDF\].*',  # PDF metadata
+            r'^https?://.*',  # URLs
+            r'^www\..*',  # WWW URLs
+            r'^\d+\s*-\s*\d+$',  # Page numbers like "1 - 2"
+            r'^(Common Data Set|Self Service|Annual Report|Catalog|Financial Report).*',  # Navigation items
+            r'^citeturn\d+.*',  # Citation metadata
+            r'^mediafiles\..*',  # Media file references
+            r'^eventreg\..*',  # Event registration URLs
+            r'\.edu$',  # Domain endings
+            r'\.com$',
+            r'\.org$',
+            r'^(assistant|user|sent|attachment omitted|powered by openai).*',  # Chat metadata
+            r'.*:\s*$',  # Lines ending with colon (speaker tags)
+        ]
         
-        for chunk in chunks:
-            lines = chunk.strip().split('\n')
+        # Compile metadata patterns
+        metadata_regex = re.compile('|'.join(metadata_patterns), re.IGNORECASE)
+        
+        # Patterns for quoted replies and chat artifacts
+        quote_pattern = re.compile(r'^>\s*')  # Email-style quotes
+        speaker_pattern = re.compile(r'^(assistant|user|chatgpt|human|ai):\s*', re.IGNORECASE)
+        
+        # Split into paragraphs and process with better context preservation
+        paragraphs = re.split(r'\n\s*\n|\r\n\s*\r\n', file_content)
+        
+        for para in paragraphs:
+            # Clean up the paragraph
+            para = para.strip()
+            
+            # Skip if too short
+            if len(para) < 10:
+                continue
+            
+            # Skip metadata and navigation
+            if metadata_regex.match(para):
+                continue
+            
+            # Skip if it's mostly punctuation or numbers (but be less strict)
+            alphanumeric_count = sum(c.isalnum() for c in para)
+            if alphanumeric_count < len(para) * 0.3:  # Reduced from 0.5 to 0.3
+                continue
+            
+            # Try to preserve multi-line content as paragraphs
+            lines = para.split('\n')
+            current_paragraph = []
+            
             for line in lines:
                 cleaned_line = line.strip()
                 
-                # OPTIMIZED: Use pre-compiled patterns and early filtering
-                if len(cleaned_line) < 3:  # Quick length check first
+                # Skip empty or very short lines
+                if len(cleaned_line) < 5:
                     continue
-                    
-                # Remove common prefixes using pre-compiled patterns
+                
+                # Remove quoted reply markers
+                cleaned_line = quote_pattern.sub('', cleaned_line)
+                
+                # Remove speaker tags at start of line
+                cleaned_line = speaker_pattern.sub('', cleaned_line)
+                
+                # Remove timestamps and username prefixes
                 cleaned_line = _TIMESTAMP_PATTERN.sub('', cleaned_line)
                 cleaned_line = _TIME_PATTERN.sub('', cleaned_line)
                 cleaned_line = _USERNAME_PATTERN.sub('', cleaned_line)
                 cleaned_line = cleaned_line.strip()
                 
-                # OPTIMIZED: Check meaningful text and duplicates efficiently
-                if is_meaningful_text(cleaned_line) and cleaned_line not in text_set:
-                    extracted_texts.append(cleaned_line)
-                    text_set.add(cleaned_line)
+                # Skip metadata lines
+                if metadata_regex.match(cleaned_line):
+                    continue
+                
+                # Check if this line is meaningful
+                if is_meaningful_text(cleaned_line):
+                    current_paragraph.append(cleaned_line)
+            
+            # Join lines into a cohesive paragraph
+            if current_paragraph:
+                # Combine lines that seem to be part of the same thought
+                combined = ' '.join(current_paragraph)
+                
+                # Detect conversation roles and tag content
+                # Check first few words for role indicators
+                first_words = combined[:100].lower()
+                role_prefix = ""
+                
+                # User/Human indicators
+                if any(marker in first_words for marker in ['you said', 'you asked', 'i said', 'i asked', 'question:', 'user:']):
+                    role_prefix = "<user> "
+                # Assistant/AI indicators  
+                elif any(marker in first_words for marker in ['i can help', 'here is', "here's", 'assistant:', 'chatgpt:', 'let me']):
+                    role_prefix = "<assistant> "
+                
+                # Apply role prefix if detected
+                if role_prefix:
+                    combined = role_prefix + combined
+                
+                # Semantic duplicate detection: normalize for comparison
+                # Only collapse whitespace and lowercase - preserve numbers and meaningful punctuation
+                semantic_hash = ' '.join(combined.lower().split())[:250]
+                
+                # Only add if not duplicate (exact or semantic) and has substance
+                if combined not in text_set and semantic_hash not in semantic_set and len(combined) > 20:
+                    extracted_texts.append(combined)
+                    text_set.add(combined)
+                    semantic_set.add(semantic_hash)
     
     except Exception as e:
         print(f"Error processing text content: {e}")
@@ -1710,40 +1728,6 @@ def extract_from_text_content(file_content: str) -> List[str]:
 from fastapi.responses import StreamingResponse
 import asyncio
 from typing import AsyncGenerator
-
-# Global progress tracking
-# Removed unused progress_tracker - using job_progress for better performance
-
-# Removed old update_progress function - using update_job_progress only for better performance
-
-@app.get("/api/progress/{job_id}/{operation}")
-async def get_progress(job_id: str, operation: str):
-    """Get current progress for a job operation - using job_progress instead"""
-    if job_id in job_progress:
-        return job_progress[job_id]
-    else:
-        return {"job_id": job_id, "step": operation, "progress": 0, "message": "No progress data"}
-
-@app.get("/api/progress/{job_id}")
-async def get_progress_stream(job_id: str):
-    """Stream progress updates for a job"""
-    async def generate():
-        last_progress = None
-        timeout_count = 0
-        while timeout_count < 60:  # 30 seconds timeout
-            current_progress = job_progress.get(job_id)
-            if current_progress and current_progress != last_progress:
-                yield f"data: {json.dumps(current_progress)}\n\n"
-                last_progress = current_progress
-                timeout_count = 0
-            else:
-                timeout_count += 1
-            await asyncio.sleep(0.5)  # Check every 500ms
-        
-        # Send final completion message
-        yield f"data: {json.dumps({'step': 'complete', 'progress': 100, 'message': 'Progress tracking ended'})}\n\n"
-    
-    return StreamingResponse(generate(), media_type="text/event-stream")
 
 @app.delete("/api/jobs/{job_id}")
 async def delete_job(job_id: str):
@@ -1982,13 +1966,14 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
                     actual_chunk_size = len(chunk)
                     # Only log dense chunks occasionally to avoid console spam
                     if chunk_count % 20 == 0:
-                        print(f"⚠️ Dense content detected, adjusting chunk sizes (avg: {chunk_tokens:,} tokens)")
+                        print(chunk)
 
                 else:
                     # Log every 20 chunks for normal content
                     if chunk_count % 20 == 0:
                         print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
-                
+                        print(chunk)
+
                 chunks.append(chunk)
                 chunk_count += 1
                 
@@ -4328,121 +4313,6 @@ async def cancel_source_analysis(
         print(f"Error cancelling source analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to cancel analysis: {str(e)}")
 
-@app.get("/api/v2/packs/{pack_id}/download/zip")
-async def download_pack_zip_v2(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download complete pack as ZIP with all sources"""
-    import zipfile
-    import tempfile
-    
-    try:
-        # Get pack details with sources
-        result = supabase.rpc("get_pack_details_v2", {
-            "user_uuid": user.user_id,
-            "target_pack_id": pack_id
-        }).execute()
-        
-        if not result.data:
-            raise HTTPException(status_code=404, detail="Pack not found")
-        
-        pack_data = result.data.get("pack", {})
-        sources = result.data.get("sources", [])
-        
-        print(f"Creating ZIP for pack {pack_id} with {len(sources)} sources")
-        
-        # Create temp ZIP file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
-            with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                files_added = 0
-                
-                # Add each source's files
-                for source in sources:
-                    source_id = source.get("source_id")
-                    source_name = source.get("source_name", "unknown")
-                    status = source.get("status", "unknown")
-                    
-                    print(f"Processing source {source_id} ({source_name}) - status: {status}")
-                    
-                    # Add extracted text if available
-                    extracted_path = f"{user.r2_directory}/{pack_id}/{source_id}/extracted.txt"
-                    try:
-                        extracted_content = download_from_r2(extracted_path)
-                        if extracted_content:
-                            zipf.writestr(f"sources/{source_name}/extracted.txt", extracted_content)
-                            files_added += 1
-                            print(f"✅ Added extracted.txt for {source_name}")
-                        else:
-                            print(f"⚠️ No extracted content for {source_name}")
-                    except Exception as e:
-                        print(f"❌ Error downloading extracted.txt for {source_name}: {e}")
-                    
-                    # Add analyzed content if completed
-                    if status == "completed":
-                        analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
-                        try:
-                            analyzed_content = download_from_r2(analyzed_path)
-                            if analyzed_content:
-                                zipf.writestr(f"sources/{source_name}/analyzed.txt", analyzed_content)
-                                files_added += 1
-                                print(f"✅ Added analyzed.txt for {source_name}")
-                            else:
-                                print(f"⚠️ No analyzed content for {source_name}")
-                        except Exception as e:
-                            print(f"❌ Error downloading analyzed.txt for {source_name}: {e}")
-                    
-                    # Add chunked data if available
-                    chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
-                    try:
-                        chunked_content = download_from_r2(chunked_path)
-                        if chunked_content:
-                            zipf.writestr(f"sources/{source_name}/chunked.json", chunked_content)
-                            files_added += 1
-                            print(f"✅ Added chunked.json for {source_name}")
-                        else:
-                            print(f"⚠️ No chunked content for {source_name}")
-                    except Exception as e:
-                        print(f"❌ Error downloading chunked.json for {source_name}: {e}")
-                
-                # Add pack metadata
-                pack_info = {
-                    "pack_id": pack_id,
-                    "pack_name": pack_data.get("pack_name"),
-                    "description": pack_data.get("description"),
-                    "total_sources": len(sources),
-                    "sources": [
-                        {
-                            "source_id": s.get("source_id"),
-                            "source_name": s.get("source_name"),
-                            "status": s.get("status"),
-                            "created_at": s.get("created_at")
-                        }
-                        for s in sources
-                    ]
-                }
-                zipf.writestr("pack_info.json", json.dumps(pack_info, indent=2))
-                files_added += 1
-                
-                print(f"Total files added to ZIP: {files_added}")
-                
-                if files_added == 1:  # Only pack_info
-                    raise HTTPException(status_code=404, detail="No source files found in pack. Sources may still be processing.")
-        
-        # Read and return ZIP
-        with open(temp_zip.name, 'rb') as f:
-            zip_data = f.read()
-        
-        os.unlink(temp_zip.name)
-        
-        return StreamingResponse(
-            io.BytesIO(zip_data),
-            media_type='application/zip',
-            headers={"Content-Disposition": f"attachment; filename=pack_{pack_data.get('pack_name', pack_id)}.zip"}
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error creating pack ZIP: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create ZIP: {str(e)}")
 
 @app.get("/api/v2/packs/{pack_id}/export/{export_type}")
 async def download_pack_export_v2(
@@ -4516,59 +4386,6 @@ async def download_pack_export_v2(
     except Exception as e:
         print(f"Error downloading pack export: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to download export: {str(e)}")
-
-@app.get("/api/test-packs")
-async def test_packs():
-    """Test packs table connection"""
-    try:
-        if not supabase:
-            return {"error": "Supabase not configured"}
-        
-        # Try to query the packs table
-        result = supabase.table("packs").select("*").limit(5).execute()
-        return {"success": True, "packs_count": len(result.data), "sample_packs": result.data}
-    except Exception as e:
-        return {"error": str(e)}
-
-@app.get("/api/test-create-pack/{job_id}")
-async def test_create_pack(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Test creating a pack for an existing job with full logging"""
-    print(f"🧪 TESTING PACK CREATION FOR JOB: {job_id}")
-    
-    try:
-        # First, let's create the job if it doesn't exist
-
-        job_record = await create_job_in_db(
-            user=user,
-            job_id=job_id,
-            file_name="test_file.txt",
-            file_size=1000,
-            status="completed"
-        )
-        
-        if job_record:
-            pass
-        
-        # Now try to create the pack
-        pack_record = await create_pack_in_db(
-            user=user,
-            job_id=job_id,
-            pack_name=f"Test Pack {job_id[:8]}",
-            r2_pack_path=f"{user.r2_directory}/{job_id}/",
-            extraction_stats={"test": True},
-            analysis_stats={"test": True}
-        )
-        
-        return {
-            "success": pack_record is not None,
-            "job_record": job_record,
-            "pack_record": pack_record,
-            "message": "Check backend logs for detailed output"
-        }
-        
-    except Exception as e:
-
-        return {"error": str(e)}
 
 @app.get("/api/debug-jobs")
 async def debug_jobs(user: AuthenticatedUser = Depends(get_current_user)):
@@ -4646,217 +4463,6 @@ async def test_auth_full(user: AuthenticatedUser = Depends(get_current_user)):
         }
     except Exception as e:
         return {"error": str(e)}
-
-@app.get("/api/manual-migrate")
-async def manual_migrate():
-    """Manually create job and pack records for known job - TEMPORARY"""
-    try:
-        if not supabase:
-            return {"error": "Supabase not configured"}
-        
-        # Manually create records for the known job from the screenshot
-        job_id = "a2a6249-81d2-44ba-bd90-3414c6516fb5"
-        user_id = "0b39c68a-46b3-4d99-b5bb-0c8525fdc4cc"
-        
-        # First, create the job record in the jobs table
-        job_data = {
-            "job_id": job_id,
-            "user_id": user_id,
-            "file_name": "migrated_data.json",  # Add required file_name field
-            "file_size": 1024,  # Add required file_size field (estimated)
-            "r2_path": f"user_{user_id}/{job_id}/",  # Add required r2_path field
-            "status": "completed",
-            "progress": 100,
-            "completed_at": "2025-08-14T22:00:00.000Z"
-        }
-        
-        # Check if job already exists
-        existing_job = supabase.table("jobs").select("*").eq("job_id", job_id).execute()
-        
-        if not existing_job.data:
-            # Create job record
-            job_result = supabase.table("jobs").insert(job_data).execute()
-            if not job_result.data:
-                return {"error": "Failed to create job record", "job_result": job_result}
-        
-        # Now create the pack record
-        pack_data = {
-            "user_id": user_id,
-            "job_id": job_id,
-            "pack_name": f"UCP Pack {job_id[:8]}",
-            "r2_pack_path": f"user_{user_id}/{job_id}/",
-            "extraction_stats": {
-                "total_chunks": 2,  # Updated to match new free plan limit
-                "processed_chunks": 2,
-                "failed_chunks": 0
-            },
-            "analysis_stats": {
-                "total_input_tokens": 0,  # We'll update these later when R2 access is fixed
-                "total_output_tokens": 0,
-                "total_cost": 0.0,
-                "completed_at": "2025-08-14T22:00:00.000Z"
-            }
-        }
-        
-        # Check if pack already exists
-        existing_pack = supabase.table("packs").select("*").eq("job_id", job_id).execute()
-        
-        if existing_pack.data:
-            return {
-                "success": True,
-                "message": "Pack record already exists in Supabase",
-                "job_id": job_id,
-                "existing_pack": existing_pack.data[0]
-            }
-        
-        # Insert pack record
-        pack_result = supabase.table("packs").insert(pack_data).execute()
-        
-        if pack_result.data:
-            return {
-                "success": True,
-                "message": "Successfully created job and pack records in Supabase",
-                "job_id": job_id,
-                "job_record": existing_job.data[0] if existing_job.data else job_result.data[0],
-                "pack_record": pack_result.data[0]
-            }
-        else:
-            return {"error": "Failed to insert pack into Supabase", "pack_result": pack_result}
-            
-    except Exception as e:
-        return {"error": f"Manual migration failed: {str(e)}"}
-
-@app.get("/api/migrate-r2-to-supabase")
-async def migrate_r2_to_supabase():
-    """Migrate existing R2 data to Supabase - TEMPORARY MIGRATION ENDPOINT"""
-    try:
-        if not supabase:
-            return {"error": "Supabase not configured"}
-        
-        # Manually create pack records for the known job
-        job_id = "a2a6249-81d2-44ba-bd90-3414c6516fb5"
-        user_id = "0b39c68a-46b3-4d99-b5bb-0c8525fdc4cc"  # From the R2 path
-        
-        # Try to download the summary.json file directly
-        summary_path = f"user_{user_id}/{job_id}/summary.json"
-        print(f"Attempting to download: {summary_path}")
-        
-        try:
-            summary_content = download_from_r2(summary_path)
-            if summary_content:
-                summary = json.loads(summary_content)
-                print(f"Successfully downloaded summary: {summary}")
-                
-                # Create pack record in Supabase
-                pack_data = {
-                    "user_id": user_id,
-                    "job_id": job_id,
-                    "pack_name": f"UCP Pack {job_id[:8]}",
-                    "r2_pack_path": f"user_{user_id}/{job_id}/",
-                    "extraction_stats": {
-                        "total_chunks": summary.get("total_chunks", 0),
-                        "processed_chunks": summary.get("processed_chunks", 0),
-                        "failed_chunks": summary.get("failed_chunks", 0)
-                    },
-                    "analysis_stats": {
-                        "total_input_tokens": summary.get("total_input_tokens", 0),
-                        "total_output_tokens": summary.get("total_output_tokens", 0),
-                        "total_cost": summary.get("total_cost", 0),
-                        "completed_at": summary.get("completed_at")
-                    }
-                }
-                
-                result = supabase.table("packs").insert(pack_data).execute()
-                
-                if result.data:
-                    return {
-                        "success": True,
-                        "message": "Successfully migrated job to Supabase",
-                        "job_id": job_id,
-                        "pack_record": result.data[0]
-                    }
-                else:
-                    return {"error": "Failed to insert into Supabase", "supabase_result": result}
-                    
-            else:
-                return {"error": f"Could not download summary file from: {summary_path}"}
-                
-        except Exception as e:
-            return {"error": f"Error processing summary: {str(e)}"}
-            
-    except Exception as e:
-        return {"error": f"Migration failed: {str(e)}"}
-
-@app.get("/api/test-jobs")
-async def test_list_jobs():
-    """Test endpoint to list jobs without authentication - TEMPORARY"""
-    try:
-        # First, let's try to list ALL objects to see what's in R2
-        print("Listing all R2 objects...")
-        all_objects = list_r2_objects("")
-        print(f"Found {len(all_objects)} total objects in R2")
-        
-        # Look for any objects containing the job ID we see in the screenshot
-        job_id = "a2a6249-81d2-44ba-bd90-3414c6516fb5"
-        matching_objects = [obj for obj in all_objects if job_id in obj]
-        print(f"Objects containing job ID {job_id}: {matching_objects}")
-        
-        # Look for any user directory objects
-        user_objects = [obj for obj in all_objects if "user_" in obj]
-        print(f"User directory objects: {user_objects[:10]}")  # Show first 10
-        
-        # Now try with the specific user directory
-        test_user_directory = "user_0b39c68a-46b3-4d99-b5bb-0c8525fdc4cc"
-        print(f"Attempting to list R2 objects for directory: {test_user_directory}")
-        
-        jobs = []
-        
-        # List all objects in the test user's R2 directory
-        user_keys = list_r2_objects(f"{test_user_directory}/")
-        print(f"Found {len(user_keys)} objects in user directory")
-        
-        # List all summary files in the test user's R2 directory
-        summary_keys = [key for key in user_keys if key.endswith("/summary.json")]
-        print(f"Found {len(summary_keys)} summary files: {summary_keys}")
-        
-        for summary_key in summary_keys:
-            try:
-                print(f"Processing summary: {summary_key}")
-                summary_content = download_from_r2(summary_key)
-                if summary_content:
-                    summary = json.loads(summary_content)
-                    jobs.append({
-                        "job_id": summary["job_id"],
-                        "status": "completed",
-                        "created_at": summary["completed_at"],
-                        "stats": {
-                            "total_chunks": summary["total_chunks"],
-                            "total_input_tokens": summary["total_input_tokens"],
-                            "total_output_tokens": summary["total_output_tokens"],
-                            "total_cost": summary["total_cost"]
-                        }
-                    })
-                    print(f"Successfully processed job: {summary['job_id']}")
-                else:
-                    print(f"Failed to download content for: {summary_key}")
-            except Exception as e:
-                print(f"Error processing summary {summary_key}: {e}")
-                continue
-        
-        print(f"Returning {len(jobs)} jobs")
-        return {
-            "debug": {
-                "total_r2_objects": len(all_objects), 
-                "matching_job_objects": len(matching_objects),
-                "user_objects_sample": user_objects[:5],
-                "user_directory_objects": len(user_keys),
-                "summary_files": len(summary_keys)
-            }, 
-            "jobs": jobs
-        }
-    except Exception as e:
-        print(f"Error in test_list_jobs: {e}")
-        return {"error": str(e), "jobs": []}
 
 @app.get("/api/jobs")
 async def list_jobs(user: AuthenticatedUser = Depends(get_current_user)):
