@@ -1957,7 +1957,7 @@ Document content:
 {redacted_chunk}
 """
                 # Scenario B: Conversations File - General overview
-                elif "conversations" in filename.lower() or filename.lower().endswith('.json') or filename.lower().endswith('.txt'):
+                elif "conversations" in filename.lower() or filename.lower().endswith('.json') or (filename.lower().endswith('.txt') and len(chunks) >= 5):
                     prompt = f"""
 Analyze this conversation segment from a larger chat history.
 
