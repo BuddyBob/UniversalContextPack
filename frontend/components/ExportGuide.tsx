@@ -168,11 +168,12 @@ const ExportGuide = () => {
               <div className="hidden md:block relative lg:col-span-3">
                 <ScrollReveal delay={0.3}>
                   <div className="relative">
-                    <Image
-                      src="/main3-image.png"
-                      alt="Move chats across platforms"
-                      width={1200}
-                      height={1200}
+                    <video
+                      src="/main3_video.mp4"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
                       className="w-full h-auto scale-110 animate-float-subtle"
                     />
                   </div>
