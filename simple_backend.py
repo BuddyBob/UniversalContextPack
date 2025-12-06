@@ -1813,12 +1813,13 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
                     actual_chunk_size = len(chunk)
                     # Only log dense chunks occasionally to avoid console spam
                     if chunk_count % 20 == 0:
-                        print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
+                        print(chunk)
 
                 else:
                     # Log every 20 chunks for normal content
                     if chunk_count % 20 == 0:
                         print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
+                        print(chunk)
 
                 chunks.append(chunk)
                 chunk_count += 1
@@ -1892,231 +1893,13 @@ def apply_redaction_filters(text: str) -> str:
         return text
 
 async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, user: AuthenticatedUser, max_chunks: int = None, custom_system_prompt: Optional[str] = None):
-    """Step 2: Analyze the chunks (OpenAI calls, deduct credits) - WITH BOUNDED CONCURRENCY
+    """Step 2: Analyze the chunks (OpenAI calls, deduct credits)
     
     Args:
         max_chunks: Optional limit on number of chunks to analyze (for partial analysis with limited credits)
     """
-    
-    # Shared state for tracking progress across concurrent tasks
-    completed_count = {'value': 0}  # Use dict for mutability in nested function
-    progress_lock = asyncio.Lock()  # Prevent race conditions on progress updates
-    
-    # Helper function to process a single chunk with semaphore
-    async def process_single_chunk(idx: int, chunk: str, sem: asyncio.Semaphore):
-        """Process one chunk with rate limiting via semaphore"""
-        async with sem:  # Acquire semaphore slot
-            # Check for cancellation
-            if source_id in cancelled_jobs:
-                print(f"🛑 Cancellation detected for source {source_id} at chunk {idx+1}")
-                return None
-            
-            try:
-                redacted_chunk = apply_redaction_filters(chunk)
-                
-                # Scenario A: Single Chunk - Dynamic analysis
-                if len(chunks) == 1:
-                    prompt = f"""
-You are an expert analyst. Your task is to analyze this document segment.
-
-STEP 1 — Identify the document TYPE.  
-Choose the closest category (or a blend if needed):
-- Technical Specification / Engineering Doc
-- Product Requirements / Roadmap
-- Business / Strategy / Planning Document
-- Legal / Policy / Compliance
-- Personal Narrative / Reflective Writing
-- Creative Writing
-- Professional Communication (email, memo, instructions)
-- Research / Academic Explanation
-- Financial / Operational Data
-- Miscellaneous (explain if so)
-
-STEP 2 — Based on the type, extract the most relevant and high-value information:
-- For Technical/Engineering: architecture, APIs, workflows, constraints, decisions
-- For Product/Business: goals, KPIs, strategies, stakeholders, dependencies, risks
-- For Legal/Policy: rules, obligations, definitions, restrictions, implications
-- For Narrative/Reflective: themes, motivations, events, insights, conflicts
-- For Instructional/Operational: steps, responsibilities, conditions, requirements
-- For Research/Explanatory: concepts, claims, evidence, conclusions
-- For Financial: amounts, timelines, obligations, assumptions
-
-STEP 3 — Produce a comprehensive analysis:
-
-Write a detailed analysis (aim for 400-700 words) that includes:
-
-**Executive Summary:** A rich, narrative overview capturing the document's core purpose, main arguments, and key takeaways.
-
-**Key Themes & Concepts:** The major ideas, topics, or arguments presented in the document.
-
-**Critical Details:** Specific facts, decisions, data points, technical specifications, or actionable items that are essential to understanding or acting on this document.
-
-**Context & Implications:** Any implicit assumptions, constraints, dependencies, or strategic considerations that provide deeper understanding.
-
-Document content:
-{redacted_chunk}
-"""
-                # Scenario B: Conversations File - General overview
-                elif "conversations" in filename.lower() or filename.lower().endswith('.json') or (filename.lower().endswith('.txt') and len(chunks) >= 5):
-                    prompt = f"""
-Analyze this conversation segment from a larger chat history.
-
-Extract only persistent, high-level information about the user and their world, such as:
-- Background facts (roles, expertise, industries, education, locations)
-- Ongoing projects, long-term efforts, and workstreams
-- Technical ecosystem (tools, languages, platforms, workflows)
-- Behavioral patterns (how they approach problems, communicate, decide)
-- Preferences, constraints, recurring themes
-- Timelines, responsibilities, domains of knowledge
-
-Do NOT extract minor or temporary conversational details.
-
-Output a concise but meaningful:
-1. High-level summary  
-2. List of stable facts and recurring patterns  
-3. Key long-term projects or responsibilities  
-4. Any cross-conversation themes that matter for future reasoning
-
-Conversation content:
-{redacted_chunk}
-"""
-                # Scenario C: Large Document (5+ chunks) - Broad analysis
-                elif len(chunks) >= 5:
-                    prompt = f"""
-Analyze this section of a large document.
-
-Your goal is to capture the high-level picture, not granular details.
-
-Extract:
-- Main themes and topics covered in this section
-- Major concepts, arguments, or components
-- How this section fits into the likely overall document
-- Structural patterns (e.g., chapters, phases, modules, workflows)
-
-Focus on clarity and breadth.  
-Do not dive into micro-details—this is just one piece of a much larger whole.
-
-Document content:
-{redacted_chunk}
-"""
-                # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
-                else:
-                    prompt = f"""
-                    Analyze this section of the document.
-                    First, infer the overall context and type of the document.
-                    Then, extract specific facts, key points, and important details relevant to that context.
-                    Since this is a relatively short document, aim for high density of information.
-                    Capture specific instructions, decisions, or factual claims made in this text.
-                    
-                    Document content:
-                    {redacted_chunk}
-                    Provide your comprehensive analysis below:"""
-
-                # Build messages array
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ]
-                
-                response = await openai_call_with_retry(
-                    openai_client,
-                    max_retries=3,
-                    model="gpt-4o-mini",
-                    messages=messages,
-                    temperature=0.3,
-                    max_completion_tokens=3000
-                )
-                
-                analysis = response.choices[0].message.content
-                
-                # Check if OpenAI refused to analyze due to content policy
-                if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
-                    raise Exception(f"Content policy refusal: OpenAI declined to analyze this content.")
-                
-                # Track tokens
-                input_tokens = response.usage.prompt_tokens
-                output_tokens = response.usage.completion_tokens
-                cost = (input_tokens * 0.00015 / 1000) + (output_tokens * 0.0006 / 1000)
-                
-                print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed: {output_tokens} tokens out, {input_tokens} tokens in")
-                
-                # Update progress in database (with lock to prevent race conditions)
-                async with progress_lock:
-                    completed_count['value'] += 1
-                    # Progress: 10% start + 70% for analysis + 20% for writing
-                    # So analysis phase = 10-80%
-                    progress = 10 + int((completed_count['value'] / len(chunks)) * 70)
-                    try:
-                        supabase.rpc("update_source_status", {
-                            "user_uuid": user.user_id,
-                            "target_source_id": source_id,
-                            "status_param": "analyzing",
-                            "progress_param": progress,
-                            "processed_chunks_param": completed_count['value']
-                        }).execute()
-                        print(f"📊 Real-time progress: {progress}% ({completed_count['value']}/{len(chunks)} chunks analyzed)")
-                    except Exception as progress_error:
-                        # Don't fail the whole analysis if progress update fails
-                        print(f"⚠️ Failed to update progress: {progress_error}")
-                
-                return {
-                    'idx': idx,
-                    'analysis': analysis,
-                    'input_tokens': input_tokens,
-                    'output_tokens': output_tokens,
-                    'cost': cost,
-                    'error': None
-                }
-                
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ Error analyzing chunk {idx}: {error_msg}")
-                
-                # Check if this is a content policy refusal
-                if "cannot assist" in error_msg.lower() or "content policy" in error_msg.lower() or "safety" in error_msg.lower():
-                    print(f"🚫 Content policy refusal detected for chunk {idx+1}")
-                    error_analysis = f"[Chunk {idx+1} could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records.]"
-                    
-                    # Still update progress for failed chunks
-                    async with progress_lock:
-                        completed_count['value'] += 1
-                        progress = 10 + int((completed_count['value'] / len(chunks)) * 70)
-                        try:
-                            supabase.rpc("update_source_status", {
-                                "user_uuid": user.user_id,
-                                "target_source_id": source_id,
-                                "status_param": "analyzing",
-                                "progress_param": progress,
-                                "processed_chunks_param": completed_count['value']
-                            }).execute()
-                        except:
-                            pass
-                    
-                    return {
-                        'idx': idx,
-                        'analysis': error_analysis,
-                        'input_tokens': 0,
-                        'output_tokens': 0,
-                        'cost': 0,
-                        'error': error_msg
-                    }
-                
-                # Return error result (still update progress)
-                async with progress_lock:
-                    completed_count['value'] += 1
-                
-                return {
-                    'idx': idx,
-                    'analysis': None,
-                    'input_tokens': 0,
-                    'output_tokens': 0,
-                    'cost': 0,
-                    'error': error_msg
-                }
-    
-    # Main function starts here
     try:
-        print(f"Starting analysis for source {source_id} with bounded concurrency")
+        print(f"Starting analysis for source {source_id}")
         
         # Update status to analyzing
         supabase.rpc("update_source_status", {
@@ -2143,12 +1926,17 @@ Document content:
             chunks = all_chunks
             print(f"📦 Loaded {len(chunks)} chunks from storage")
         
+        
         # Check if this is a large job that needs email notification
         is_large_job = len(chunks) >= 10
+        
         if is_large_job:
             print(f"📧 Large job detected ({len(chunks)} chunks). Will send email notification on completion.")
         
         openai_client = get_openai_client()
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cost = 0.0
         
         # Prepare paths for saving analysis
         pack_analyzed_path = f"{user.r2_directory}/{pack_id}/complete_analyzed.txt"
@@ -2163,94 +1951,213 @@ Document content:
         else:
             source_header = f"--- SOURCE: {filename} ---\n\n"
         
-        # Build system prompt
         base_system_prompt = "You are a personal data analysis assistant analyzing user-owned documents. Extract key insights concisely and comprehensively."
         if custom_system_prompt:
             trimmed_custom_prompt = custom_system_prompt.strip()
+            # Prevent runaway prompts while allowing detailed guidance
             if len(trimmed_custom_prompt) > 2000:
                 trimmed_custom_prompt = trimmed_custom_prompt[:2000]
             system_prompt = f"{base_system_prompt}\n\nPack instructions:\n{trimmed_custom_prompt}"
         else:
             system_prompt = base_system_prompt
         
-        # Create semaphore for rate limiting (max 3 concurrent OpenAI calls)
-        sem = asyncio.Semaphore(3)
-        
-        # Process all chunks concurrently with bounded concurrency
-        print(f"🚀 Starting bounded concurrent analysis (max 3 parallel requests)")
-        tasks = [process_single_chunk(i, chunk, sem) for i, chunk in enumerate(chunks)]
-        results = await asyncio.gather(*tasks)
-        
-        # Filter out None results (from cancellation)
-        if source_id in cancelled_jobs:
-            print(f"🛑 Cancellation detected, stopping analysis")
-            supabase.rpc("update_source_status", {
-                "user_uuid": user.user_id,
-                "target_source_id": source_id,
-                "status_param": "cancelled",
-                "progress_param": 0
-            }).execute()
-            cancelled_jobs.discard(source_id)
-            return
-        
-        # Sort results by index to maintain order
-        results = [r for r in results if r is not None]
-        results.sort(key=lambda x: x['idx'])
-        
-        # Aggregate token counts and costs
-        total_input_tokens = sum(r['input_tokens'] for r in results)
-        total_output_tokens = sum(r['output_tokens'] for r in results)
-        total_cost = sum(r['cost'] for r in results)
-        
-        print(f"📊 All chunks analyzed. Total: {total_input_tokens} input tokens, {total_output_tokens} output tokens, ${total_cost:.4f}")
-        
-        # =====================================================================
-        # OPTIMIZED WRITE: Accumulate in memory, write once (was O(n²), now O(n))
-        # This eliminates 20-30s bottleneck from downloading/uploading file 12x
-        # =====================================================================
-        print(f"📝 Writing {len(results)} chunk analyses to R2...")
-        
-        # Build complete content in memory (fast)
-        pack_content = existing_pack_content + source_header
-        source_content = ""
-        
-        for i, result in enumerate(results):
-            if result['analysis'] is None:
-                continue  # Skip failed chunks
+        for idx, chunk in enumerate(chunks):
+            # Check for cancellation at the start of each chunk
+            if source_id in cancelled_jobs:
+                print(f"🛑 Cancellation detected for source {source_id}. Stopping at chunk {idx+1}/{len(chunks)}")
+                # Update status to cancelled
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "cancelled",
+                    "progress_param": 0,
+                    "processed_chunks_param": idx  # Save how many were processed before cancel
+                }).execute()
+                cancelled_jobs.discard(source_id)
+                return
             
-            # Add chunk separator (same as before)
-            chunk_sep = f"\n\n--- Chunk {i+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
-            
-            # Accumulate content (no I/O)
-            pack_content += chunk_sep + result['analysis']
-            source_content += chunk_sep + result['analysis']
+            try:
+                redacted_chunk = apply_redaction_filters(chunk)
+                # Scenario A: Single Chunk - Extract all details (no summarization)
+                if len(chunks) == 1:
+                    prompt = f"""
+You are an expert analyst. Extract and preserve ALL information from this document.
+
+CRITICAL: Do NOT summarize or omit details. Include ALL specific values like hex codes, API keys, configuration settings, preferences, examples, etc.
+
+STEP 1 — Identify the document TYPE and extract accordingly:
+- Technical/Engineering: Include ALL code, hex codes, API endpoints, commands, file paths, config values
+- Design: Include ALL color codes (#hex values), dimensions, spacing, fonts, exact specifications  
+- Business: Include ALL metrics, KPIs, dates, names, requirements
+- Personal: Include ALL preferences, tools, workflows, specific examples
+
+STEP 2 — Comprehensive extraction with maximum detail:
+
+**Document Overview:** Brief identification of document type and purpose.
+
+**Complete Information Extract:** 
+Preserve and list ALL meaningful information found in the document:
+- Specific values and identifiers (hex codes, URLs, paths, IDs)
+- Technical specifications and configurations
+- Preferences and choices
+- Tools, technologies, and methods mentioned
+- Examples and use cases
+- Any other specific details
+
+**Context & Relationships:** How information connects together.
+
+Document content:
+{redacted_chunk}
+"""
+
+                # Scenario B: Conversations File - General overview
+                elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
+                    prompt = f"""
+Analyze this conversation segment from a larger chat history.
+
+Extract only persistent, high-level information about the user and their world, such as:
+- Background facts (roles, expertise, industries, education, locations)
+- Ongoing projects, long-term efforts, and workstreams
+- Technical ecosystem (tools, languages, platforms, workflows)
+- Behavioral patterns (how they approach problems, communicate, decide)
+- Preferences, constraints, recurring themes
+- Timelines, responsibilities, domains of knowledge
+
+Do NOT extract minor or temporary conversational details.
+
+Output a concise but meaningful:
+1. High-level summary  
+2. List of stable facts and recurring patterns  
+3. Key long-term projects or responsibilities  
+4. Any cross-conversation themes that matter for future reasoning
+
+Conversation content:
+{redacted_chunk}
+"""
+                
+                # Scenario C: Large Document (5+ chunks) - Broad analysis
+                elif len(chunks) >= 5:
+                    prompt = f"""
+Analyze this section of a large document.
+
+Your goal is to capture the high-level picture, not granular details.
+
+Extract:
+- Main themes and topics covered in this section
+- Major concepts, arguments, or components
+- How this section fits into the likely overall document
+- Structural patterns (e.g., chapters, phases, modules, workflows)
+
+Focus on clarity and breadth.  
+Do not dive into micro-details—this is just one piece of a much larger whole.
+
+Document content:
+{redacted_chunk}
+"""
+                
+                # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
+                else:
+                    prompt = f"""
+                    Analyze this section of the document.
+                    First, infer the overall context and type of the document.
+                    Then, extract specific facts, key points, and important details relevant to that context.
+                    Since this is a relatively short document, aim for high density of information.
+                    Capture specific instructions, decisions, or factual claims made in this text.
+                    
+                    Document content:
+                    {redacted_chunk}
+                    Provide your comprehensive analysis below:"""
+
+
+                # Build messages array
+                messages = [
+                    {
+                        "role": "system", 
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user", 
+                        "content": prompt
+                    }
+                ]
+                
+                print(f"DEBUG: Final messages count: {len(messages)}")
+                
+                response = await openai_call_with_retry(
+                    openai_client,
+                    max_retries=3,
+                    model="gpt-4o-mini",
+                    messages=messages,
+                    temperature=0.3,
+                    max_completion_tokens=3000  # Increased for richer analysis
+                )
+                
+                analysis = response.choices[0].message.content
+                
+                # Check if OpenAI refused to analyze due to content policy
+                if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
+                    raise Exception(f"Content policy refusal: OpenAI declined to analyze this content. This may occur with documents containing sensitive personal information.")
+                
+                # Track tokens and cost
+                input_tokens = response.usage.prompt_tokens
+                output_tokens = response.usage.completion_tokens
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+                total_cost += (input_tokens * 0.00015 / 1000) + (output_tokens * 0.0006 / 1000)
+                
+                print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed: {output_tokens} tokens out, {input_tokens} tokens in")
+                
+                # Append this chunk's analysis to files
+                chunk_sep = f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
+                
+                # Append to pack file
+                if idx == 0:
+                    # First chunk - add source header
+                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis)
+                else:
+                    current = download_from_r2(pack_analyzed_path) or ""
+                    upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis)
+                
+                # Append to individual source file
+                current_source = download_from_r2(analyzed_path, silent_404=True) or ""
+                upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
+                
+                
+                # Update progress with chunk count (more reliable than percentage for large files)
+                progress = 50 + int((idx + 1) / len(chunks) * 40)
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "processing",
+                    "progress_param": progress,
+                    "processed_chunks_param": idx + 1  # Current chunk number for frontend display
+                }).execute()
+                
+                print(f"📊 Progress updated: {progress}% (chunk {idx+1}/{len(chunks)} complete)")
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"❌ Error analyzing chunk {idx}: {error_msg}")
+                
+                # Check if this is a content policy refusal
+                if "cannot assist" in error_msg.lower() or "content policy" in error_msg.lower() or "safety" in error_msg.lower():
+                    print(f"🚫 Content policy refusal detected. This may be due to sensitive information in the document.")
+                    # Save a placeholder for this chunk
+                    error_analysis = f"[Chunk {idx+1} could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records.]"
+                    current_source = download_from_r2(analyzed_path, silent_404=True) or ""
+                    upload_to_r2(analyzed_path, current_source + f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" + error_analysis)
+                
+                continue
         
-        # Single atomic write for pack file (1 write instead of 12!)
-        upload_to_r2(pack_analyzed_path, pack_content)
-        print(f"✅ Pack file written: {len(pack_content)} chars")
-        
-        # Single atomic write for source file
-        upload_to_r2(analyzed_path, source_content)
-        print(f"✅ Source file written: {len(source_content)} chars")
-        
-        # Update final progress
-        supabase.rpc("update_source_status", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id,
-            "status_param": "processing",
-            "progress_param": 95,
-            "processed_chunks_param": len(results)
-        }).execute()
-        print(f"📊 Write complete (95%)")
-        
-        # Update source status to completed
+        # Update source status to completed (whether full or partial analysis)
+        # If user had limited credits, they successfully completed what they could afford
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
             "status_param": "completed",
             "progress_param": 100,
-            "total_chunks_param": len(all_chunks),
-            "processed_chunks_param": len(chunks),
+            "total_chunks_param": len(all_chunks),  # Total chunks available in source
+            "processed_chunks_param": len(chunks),   # Chunks actually analyzed
             "total_input_tokens_param": total_input_tokens,
             "total_output_tokens_param": total_output_tokens,
             "total_cost_param": total_cost
@@ -2259,7 +2166,7 @@ Document content:
         if max_chunks is not None and len(chunks) < len(all_chunks):
             print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks (limited by available credits)")
         else:
-            print(f"✅ Source {source_id} analyzed successfully with bounded concurrency")
+            print(f"✅ Source {source_id} analyzed successfully")
         
         # Send email notification if it was a large job
         if is_large_job:
@@ -2664,31 +2571,7 @@ async def get_user_profile(user: AuthenticatedUser = Depends(get_current_user)):
             "error": str(e)
         }
 
-# ============================================================================
-# GLOBAL JOB CANCELLATION TRACKING
-# ============================================================================
-# CONCURRENCY SEMANTICS:
-#   - Thread-safe: Python's set operations (add, discard, in) are atomic
-#   - Asyncio-safe: Single event loop, no race conditions between coroutines
-#   - Multi-process UNSAFE: In-memory set is NOT shared across uvicorn workers
-#
-# CURRENT DEPLOYMENT:
-#   - Single-process mode (one uvicorn worker): SAFE ✓
-#   - Multi-process mode (multiple workers): UNSAFE ✗ (cancellation won't propagate)
-#
-# MIGRATION PATH FOR MULTI-PROCESS:
-#   Option 1: Use Redis set for shared state across workers
-#   Option 2: Add 'cancel_requested' column to pack_sources table (recommended)
-#   Option 3: Use shared memory (complex, not recommended)
-#
-# USAGE:
-#   - Jobs check 'if source_id in cancelled_jobs' during processing
-#   - API endpoint adds to set via 'cancelled_jobs.add(source_id)'
-#   - Job cleanup uses 'cancelled_jobs.discard(source_id)' after handling
-#
-# NOTE: For production multi-process deployments, migrate to database-based
-#       cancellation by checking pack_sources.status = 'cancelled' instead
-# ============================================================================
+# Global job cancellation tracking
 cancelled_jobs = set()
 
 @app.post("/api/cancel/{job_id}")
