@@ -116,7 +116,7 @@ const ExportGuide = () => {
             {/* Header */}
             <div className="text-center mb-16">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 border border-slate-700/50 mb-6 animate-fade-in-down">
-                <span className="text-sm text-gray-400">600+ users</span>
+                <span className="text-sm text-gray-400">700+ users</span>
               </div>
 
               <h1 className="text-4xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
