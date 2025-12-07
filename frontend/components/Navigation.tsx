@@ -61,7 +61,7 @@ export default function Navigation() {
           <div className="nav-content">
             <div className="nav-brand">
               <Image
-                src="/Logo.png"
+                src="/Logo2.png"
                 alt="UCP Logo"
                 width={32}
                 height={32}
@@ -84,7 +84,7 @@ export default function Navigation() {
             <div className="flex items-center justify-between w-full">
               <Link href="/" className="nav-brand">
                 <Image
-                  src="/Logo.png"
+                  src="/Logo2.png"
                   alt="UCP Logo"
                   width={25}
                   height={25}
