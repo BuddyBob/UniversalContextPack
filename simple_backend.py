@@ -1811,15 +1811,11 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
                     chunk = combined_text[position:position + safe_size]
                     chunk_tokens = count_tokens(chunk)
                     actual_chunk_size = len(chunk)
-                    # Only log dense chunks occasionally to avoid console spam
-                    if chunk_count % 20 == 0:
-                        print(chunk)
 
                 else:
                     # Log every 20 chunks for normal content
                     if chunk_count % 20 == 0:
                         print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
-                        print(chunk)
 
                 chunks.append(chunk)
                 chunk_count += 1
