@@ -108,12 +108,6 @@ export default function Navigation() {
             {/* Desktop Navigation Links */}
             <nav className="nav-links hidden md:flex">
               <Link
-                href="/"
-                className={`nav-link ${pathname === '/' ? 'active' : ''}`}
-              >
-                Home
-              </Link>
-              <Link
                 href="/packs"
                 className={`nav-link ${pathname === '/packs' ? 'active' : ''}`}
               >
