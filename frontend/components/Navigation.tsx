@@ -81,31 +81,29 @@ export default function Navigation() {
       <header className="nav-header">
         <div className="nav-container">
           <div className="nav-content">
-            <div className="flex items-center justify-between w-full">
-              <Link href="/" className="nav-brand">
-                <Image
-                  src="/Logo2.png"
-                  alt="UCP Logo"
-                  width={25}
-                  height={25}
-                  className="nav-logo-img"
-                />
-                <h1 className="nav-title font-medium text-lg tracking-tight">Context Pack</h1>
-              </Link>
+            <Link href="/" className="nav-brand">
+              <Image
+                src="/Logo2.png"
+                alt="UCP Logo"
+                width={25}
+                height={25}
+                className="nav-logo-img"
+              />
+              <h1 className="nav-title font-medium text-lg tracking-tight">Context Pack</h1>
+            </Link>
 
-              {/* Mobile Hamburger - Always visible on mobile */}
-              <button
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="md:hidden p-2 rounded-md text-white hover:bg-gray-800 transition-colors ml-auto"
-                aria-label="Toggle mobile menu"
-              >
-                {showMobileMenu ? (
-                  <X className="h-6 w-6" />
-                ) : (
-                  <Menu className="h-6 w-6" />
-                )}
-              </button>
-            </div>
+            {/* Mobile Hamburger - Always visible on mobile */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="md:hidden p-2 rounded-md text-white hover:bg-gray-800 transition-colors ml-auto"
+              aria-label="Toggle mobile menu"
+            >
+              {showMobileMenu ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </button>
 
             {/* Desktop Navigation Links */}
             <nav className="nav-links hidden md:flex">
