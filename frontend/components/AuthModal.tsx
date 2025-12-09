@@ -153,7 +153,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in to Continue</h2>
           <p className="text-gray-600">
-            You'll get 4 processing credits to start immediately. Quick Google sign-in.
+            You'll get 10 processing credits to start immediately. Quick Google sign-in.
           </p>
         </div>
 

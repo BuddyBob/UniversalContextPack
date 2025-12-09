@@ -723,7 +723,7 @@ END OF CONTEXT PACK`
             {/* Demo Banner */}
             <div className="mb-6 p-3 bg-purple-900/20 border border-purple-800/30 rounded-lg flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-purple-400" />
+                <FileText className="w-4 h-4 text-purple-400 You'll get 10 processing credits to start immediately. Quick Google sign-in" />
                 <span className="text-sm text-purple-300">Demo Pack - Sign In To Create</span>
               </div>
             </div>
