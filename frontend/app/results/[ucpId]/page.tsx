@@ -92,15 +92,10 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
   const [demoData, setDemoData] = useState<any>(null)
   const [isDownloading, setIsDownloading] = useState(false)
 
-  const handleSignIn = async () => {
-    const { createClientComponentClient } = await import('@supabase/auth-helpers-nextjs')
-    const supabase = createClientComponentClient()
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/packs`
-      }
-    })
+  const handleSignIn = () => {
+    // Trigger the auth modal via custom event (same as navbar)
+    const authEvent = new CustomEvent('openAuthModal')
+    window.dispatchEvent(authEvent)
   }
 
   useEffect(() => {
@@ -721,10 +716,21 @@ END OF CONTEXT PACK`
           {/* Add Sources Section */}
           <div className="w-full max-w-3xl">
             {/* Demo Banner */}
-            <div className="mb-6 p-3 bg-purple-900/20 border border-purple-800/30 rounded-lg flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-purple-400 You'll get 10 processing credits to start immediately. Quick Google sign-in" />
-                <span className="text-sm text-purple-300">Demo Pack - Sign In To Create</span>
+            <div className="mb-6 p-4 bg-purple-900/20 border border-purple-800/30 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FileText className="w-5 h-5 text-purple-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-purple-300">This is a Demo Pack</p>
+                    <p className="text-sm text-purple-400/80">Sign in to create your own pack with 10 free credits</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleSignIn}
+                  className="px-4 py-2 bg-white hover:bg-gray-100 text-black text-sm font-semibold rounded-lg transition-all shadow-lg"
+                >
+                  Sign In Free
+                </button>
               </div>
             </div>
 
