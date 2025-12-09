@@ -797,15 +797,7 @@ END OF CONTEXT PACK`
 
             {/* CTA Footer */}
             <div className="mt-12 text-center p-8 bg-gray-900 border border-gray-800 rounded-xl">
-              <Lock className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-white mb-2">Ready to create your own Context Packs?</h3>
-              <p className="text-gray-400 mb-6">Sign up now and get 10 free credits to get started!</p>
-              <button
-                onClick={() => router.push('/pricing')}
-                className="px-6 py-3 bg-white text-black font-semibold rounded-lg hover:bg-gray-100 transition-all"
-              >
-                Get Started Free
-              </button>
+
             </div>
           </div>
         </div>

@@ -8,6 +8,7 @@ import { CreditCard, ArrowLeft, Calculator, Zap, Shield, CheckCircle, Infinity }
 import { API_ENDPOINTS } from '@/lib/api'
 import { getNewUserCredits } from '@/lib/credit-config'
 import Image from 'next/image'
+import AuthModal from '@/components/AuthModal'
 
 interface PaymentStatus {
   plan: string
@@ -27,6 +28,7 @@ export default function PricingPageClient() {
   const [customCredits, setCustomCredits] = useState(25)
   const [customCreditsInput, setCustomCreditsInput] = useState('25')
   const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(true) // Default to unlimited
+  const [showAuthModal, setShowAuthModal] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
@@ -106,14 +108,8 @@ export default function PricingPageClient() {
 
   const handlePurchase = async () => {
     if (!user) {
-      // Redirect to Google sign-in if not authenticated
-      const supabase = createClientComponentClient()
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/pricing`
-        }
-      })
+      // Open auth modal if not authenticated
+      setShowAuthModal(true)
       return
     }
 
@@ -208,7 +204,7 @@ export default function PricingPageClient() {
         )}
 
         {/* Conditional Rendering: Single Card for Unlimited, 3 Cards for Others */}
-        {paymentStatus?.plan === 'unlimited' ? (
+        {user && paymentStatus?.plan === 'unlimited' ? (
           /* Unlimited User - Single Professional Active Plan Card */
           <div className="max-w-xl mx-auto">
             <div className="bg-[#181818] border border-[#2e2e2e] rounded-xl p-8 shadow-lg relative">
@@ -484,6 +480,11 @@ export default function PricingPageClient() {
         )}
 
       </div>
+
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)} 
+      />
     </div>
   )
 }
