@@ -193,7 +193,7 @@ export default function Navigation() {
                     onClick={() => setShowAuthModal(true)}
                     className="btn-white"
                   >
-                    Sign In / Sign Up
+                    Sign In
                   </button>
                 )}
               </div>
@@ -317,7 +317,7 @@ export default function Navigation() {
                       }}
                       className="w-full px-6 py-3 bg-white text-black font-semibold hover:bg-gray-100 rounded-xl transition-all shadow-lg"
                     >
-                      Sign In / Sign Up
+                      Sign In
                     </button>
                   )}
                 </div>
