@@ -106,7 +106,7 @@ export default function Navigation() {
             </button>
 
             {/* Desktop Navigation Links */}
-            <nav className="nav-links hidden md:flex">
+            <nav className="nav-links hidden md:flex flex-1">
               <Link
                 href="/packs"
                 className={`nav-link ${pathname === '/packs' ? 'active' : ''}`}
@@ -128,7 +128,7 @@ export default function Navigation() {
             </nav>
 
             {/* Desktop Right Side Navigation */}
-            <div className="hidden md:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-4 ml-auto">
               {/* Status Indicator */}
               <Link href="/status" className="flex items-center text-sm hover:opacity-80 transition-opacity" title="System Status">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
@@ -193,7 +193,7 @@ export default function Navigation() {
                     onClick={() => setShowAuthModal(true)}
                     className="btn-white"
                   >
-                    Get Started
+                    Sign In / Sign Up
                   </button>
                 )}
               </div>
@@ -317,7 +317,7 @@ export default function Navigation() {
                       }}
                       className="w-full px-6 py-3 bg-white text-black font-semibold hover:bg-gray-100 rounded-xl transition-all shadow-lg"
                     >
-                      Get Started
+                      Sign In / Sign Up
                     </button>
                   )}
                 </div>

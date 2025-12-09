@@ -129,19 +129,9 @@ const ExportGuide = () => {
               </p>
               {/*If the user is not signed in, send them to /process if they are signed in send them to /packs */}
               <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                {
-                  user ? (
-                    <a href="/packs" className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl">
-                      Get Started
-                    </a>
-                  ) : (
-                    <a
-                      href="/process"
-                      className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl"
-                    >
-                      Get Started
-                    </a>
-                  )}
+                <a href="/results/sample-1" className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl">
+                  Get Started
+                </a>
               </div>
             </div>
 

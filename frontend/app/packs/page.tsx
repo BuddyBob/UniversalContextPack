@@ -302,12 +302,21 @@ export default function PacksPage() {
   }
 
   const handleViewPack = (pack: UCPPack) => {
-    // If not authenticated, trigger auth prompt
+    const packId = pack.ucpId || pack.id
+    
+    // Allow viewing demo/sample packs without authentication
+    if (!user && packId?.startsWith('sample-')) {
+      router.push(`/results/${packId}`)
+      return
+    }
+    
+    // If not authenticated and not a demo pack, trigger auth prompt
     if (!user) {
       freeCreditsPrompt.triggerPrompt("accessing context packs")
       return
     }
-    router.push(`/process?pack_id=${pack.ucpId || pack.id}`)
+    
+    router.push(`/process?pack_id=${packId}`)
   }
   
   const handleCreatePack = () => {

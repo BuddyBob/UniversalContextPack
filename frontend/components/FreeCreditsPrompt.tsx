@@ -54,7 +54,7 @@ export default function FreeCreditsPrompt({
           </h3>
           
           <p className="text-text-secondary mb-6 text-center">
-            You'll get <strong>5 processing credits</strong> to get started immediately. Quick Google sign-in.
+            You'll get <strong>10 processing credits</strong> to get started immediately. Quick Google sign-in.
           </p>
 
           {/* Error Message */}

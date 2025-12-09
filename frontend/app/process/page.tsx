@@ -3157,7 +3157,7 @@ export default function ProcessPage() {
                       </div>
                       <h3 className="text-lg font-semibold text-white mb-2">Upload sources</h3>
                       <p className="text-sm text-gray-400 mb-4">
-                        Choose one of the three options below to add sources to your pack for analysis. <br /> Large files will be processed and emailed when done.
+                        Choose an option to add sources to your pack for analysis. <br /> Large files will be processed and emailed when done.
                       </p>
                     </div>
 
