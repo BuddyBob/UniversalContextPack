@@ -92,6 +92,17 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
   const [demoData, setDemoData] = useState<any>(null)
   const [isDownloading, setIsDownloading] = useState(false)
 
+  const handleSignIn = async () => {
+    const { createClientComponentClient } = await import('@supabase/auth-helpers-nextjs')
+    const supabase = createClientComponentClient()
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/packs`
+      }
+    })
+  }
+
   useEffect(() => {
     // Check if this is a demo pack
     if (params.ucpId.startsWith('sample-')) {
@@ -706,33 +717,17 @@ END OF CONTEXT PACK`
 
       {/* Middle Panel - Main Content Area */}
       <div className="flex-1 overflow-y-auto flex">
-        <div className="flex-1 max-w-7xl p-6">
-          {/* Demo Banner */}
-          <div className="mb-6 p-4 bg-blue-900/20 border border-blue-800/40 rounded-xl">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3">
-                <FileText className="w-5 h-5 text-blue-400" />
-                <div>
-                  <p className="text-blue-300 font-semibold">Demo Context Pack</p>
-                  <p className="text-blue-400/80 text-sm">This is a sample pack. Sign in to create your own!</p>
-                </div>
+        <div className="flex-1 flex items-center justify-center p-6">
+          {/* Add Sources Section */}
+          <div className="w-full max-w-3xl">
+            {/* Demo Banner */}
+            <div className="mb-6 p-3 bg-purple-900/20 border border-purple-800/30 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-purple-400" />
+                <span className="text-sm text-purple-300">Demo Pack - Sign In To Create</span>
               </div>
             </div>
-          </div>
 
-          {/* Back Button */}
-          <div className="mb-6">
-            <button
-              onClick={() => router.push('/packs')}
-              className="inline-flex items-center text-gray-400 hover:text-white transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Packs
-            </button>
-          </div>
-
-          {/* Add Sources Section */}
-          <div className="w-full max-w-3xl mx-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-white">Add sources</h2>
               <button className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
@@ -793,11 +788,6 @@ END OF CONTEXT PACK`
                   <p className="text-sm text-gray-400">Direct text input</p>
                 </div>
               </div>
-            </div>
-
-            {/* CTA Footer */}
-            <div className="mt-12 text-center p-8 bg-gray-900 border border-gray-800 rounded-xl">
-
             </div>
           </div>
         </div>

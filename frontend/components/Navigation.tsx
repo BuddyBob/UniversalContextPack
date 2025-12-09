@@ -54,6 +54,18 @@ export default function Navigation() {
     }
   }, [])
 
+  // Listen for auth modal open events from demo packs
+  useEffect(() => {
+    const handleOpenAuthModal = () => {
+      setShowAuthModal(true)
+    }
+
+    window.addEventListener('openAuthModal', handleOpenAuthModal)
+    return () => {
+      window.removeEventListener('openAuthModal', handleOpenAuthModal)
+    }
+  }, [])
+
   if (loading) {
     return (
       <header className="nav-header">
