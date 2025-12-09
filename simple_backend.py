@@ -1933,6 +1933,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         total_input_tokens = 0
         total_output_tokens = 0
         total_cost = 0.0
+        failed_chunks_count = 0  # Track chunks that failed due to content policy
         
         # Prepare paths for saving analysis
         pack_analyzed_path = f"{user.r2_directory}/{pack_id}/complete_analyzed.txt"
@@ -2138,6 +2139,7 @@ Document content:
                 # Check if this is a content policy refusal
                 if "cannot assist" in error_msg.lower() or "content policy" in error_msg.lower() or "safety" in error_msg.lower():
                     print(f"🚫 Content policy refusal detected. This may be due to sensitive information in the document.")
+                    failed_chunks_count += 1
                     # Save a placeholder for this chunk
                     error_analysis = f"[Chunk {idx+1} could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records.]"
                     current_source = download_from_r2(analyzed_path, silent_404=True) or ""
@@ -2147,6 +2149,11 @@ Document content:
         
         # Update source status to completed (whether full or partial analysis)
         # If user had limited credits, they successfully completed what they could afford
+        # Add warning if some chunks failed due to content policy
+        warning_message = None
+        if failed_chunks_count > 0:
+            warning_message = f"⚠️ {failed_chunks_count} chunk(s) could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records."
+        
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
@@ -2156,13 +2163,17 @@ Document content:
             "processed_chunks_param": len(chunks),   # Chunks actually analyzed
             "total_input_tokens_param": total_input_tokens,
             "total_output_tokens_param": total_output_tokens,
-            "total_cost_param": total_cost
+            "total_cost_param": total_cost,
+            "error_message_param": warning_message  # Use error_message field for warning
         }).execute()
         
         if max_chunks is not None and len(chunks) < len(all_chunks):
             print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks (limited by available credits)")
         else:
             print(f"✅ Source {source_id} analyzed successfully")
+        
+        if failed_chunks_count > 0:
+            print(f"⚠️  WARNING: {failed_chunks_count} chunk(s) failed due to content policy restrictions")
         
         # Send email notification if it was a large job
         if is_large_job:

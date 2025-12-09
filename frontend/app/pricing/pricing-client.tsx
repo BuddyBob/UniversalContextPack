@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/components/AuthProvider'
-import { CreditCard, ArrowLeft, Calculator, Sparkles, Zap, Shield, Star } from 'lucide-react'
+import { CreditCard, ArrowLeft, Calculator, Zap, Shield, CheckCircle, Infinity } from 'lucide-react'
 import { API_ENDPOINTS } from '@/lib/api'
 import { getNewUserCredits } from '@/lib/credit-config'
 import Image from 'next/image'
@@ -46,8 +46,8 @@ export default function PricingPageClient() {
   }, [searchParams])
 
   // Calculate pricing with updated rates
-  const calculatePrice = (credits: number) => {
-    if (isUnlimitedSelected) return 4.99 // Unlimited for $4.99
+  const calculatePrice = (credits: number, unlimited: boolean = false) => {
+    if (unlimited) return 4.99 // Unlimited for $4.99
 
     // Special pricing for 25 credits
     if (credits === 25) return 1.50
@@ -124,7 +124,7 @@ export default function PricingPageClient() {
       // Create checkout session and redirect directly to Stripe
       const requestBody: any = {
         credits: isUnlimitedSelected ? 0 : customCredits, // 0 for unlimited (rely on unlimited flag)
-        amount: calculatePrice(customCredits)
+        amount: calculatePrice(isUnlimitedSelected ? 0 : customCredits, isUnlimitedSelected)
       }
 
       // Only include unlimited field if it's true (for backward compatibility)
@@ -190,10 +190,10 @@ export default function PricingPageClient() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-12">
+      <div className="max-w-7xl mx-auto px-6 py-16">
         {/* Current Balance - Separate Card */}
         {paymentStatus && paymentStatus.plan !== 'unlimited' && (
-          <div className="mb-6 p-5 bg-gray-900/30 border border-gray-800/60 rounded-2xl max-w-lg mx-auto shadow-xl">
+          <div className="mb-12 p-5 bg-[#181818] border border-[#2e2e2e] rounded-xl max-w-md mx-auto shadow-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <CreditCard className="h-5 w-5 text-gray-400 mr-3" />
@@ -207,207 +207,266 @@ export default function PricingPageClient() {
           </div>
         )}
 
-        {/* Main Pricing Card */}
-        <div className="max-w-lg mx-auto bg-gray-900/30 border border-gray-800/60 rounded-2xl p-8 shadow-xl">
-          {/* User already has unlimited plan */}
-          {paymentStatus?.plan === 'unlimited' ? (
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Sparkles className="h-8 w-8 text-green-400" />
+        {/* Conditional Rendering: Single Card for Unlimited, 3 Cards for Others */}
+        {paymentStatus?.plan === 'unlimited' ? (
+          /* Unlimited User - Single Professional Active Plan Card */
+          <div className="max-w-xl mx-auto">
+            <div className="bg-[#181818] border border-[#2e2e2e] rounded-xl p-8 shadow-lg relative">
+              {/* Active Badge */}
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-semibold bg-white text-black shadow-md">
+                  ACTIVE PLAN
+                </span>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">You have Unlimited Access!</h3>
-              <p className="text-gray-400 mb-6">
-                Process unlimited conversations with no restrictions.
-              </p>
+              
+              {/* Icon */}
+              <div className="flex justify-center mb-6 mt-2">
+                <div className="w-16 h-16 bg-[#2d2d2d] rounded-lg flex items-center justify-center">
+                  <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Title & Description */}
+              <div className="text-center mb-6">
+                <h3 className="text-2xl font-semibold text-white mb-2">Unlimited Access</h3>
+                <p className="text-[#9ca3af] text-base leading-relaxed">
+                  You have full unlimited access to process conversations with no restrictions.
+                </p>
+              </div>
+
+              {/* Features */}
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center">
+                  <div className="w-5 h-5 rounded-md bg-[#2d2d2d] flex items-center justify-center mr-3 flex-shrink-0">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-sm text-[#e5e7eb] font-medium">Unlimited chunks processing</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-5 h-5 rounded-md bg-[#2d2d2d] flex items-center justify-center mr-3 flex-shrink-0">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-sm text-[#e5e7eb] font-medium">Full AI analysis</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-5 h-5 rounded-md bg-[#2d2d2d] flex items-center justify-center mr-3 flex-shrink-0">
+                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="text-sm text-[#e5e7eb] font-medium">Priority processing</span>
+                </div>
+              </div>
+
+              {/* CTA Button */}
               <button
                 onClick={() => router.push('/process')}
-                className="w-full bg-white hover:bg-gray-50 text-gray-900 px-8 py-3.5 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
+                className="w-full bg-white hover:bg-gray-100 text-black py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg flex items-center justify-center"
               >
                 Start Processing
+                <ArrowLeft className="ml-2 h-5 w-5 rotate-180" />
               </button>
             </div>
-          ) : (
-            <>
-              {/* Plan Toggle */}
-              <div className="flex justify-center mb-8">
-                <div className="inline-flex border border-gray-800/60 rounded-xl p-1.5 bg-gray-900/40 shadow-lg w-full">
-                  <button
-                    onClick={() => {
-                      setIsUnlimitedSelected(false)
-                      setCustomCredits(25)
-                    }}
-                    className={`flex-1 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${!isUnlimitedSelected
-                        ? 'bg-gray-800 text-white shadow-md'
-                        : 'text-gray-400 hover:text-gray-300'
-                      }`}
-                  >
-                    <div className={!isUnlimitedSelected ? 'text-white' : 'text-gray-400'}>Pay per use</div>
-                    <div className={`text-xs mt-0.5 ${!isUnlimitedSelected ? 'text-gray-400' : 'text-gray-500'}`}>From $0.10/credit</div>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsUnlimitedSelected(true)
-                      setCustomCredits(1000)
-                    }}
-                    className={`flex-1 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${isUnlimitedSelected
-                        ? 'bg-white text-gray-900 shadow-md'
-                        : 'text-gray-400 hover:text-gray-300 hover:bg-gray-800/50'
-                      }`}
-                  >
-                    <div className="flex items-center justify-center">
-                      <span className="font-semibold">Unlimited</span>
-                    </div>
-                    <div className={`text-xs mt-0.5 ${isUnlimitedSelected ? 'text-gray-600' : 'text-gray-500'}`}>One-time $4.99</div>
-                  </button>
+          </div>
+        ) : (
+          /* Non-Unlimited Users - 3 Column Pricing Cards Layout */
+          <>
+            {/* Shared Features Strip */}
+            <div className="mb-12 text-center">
+              <p className="text-sm text-[#9ca3af] mb-6">All plans include</p>
+              <div className="flex flex-wrap justify-center gap-8 max-w-2xl mx-auto">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-[#6b7280]" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm text-[#9ca3af]">Full AI analysis</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-[#6b7280]" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm text-[#9ca3af]">Secure processing</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-[#6b7280]" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm text-[#9ca3af]">Instant results</span>
                 </div>
               </div>
+            </div>
 
-              {/* Content based on selection */}
-              {isUnlimitedSelected ? (
-                /* Unlimited Plan */
-                <div className="text-center">
-                  <div className="mb-3">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-800/60 text-gray-300 border border-gray-700/50">
-                      Recommended
-                    </span>
+            {/* Pricing Cards */}
+            <div className={`grid grid-cols-1 gap-8 mx-auto ${!user ? 'md:grid-cols-3 max-w-6xl' : 'md:grid-cols-2 max-w-4xl justify-center'}`}>
+              {/* Free Plan Card */}
+              {!user && (
+                <div className="bg-[#0a0a0a] border border-[#2e2e2e] rounded-xl p-8 flex flex-col">
+                  <div className="text-center mb-8">
+                    <h3 className="text-xl font-semibold text-white mb-3">Free</h3>
+                    <div className="mb-2">
+                      <span className="text-5xl font-bold text-white">{getNewUserCredits()}</span>
+                    </div>
+                    <p className="text-sm text-[#6b7280]">credits to start</p>
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">Unlimited Access</h3>
-                  <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-                    Unlimited tokens & Unlimited conversations
-                  </p>
-                  <div className="mb-8">
-                    <span className="text-5xl font-bold text-white">$4.99</span>
-                    <span className="text-gray-400 ml-2 text-base">one-time</span>
+                  
+                  <div className="flex-grow mb-8">
+                    <p className="text-sm text-[#9ca3af] text-center">Perfect for trying out the platform</p>
                   </div>
+
                   <button
                     onClick={handlePurchase}
-                    disabled={processingPurchase}
-                    className="w-full bg-white hover:bg-gray-50 disabled:bg-gray-700 text-gray-900 py-3.5 px-6 rounded-xl font-semibold text-base transition-all shadow-lg hover:shadow-xl flex items-center justify-center"
+                    className="w-full border border-[#323232] hover:border-[#3a3a3a] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200"
                   >
-                    {processingPurchase ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-900 border-t-transparent mr-2"></div>
-                        Processing...
-                      </>
-                    ) : (
-                      user ? 'Get unlimited access' : 'Sign in to Continue'
-                    )}
+                    Sign Up Free
                   </button>
-                  {!user && (
-                    <p className="text-center text-sm text-gray-400 mt-3">
-                      Get {getNewUserCredits()} free credits when you sign up
-                    </p>
-                  )}
-                </div>
-              ) : (
-                /* Pay Per Use */
-                <div className="space-y-6">
-                  {/* Credit Options */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {[5, 25, 50].map((amount) => (
-                      <button
-                        key={amount}
-                        onClick={() => {
-                          setCustomCredits(amount)
-                          setCustomCreditsInput(amount.toString())
-                        }}
-                        className={`p-4 text-center border rounded-xl transition-all ${customCredits === amount
-                            ? 'border-white bg-white text-gray-900 shadow-lg'
-                            : 'border-gray-800/60 bg-gray-900/30 text-white hover:border-gray-700'
-                          }`}
-                      >
-                        <div className="text-lg font-semibold">{amount}</div>
-                        <div className="text-sm opacity-80">${calculatePrice(amount)}</div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Custom Amount */}
-                  <div>
-                    <label className="block text-sm font-medium text-white mb-2">
-                      Custom amount
-                    </label>
-                    <div className="flex">
-                      <input
-                        type="number"
-                        min="2"
-                        max="10000"
-                        value={customCreditsInput}
-                        onChange={(e) => {
-                          const value = e.target.value
-                          setCustomCreditsInput(value)
-                          const credits = parseInt(value) || 0
-                          if (credits >= 2 && credits <= 10000) {
-                            setCustomCredits(credits)
-                          }
-                        }}
-                        className="flex-1 px-4 py-2.5 border border-gray-700/60 rounded-l-xl focus:ring-2 focus:ring-gray-600 focus:border-transparent text-white bg-gray-900/30"
-                        placeholder="25"
-                      />
-                      <div className="px-4 py-2.5 bg-gray-800/50 border border-l-0 border-gray-700/60 rounded-r-xl text-sm text-white font-medium">
-                        credits
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1 font-medium">
-                      Minimum 2 credits. Volume discounts automatically applied.
-                    </p>
-                  </div>
-
-                  {/* Price Display */}
-                  <div className="bg-gray-900/30 border border-gray-800/60 rounded-xl p-5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-400">Total</span>
-                      <span className="text-lg font-semibold text-white">
-                        ${calculatePrice(customCredits)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-xs text-gray-500">Per credit</span>
-                      <span className="text-xs text-gray-500">
-                        ${getPricePerCredit(customCredits)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Purchase Button */}
-                  <button
-                    onClick={handlePurchase}
-                    disabled={processingPurchase || customCredits < 5}
-                    className="w-full bg-white hover:bg-gray-50 disabled:bg-gray-700 text-gray-900 py-3.5 px-6 rounded-xl font-semibold text-base transition-all shadow-lg hover:shadow-xl flex items-center justify-center"
-                  >
-                    {processingPurchase ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        {customCredits < 5
-                          ? 'Minimum 2 credits required'
-                          : user
-                            ? `Purchase ${customCredits} credits`
-                            : 'Sign in to Continue'
-                        }
-                      </>
-                    )}
-                  </button>
-                  {!user && (
-                    <p className="text-center text-sm text-gray-400">
-                      Get {getNewUserCredits()} free credits when you sign up
-                    </p>
-                  )}
                 </div>
               )}
-            </>
-          )}
 
-          {/* Footer */}
-          <div className="mt-8 pt-6 border-t border-gray-800/40 text-center">
-            <div className="flex items-center justify-center text-xs text-gray-500">
-              <Shield className="h-3 w-3 mr-1" />
-              Payments secured by Stripe
+              {/* Unlimited Plan Card - DOMINANT */}
+              <div className="bg-[#1E1E1E] border-2 border-white/20 rounded-xl p-10 flex flex-col relative transform md:scale-105 shadow-[0_0_50px_-12px_rgba(255,255,255,0.15)]">
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                  <span className="inline-flex items-center px-4 py-1 rounded-full text-xs font-semibold bg-white text-black">
+                    RECOMMENDED
+                  </span>
+                </div>
+                
+                <div className="text-center mb-10">
+                  <h3 className="text-xl font-semibold text-white mb-4">Unlimited</h3>
+                  <div className="mb-2">
+                    <span className="text-6xl font-bold text-white">$4.99</span>
+                  </div>
+                  <p className="text-sm text-[#9ca3af]">one-time payment</p>
+                </div>
+                
+                <div className="flex-grow mb-10">
+                  <p className="text-sm text-[#9ca3af] text-center mb-6">Unlimited conversations forever</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm text-white font-medium">No limits</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm text-white font-medium">Priority support</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setIsUnlimitedSelected(true)
+                    handlePurchase()
+                  }}
+                  disabled={processingPurchase}
+                  className="w-full bg-white hover:bg-gray-100 text-black py-4 px-6 rounded-lg font-semibold transition-all duration-200 shadow-lg"
+                >
+                  {processingPurchase ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-black border-t-transparent mr-2 inline-block"></div>
+                      Processing...
+                    </>
+                  ) : user ? (
+                    'Get Unlimited'
+                  ) : (
+                    'Get Started'
+                  )}
+                </button>
+              </div>
+
+              {/* Pay Per Use Card */}
+              <div className="bg-[#0a0a0a] border border-[#2e2e2e] rounded-xl p-8 flex flex-col">
+                <div className="text-center mb-8">
+                  <h3 className="text-xl font-semibold text-white mb-3">Flexible</h3>
+                  {!user ? (
+                    <>
+                      <div className="mb-2">
+                        <span className="text-5xl font-bold text-white">$0.08</span>
+                      </div>
+                      <p className="text-sm text-[#6b7280]">per credit</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mb-2">
+                        <span className="text-5xl font-bold text-white">${calculatePrice(customCredits, false)}</span>
+                      </div>
+                      <p className="text-sm text-[#6b7280]">total price</p>
+                    </>
+                  )}
+                </div>
+                
+                <div className="flex-grow mb-8">
+                  {!user ? (
+                    <p className="text-sm text-[#9ca3af] text-center">Pay only for what you use</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <label className="block">
+                        <span className="text-sm text-[#9ca3af] mb-2 block text-center">Number of credits</span>
+                        <input
+                          type="number"
+                          min="2"
+                          max="10000"
+                          value={customCreditsInput}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setCustomCreditsInput(value)
+                            const credits = parseInt(value) || 2
+                            const finalCredits = Math.max(2, Math.min(10000, credits))
+                            setCustomCredits(finalCredits)
+                            setIsUnlimitedSelected(false)
+                          }}
+                          onFocus={() => setIsUnlimitedSelected(false)}
+                          className="w-full bg-[#181818] border border-[#2e2e2e] rounded-lg px-4 py-3 text-white text-center text-2xl font-bold focus:outline-none focus:border-[#3a3a3a]"
+                        />
+                      </label>
+                      <div className="text-center pt-2">
+                        <p className="text-xs text-[#6b7280]">
+                          ${getPricePerCredit(customCredits)} per credit
+                          {getDiscountPercent(customCredits) > 0 && ` • ${getDiscountPercent(customCredits)}% discount`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    setIsUnlimitedSelected(false)
+                    handlePurchase()
+                  }}
+                  disabled={processingPurchase}
+                  className="w-full border border-[#323232] hover:border-[#3a3a3a] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {processingPurchase && !isUnlimitedSelected ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2 inline-block"></div>
+                      Processing...
+                    </>
+                  ) : user ? (
+                    `Buy ${customCredits} Credits`
+                  ) : (
+                    'Get Started'
+                  )}
+                </button>
+              </div>
             </div>
+          </>
+        )}
+
+        {/* Footer */}
+        <div className="mt-12 text-center">
+          <div className="flex items-center justify-center text-xs text-gray-500">
+            <Shield className="h-3 w-3 mr-1" />
+            Payments secured by Stripe
           </div>
         </div>
 
@@ -423,6 +482,7 @@ export default function PricingPageClient() {
             <p className="text-sm">{error}</p>
           </div>
         )}
+
       </div>
     </div>
   )
