@@ -48,6 +48,18 @@ from urllib.parse import urlparse
 # Load environment variables with override to refresh from file
 load_dotenv(override=True)
 
+# Import Memory Tree module (if enabled)
+try:
+    from memory_tree import (
+        get_scope_for_source,
+        apply_chunk_to_memory_tree,
+        export_pack_from_tree
+    )
+    MEMORY_TREE_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Memory Tree module not available: {e}")
+    MEMORY_TREE_AVAILABLE = False
+
 def reload_env_vars():
     """Reload environment variables from .env file"""
     load_dotenv(override=True)
@@ -73,10 +85,20 @@ R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY")
 R2_SECRET_KEY = os.getenv("R2_SECRET_KEY") 
 R2_BUCKET = os.getenv("R2_BUCKET_NAME")
 
+# Memory Tree feature flag
+MEMORY_TREE_ENABLED = os.getenv("MEMORY_TREE_ENABLED", "false").lower() == "true"
+if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
+    print("🌳 Memory Tree ENABLED - will populate knowledge graph during analysis")
+elif MEMORY_TREE_ENABLED:
+    print("⚠️ Memory Tree ENABLED but module not available - check imports")
+else:
+    print("📝 Memory Tree DISABLED - using text-only mode")
+
 # Create a properly configured requests session with SSL verification
 r2_session = requests.Session()
 r2_session.verify = certifi.where()  # Use Mozilla's certificate bundle
 print(f"🔒 SSL verification enabled using certificates from: {certifi.where()}")
+
 
 
 # Initialize Supabase client
@@ -2031,6 +2053,7 @@ Output a concise but meaningful:
 Conversation content:
 {redacted_chunk}
 """
+
                 
                 # Scenario C: Large Document (5+ chunks) - Broad analysis
                 elif len(chunks) >= 5:
@@ -2051,19 +2074,20 @@ Do not dive into micro-details—this is just one piece of a much larger whole.
 Document content:
 {redacted_chunk}
 """
+
                 
-                # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
+                 # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
                 else:
                     prompt = f"""
-                    Analyze this section of the document.
-                    First, infer the overall context and type of the document.
-                    Then, extract specific facts, key points, and important details relevant to that context.
-                    Since this is a relatively short document, aim for high density of information.
-                    Capture specific instructions, decisions, or factual claims made in this text.
-                    
-                    Document content:
-                    {redacted_chunk}
-                    Provide your comprehensive analysis below:"""
+Analyze this section of the document.
+First, infer the overall context and type of the document.
+Then, extract specific facts, key points, and important details relevant to that context.
+Since this is a relatively short document, aim for high density of information.
+Capture specific instructions, decisions, or factual claims made in this text.
+
+Document content:
+{redacted_chunk}
+Provide your comprehensive analysis below:"""
 
 
                 # Build messages array
@@ -2175,6 +2199,44 @@ Document content:
         if failed_chunks_count > 0:
             print(f"⚠️  WARNING: {failed_chunks_count} chunk(s) failed due to content policy restrictions")
         
+        # NEW: Build Memory Tree from analysis (if enabled)
+        if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
+            try:
+                # Update status to show tree is building
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "building_tree",
+                    "progress_param": 95
+                }).execute()
+                
+                print(f"\n🌳 [MEMORY TREE] Starting second-pass tree extraction...")
+                await build_tree_from_analysis(
+                    pack_id=pack_id,
+                    source_id=source_id,
+                    filename=filename,
+                    user=user,
+                    max_tree_chunks=None  # Process all chunks by default
+                )
+                
+                # Mark as fully completed after tree building
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "completed",
+                    "progress_param": 100
+                }).execute()
+                
+            except Exception as tree_error:
+                print(f"⚠️ Tree building failed (non-fatal): {tree_error}")
+                # Still mark as completed even if tree building fails
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "completed",
+                    "progress_param": 100
+                }).execute()
+        
         # Send email notification if it was a large job
         if is_large_job:
             try:
@@ -2216,6 +2278,242 @@ Document content:
                 print(f"📧 Failure email notification sent to {user.email}")
             except Exception as email_error:
                 print(f"⚠️ Failed to send failure email notification: {email_error}")
+
+# Second-pass tree building from analysis text
+
+async def build_tree_from_analysis(
+    pack_id: str,
+    source_id: str,
+    filename: str,
+    user: AuthenticatedUser,
+    max_tree_chunks: int | None = None
+):
+    """
+    Second-pass Memory Tree extraction from completed analysis text.
+   
+    This runs AFTER analyze_source_chunks completes. It reads the
+    high-quality narrative analysis and extracts structured facts into the tree.
+   
+    Args:
+        pack_id: Pack identifier
+        source_id: Source identifier
+        filename: Original filename (for scope detection)
+        user: Authenticated user
+        max_tree_chunks: Optional limit on how many chunks to process (None = all)
+    """
+    print(f"\n🌳 [TREE EXTRACTION] Starting tree build for source {source_id}")
+   
+    # Load the analyzed text from R2
+    analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
+    try:
+        analysis_text = download_from_r2(analyzed_path, silent_404=False)
+    except Exception as e:
+        print(f"❌ Failed to load analyzed text: {e}")
+        return
+   
+    # Split into chunk sections
+    # Format: "--- Chunk X/Y ---\n\nanalysis text"
+    blocks = analysis_text.split("\n\n--- Chunk ")
+   
+    chunk_analyses = []
+    for i, block in enumerate(blocks):
+        if i == 0:
+            # First block might not have separator if only 1 chunk
+            if block.strip():
+                chunk_analyses.append({"index": 0, "text": block.strip()})
+        else:
+           # Parse "X/Y ---\n\nanalysis"
+            parts = block.split(" ---\n\n", 1)
+            if len(parts) == 2:
+                chunk_number_str = parts[0].split("/")[0]
+                try:
+                    chunk_num = int(chunk_number_str) - 1  #0-indexed
+                    chunk_analyses.append({"index": chunk_num, "text": parts[1].strip()})
+                except ValueError:
+                    continue
+   
+    print(f"📦 Found {len(chunk_analyses)} chunk analyses to process")
+   
+    # Apply max_tree_chunks limit if specified
+    if max_tree_chunks and len(chunk_analyses) > max_tree_chunks:
+        chunk_analyses = chunk_analyses[:max_tree_chunks]
+        print(f"   📏 Limited to {max_tree_chunks} chunks")
+   
+    # Determine scope for this source (filename passed from caller)
+    scope = get_scope_for_source(source_id, filename, "")
+   
+    print(f"🎯 Scope: {scope}")
+    
+    # Get user_id for status updates
+    user_id = user.user_id
+   
+    # Process each chunk analysis
+    total_nodes = 0
+    for chunk_idx, chunk_analysis in enumerate(chunk_analyses):
+        idx = chunk_analysis["index"]
+        text = chunk_analysis["text"]
+       
+        # Update progress
+        tree_progress = 95 + int((chunk_idx / len(chunk_analyses)) * 4)  # 95-99%
+        try:
+            supabase.rpc("update_source_status", {
+                "user_uuid": user_id,
+                "target_source_id": source_id,
+                "status_param": "building_tree",
+                "progress_param": tree_progress
+            }).execute()
+        except:
+            pass  # Don't fail if status update fails
+       
+        print(f"\n📝 Processing chunk {idx + 1}/{len(chunk_analyses)} (tree progress: {tree_progress}%)...")
+       
+        # Build tree extraction prompt
+        if scope.startswith("knowledge:"):
+            tree_prompt = f"""
+You are turning a chunk of analysis into a structured "memory tree" representation.
+
+The input is a human-readable analysis of a document. Based on this analysis, extract:
+
+- sections: high-level topics or subtopics discussed
+- events: concrete events mentioned (with dates or periods if present)
+- entities: important people, organizations, or places
+- concepts: key ideas, themes, or issues
+
+Return STRICT JSON:
+
+{{
+  "sections": [
+    {{
+      "title": "string",
+      "period": null,
+      "summary": "string"
+    }}
+  ],
+  "events": [
+    {{
+      "name": "string",
+      "date_or_period": null,
+      "summary": "string"
+    }}
+  ],
+  "entities": [
+    {{
+      "name": "string",
+      "type": "person | organization | place | other",
+      "summary": "string"
+    }}
+  ],
+  "concepts": ["string"]
+}}
+
+Rules:
+- Extract as many useful sections/events/entities/concepts as the analysis supports.
+- Be specific and detailed.
+- Do NOT add commentary outside the JSON.
+- Do NOT wrap in backticks or code blocks.
+- Return ONLY valid JSON.
+
+Analysis text:
+{text}
+"""
+        else:  # user_profile scope
+            tree_prompt = f"""
+You are turning a conversation analysis into a structured "memory tree" representation.
+
+The input is a human-readable analysis of conversations. Extract persistent information about the USER:
+
+- identity: name, roles, background facts
+- preferences: lasting preferences and constraints
+- projects: ongoing projects and efforts
+- skills: technical skills and expertise
+- goals: stated goals or aspirations
+- constraints: limitations or requirements
+- facts: other persistent facts about the user
+
+Return STRICT JSON:
+
+{{
+  "identity": {{
+    "name": null,
+    "roles": [],
+    "background": []
+  }},
+  "preferences": ["string"],
+  "projects": [
+    {{
+      "name": "string",
+      "description": null,
+      "status": null
+    }}
+  ],
+  "skills": ["string"],
+  "goals": ["string"],
+  "constraints": ["string"],
+  "facts": ["string"]
+}}
+
+Rules:
+- Only include persistent, long-term information.
+- Ignore temporary or one-off details.
+- Do NOT add commentary.
+- Do NOT wrap in backticks.
+- Return ONLY valid JSON.
+
+Analysis text:
+{text}
+"""
+       
+        # Call OpenAI for tree extraction
+        try:
+            response = await openai_call_with_retry(
+                default_openai_client,
+                max_retries=3,
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You extract structured knowledge from analysis text."},
+                    {"role": "user", "content": tree_prompt}
+                ],
+                temperature=0.2,
+                max_completion_tokens=1500
+            )
+           
+            tree_json_str = response.choices[0].message.content
+           
+            # Parse JSON
+            try:
+                # Clean up potential markdown formatting
+                cleaned = tree_json_str.strip()
+                if cleaned.startswith('```'):
+                    lines = cleaned.split('\n')
+                    cleaned = '\n'.join(lines[1:-1] if len(lines) > 2 else lines)
+               
+                structured = json.loads(cleaned)
+                print(f"   ✅ Parsed JSON tree structure")
+               
+                # Apply to memory tree
+                apply_chunk_to_memory_tree(
+                    structured_facts=structured,
+                    scope=scope,
+                    user=user,
+                    pack_id=pack_id,
+                    source_id=source_id,
+                    chunk_index=idx
+                )
+               
+                # Count nodes (rough estimate)
+                node_count = sum(len(v) if isinstance(v, list) else 1 for v in structured.values() if v)
+                total_nodes += node_count
+               
+            except json.JSONDecodeError as e:
+                print(f"   ⚠️ JSON parse error: {e}")
+                print(f"   First 200 chars: {tree_json_str[:200]}")
+               
+        except Exception as e:
+            print(f"   ❌ Tree extraction failed: {e}")
+            continue
+   
+    print(f"\n🎉 Tree building complete: ~{total_nodes} nodes created from {len(chunk_analyses)} chunks")
+
 
 @app.get("/api/job-summary/{job_id}")
 async def get_job_summary(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -4163,11 +4461,38 @@ async def download_pack_export_v2(
     export_type: str,
     user: AuthenticatedUser = Depends(get_current_user)
 ):
-    """Download a pack export (compact/standard/complete)"""
+    """Download a pack export (compact/standard/complete/tree)"""
     try:
-        if export_type not in ['compact', 'standard', 'complete']:
+        if export_type not in ['compact', 'standard', 'complete', 'tree']:
             raise HTTPException(status_code=400, detail="Invalid export type")
         
+        # Handle tree export (new Memory Tree-based export)
+        if export_type == 'tree':
+            if not MEMORY_TREE_ENABLED or not MEMORY_TREE_AVAILABLE:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Memory Tree export is not available (MEMORY_TREE_ENABLED=false or module not loaded)"
+                )
+            
+            try:
+                # Generate pack from memory tree
+                export_content = export_pack_from_tree(user.user_id, pack_id)
+                
+                return StreamingResponse(
+                    iter([export_content.encode('utf-8')]),
+                    media_type="text/plain",
+                    headers={
+                        "Content-Disposition": f"attachment; filename=tree_pack_{pack_id}.txt"
+                    }
+                )
+            except Exception as tree_error:
+                print(f"Error exporting from tree: {tree_error}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"Failed to export from memory tree: {str(tree_error)}"
+                )
+        
+        # Original export logic for compact/standard/complete
         # Check if it's a v2 pack or legacy
         pack_result = supabase.rpc("get_pack_details", {
             "user_uuid": user.user_id,
@@ -4245,6 +4570,247 @@ async def debug_jobs(user: AuthenticatedUser = Depends(get_current_user)):
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+"""
+New API endpoint for Memory Tree Viewer
+"""
+
+@app.get("/api/v2/packs/{pack_id}/tree/nodes")
+async def get_pack_tree_nodes(
+    pack_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Get all memory tree nodes for a pack, organized by scope and type.
+    Returns structured data for the tree viewer UI.
+    """
+    try:
+        # Query memory_nodes with evidence counts
+        result = supabase.table("memory_nodes") \
+            .select("*, memory_evidence(count)") \
+            .eq("user_id", user.user_id) \
+            .eq("pack_id", pack_id) \
+            .order("scope", desc=False) \
+            .order("node_type", desc=False) \
+            .order("created_at", desc=False) \
+            .execute()
+        
+        if not result.data:
+            # No nodes found - tree might be disabled or not yet built
+            return {
+                "pack_id": pack_id,
+                "pack_name": None,
+                "scopes": {},
+                "total_nodes": 0,
+                "tree_available": False
+            }
+        
+        # Get pack name using RPC function (bypasses RLS)
+        pack_result = supabase.rpc("get_pack_details_v2", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id
+        }).execute()
+        
+        # RPC returns a dict with pack details
+        pack_name = "Unknown Pack"
+        if pack_result.data:
+            if isinstance(pack_result.data, dict):
+                pack_name = pack_result.data.get("pack_name", "Unknown Pack")
+            elif isinstance(pack_result.data, list) and len(pack_result.data) > 0:
+                pack_name = pack_result.data[0].get("pack_name", "Unknown Pack")
+        
+        # Organize nodes by scope and type
+        scopes = {}
+        for node in result.data:
+            scope = node["scope"]
+            node_type = node["node_type"]
+            
+            if scope not in scopes:
+                scopes[scope] = {}
+            
+            if node_type not in scopes[scope]:
+                scopes[scope][node_type] = []
+            
+            # Format node data
+            formatted_node = {
+                "id": node["id"],
+                "label": node.get("label"),
+                "node_type": node_type,
+                "data": node.get("data", {}),
+                "created_at": node.get("created_at"),
+                "updated_at": node.get("updated_at"),
+                "evidence_count": len(node.get("memory_evidence", []))
+            }
+            
+            scopes[scope][node_type].append(formatted_node)
+        
+        return {
+            "pack_id": pack_id,
+            "pack_name": pack_name,
+            "scopes": scopes,
+            "total_nodes": len(result.data),
+            "tree_available": True
+        }
+        
+    except Exception as e:
+        print(f"Error fetching tree nodes for pack {pack_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch tree nodes: {str(e)}")
+
+
+
+
+@app.patch("/api/v2/nodes/{node_id}")
+async def update_node(
+    node_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Update node label and/or data fields.
+    """
+    try:
+        body = await request.json()
+        label = body.get("label")
+        data = body.get("data")
+        
+        print(f"Updating node {node_id} for user {user.user_id}")
+        print(f"Label: {label}")
+        print(f"Data: {data}")
+        
+        # Build update dict
+        update_dict = {}
+        if label is not None:
+            update_dict["label"] = label
+        if data is not None:
+            update_dict["data"] = data
+        
+        if not update_dict:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        # Update node
+        result = supabase.table("memory_nodes") \
+            .update(update_dict) \
+            .eq("id", node_id) \
+            .eq("user_id", user.user_id) \
+            .execute()
+        
+        print(f"Update result: {result.data}")
+        
+        if not result.data:
+            # Try to check if node exists at all
+            check_result = supabase.table("memory_nodes") \
+                .select("id, user_id") \
+                .eq("id", node_id) \
+                .execute()
+            
+            if not check_result.data:
+                raise HTTPException(status_code=404, detail="Node not found")
+            else:
+                raise HTTPException(status_code=403, detail="Node belongs to different user")
+        
+        return {"success": True, "node": result.data[0]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error updating node {node_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update node: {str(e)}")
+
+
+
+
+
+@app.delete("/api/v2/nodes/{node_id}")
+async def delete_node(
+    node_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Delete a node and its associated evidence.
+    """
+    try:
+        print(f"Deleting node {node_id} for user {user.user_id}")
+        
+        # First, delete associated evidence
+        evidence_result = supabase.table("memory_evidence") \
+            .delete() \
+            .eq("node_id", node_id) \
+            .eq("user_id", user.user_id) \
+            .execute()
+        
+        print(f"Deleted {len(evidence_result.data or [])} evidence items")
+        
+        # Then delete the node
+        result = supabase.table("memory_nodes") \
+            .delete() \
+            .eq("id", node_id) \
+            .eq("user_id", user.user_id) \
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Node not found")
+        
+        print(f"Successfully deleted node {node_id}")
+        return {"success": True, "deleted_node_id": node_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting node {node_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete node: {str(e)}")
+
+
+@app.get("/api/v2/nodes/{node_id}/evidence")
+async def get_node_evidence(
+    node_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Get evidence (source snippets) for a specific node.
+    """
+    try:
+        result = supabase.table("memory_evidence") \
+            .select("id, source_id, chunk_index, snippet, created_at") \
+            .eq("user_id", user.user_id) \
+            .eq("node_id", node_id) \
+            .order("created_at", desc=False) \
+            .execute()
+        
+        # Get source names separately
+        evidence_list = []
+        for ev in result.data or []:
+            # Try to get source name
+            source_name = None
+            try:
+                source_result = supabase.table("pack_sources") \
+                    .select("file_name") \
+                    .eq("source_id", ev["source_id"]) \
+                    .single() \
+                    .execute()
+                source_name = source_result.data.get("file_name") if source_result.data else None
+            except:
+                # If permission denied or other error, just use None
+                pass
+            
+            evidence_list.append({
+                "id": ev["id"],
+                "source_id": ev.get("source_id"),
+                "source_name": source_name,
+                "chunk_index": ev.get("chunk_index"),
+                "snippet": ev.get("snippet"),
+                "created_at": ev.get("created_at")
+            })
+        
+        return {
+            "node_id": node_id,
+            "evidence": evidence_list,
+            "count": len(evidence_list)
+        }
+        
+    except Exception as e:
+        print(f"Error fetching evidence for node {node_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch evidence: {str(e)}")
 
 @app.get("/api/test-auth")
 async def test_auth(request: Request):

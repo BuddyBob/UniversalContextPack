@@ -2662,6 +2662,7 @@ export default function ProcessPage() {
                             ? `Processing chunk ${source.processed_chunks}/${source.total_chunks}`
                             : `Processing... ${source.progress || 0}%`
                         )}
+                        {source.status === 'building_tree' && `Building Memory Tree... ${source.progress || 95}%`}
                         {source.status === 'completed' && `Complete (${source.total_chunks || 0} chunks)`}
                         {source.status === 'failed' && 'Failed'}
                         {source.status === 'pending' && 'Pending'}
@@ -2669,6 +2670,9 @@ export default function ProcessPage() {
                     </div>
                     {(source.status === 'extracting' || source.status === 'processing' || source.status === 'analyzing') && (
                       <Loader className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+                    )}
+                    {source.status === 'building_tree' && (
+                      <span className="text-lg animate-pulse flex-shrink-0">🌳</span>
                     )}
                     {source.status === 'ready_for_analysis' && (
                       <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
@@ -3434,7 +3438,7 @@ export default function ProcessPage() {
         <div className="flex-1 p-4 space-y-4">
 
           {/* Download Options */}
-          {selectedPack && packSources.some((s: any) => s.status === 'completed') && (
+          {selectedPack && packSources.some((s: any) => s.status === 'completed' || s.status === 'building_tree') && (
             <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -3448,7 +3452,7 @@ export default function ProcessPage() {
               <button
                 onClick={() => downloadPack('complete')}
                 disabled={isDownloading}
-                className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${!isDownloading && packSources.some(s => s.status === 'completed')
+                className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${!isDownloading && packSources.some(s => s.status === 'completed' || s.status === 'building_tree')
                   ? 'after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-gradient-to-r after:from-transparent after:via-green-400 after:to-transparent after:animate-shimmer-slide'
                   : ''
                   }`}
@@ -3465,6 +3469,35 @@ export default function ProcessPage() {
                   </>
                 )}
               </button>
+
+              {/* View Memory Tree Button */}
+              {(() => {
+                const isBuildingTree = packSources.some((s: any) => s.status === 'building_tree');
+                const hasTree = packSources.some((s: any) => s.status === 'completed');
+
+                return (
+                  <button
+                    onClick={() => !isBuildingTree && router.push(`/tree/${selectedPack.pack_id}`)}
+                    disabled={isBuildingTree}
+                    className={`w-full px-4 py-3 mt-2 ${isBuildingTree
+                        ? 'bg-gray-600 cursor-wait'
+                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
+                      } text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-75`}
+                  >
+                    {isBuildingTree ? (
+                      <>
+                        <span className="text-xl animate-pulse">🌳</span>
+                        <span>Building Tree...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xl">🌳</span>
+                        <span>View Memory Tree</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           )}
 
