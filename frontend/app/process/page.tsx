@@ -3162,7 +3162,7 @@ export default function ProcessPage() {
                       </div>
                       <h3 className="text-lg font-semibold text-white mb-2">Upload sources</h3>
                       <p className="text-sm text-gray-400 mb-4">
-                        Choose an option to add sources to your pack for analysis. <br /> Large files will be processed and emailed when done.
+                        Choose an option to add sources to your pack for analysis. <br /> Migrate between AI's, keep your AI's memory fresh, build a memory system for yourself.
                       </p>
                     </div>
 
@@ -3206,7 +3206,7 @@ export default function ProcessPage() {
                               <MessageSquare className="h-6 w-6 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
                             </div>
                           </div>
-                          <h3 className="text-lg font-bold text-white mb-2">All AI Chats</h3>
+                          <h3 className="text-lg font-bold text-white mb-2">All ChatGPT Chats</h3>
                           <p className="text-gray-400 text-sm leading-relaxed">
                             conversations.json
                           </p>

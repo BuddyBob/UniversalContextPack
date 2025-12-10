@@ -87,12 +87,18 @@ R2_BUCKET = os.getenv("R2_BUCKET_NAME")
 
 # Memory Tree feature flag
 MEMORY_TREE_ENABLED = os.getenv("MEMORY_TREE_ENABLED", "false").lower() == "true"
+
+# Concurrent processing configuration
+MAX_CONCURRENT_CHUNKS = int(os.getenv("OPENAI_MAX_CONCURRENT_REQUESTS", "5"))
+
 if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
     print("🌳 Memory Tree ENABLED - will populate knowledge graph during analysis")
 elif MEMORY_TREE_ENABLED:
     print("⚠️ Memory Tree ENABLED but module not available - check imports")
 else:
     print("📝 Memory Tree DISABLED - using text-only mode")
+
+print(f"⚡ Concurrent chunk processing: {MAX_CONCURRENT_CHUNKS} chunks at a time")
 
 # Create a properly configured requests session with SSL verification
 r2_session = requests.Session()
@@ -2399,20 +2405,129 @@ Provide your comprehensive analysis below:"""
                 
                 print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed: {output_tokens} tokens out, {input_tokens} tokens in")
                 
+                # Convert JSON to human-readable text for pack download (if memory tree is enabled)
+                display_analysis = analysis
+                if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
+                    try:
+                        # Try to parse as JSON and convert to readable format
+                        cleaned = analysis.strip()
+                        if cleaned.startswith("```json"):
+                            cleaned = cleaned[7:]
+                        if cleaned.startswith("```"):
+                            cleaned = cleaned[3:]
+                        if cleaned.endswith("```"):
+                            cleaned = cleaned[:-3]
+                        cleaned = cleaned.strip()
+                        
+                        parsed_json = json.loads(cleaned)
+                        
+                        # Convert JSON to human-readable format
+                        readable_parts = []
+                        
+                        # Handle different JSON structures based on scope
+                        if "sections" in parsed_json and parsed_json["sections"]:
+                            readable_parts.append("## Key Sections")
+                            for section in parsed_json["sections"]:
+                                readable_parts.append(f"\n### {section.get('title', 'Untitled')}")
+                                if section.get('summary'):
+                                    readable_parts.append(section['summary'])
+                                if section.get('topics'):
+                                    readable_parts.append(f"Topics: {', '.join(section['topics'])}")
+                        
+                        if "concepts" in parsed_json and parsed_json["concepts"]:
+                            readable_parts.append("\n## Key Concepts")
+                            for concept in parsed_json["concepts"]:
+                                name = concept.get('name', 'Unknown')
+                                definition = concept.get('definition', '')
+                                category = concept.get('category', '')
+                                readable_parts.append(f"\n**{name}**{f' ({category})' if category else ''}: {definition}")
+                        
+                        if "entities" in parsed_json and parsed_json["entities"]:
+                            readable_parts.append("\n## Entities")
+                            for entity in parsed_json["entities"]:
+                                name = entity.get('name', 'Unknown')
+                                entity_type = entity.get('type', '')
+                                summary = entity.get('summary', '')
+                                readable_parts.append(f"\n- **{name}**{f' ({entity_type})' if entity_type else ''}: {summary}")
+                        
+                        if "facts" in parsed_json and parsed_json["facts"]:
+                            readable_parts.append("\n## Key Facts")
+                            for fact in parsed_json["facts"]:
+                                if isinstance(fact, dict):
+                                    statement = fact.get('statement', str(fact))
+                                    category = fact.get('category', '')
+                                    readable_parts.append(f"- {statement}{f' [{category}]' if category else ''}")
+                                else:
+                                    readable_parts.append(f"- {fact}")
+                        
+                        # Handle user profile structure
+                        if "identity" in parsed_json:
+                            identity = parsed_json["identity"]
+                            if identity.get('name') or identity.get('roles') or identity.get('background'):
+                                readable_parts.append("## Identity")
+                                if identity.get('name'):
+                                    readable_parts.append(f"Name: {identity['name']}")
+                                if identity.get('roles'):
+                                    readable_parts.append(f"Roles: {', '.join(identity['roles'])}")
+                                if identity.get('background'):
+                                    readable_parts.append(f"Background: {', '.join(identity['background'])}")
+                        
+                        if "preferences" in parsed_json and parsed_json["preferences"]:
+                            readable_parts.append("\n## Preferences")
+                            for pref in parsed_json["preferences"]:
+                                readable_parts.append(f"- {pref}")
+                        
+                        if "projects" in parsed_json and parsed_json["projects"]:
+                            readable_parts.append("\n## Projects")
+                            for project in parsed_json["projects"]:
+                                name = project.get('name', 'Unnamed Project')
+                                desc = project.get('description', '')
+                                status = project.get('status', '')
+                                readable_parts.append(f"\n**{name}**{f' ({status})' if status else ''}")
+                                if desc:
+                                    readable_parts.append(desc)
+                        
+                        if "skills" in parsed_json and parsed_json["skills"]:
+                            readable_parts.append("\n## Skills")
+                            readable_parts.append(", ".join(parsed_json["skills"]))
+                        
+                        if "goals" in parsed_json and parsed_json["goals"]:
+                            readable_parts.append("\n## Goals")
+                            for goal in parsed_json["goals"]:
+                                readable_parts.append(f"- {goal}")
+                        
+                        if "constraints" in parsed_json and parsed_json["constraints"]:
+                            readable_parts.append("\n## Constraints")
+                            for constraint in parsed_json["constraints"]:
+                                readable_parts.append(f"- {constraint}")
+                        
+                        # If we successfully converted, use the readable version
+                        if readable_parts:
+                            display_analysis = "\n".join(readable_parts)
+                            print(f"📝 [TREE] Converted JSON to readable format ({len(display_analysis)} chars)")
+                        else:
+                            # Fallback: keep original if no content was extracted
+                            print(f"⚠️ [TREE] JSON parsed but no content extracted, using original")
+                    
+                    except (json.JSONDecodeError, KeyError, TypeError) as e:
+                        # If JSON parsing fails, use original analysis text
+                        print(f"⚠️ [TREE] Could not convert to readable format: {e}, using original")
+                        pass
+                
                 # Append this chunk's analysis to files
                 chunk_sep = f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
                 
-                # Append to pack file
+                # Append to pack file (use display_analysis which is human-readable)
                 if idx == 0:
                     # First chunk - add source header
-                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis)
+                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + display_analysis)
                 else:
                     current = download_from_r2(pack_analyzed_path) or ""
-                    upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis)
+                    upload_to_r2(pack_analyzed_path, current + chunk_sep + display_analysis)
                 
-                # Append to individual source file
+                # Append to individual source file (also use display_analysis)
                 current_source = download_from_r2(analyzed_path, silent_404=True) or ""
-                upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
+                upload_to_r2(analyzed_path, current_source + chunk_sep + display_analysis)
                 
                 
                 # Update progress with chunk count (more reliable than percentage for large files)

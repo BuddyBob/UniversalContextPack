@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { FileText, ArrowLeft, FolderOpen, CheckCircle, Upload, MessageSquare, Lock, X, Download, Loader } from 'lucide-react'
+import { FileText, ArrowLeft, FolderOpen, CheckCircle, Upload, MessageSquare, Lock, X, Download, Loader, Info } from 'lucide-react'
 
 // Demo data for sample packs
 const DEMO_PACKS: Record<string, any> = {
@@ -91,6 +91,7 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
   const [isDemo, setIsDemo] = useState(false)
   const [demoData, setDemoData] = useState<any>(null)
   const [isDownloading, setIsDownloading] = useState(false)
+  const [showChatGPTInfo, setShowChatGPTInfo] = useState(false)
 
   const handleSignIn = () => {
     // Trigger the auth modal via custom event (same as navbar)
@@ -761,11 +762,34 @@ END OF CONTEXT PACK`
 
               {/* Source Type Options */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60">
+                <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60 relative">
+                  <button
+                    onClick={() => setShowChatGPTInfo(!showChatGPTInfo)}
+                    className="absolute top-4 right-4 p-1 hover:bg-gray-700 rounded-full transition-colors"
+                  >
+                    <Info className="h-4 w-4 text-gray-400 hover:text-gray-300" />
+                  </button>
+                  
+                  {showChatGPTInfo && (
+                    <div className="absolute top-12 right-4 z-10 w-72 bg-gray-900 border border-gray-700 rounded-lg p-4 shadow-xl">
+                      <button
+                        onClick={() => setShowChatGPTInfo(false)}
+                        className="absolute top-2 right-2 text-gray-500 hover:text-gray-300"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                      <h5 className="text-sm font-semibold text-white mb-2">Migrate Your AI Conversations</h5>
+                      <p className="text-xs text-gray-400 leading-relaxed">
+                        Use this to export all your ChatGPT conversations and migrate them to other AI platforms like Claude or Gemini. 
+                        Simply download your conversations.json from ChatGPT, upload it here, and get a clean context pack you can share with any AI assistant.
+                      </p>
+                    </div>
+                  )}
+                  
                   <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
                     <MessageSquare className="h-6 w-6 text-gray-400" />
                   </div>
-                  <h4 className="text-base font-semibold text-white mb-2">All AI Chats</h4>
+                  <h4 className="text-base font-semibold text-white mb-2">All ChatGPT Chats</h4>
                   <p className="text-sm text-gray-400 mb-2">conversations.json</p>
                   <a href="#" className="text-xs text-blue-400 hover:text-blue-300">How to download →</a>
                 </div>
