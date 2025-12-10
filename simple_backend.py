@@ -2180,7 +2180,57 @@ Conversation content:
                 
                 # Scenario C: Large Document (5+ chunks) - Broad analysis
                 elif len(chunks) >= 5:
-                    prompt = f"""
+                    if MEMORY_TREE_ENABLED:
+                        # Return JSON for memory tree
+                        prompt = f"""
+Analyze this section of a large document and extract structured knowledge.
+
+Return STRICT JSON with this shape:
+
+{{
+  "sections": [
+    {{
+      "title": string,
+      "summary": string,
+      "topics": [string]
+    }}
+  ],
+  "concepts": [
+    {{
+      "name": string,
+      "definition": string,
+      "category": string
+    }}
+  ],
+  "entities": [
+    {{
+      "name": string,
+      "type": string,
+      "summary": string
+    }}
+  ],
+  "facts": [
+    {{
+      "statement": string,
+      "category": string
+    }}
+  ]
+}}
+
+Rules:
+- Extract main themes and topics as sections
+- Identify key concepts and their definitions
+- List important entities (people, organizations, places)
+- Capture factual statements
+- DO NOT wrap JSON in backticks or markdown
+- DO NOT add commentary outside JSON
+
+Document content:
+{redacted_chunk}
+"""
+                    else:
+                        # Text-based analysis (legacy)
+                        prompt = f"""
 Analyze this section of a large document.
 
 Your goal is to capture the high-level picture, not granular details.
@@ -2201,7 +2251,58 @@ Document content:
                 
                  # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
                 else:
-                    prompt = f"""
+                    if MEMORY_TREE_ENABLED:
+                        # Return JSON for memory tree
+                        prompt = f"""
+Analyze this section of a document and extract structured knowledge.
+
+Return STRICT JSON with this shape:
+
+{{
+  "sections": [
+    {{
+      "title": string,
+      "summary": string,
+      "topics": [string]
+    }}
+  ],
+  "concepts": [
+    {{
+      "name": string,
+      "definition": string,
+      "category": string
+    }}
+  ],
+  "entities": [
+    {{
+      "name": string,
+      "type": string,
+      "summary": string
+    }}
+  ],
+  "facts": [
+    {{
+      "statement": string,
+      "category": string
+    }}
+  ]
+}}
+
+Rules:
+- Extract specific facts and key points
+- Identify important concepts with definitions
+- List entities (people, organizations, places, products)
+- Capture factual claims and decisions
+- Aim for high information density
+- DO NOT wrap JSON in backticks or markdown
+- DO NOT add commentary outside JSON
+
+Document content:
+{redacted_chunk}
+"""
+                    else:
+                        # Text-based analysis (legacy)
+                        prompt = f"""
 Analyze this section of the document.
 First, infer the overall context and type of the document.
 Then, extract specific facts, key points, and important details relevant to that context.
@@ -2211,6 +2312,7 @@ Capture specific instructions, decisions, or factual claims made in this text.
 Document content:
 {redacted_chunk}
 Provide your comprehensive analysis below:"""
+
 
 
                 # Build messages array
@@ -2244,7 +2346,9 @@ Provide your comprehensive analysis below:"""
                     raise Exception(f"Content policy refusal: OpenAI declined to analyze this content. This may occur with documents containing sensitive personal information.")
                 
                 # NEW: Parse JSON and apply to memory tree (if enabled)
+                print(f"🔍 [DEBUG] Memory Tree Status: ENABLED={MEMORY_TREE_ENABLED}, AVAILABLE={MEMORY_TREE_AVAILABLE}")
                 if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
+                    print(f"🌳 [TREE] Attempting to parse and apply chunk {idx+1} to memory tree (scope: {scope})")
                     try:
                         # Clean potential markdown wrapping
                         cleaned = analysis.strip()
@@ -2256,11 +2360,14 @@ Provide your comprehensive analysis below:"""
                             cleaned = cleaned[:-3]
                         cleaned = cleaned.strip()
                         
+                        print(f"🔍 [DEBUG] Attempting JSON parse of {len(cleaned)} chars")
                         # Try to parse as JSON
                         structured = json.loads(cleaned)
+                        print(f"✅ [DEBUG] JSON parsed successfully, keys: {list(structured.keys())}")
                         
                         # Apply to tree
                         from memory_tree import apply_chunk_to_memory_tree
+                        print(f"🌳 [TREE] Calling apply_chunk_to_memory_tree...")
                         apply_chunk_to_memory_tree(
                             structured_facts=structured,
                             scope=scope,
@@ -2269,15 +2376,19 @@ Provide your comprehensive analysis below:"""
                             source_id=source_id,
                             chunk_index=idx
                         )
-                        print(f"🌳 Applied chunk {idx+1} to memory tree")
+                        print(f"✅ [TREE] Successfully applied chunk {idx+1} to memory tree")
                         
                     except json.JSONDecodeError as e:
-                        print(f"⚠️ Failed to parse JSON from chunk {idx}: {e}")
+                        print(f"⚠️ [TREE] Failed to parse JSON from chunk {idx}: {e}")
                         print(f"   Response preview: {analysis[:200]}...")
                         # Continue with text-only storage
                     except Exception as e:
-                        print(f"⚠️ Failed to apply to tree for chunk {idx}: {e}")
+                        print(f"❌ [TREE] Failed to apply to tree for chunk {idx}: {e}")
+                        import traceback
+                        print(f"   Traceback: {traceback.format_exc()}")
                         # Continue with text-only storage
+                else:
+                    print(f"⚠️ [TREE] Memory tree is disabled or unavailable, skipping tree population")
                 
                 # Track tokens and cost
                 input_tokens = response.usage.prompt_tokens
@@ -2360,6 +2471,7 @@ Provide your comprehensive analysis below:"""
             print(f"⚠️  WARNING: {failed_chunks_count} chunk(s) failed due to content policy restrictions")
         
         # NEW: Build Memory Tree from analysis (if enabled)
+        print(f"\n🔍 [DEBUG] Post-analysis tree building check: ENABLED={MEMORY_TREE_ENABLED}, AVAILABLE={MEMORY_TREE_AVAILABLE}")
         if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
             try:
                 # Update status to show tree is building
@@ -2371,6 +2483,9 @@ Provide your comprehensive analysis below:"""
                 }).execute()
                 
                 print(f"\n🌳 [MEMORY TREE] Starting second-pass tree extraction...")
+                print(f"   Pack ID: {pack_id}")
+                print(f"   Source ID: {source_id}")
+                print(f"   Filename: {filename}")
                 await build_tree_from_analysis(
                     pack_id=pack_id,
                     source_id=source_id,
@@ -2386,9 +2501,12 @@ Provide your comprehensive analysis below:"""
                     "status_param": "completed",
                     "progress_param": 100
                 }).execute()
+                print(f"✅ [TREE] Second-pass tree extraction completed successfully")
                 
             except Exception as tree_error:
-                print(f"⚠️ Tree building failed (non-fatal): {tree_error}")
+                print(f"❌ [TREE] Tree building failed (non-fatal): {tree_error}")
+                import traceback
+                print(f"   Traceback: {traceback.format_exc()}")
                 # Still mark as completed even if tree building fails
                 supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
@@ -2396,6 +2514,8 @@ Provide your comprehensive analysis below:"""
                     "status_param": "completed",
                     "progress_param": 100
                 }).execute()
+        else:
+            print(f"⚠️ [TREE] Skipping second-pass tree extraction (feature disabled or unavailable)")
         
         # Send email notification if it was a large job
         if is_large_job:
