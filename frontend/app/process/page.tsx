@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader, Lock, Info, HelpCircle, ChevronDown, Plus, FolderOpen, MessageSquare, AlertCircle } from 'lucide-react';
+import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader, Lock, Info, HelpCircle, ChevronDown, Plus, FolderOpen, MessageSquare, AlertCircle, Network } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import AuthModal from '@/components/AuthModal';
 import PaymentNotification, { usePaymentNotifications } from '@/components/PaymentNotification';
@@ -35,6 +35,7 @@ export default function ProcessPage() {
   const { user, session, makeAuthenticatedRequest } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const API_URL = API_BASE_URL; // Add API_URL constant
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingExtraction, setPendingExtraction] = useState(false); // Track if extraction is pending after auth
   const freeCreditsPrompt = useFreeCreditsPrompt();
@@ -3437,67 +3438,111 @@ export default function ProcessPage() {
 
         <div className="flex-1 p-4 space-y-4">
 
-          {/* Download Options */}
+          {/* Download Options - Split into Two Cards */}
           {selectedPack && packSources.some((s: any) => s.status === 'completed' || s.status === 'building_tree') && (
-            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <FolderOpen className="h-6 w-6 text-white" />
+            <div className="space-y-4">
+              {/* Pack Downloads Card */}
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <FolderOpen className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white">Pack Downloads</h3>
+                    <p className="text-sm text-gray-400">{selectedPack.pack_name}</p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-md text-white">{selectedPack.pack_name}</p>
-                </div>
+
+                <button
+                  onClick={() => downloadPack('complete')}
+                  disabled={isDownloading}
+                  className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${!isDownloading && packSources.some(s => s.status === 'completed' || s.status === 'building_tree')
+                    ? 'after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-gradient-to-r after:from-transparent after:via-green-400 after:to-transparent after:animate-shimmer-slide'
+                    : ''
+                    }`}
+                >
+                  {isDownloading ? (
+                    <>
+                      <Loader className="h-4 w-4 animate-spin" />
+                      <span>Downloading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      <span>Download Pack</span>
+                    </>
+                  )}
+                </button>
               </div>
 
-              <button
-                onClick={() => downloadPack('complete')}
-                disabled={isDownloading}
-                className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${!isDownloading && packSources.some(s => s.status === 'completed' || s.status === 'building_tree')
-                  ? 'after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-gradient-to-r after:from-transparent after:via-green-400 after:to-transparent after:animate-shimmer-slide'
-                  : ''
-                  }`}
-              >
-                {isDownloading ? (
-                  <>
-                    <Loader className="h-4 w-4 animate-spin" />
-                    <span>Downloading...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4" />
-                    <span>Download Pack</span>
-                  </>
-                )}
-              </button>
+              {/* Memory Tree Card */}
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+                    <Network className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white">Memory Tree</h3>
+                    <p className="text-sm text-gray-400">View and export</p>
+                  </div>
+                </div>
 
-              {/* View Memory Tree Button */}
-              {(() => {
-                const isBuildingTree = packSources.some((s: any) => s.status === 'building_tree');
-                const hasTree = packSources.some((s: any) => s.status === 'completed');
+                {/* Download Tree JSON Button */}
+                <button
+                  onClick={async () => {
+                    try {
+                      const response = await makeAuthenticatedRequest(
+                        `${API_URL}/api/v2/packs/${selectedPack.pack_id}/tree/nodes`
+                      );
+                      if (response.ok) {
+                        const treeData = await response.json();
+                        const blob = new Blob([JSON.stringify(treeData, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${selectedPack.pack_name}-tree.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }
+                    } catch (err) {
+                      console.error('Error downloading tree:', err);
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 mb-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download Tree JSON</span>
+                </button>
 
-                return (
-                  <button
-                    onClick={() => !isBuildingTree && router.push(`/tree/${selectedPack.pack_id}`)}
-                    disabled={isBuildingTree}
-                    className={`w-full px-4 py-3 mt-2 ${isBuildingTree
+                {/* View Memory Tree Button */}
+                {(() => {
+                  const isBuildingTree = packSources.some((s: any) => s.status === 'building_tree');
+                  const hasTree = packSources.some((s: any) => s.status === 'completed');
+
+                  return (
+                    <button
+                      onClick={() => !isBuildingTree && router.push(`/tree/${selectedPack.pack_id}`)}
+                      disabled={isBuildingTree}
+                      className={`w-full px-4 py-3 ${isBuildingTree
                         ? 'bg-gray-600 cursor-wait'
-                        : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
-                      } text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-75`}
-                  >
-                    {isBuildingTree ? (
-                      <>
-                        <span className="text-xl animate-pulse">🌳</span>
-                        <span>Building Tree...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-xl">🌳</span>
-                        <span>View Memory Tree</span>
-                      </>
-                    )}
-                  </button>
-                );
-              })()}
+                        : 'bg-emerald-700/60 hover:bg-emerald-600/60'
+                        } text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-75`}
+                    >
+                      {isBuildingTree ? (
+                        <>
+                          <Network className="h-5 w-5 animate-pulse" />
+                          <span>Building Tree...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Network className="h-5 w-5" />
+                          <span>View Memory Tree</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
+              </div>
             </div>
           )}
 

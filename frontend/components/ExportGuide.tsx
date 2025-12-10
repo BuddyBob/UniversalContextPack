@@ -127,9 +127,9 @@ const ExportGuide = () => {
               <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
                 Migrate or Backup Your AI Memory
               </p>
-              {/*If the user is not signed in, send them to /process if they are signed in send them to /packs */}
+              {/*If the user is not signed in, send them to /results/sample-1 (demo), if they are signed in send them to /packs */}
               <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                <a href="/results/sample-1" className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl">
+                <a href={user ? "/packs" : "/results/sample-1"} className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl">
                   Get Started
                 </a>
               </div>
@@ -270,7 +270,7 @@ const ExportGuide = () => {
               <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
                 One click to download your entire chat history
               </p>
-              
+
               {/* How to get chats info */}
               <div className="max-w-xl mx-auto p-4 rounded-xl bg-white/[0.02] border border-white/10 backdrop-blur-sm">
                 <p className="text-sm text-gray-400">

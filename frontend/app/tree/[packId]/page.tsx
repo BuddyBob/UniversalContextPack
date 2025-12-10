@@ -1,10 +1,11 @@
 'use client';
 
+import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import {
     ArrowLeft, Search, FileText, AlertTriangle, Target,
-    User, Star, Folder, Zap, ArrowUpDown, Pin, Edit2, Save, X, Trash2
+    User, Star, Folder, Zap, ArrowUpDown, Pin, Edit2, Save, X, Trash2, Plus
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 
@@ -84,6 +85,19 @@ export default function TreeViewerPage() {
     const [editedLabel, setEditedLabel] = useState('');
     const [editedData, setEditedData] = useState<any>({});
     const [isSaving, setIsSaving] = useState(false);
+
+    // Create node modal state
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [newNodeType, setNewNodeType] = useState('Fact');
+    const [newNodeLabel, setNewNodeLabel] = useState('');
+    const [newNodeScope, setNewNodeScope] = useState('user_profile');
+    const [newNodeData, setNewNodeData] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
+
+    // Multi-select deletion state
+    const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+    const [isSelectMode, setIsSelectMode] = useState(false);
 
     // Flatten nodes from tree structure
     const allNodes = useMemo(() => {
@@ -296,43 +310,113 @@ export default function TreeViewerPage() {
         }
     };
 
-    const deleteNode = async () => {
-        if (!selectedNode || !user) return;
+    const createNode = async () => {
+        if (!user || !newNodeLabel.trim()) return;
 
-        if (!confirm(`Are you sure you want to delete "${selectedNode.label || 'this node'}"? This action cannot be undone.`)) {
-            return;
-        }
-
+        setIsCreating(true);
         try {
+            // Parse data field if provided
+            let parsedData = {};
+            if (newNodeData.trim()) {
+                try {
+                    parsedData = JSON.parse(newNodeData);
+                } catch {
+                    // If not valid JSON, treat as plain text
+                    parsedData = { text: newNodeData.trim() };
+                }
+            }
+
             const response = await makeAuthenticatedRequest(
-                `${API_URL}/api/v2/nodes/${selectedNode.id}`,
-                { method: 'DELETE' }
+                `${API_URL}/api/v2/packs/${packId}/tree/nodes`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        node_type: newNodeType,
+                        label: newNodeLabel.trim(),
+                        scope: newNodeScope,
+                        data: parsedData
+                    })
+                }
             );
 
             if (!response.ok) {
-                throw new Error('Failed to delete node');
+                throw new Error('Failed to create node');
             }
 
-            // Update local state - remove node from tree
+            const result = await response.json();
+            const createdNode = result.node;
+
+            // Refresh tree data from server to avoid duplicates
+            const treeResponse = await makeAuthenticatedRequest(
+                `${API_URL}/api/v2/packs/${packId}/tree/nodes`
+            );
+
+            if (treeResponse.ok) {
+                const freshTreeData = await treeResponse.json();
+                setTreeData(freshTreeData);
+            }
+
+            // Select the newly created node
+            setSelectedNode(createdNode);
+
+            // Reset form and close modal
+            setNewNodeLabel('');
+            setNewNodeType('Fact');
+            setNewNodeScope('user_profile');
+            setNewNodeData('');
+            setShowCreateModal(false);
+        } catch (err) {
+            console.error('Error creating node:', err);
+            alert('Failed to create node');
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+
+    const deleteNode = async (nodeIds?: string[]) => {
+        if (!user) return;
+
+        // Use provided nodeIds or selected node
+        const idsToDelete = nodeIds || (selectedNode ? [selectedNode.id] : []);
+        if (idsToDelete.length === 0) return;
+
+        try {
+            // Delete all nodes
+            await Promise.all(
+                idsToDelete.map(id =>
+                    makeAuthenticatedRequest(
+                        `${API_URL}/api/v2/nodes/${id}`,
+                        { method: 'DELETE' }
+                    )
+                )
+            );
+
+            // Update local state - remove nodes from tree
             setTreeData(prev => {
                 if (!prev) return prev;
                 const updated = { ...prev };
                 Object.keys(updated.scopes).forEach(scope => {
                     Object.keys(updated.scopes[scope]).forEach(type => {
                         updated.scopes[scope][type] = updated.scopes[scope][type].filter(
-                            n => n.id !== selectedNode.id
+                            n => !idsToDelete.includes(n.id)
                         );
                     });
                 });
-                updated.total_nodes = updated.total_nodes - 1;
+                updated.total_nodes = updated.total_nodes - idsToDelete.length;
                 return updated;
             });
 
-            // Clear selection
-            setSelectedNode(null);
-            setSelectedEvidence([]);
+            // Clear selection if deleted node was selected
+            if (selectedNode && idsToDelete.includes(selectedNode.id)) {
+                setSelectedNode(null);
+            }
+
+            // Clear multi-select
+            setSelectedNodeIds(new Set());
         } catch (err) {
-            console.error('Error deleting node:', err);
+            console.error('Error deleting nodes:', err);
             alert('Failed to delete node');
         }
     };
@@ -374,27 +458,69 @@ export default function TreeViewerPage() {
             </div>
         );
     }
-
     return (
         <div className="min-h-screen bg-black text-white flex flex-col">
             {/* Header */}
             <div className="border-b border-white/10 bg-black/50 backdrop-blur-sm">
-                <div className="max-w-[1800px] mx-auto px-6 py-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={() => router.push(`/process?packId=${packId}`)}
-                                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                                title="Back to pack"
-                            >
-                                <ArrowLeft className="w-5 h-5" />
-                            </button>
-                            <div>
-                                <h1 className="text-2xl font-bold">{treeData.pack_name}</h1>
-                                <p className="text-sm text-gray-400">
-                                    {treeData.total_nodes} nodes · {Object.keys(treeData.scopes).length} {Object.keys(treeData.scopes).length === 1 ? 'scope' : 'scopes'}
-                                </p>
+                <div className="px-6 py-4">
+                    <div className="flex items-center justify-between gap-6">
+                        {/* Left: Back button */}
+                        <button
+                            onClick={() => router.push('/packs')}
+                            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+
+                        {/* Center: Pack info */}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <h1 className="text-2xl font-bold truncate">
+                                        {treeData?.pack_name || 'Unknown Pack'}
+                                    </h1>
+                                    <p className="text-sm text-gray-400">
+                                        {treeData.total_nodes} nodes · {Object.keys(treeData.scopes).length} {Object.keys(treeData.scopes).length === 1 ? 'scope' : 'scopes'}
+                                    </p>
+                                </div>
                             </div>
+                        </div>
+
+                        {/* Right: Action buttons */}
+                        <div className="flex items-center gap-3">
+                            {/* Select Mode Toggle */}
+                            <button
+                                onClick={() => {
+                                    setIsSelectMode(!isSelectMode);
+                                    if (isSelectMode) {
+                                        setSelectedNodeIds(new Set());
+                                        setLastSelectedIndex(null);
+                                    }
+                                }}
+                                className={`text-sm px-3 py-1.5 rounded ${isSelectMode ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'} transition-colors`}
+                            >
+                                {isSelectMode ? 'Cancel Selection' : 'Select'}
+                            </button>
+
+                            {/* Delete button (only in select mode with selections) */}
+                            {selectedNodeIds.size > 0 && isSelectMode && (
+                                <button
+                                    onClick={() => deleteNode(Array.from(selectedNodeIds))}
+                                    className="px-4 py-2 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete {selectedNodeIds.size}
+                                </button>
+                            )}
+
+                            {/* Create Node button */}
+                            <button
+                                onClick={() => setShowCreateModal(true)}
+                                className="px-4 py-2 bg-emerald-700/60 hover:bg-emerald-600/60 text-white rounded-lg transition-colors flex items-center gap-2"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Create Node
+                            </button>
                         </div>
                     </div>
 
@@ -518,40 +644,63 @@ export default function TreeViewerPage() {
                                     return (
                                         <div
                                             key={node.id}
-                                            className={`group w-full px-4 py-3 flex items-center gap-4 hover:bg-white/10 transition-all border-l-2 ${isSelected
-                                                ? 'border-white bg-white/10'
-                                                : 'border-transparent'
+                                            onClick={(e) => {
+                                                if (isSelectMode) {
+                                                    // Selection mode - handle multi-select
+                                                    const currentIndex = filteredNodes.findIndex(n => n.id === node.id);
+                                                    const newSet = new Set(selectedNodeIds);
+
+                                                    // Shift-click range selection
+                                                    if (e.shiftKey && lastSelectedIndex !== null) {
+                                                        const start = Math.min(lastSelectedIndex, currentIndex);
+                                                        const end = Math.max(lastSelectedIndex, currentIndex);
+
+                                                        for (let i = start; i <= end; i++) {
+                                                            newSet.add(filteredNodes[i].id);
+                                                        }
+                                                    } else if (e.metaKey || e.ctrlKey) {
+                                                        // Cmd/Ctrl-click to toggle individual selection
+                                                        if (newSet.has(node.id)) {
+                                                            newSet.delete(node.id);
+                                                        } else {
+                                                            newSet.add(node.id);
+                                                        }
+                                                    } else {
+                                                        // Regular click - toggle selection
+                                                        if (newSet.has(node.id)) {
+                                                            newSet.delete(node.id);
+                                                        } else {
+                                                            newSet.add(node.id);
+                                                        }
+                                                    }
+
+                                                    setSelectedNodeIds(newSet);
+                                                    setLastSelectedIndex(currentIndex);
+                                                } else {
+                                                    // Normal mode - just select node for viewing
+                                                    setSelectedNode(node);
+                                                }
+                                            }}
+                                            className={`group w-full px-4 py-3 flex items-center gap-4 hover:bg-white/10 transition-all border-l-2 cursor-pointer ${isSelectMode && selectedNodeIds.has(node.id)
+                                                ? 'border-emerald-500 bg-emerald-500/10'
+                                                : isSelected
+                                                    ? 'border-white bg-white/10'
+                                                    : 'border-transparent'
                                                 }`}
                                         >
-                                            <button
-                                                onClick={() => setSelectedNode(node)}
-                                                className="flex-1 flex items-center gap-4 text-left"
-                                            >
+                                            <div className="flex-1 flex items-center gap-3">
+                                                <div className={`p-1.5 rounded ${nodeIcons[node.node_type]?.color || 'bg-gray-500/20'}`}>
+                                                    {React.createElement(nodeIcons[node.node_type]?.icon || FileText, { className: 'w-4 h-4' })}
+                                                </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <span className="text-sm block truncate" title={node.label || 'Untitled'}>
-                                                        {node.label || 'Untitled'}
-                                                    </span>
+                                                    <div className="font-medium truncate">{node.label || 'Untitled'}</div>
+                                                    <div className="text-xs text-gray-400">{node.node_type}</div>
                                                 </div>
-                                                <div className="w-32 flex items-center gap-2">
-                                                    <Icon className={`w-4 h-4 ${color}`} />
-                                                    <span className="text-xs text-gray-400">{node.node_type}</span>
-                                                </div>
-                                                <div className="w-20 text-center">
-                                                    {node.evidence_count > 0 && (
-                                                        <span className="px-2 py-0.5 bg-white/10 rounded-full text-xs">
-                                                            {node.evidence_count}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="w-32 text-xs text-gray-500">
-                                                    {new Date(node.updated_at).toLocaleDateString()}
-                                                </div>
-                                            </button>
+                                            </div>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setSelectedNode(node);
-                                                    deleteNode();
+                                                    deleteNode([node.id]);
                                                 }}
                                                 className="opacity-0 group-hover:opacity-100 p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-all"
                                                 title="Delete node"
@@ -570,30 +719,19 @@ export default function TreeViewerPage() {
                         {selectedNode ? (
                             <div className="flex flex-col h-full">
                                 {/* Header */}
-                                <div className="p-6 border-b border-white/10">
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div className="flex items-center gap-3 flex-1">
+                                <div className="p-4 border-b border-white/10">
+                                    {/* Node Type and Edit Button Row */}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
                                             {(() => {
                                                 const Icon = getNodeIcon(selectedNode.node_type);
                                                 const color = nodeColors[selectedNode.node_type] || 'text-gray-400';
-                                                return <Icon className={`w-8 h-8 ${color} flex-shrink-0`} />;
+                                                return <Icon className={`w-4 h-4 ${color}`} />;
                                             })()}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-xs text-gray-400 mb-1">{selectedNode.node_type}</div>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editedLabel}
-                                                        onChange={(e) => setEditedLabel(e.target.value)}
-                                                        className="w-full text-lg font-semibold bg-white/5 border border-white/20 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-white/30"
-                                                        placeholder="Node label"
-                                                    />
-                                                ) : (
-                                                    <h3 className="text-lg font-semibold leading-tight">{selectedNode.label || 'Untitled'}</h3>
-                                                )}
-                                            </div>
+                                            <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">{selectedNode.node_type}</span>
                                         </div>
-                                        <div className="flex items-center gap-2 ml-2">
+                                        {/* Edit Buttons */}
+                                        <div className="flex items-center gap-1">
                                             {isEditing ? (
                                                 <>
                                                     <button
@@ -622,10 +760,36 @@ export default function TreeViewerPage() {
                                                     >
                                                         <Edit2 className="w-4 h-4" />
                                                     </button>
+                                                    <button
+                                                        onClick={() => selectedNode && deleteNode([selectedNode.id])}
+                                                        className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors"
+                                                        title="Delete node"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
                                                 </>
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Node Label */}
+                                    {isEditing ? (
+                                        <input
+                                            type="text"
+                                            value={editedLabel}
+                                            onChange={(e) => setEditedLabel(e.target.value)}
+                                            className="w-full text-xl font-semibold bg-white/5 border border-white/20 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-white/30"
+                                            placeholder="Node label"
+                                        />
+                                    ) : (
+                                        <h3
+                                            className="text-xl font-semibold leading-tight cursor-pointer hover:text-gray-300 transition-colors break-words"
+                                            title="Double-click to edit"
+                                            onDoubleClick={startEditing}
+                                        >
+                                            {selectedNode.label || 'Untitled'}
+                                        </h3>
+                                    )}
                                 </div>
 
                                 {/* Content */}
@@ -725,6 +889,131 @@ export default function TreeViewerPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Create Node Modal */}
+            {showCreateModal && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-gray-900 border border-white/10 rounded-lg max-w-md w-full p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-semibold">Create New Node</h2>
+                            <button
+                                onClick={() => {
+                                    setShowCreateModal(false);
+                                    setNewNodeLabel('');
+                                    setNewNodeType('Fact');
+                                    setNewNodeScope('user_profile');
+                                    setNewNodeData('');
+                                }}
+                                className="p-1 hover:bg-white/10 rounded transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {/* Node Type */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Node Type
+                                </label>
+                                <select
+                                    value={newNodeType}
+                                    onChange={(e) => setNewNodeType(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                >
+                                    <option value="Fact">Fact</option>
+                                    <option value="Identity">Identity</option>
+                                    <option value="Preference">Preference</option>
+                                    <option value="Project">Project</option>
+                                    <option value="Skill">Skill</option>
+                                    <option value="Goal">Goal</option>
+                                    <option value="Constraint">Limitation</option>
+                                    <option value="Section">Topic</option>
+                                    <option value="Event">Event</option>
+                                    <option value="Entity">Person/Organization</option>
+                                    <option value="Concept">Idea</option>
+                                    <option value="CodePattern">Code Example</option>
+                                </select>
+                            </div>
+
+                            {/* Label */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Label <span className="text-red-400">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newNodeLabel}
+                                    onChange={(e) => setNewNodeLabel(e.target.value)}
+                                    placeholder="Enter node label..."
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && newNodeLabel.trim()) {
+                                            createNode();
+                                        }
+                                    }}
+                                />
+                            </div>
+
+                            {/* Scope */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Scope
+                                </label>
+                                <select
+                                    value={newNodeScope}
+                                    onChange={(e) => setNewNodeScope(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                >
+                                    <option value="user_profile">User Profile</option>
+                                    <option value="knowledge:general">Knowledge: General</option>
+                                </select>
+                            </div>
+
+                            {/* Details/Data */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">
+                                    Details <span className="text-gray-500 text-xs">(optional)</span>
+                                </label>
+                                <textarea
+                                    value={newNodeData}
+                                    onChange={(e) => setNewNodeData(e.target.value)}
+                                    placeholder='JSON or plain text, e.g. {"description": "My details"}'
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-sm"
+                                    rows={3}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Enter JSON or plain text for additional details
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={() => {
+                                    setShowCreateModal(false);
+                                    setNewNodeLabel('');
+                                    setNewNodeType('Fact');
+                                    setNewNodeScope('user_profile');
+                                    setNewNodeData('');
+                                }}
+                                className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                                disabled={isCreating}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={createNode}
+                                disabled={!newNodeLabel.trim() || isCreating}
+                                className="flex-1 px-4 py-2 bg-emerald-700/60 hover:bg-emerald-600/60 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                            >
+                                {isCreating ? 'Creating...' : 'Create Node'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }

@@ -4878,6 +4878,68 @@ async def update_node(
         raise HTTPException(status_code=500, detail=f"Failed to update node: {str(e)}")
 
 
+@app.post("/api/v2/packs/{pack_id}/tree/nodes")
+async def create_node(
+    pack_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Create a new node manually in the memory tree.
+    """
+    try:
+        body = await request.json()
+        node_type = body.get("node_type")
+        label = body.get("label")
+        scope = body.get("scope", "user_profile")
+        data = body.get("data", {})
+        
+        # Validate required fields
+        if not node_type:
+            raise HTTPException(status_code=400, detail="node_type is required")
+        if not label:
+            raise HTTPException(status_code=400, detail="label is required")
+        
+        # Validate node_type against allowed types
+        allowed_types = [
+            "Identity", "Preference", "Project", "Skill", "Goal", "Constraint", "Fact",
+            "Section", "Event", "Entity", "Concept", "CodePattern"
+        ]
+        if node_type not in allowed_types:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid node_type. Must be one of: {', '.join(allowed_types)}"
+            )
+        
+        print(f"Creating node for pack {pack_id}, user {user.user_id}")
+        print(f"Type: {node_type}, Label: {label}, Scope: {scope}")
+        
+        # Create node
+        new_node = {
+            "user_id": user.user_id,
+            "pack_id": pack_id,
+            "scope": scope,
+            "node_type": node_type,
+            "label": label,
+            "data": data
+        }
+        
+        result = supabase.table("memory_nodes").insert(new_node).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create node")
+        
+        print(f"Created node: {result.data[0]['id']}")
+        
+        return {"success": True, "node": result.data[0]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error creating node: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create node: {str(e)}")
+
+
 
 
 
