@@ -365,7 +365,7 @@ export default function TreeViewerPage() {
                 <div className="text-center">
                     <p className="text-red-400 mb-4">{error || 'Failed to load tree data'}</p>
                     <button
-                        onClick={() => router.push(`/process?pack=${packId}`)}
+                        onClick={() => router.push(`/process?packId=${packId}`)}
                         className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
                     >
                         Back to Pack
@@ -383,7 +383,7 @@ export default function TreeViewerPage() {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <button
-                                onClick={() => router.push(`/process?pack=${packId}`)}
+                                onClick={() => router.push(`/process?packId=${packId}`)}
                                 className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                                 title="Back to pack"
                             >
@@ -432,15 +432,24 @@ export default function TreeViewerPage() {
                                     const Icon = getNodeIcon(type);
                                     const color = nodeColors[type] || 'text-gray-400';
                                     return (
-                                        <label key={type} className="flex items-center gap-2 p-2 hover:bg-white/5 rounded cursor-pointer transition-colors">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedTypes.has(type)}
-                                                onChange={() => toggleTypeFilter(type)}
-                                                className="rounded border-white/20 bg-white/5 text-white focus:ring-white/20"
-                                            />
+                                        <label key={type} className="flex items-center gap-2 p-2 hover:bg-white/5 rounded cursor-pointer transition-colors group/checkbox">
+                                            <div className="relative flex items-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedTypes.has(type)}
+                                                    onChange={() => toggleTypeFilter(type)}
+                                                    className="peer sr-only"
+                                                />
+                                                <div className="w-4 h-4 border-2 border-white/30 rounded bg-white/5 peer-checked:bg-blue-500 peer-checked:border-blue-500 transition-all flex items-center justify-center">
+                                                    {selectedTypes.has(type) && (
+                                                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                            </div>
                                             <Icon className={`w-4 h-4 ${color}`} />
-                                            <span className="text-sm flex-1">{type}</span>
+                                            <span className="text-sm flex-1 truncate">{type}</span>
                                             <span className="text-xs text-gray-500">{count}</span>
                                         </label>
                                     );
@@ -510,16 +519,18 @@ export default function TreeViewerPage() {
                                         <div
                                             key={node.id}
                                             className={`group w-full px-4 py-3 flex items-center gap-4 hover:bg-white/10 transition-all border-l-2 ${isSelected
-                                                    ? 'border-white bg-white/10'
-                                                    : 'border-transparent'
+                                                ? 'border-white bg-white/10'
+                                                : 'border-transparent'
                                                 }`}
                                         >
                                             <button
                                                 onClick={() => setSelectedNode(node)}
                                                 className="flex-1 flex items-center gap-4 text-left"
                                             >
-                                                <div className="flex-1 truncate">
-                                                    <span className="text-sm">{node.label || 'Untitled'}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="text-sm block truncate" title={node.label || 'Untitled'}>
+                                                        {node.label || 'Untitled'}
+                                                    </span>
                                                 </div>
                                                 <div className="w-32 flex items-center gap-2">
                                                     <Icon className={`w-4 h-4 ${color}`} />

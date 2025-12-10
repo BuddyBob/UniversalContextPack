@@ -521,32 +521,137 @@ def _apply_knowledge_facts(
             snippet=snippet
         )
     
-    # Concepts (simple strings)
+    # Concepts (can be simple strings or rich objects)
     concept_count = 0
     for concept in facts.get("concepts", []):
-        if not concept or not isinstance(concept, str):
+        if not concept:
             continue
+        
+        if isinstance(concept, str):
+            # Simple string concept
+            node = get_or_create_node(
+                user_id=user_id,
+                pack_id=pack_id,
+                scope=scope,
+                node_type="Concept",
+                label=concept[:120]
+            )
+            merge_node_data(node["id"], {"text": concept})
+            create_evidence(
+                user_id=user_id,
+                node_id=node["id"],
+                pack_id=pack_id,
+                source_id=source_id,
+                chunk_index=chunk_index,
+                snippet=concept[:250]
+            )
+            concept_count += 1
+        elif isinstance(concept, dict):
+            # Rich concept with name, definition, category
+            name = concept.get("name", "Unnamed Concept")
+            node = get_or_create_node(
+                user_id=user_id,
+                pack_id=pack_id,
+                scope=scope,
+                node_type="Concept",
+                label=name[:120]
+            )
+            merge_node_data(node["id"], concept)
+            snippet = concept.get("definition", json.dumps(concept))[:250]
+            create_evidence(
+                user_id=user_id,
+                node_id=node["id"],
+                pack_id=pack_id,
+                source_id=source_id,
+                chunk_index=chunk_index,
+                snippet=snippet
+            )
+            concept_count += 1
+    
+    if concept_count > 0:
+        print(f"   ✅ Processed {concept_count} concepts")
+        nodes_created += concept_count
+    
+    # Facts (for knowledge conversations)
+    fact_count = 0
+    for fact in facts.get("facts", []):
+        if not fact:
+            continue
+        
+        if isinstance(fact, str):
+            # Simple string fact
+            node = get_or_create_node(
+                user_id=user_id,
+                pack_id=pack_id,
+                scope=scope,
+                node_type="Fact",
+                label=fact[:120]
+            )
+            merge_node_data(node["id"], {"text": fact})
+            create_evidence(
+                user_id=user_id,
+                node_id=node["id"],
+                pack_id=pack_id,
+                source_id=source_id,
+                chunk_index=chunk_index,
+                snippet=fact[:250]
+            )
+            fact_count += 1
+        elif isinstance(fact, dict):
+            # Rich fact with statement and category
+            statement = fact.get("statement", "")
+            if statement:
+                node = get_or_create_node(
+                    user_id=user_id,
+                    pack_id=pack_id,
+                    scope=scope,
+                    node_type="Fact",
+                    label=statement[:120]
+                )
+                merge_node_data(node["id"], fact)
+                create_evidence(
+                    user_id=user_id,
+                    node_id=node["id"],
+                    pack_id=pack_id,
+                    source_id=source_id,
+                    chunk_index=chunk_index,
+                    snippet=statement[:250]
+                )
+                fact_count += 1
+    
+    if fact_count > 0:
+        print(f"   ✅ Processed {fact_count} facts")
+        nodes_created += fact_count
+    
+    # Code patterns (for technical conversations)
+    pattern_count = 0
+    for pattern in facts.get("code_patterns", []):
+        if not pattern or not isinstance(pattern, dict):
+            continue
+        
+        purpose = pattern.get("purpose", "Code Pattern")
         node = get_or_create_node(
             user_id=user_id,
             pack_id=pack_id,
             scope=scope,
-            node_type="Concept",
-            label=concept[:120]
+            node_type="CodePattern",
+            label=purpose[:120]
         )
-        merge_node_data(node["id"], {"text": concept})
+        merge_node_data(node["id"], pattern)
+        snippet = pattern.get("pattern", json.dumps(pattern))[:250]
         create_evidence(
             user_id=user_id,
             node_id=node["id"],
             pack_id=pack_id,
             source_id=source_id,
             chunk_index=chunk_index,
-            snippet=concept[:250]
+            snippet=snippet
         )
-        concept_count += 1
+        pattern_count += 1
     
-    if concept_count > 0:
-        print(f"   ✅ Processed {concept_count} concepts")
-        nodes_created += concept_count
+    if pattern_count > 0:
+        print(f"   ✅ Processed {pattern_count} code patterns")
+        nodes_created += pattern_count
     
     print(f"\n   🎉 KNOWLEDGE SUMMARY: {nodes_created} nodes processed for {scope}")
 
