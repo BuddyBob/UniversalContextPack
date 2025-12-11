@@ -311,21 +311,13 @@ def apply_chunk_to_memory_tree(
     """
     user_id = user.user_id
     
-    print(f"\n🌳 [MEMORY TREE] Applying chunk {chunk_index} to tree")
-    print(f"   📦 Pack: {pack_id}")
-    print(f"   📄 Source: {source_id}")
-    print(f"   🎯 Scope: {scope}")
-    print(f"   📊 Facts structure: {list(structured_facts.keys())}")
+
     
     # Route based on scope
     if scope == "user_profile":
-        print(f"   👤 Processing as USER PROFILE facts")
         _apply_user_profile_facts(structured_facts, user_id, pack_id, source_id, chunk_index)
     elif scope.startswith("knowledge:"):
-        print(f"   📚 Processing as KNOWLEDGE facts")
         _apply_knowledge_facts(structured_facts, user_id, pack_id, source_id, chunk_index, scope)
-    else:
-        print(f"   ⚠️  Unknown scope: {scope}, skipping tree application")
 
 
 def _apply_user_profile_facts(

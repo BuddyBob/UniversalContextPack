@@ -1985,31 +1985,6 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         else:
             system_prompt = base_system_prompt
         
-        # Detect scope and content type for memory tree
-        scope = "knowledge:generic"
-        is_knowledge_conversation = False
-        
-        if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
-            from memory_tree import get_scope_for_source
-            scope = get_scope_for_source(source_id, filename, "")
-            
-            # Detect if conversation is about knowledge vs personal topics
-            if "conversations" in filename.lower() or filename.lower().endswith('.json'):
-                # Sample first chunk to detect type
-                sample = chunks[0][:2000] if chunks else ""
-                knowledge_keywords = [
-                    "implement", "architecture", "database", "schema", "api", "system",
-                    "research", "study", "analysis", "paper", "theory", "concept",
-                    "function", "class", "method", "algorithm", "data structure",
-                    "design pattern", "framework", "library", "module"
-                ]
-                if any(keyword in sample.lower() for keyword in knowledge_keywords):
-                    scope = "knowledge:conversation"
-                    is_knowledge_conversation = True
-                    print(f"🧠 Detected KNOWLEDGE conversation (technical/research content)")
-                else:
-                    scope = "user_profile"
-                    print(f"👤 Detected USER PROFILE conversation (personal content)")
         
         for idx, chunk in enumerate(chunks):
             # Check for cancellation at the start of each chunk
@@ -2075,127 +2050,30 @@ Use only the information explicitly present in the document.
 Document content:
 {redacted_chunk}
 """
-                # Scenario B: Conversations File
+                # Scenario B: Conversations File - Text output for tree building
                 elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
-                    if is_knowledge_conversation and MEMORY_TREE_ENABLED:
-                        # Knowledge conversation - extract technical/research content as JSON
-                        prompt = f"""
-                            Analyze this conversation segment containing technical or knowledge-based discussion.
+                    prompt = f"""
+Analyze this conversation segment and extract persistent, high-level information.
 
-                            Extract structured information about the topics discussed.
+Focus on information that remains true beyond this conversation:
+- User background (roles, expertise, education, location)
+- Ongoing projects and long-term efforts
+- Technical ecosystem (tools, languages, platforms, workflows)
+- Preferences, constraints, and recurring themes
+- Key facts and patterns about the user
 
-                            Return STRICT JSON with this shape:
+Ignore temporary conversational details and small talk.
 
-                            {{
-                            "sections": [
-                                {{
-                                "title": string,
-                                "summary": string,
-                                "topics": [string]
-                                }}
-                            ],
-                            "concepts": [
-                                {{
-                                "name": string,
-                                "definition": string,
-                                "category": string
-                                }}
-                            ],
-                            "entities": [
-                                {{
-                                "name": string,
-                                "type": string,
-                                "summary": string
-                                }}
-                            ],
-                            "facts": [
-                                {{
-                                "statement": string,
-                                "category": string
-                                }}
-                            ],
-                            "code_patterns": [
-                                {{
-                                "language": string,
-                                "pattern": string,
-                                "purpose": string
-                                }}
-                            ]
-                            }}
+Output format:
+1. High-level summary
+2. Stable facts and patterns
+3. Projects and responsibilities
+4. Important context for future conversations
 
-                            Rules:
-                            - Extract ALL distinct topics discussed
-                            - Include technical terms, APIs, schemas, architectures
-                            - Capture code patterns and implementation details
-                            - DO NOT wrap JSON in backticks or markdown
-                            - DO NOT add commentary outside JSON
+Conversation content:
+{redacted_chunk}
+"""
 
-                            Conversation content:
-                            {redacted_chunk}
-                            """
-                    elif MEMORY_TREE_ENABLED:
-                        # User profile conversation - extract personal information as JSON
-                          prompt = f"""
-                        Analyze this conversation segment from a larger chat history.
-
-                        Extract only persistent, high-level information about the USER (not the assistant).
-
-                        Return STRICT JSON with this shape:
-
-                        {{
-                        "identity": {{
-                            "name": string | null,
-                            "roles": [string],
-                            "background": [string]
-                        }},
-                        "preferences": [string],
-                        "projects": [
-                            {{
-                            "name": string,
-                            "description": string | null,
-                            "status": string | null,
-                            "numbers": [{{ "key": string, "value": string }}]
-                            }}
-                        ],
-                        "skills": [string],
-                        "goals": [string],
-                        "constraints": [string],
-                        "facts": [string]
-                        }}
-
-                        Rules:
-                        - Only include information likely to remain true beyond this segment
-                        - Ignore small talk and temporary details
-                        - DO NOT wrap JSON in backticks or markdown
-                        - DO NOT add commentary outside JSON
-
-                        Conversation content:
-                        {redacted_chunk}
-                        """
-                    else:
-                        # Fallback to text-based analysis
-                        prompt = f"""
-                        Analyze this conversation segment from a larger chat history.
-
-                        Extract only persistent, high-level information about the user and their world, such as:
-                        - Background facts (roles, expertise, industries, education, locations)
-                        - Ongoing projects, long-term efforts, and workstreams
-                        - Technical ecosystem (tools, languages, platforms, workflows)
-                        - Behavioral patterns (how they approach problems, communicate, decide)
-                        - Preferences, constraints, recurring themes
-                        - Timelines, responsibilities, domains of knowledge
-
-                        Do NOT extract minor or temporary conversational details.
-
-                        Output a concise but meaningful:
-                        1. High-level summary  
-                        2. List of stable facts and recurring patterns  
-                        3. Key long-term projects or responsibilities  
-                        4. Any cross-conversation themes that matter for future reasoning
-
-                        Conversation content:
-                        {redacted_chunk}
-                        """
 
                 
                 # Scenario C: Large Document (5+ chunks) - Broad analysis
