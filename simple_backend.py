@@ -2011,36 +2011,30 @@ You are an expert extraction system. Your job is to extract all unique, meaningf
 PRIMARY RULES:
 1. Do NOT summarize.
 2. Do NOT omit meaningful details.
-3. Do NOT restate the same information twice. Remove duplicates.
+3. Do NOT restate the same information twice. 
 4. Do NOT include filler text, greetings, conversational fluff, or irrelevant lines.
 5. Preserve exact values whenever they appear:
-   - Hex codes, color values, dimensions
-   - Code snippets, commands, file paths, config values
-   - URLs, IDs, keys, parameters
-   - Metrics, KPIs, dates, version numbers
-   - Examples, workflows, instructions
-6. When unsure whether something is meaningful, INCLUDE it.
-7. When multiple parts of the document repeat the same fact, include it once.
+   (names, dates, values, terminology, labels, instructions, or precise descriptions).
+6. If a detail seems important or specific, include it.
 
 STEP 1 — Document Identification (1–2 sentences ONLY)
 Identify what type of document this is (technical, design, business, personal, research, chat, etc.).
 
 STEP 2 — Unique, Comprehensive Extraction
-Extract every meaningful piece of information without losing specificity.  
-Group logically, but do NOT compress content.
+Extract every meaningful piece of information without changing its specificity.
+Group related ideas together only for organization. Do NOT compress or combine ideas.
 
 **Complete Unique Information Extract**
-List all key details found in the document:
-- Exact values, identifiers, specs
-- Technical configs, parameters, constraints
-- Preferences, rules, workflows
-- Tools, methods, examples
-- Any other meaningful data
+List all meaningful details found in the document. Include:
+- Specific facts, values, descriptions, instructions
+- Stated preferences, rules, constraints, or workflows
+- Examples, scenarios, references
+- Any other concrete, meaningful information
 
 Ensure:
 - No duplicates
 - No summaries
-- No omissions of important details
+- No omission of important details
 
 **Context & Relationships**
 Describe how extracted items relate to each other (if relationships exist).
@@ -2053,22 +2047,26 @@ Document content:
                 # Scenario B: Conversations File - Text output for tree building
                 elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
                     prompt = f"""
-Analyze this conversation segment and extract persistent, high-level information.
+Analyze this conversation segment and extract only persistent, high-level information about the user.
 
-Focus on information that remains true beyond this conversation:
-- User background (roles, expertise, education, location)
-- Ongoing projects and long-term efforts
-- Technical ecosystem (tools, languages, platforms, workflows)
-- Preferences, constraints, and recurring themes
-- Key facts and patterns about the user
+Focus on information that remains true across time, such as:
+- User background (roles, interests, skills, identity, general profile)
+- Long-term goals, ongoing activities, or recurring topics
+- Preferences, habits, constraints, or stable patterns of behavior
+- Any systems, tools, or environments the user consistently relies on
+- Important facts that would help future conversations remain personalized and consistent
 
-Ignore temporary conversational details and small talk.
+Ignore:
+- Temporary actions or one-time tasks
+- Small talk or conversational filler
+- Emotional expressions tied only to the moment
+- Anything not explicitly stated in the conversation
 
 Output format:
-1. High-level summary
+1. High-level summary of the user
 2. Stable facts and patterns
-3. Projects and responsibilities
-4. Important context for future conversations
+3. Long-term goals, activities, or responsibilities
+4. Useful context for future conversations
 
 Conversation content:
 {redacted_chunk}
