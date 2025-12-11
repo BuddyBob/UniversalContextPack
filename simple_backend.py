@@ -1736,13 +1736,12 @@ async def submit_feedback(request: FeedbackRequest):
                         "to": [admin_email],
                         "subject": f"💡 New Feedback/Feature Request - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
                         "text": f"""New anonymous feedback received:
+                        {feedback_text}
 
-{feedback_text}
-
----
-Submitted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
-Source: Context Pack Website Feedback Banner
-"""
+                        ---
+                        Submitted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+                        Source: Context Pack Website Feedback Banner
+                        """
                     },
                     timeout=30
                 )
@@ -2032,156 +2031,171 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 # Scenario A: Single Chunk - Extract all details (no summarization)
                 if len(chunks) == 1:
                     prompt = f"""
-You are an expert analyst. Extract and preserve ALL information from this document.
+You are an expert extraction system. Your job is to extract all unique, meaningful information from the document with maximum precision.
 
-CRITICAL: Do NOT summarize or omit details. Include ALL specific values like hex codes, API keys, configuration settings, preferences, examples, etc.
+PRIMARY RULES:
+1. Do NOT summarize.
+2. Do NOT omit meaningful details.
+3. Do NOT restate the same information twice. Remove duplicates.
+4. Do NOT include filler text, greetings, conversational fluff, or irrelevant lines.
+5. Preserve exact values whenever they appear:
+   - Hex codes, color values, dimensions
+   - Code snippets, commands, file paths, config values
+   - URLs, IDs, keys, parameters
+   - Metrics, KPIs, dates, version numbers
+   - Examples, workflows, instructions
+6. When unsure whether something is meaningful, INCLUDE it.
+7. When multiple parts of the document repeat the same fact, include it once.
 
-STEP 1 — Identify the document TYPE and extract accordingly:
-- Technical/Engineering: Include ALL code, hex codes, API endpoints, commands, file paths, config values
-- Design: Include ALL color codes (#hex values), dimensions, spacing, fonts, exact specifications  
-- Business: Include ALL metrics, KPIs, dates, names, requirements
-- Personal: Include ALL preferences, tools, workflows, specific examples
+STEP 1 — Document Identification (1–2 sentences ONLY)
+Identify what type of document this is (technical, design, business, personal, research, chat, etc.).
 
-STEP 2 — Comprehensive extraction with maximum detail:
+STEP 2 — Unique, Comprehensive Extraction
+Extract every meaningful piece of information without losing specificity.  
+Group logically, but do NOT compress content.
 
-**Document Overview:** Brief identification of document type and purpose.
+**Complete Unique Information Extract**
+List all key details found in the document:
+- Exact values, identifiers, specs
+- Technical configs, parameters, constraints
+- Preferences, rules, workflows
+- Tools, methods, examples
+- Any other meaningful data
 
-**Complete Information Extract:** 
-Preserve and list ALL meaningful information found in the document:
-- Specific values and identifiers (hex codes, URLs, paths, IDs)
-- Technical specifications and configurations
-- Preferences and choices
-- Tools, technologies, and methods mentioned
-- Examples and use cases
-- Any other specific details
+Ensure:
+- No duplicates
+- No summaries
+- No omissions of important details
 
-**Context & Relationships:** How information connects together.
+**Context & Relationships**
+Describe how extracted items relate to each other (if relationships exist).
+
+Use only the information explicitly present in the document.
 
 Document content:
 {redacted_chunk}
 """
-
                 # Scenario B: Conversations File
                 elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
                     if is_knowledge_conversation and MEMORY_TREE_ENABLED:
                         # Knowledge conversation - extract technical/research content as JSON
                         prompt = f"""
-Analyze this conversation segment containing technical or knowledge-based discussion.
+                            Analyze this conversation segment containing technical or knowledge-based discussion.
 
-Extract structured information about the topics discussed.
+                            Extract structured information about the topics discussed.
 
-Return STRICT JSON with this shape:
+                            Return STRICT JSON with this shape:
 
-{{
-  "sections": [
-    {{
-      "title": string,
-      "summary": string,
-      "topics": [string]
-    }}
-  ],
-  "concepts": [
-    {{
-      "name": string,
-      "definition": string,
-      "category": string
-    }}
-  ],
-  "entities": [
-    {{
-      "name": string,
-      "type": string,
-      "summary": string
-    }}
-  ],
-  "facts": [
-    {{
-      "statement": string,
-      "category": string
-    }}
-  ],
-  "code_patterns": [
-    {{
-      "language": string,
-      "pattern": string,
-      "purpose": string
-    }}
-  ]
-}}
+                            {{
+                            "sections": [
+                                {{
+                                "title": string,
+                                "summary": string,
+                                "topics": [string]
+                                }}
+                            ],
+                            "concepts": [
+                                {{
+                                "name": string,
+                                "definition": string,
+                                "category": string
+                                }}
+                            ],
+                            "entities": [
+                                {{
+                                "name": string,
+                                "type": string,
+                                "summary": string
+                                }}
+                            ],
+                            "facts": [
+                                {{
+                                "statement": string,
+                                "category": string
+                                }}
+                            ],
+                            "code_patterns": [
+                                {{
+                                "language": string,
+                                "pattern": string,
+                                "purpose": string
+                                }}
+                            ]
+                            }}
 
-Rules:
-- Extract ALL distinct topics discussed
-- Include technical terms, APIs, schemas, architectures
-- Capture code patterns and implementation details
-- DO NOT wrap JSON in backticks or markdown
-- DO NOT add commentary outside JSON
+                            Rules:
+                            - Extract ALL distinct topics discussed
+                            - Include technical terms, APIs, schemas, architectures
+                            - Capture code patterns and implementation details
+                            - DO NOT wrap JSON in backticks or markdown
+                            - DO NOT add commentary outside JSON
 
-Conversation content:
-{redacted_chunk}
-"""
+                            Conversation content:
+                            {redacted_chunk}
+                            """
                     elif MEMORY_TREE_ENABLED:
                         # User profile conversation - extract personal information as JSON
-                        prompt = f"""
-Analyze this conversation segment from a larger chat history.
+                          prompt = f"""
+                        Analyze this conversation segment from a larger chat history.
 
-Extract only persistent, high-level information about the USER (not the assistant).
+                        Extract only persistent, high-level information about the USER (not the assistant).
 
-Return STRICT JSON with this shape:
+                        Return STRICT JSON with this shape:
 
-{{
-  "identity": {{
-    "name": string | null,
-    "roles": [string],
-    "background": [string]
-  }},
-  "preferences": [string],
-  "projects": [
-    {{
-      "name": string,
-      "description": string | null,
-      "status": string | null,
-      "numbers": [{{ "key": string, "value": string }}]
-    }}
-  ],
-  "skills": [string],
-  "goals": [string],
-  "constraints": [string],
-  "facts": [string]
-}}
+                        {{
+                        "identity": {{
+                            "name": string | null,
+                            "roles": [string],
+                            "background": [string]
+                        }},
+                        "preferences": [string],
+                        "projects": [
+                            {{
+                            "name": string,
+                            "description": string | null,
+                            "status": string | null,
+                            "numbers": [{{ "key": string, "value": string }}]
+                            }}
+                        ],
+                        "skills": [string],
+                        "goals": [string],
+                        "constraints": [string],
+                        "facts": [string]
+                        }}
 
-Rules:
-- Only include information likely to remain true beyond this segment
-- Ignore small talk and temporary details
-- DO NOT wrap JSON in backticks or markdown
-- DO NOT add commentary outside JSON
+                        Rules:
+                        - Only include information likely to remain true beyond this segment
+                        - Ignore small talk and temporary details
+                        - DO NOT wrap JSON in backticks or markdown
+                        - DO NOT add commentary outside JSON
 
-Conversation content:
-{redacted_chunk}
-"""
+                        Conversation content:
+                        {redacted_chunk}
+                        """
                     else:
                         # Fallback to text-based analysis
                         prompt = f"""
-Analyze this conversation segment from a larger chat history.
+                        Analyze this conversation segment from a larger chat history.
 
-Extract only persistent, high-level information about the user and their world, such as:
-- Background facts (roles, expertise, industries, education, locations)
-- Ongoing projects, long-term efforts, and workstreams
-- Technical ecosystem (tools, languages, platforms, workflows)
-- Behavioral patterns (how they approach problems, communicate, decide)
-- Preferences, constraints, recurring themes
-- Timelines, responsibilities, domains of knowledge
+                        Extract only persistent, high-level information about the user and their world, such as:
+                        - Background facts (roles, expertise, industries, education, locations)
+                        - Ongoing projects, long-term efforts, and workstreams
+                        - Technical ecosystem (tools, languages, platforms, workflows)
+                        - Behavioral patterns (how they approach problems, communicate, decide)
+                        - Preferences, constraints, recurring themes
+                        - Timelines, responsibilities, domains of knowledge
 
-Do NOT extract minor or temporary conversational details.
+                        Do NOT extract minor or temporary conversational details.
 
-Output a concise but meaningful:
-1. High-level summary  
-2. List of stable facts and recurring patterns  
-3. Key long-term projects or responsibilities  
-4. Any cross-conversation themes that matter for future reasoning
+                        Output a concise but meaningful:
+                        1. High-level summary  
+                        2. List of stable facts and recurring patterns  
+                        3. Key long-term projects or responsibilities  
+                        4. Any cross-conversation themes that matter for future reasoning
 
-Conversation content:
-{redacted_chunk}
-"""
+                        Conversation content:
+                        {redacted_chunk}
+                        """
 
                 
                 # Scenario C: Large Document (5+ chunks) - Broad analysis
@@ -2189,137 +2203,70 @@ Conversation content:
                     if MEMORY_TREE_ENABLED:
                         # Return JSON for memory tree
                         prompt = f"""
-Analyze this section of a large document and extract structured knowledge.
+                        Analyze this section of a large document and extract structured knowledge.
 
-Return STRICT JSON with this shape:
+                        Return STRICT JSON with this shape:
 
-{{
-  "sections": [
-    {{
-      "title": string,
-      "summary": string,
-      "topics": [string]
-    }}
-  ],
-  "concepts": [
-    {{
-      "name": string,
-      "definition": string,
-      "category": string
-    }}
-  ],
-  "entities": [
-    {{
-      "name": string,
-      "type": string,
-      "summary": string
-    }}
-  ],
-  "facts": [
-    {{
-      "statement": string,
-      "category": string
-    }}
-  ]
-}}
+                        {{
+                        "sections": [
+                            {{
+                            "title": string,
+                            "summary": string,
+                            "topics": [string]
+                            }}
+                        ],
+                        "concepts": [
+                            {{
+                            "name": string,
+                            "definition": string,
+                            "category": string
+                            }}
+                        ],
+                        "entities": [
+                            {{
+                            "name": string,
+                                "type": string,
+                            "summary": string
+                            }}
+                        ],
+                        "facts": [
+                            {{
+                            "statement": string,
+                            "category": string
+                            }}
+                        ]
+                        }}
 
-Rules:
-- Extract main themes and topics as sections
-- Identify key concepts and their definitions
-- List important entities (people, organizations, places)
-- Capture factual statements
-- DO NOT wrap JSON in backticks or markdown
-- DO NOT add commentary outside JSON
+                            Rules:
+                            - Extract main themes and topics as sections
+                            - Identify key concepts and their definitions
+                            - List important entities (people, organizations, places)
+                            - Capture factual statements
+                            - DO NOT wrap JSON in backticks or markdown
+                            - DO NOT add commentary outside JSON
 
-Document content:
-{redacted_chunk}
-"""
+                            Document content:
+                            {redacted_chunk}
+                            """
                     else:
                         # Text-based analysis (legacy)
                         prompt = f"""
-Analyze this section of a large document.
+                        Analyze this section of a large document.
 
-Your goal is to capture the high-level picture, not granular details.
+                        Your goal is to capture the high-level picture, not granular details.
 
-Extract:
-- Main themes and topics covered in this section
-- Major concepts, arguments, or components
-- How this section fits into the likely overall document
-- Structural patterns (e.g., chapters, phases, modules, workflows)
+                        Extract:
+                        - Main themes and topics covered in this section
+                        - Major concepts, arguments, or components
+                        - How this section fits into the likely overall document
+                        - Structural patterns (e.g., chapters, phases, modules, workflows)
 
-Focus on clarity and breadth.  
-Do not dive into micro-details—this is just one piece of a much larger whole.
+                        Focus on clarity and breadth.  
+                        Do not dive into micro-details—this is just one piece of a much larger whole.
 
-Document content:
-{redacted_chunk}
-"""
-
-                
-                 # Scenario D: Small/Medium Document (2-4 chunks) - Specific facts
-                else:
-                    if MEMORY_TREE_ENABLED:
-                        # Return JSON for memory tree
-                        prompt = f"""
-Analyze this section of a document and extract structured knowledge.
-
-Return STRICT JSON with this shape:
-
-{{
-  "sections": [
-    {{
-      "title": string,
-      "summary": string,
-      "topics": [string]
-    }}
-  ],
-  "concepts": [
-    {{
-      "name": string,
-      "definition": string,
-      "category": string
-    }}
-  ],
-  "entities": [
-    {{
-      "name": string,
-      "type": string,
-      "summary": string
-    }}
-  ],
-  "facts": [
-    {{
-      "statement": string,
-      "category": string
-    }}
-  ]
-}}
-
-Rules:
-- Extract specific facts and key points
-- Identify important concepts with definitions
-- List entities (people, organizations, places, products)
-- Capture factual claims and decisions
-- Aim for high information density
-- DO NOT wrap JSON in backticks or markdown
-- DO NOT add commentary outside JSON
-
-Document content:
-{redacted_chunk}
-"""
-                    else:
-                        # Text-based analysis (legacy)
-                        prompt = f"""
-Analyze this section of the document.
-First, infer the overall context and type of the document.
-Then, extract specific facts, key points, and important details relevant to that context.
-Since this is a relatively short document, aim for high density of information.
-Capture specific instructions, decisions, or factual claims made in this text.
-
-Document content:
-{redacted_chunk}
-Provide your comprehensive analysis below:"""
-
-
+                        Document content:
+                        {redacted_chunk}
+                        """
 
                 # Build messages array
                 messages = [
