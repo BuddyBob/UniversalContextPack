@@ -2051,11 +2051,12 @@ Document content:
 {redacted_chunk}
 """
                 # Scenario B: Conversations File - Text output for tree building
-                elif "conversations" in filename.lower() or filename.lower().endswith('.json'):
+                elif "conversations" in filename.lower():
                     prompt = f"""
 Analyze this conversation segment and extract only persistent, high-level information about the user.
 
 Focus on information that remains true across time, such as:
+- Who is the user? Most often these are project managers, adults, team members, writers, professors, etc.
 - User background (roles, interests, skills, identity, general profile)
 - Long-term goals, ongoing activities, or recurring topics
 - Preferences, habits, constraints, or stable patterns of behavior
@@ -2154,47 +2155,6 @@ Conversation content:
                 if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
                     raise Exception(f"Content policy refusal: OpenAI declined to analyze this content. This may occur with documents containing sensitive personal information.")
                 
-                # NEW: Parse JSON and apply to memory tree (if enabled)
-                print(f"🔍 [DEBUG] Memory Tree Status: ENABLED={MEMORY_TREE_ENABLED}, AVAILABLE={MEMORY_TREE_AVAILABLE}")
-                if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
-                    print(f"🌳 [TREE] Attempting to parse and apply chunk {idx+1} to memory tree (scope: {scope})")
-                    try:
-                        # Clean potential markdown wrapping
-                        cleaned = analysis.strip()
-                        if cleaned.startswith("```json"):
-                            cleaned = cleaned[7:]
-                        if cleaned.startswith("```"):
-                            cleaned = cleaned[3:]
-                        if cleaned.endswith("```"):
-                            cleaned = cleaned[:-3]
-                        cleaned = cleaned.strip()
-                        
-                        # Try to parse as JSON
-                        structured = json.loads(cleaned)
-                        
-                        # Apply to tree
-                        from memory_tree import apply_chunk_to_memory_tree
-                        apply_chunk_to_memory_tree(
-                            structured_facts=structured,
-                            scope=scope,
-                            user=user,
-                            pack_id=pack_id,
-                            source_id=source_id,
-                            chunk_index=idx
-                        )
-                        print(f"✅ [TREE] Successfully applied chunk {idx+1} to memory tree")
-                        
-                    except json.JSONDecodeError as e:
-                        print(f"⚠️ [TREE] Failed to parse JSON from chunk {idx}: {e}")
-                        # Continue with text-only storage
-                    except Exception as e:
-                        print(f"❌ [TREE] Failed to apply to tree for chunk {idx}: {e}")
-                        import traceback
-                        print(f"   Traceback: {traceback.format_exc()}")
-                        # Continue with text-only storage
-                else:
-                    print(f"⚠️ [TREE] Memory tree is disabled or unavailable, skipping tree population")
-                
                 # Track tokens and cost
                 input_tokens = response.usage.prompt_tokens
                 output_tokens = response.usage.completion_tokens
@@ -2204,129 +2164,20 @@ Conversation content:
                 
                 print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed: {output_tokens} tokens out, {input_tokens} tokens in")
                 
-                # Convert JSON to human-readable text for pack download (if memory tree is enabled)
-                display_analysis = analysis
-                if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
-                    try:
-                        # Try to parse as JSON and convert to readable format
-                        cleaned = analysis.strip()
-                        if cleaned.startswith("```json"):
-                            cleaned = cleaned[7:]
-                        if cleaned.startswith("```"):
-                            cleaned = cleaned[3:]
-                        if cleaned.endswith("```"):
-                            cleaned = cleaned[:-3]
-                        cleaned = cleaned.strip()
-                        
-                        parsed_json = json.loads(cleaned)
-                        
-                        # Convert JSON to human-readable format
-                        readable_parts = []
-                        
-                        # Handle different JSON structures based on scope
-                        if "sections" in parsed_json and parsed_json["sections"]:
-                            readable_parts.append("## Key Sections")
-                            for section in parsed_json["sections"]:
-                                readable_parts.append(f"\n### {section.get('title', 'Untitled')}")
-                                if section.get('summary'):
-                                    readable_parts.append(section['summary'])
-                                if section.get('topics'):
-                                    readable_parts.append(f"Topics: {', '.join(section['topics'])}")
-                        
-                        if "concepts" in parsed_json and parsed_json["concepts"]:
-                            readable_parts.append("\n## Key Concepts")
-                            for concept in parsed_json["concepts"]:
-                                name = concept.get('name', 'Unknown')
-                                definition = concept.get('definition', '')
-                                category = concept.get('category', '')
-                                readable_parts.append(f"\n**{name}**{f' ({category})' if category else ''}: {definition}")
-                        
-                        if "entities" in parsed_json and parsed_json["entities"]:
-                            readable_parts.append("\n## Entities")
-                            for entity in parsed_json["entities"]:
-                                name = entity.get('name', 'Unknown')
-                                entity_type = entity.get('type', '')
-                                summary = entity.get('summary', '')
-                                readable_parts.append(f"\n- **{name}**{f' ({entity_type})' if entity_type else ''}: {summary}")
-                        
-                        if "facts" in parsed_json and parsed_json["facts"]:
-                            readable_parts.append("\n## Key Facts")
-                            for fact in parsed_json["facts"]:
-                                if isinstance(fact, dict):
-                                    statement = fact.get('statement', str(fact))
-                                    category = fact.get('category', '')
-                                    readable_parts.append(f"- {statement}{f' [{category}]' if category else ''}")
-                                else:
-                                    readable_parts.append(f"- {fact}")
-                        
-                        # Handle user profile structure
-                        if "identity" in parsed_json:
-                            identity = parsed_json["identity"]
-                            if identity.get('name') or identity.get('roles') or identity.get('background'):
-                                readable_parts.append("## Identity")
-                                if identity.get('name'):
-                                    readable_parts.append(f"Name: {identity['name']}")
-                                if identity.get('roles'):
-                                    readable_parts.append(f"Roles: {', '.join(identity['roles'])}")
-                                if identity.get('background'):
-                                    readable_parts.append(f"Background: {', '.join(identity['background'])}")
-                        
-                        if "preferences" in parsed_json and parsed_json["preferences"]:
-                            readable_parts.append("\n## Preferences")
-                            for pref in parsed_json["preferences"]:
-                                readable_parts.append(f"- {pref}")
-                        
-                        if "projects" in parsed_json and parsed_json["projects"]:
-                            readable_parts.append("\n## Projects")
-                            for project in parsed_json["projects"]:
-                                name = project.get('name', 'Unnamed Project')
-                                desc = project.get('description', '')
-                                status = project.get('status', '')
-                                readable_parts.append(f"\n**{name}**{f' ({status})' if status else ''}")
-                                if desc:
-                                    readable_parts.append(desc)
-                        
-                        if "skills" in parsed_json and parsed_json["skills"]:
-                            readable_parts.append("\n## Skills")
-                            readable_parts.append(", ".join(parsed_json["skills"]))
-                        
-                        if "goals" in parsed_json and parsed_json["goals"]:
-                            readable_parts.append("\n## Goals")
-                            for goal in parsed_json["goals"]:
-                                readable_parts.append(f"- {goal}")
-                        
-                        if "constraints" in parsed_json and parsed_json["constraints"]:
-                            readable_parts.append("\n## Constraints")
-                            for constraint in parsed_json["constraints"]:
-                                readable_parts.append(f"- {constraint}")
-                        
-                        # If we successfully converted, use the readable version
-                        if readable_parts:
-                            display_analysis = "\n".join(readable_parts)
-                            print(f"📝 [TREE] Converted JSON to readable format ({len(display_analysis)} chars)")
-                        else:
-                            # Fallback: keep original if no content was extracted
-                            print(f"⚠️ [TREE] JSON parsed but no content extracted, using original")
-                    
-                    except (json.JSONDecodeError, KeyError, TypeError) as e:
-                        # If JSON parsing fails, use original analysis text
-                        print(f"⚠️ [TREE] Could not convert to readable format: {e}, using original")
-                        pass
-                
                 # Append this chunk's analysis to files
                 chunk_sep = f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
                 
-                # Append to pack file (use display_analysis which is human-readable)
+                # Append to pack file
                 if idx == 0:
                     # First chunk - add source header
-                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + display_analysis)
+                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis)
                 else:
                     current = download_from_r2(pack_analyzed_path) or ""
-                    upload_to_r2(pack_analyzed_path, current + chunk_sep + display_analysis)
+                    upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis)
                 
-                # Append to individual source file (also use display_analysis)
+                # Append to individual source file
                 current_source = download_from_r2(analyzed_path, silent_404=True) or ""
-                upload_to_r2(analyzed_path, current_source + chunk_sep + display_analysis)
+                upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
                 
                 
                 # Update progress with chunk count (more reliable than percentage for large files)
@@ -2612,17 +2463,44 @@ Analysis text:
 """
         else:  # user_profile scope
             tree_prompt = f"""
-You are turning a conversation analysis into a structured "memory tree" representation.
+You are an intelligent extraction system analyzing conversation history to build a memory tree about THE USER.
 
-The input is a human-readable analysis of conversations. Extract persistent information about the USER:
+YOUR TASK: Figure out who THE USER is, then extract persistent information about them.
 
-- identity: name, roles, background facts
-- preferences: lasting preferences and constraints
-- projects: ongoing projects and efforts
-- skills: technical skills and expertise
-- goals: stated goals or aspirations
-- constraints: limitations or requirements
-- facts: other persistent facts about the user
+STEP 1 - IDENTIFY THE USER:
+The USER is the person who OWNS these conversations (the conversation participant, not people they mention).
+
+Clues to identify THE USER:
+- First-person statements: "I am...", "I work on...", "my project...", "I'm interested in..."
+- Consistent patterns across conversation chunks
+- The person HAVING the conversations (not people being discussed)
+- Context: If they're helping someone, the helper is the user, not the person being helped
+
+STEP 2 - UNDERSTAND THE USER'S CONTEXT:
+What kind of person is the user? Examples:
+- Developer working on projects → Extract: projects, tech stack, goals
+- Writer creating content → Extract: writing projects, themes, creative work
+- Student learning → Extract: subjects, courses, learning goals
+- Professional → Extract: role, industry, work patterns
+- Researcher → Extract: research topics, methodologies, findings
+
+STEP 3 - EXTRACT INTELLIGENTLY:
+Based on who the user is and what matters to them, extract:
+
+- **identity**: User's name (if stated), roles, background that defines them
+- **preferences**: Lasting preferences, constraints, or patterns
+- **projects**: Ongoing work, creative projects, or efforts (adapt to user type)
+- **skills**: Technical skills, expertise, or capabilities
+- **goals**: Stated goals, aspirations, or objectives
+- **constraints**: Limitations, requirements, or boundaries
+- **facts**: Other persistent facts relevant to this user
+
+IMPORTANT PRINCIPLES:
+BE ADAPTIVE: A writer's "projects" are essays/books, a developer's are codebases
+USE CONTEXT: If user discusses their essay, include it. If they paste someone else's essay, don't.
+LOOK FOR PATTERNS: Information appearing across multiple chunks is likely about the user
+FIRST-PERSON FOCUS: Prioritize "I/my/me" statements over third-party content
+BE RELEVANT: Extract what matters to THIS specific user, not generic categories
 
 Return STRICT JSON:
 
@@ -2647,11 +2525,12 @@ Return STRICT JSON:
 }}
 
 Rules:
-- Only include persistent, long-term information.
-- Ignore temporary or one-off details.
-- Do NOT add commentary.
-- Do NOT wrap in backticks.
-- Return ONLY valid JSON.
+- Figure out who the user is first, then extract accordingly
+- Be adaptive to the user's context (writer, developer, student, etc.)
+- Focus on first-person statements and consistent patterns
+- Do NOT add commentary
+- Do NOT wrap in backticks
+- Return ONLY valid JSON
 
 Analysis text:
 {text}
@@ -4714,7 +4593,8 @@ async def download_pack_export_v2(
         # Combine all analyzed content from sources
         combined_content = []
         for source in sources:
-            if source["status"] == "completed":
+            # Include completed sources AND sources currently building tree (text analysis is done)
+            if source["status"] in ["completed", "building_tree"]:
                 # Download analyzed content from R2
                 analyzed_path = source.get("r2_analyzed_path")
                 if not analyzed_path:
