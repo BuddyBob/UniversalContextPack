@@ -3162,7 +3162,7 @@ export default function ProcessPage() {
                       </div>
                       <h3 className="text-lg font-semibold text-white mb-2">Upload sources</h3>
                       <p className="text-sm text-gray-400 mb-4">
-                        Choose an option to add sources to your pack for analysis. <br /> Migrate between AI's, keep your AI's memory fresh, build a memory system for yourself.
+                        Migrate between AIs. Keep your AI’s memory fresh. Build a personal memory system.
                       </p>
                     </div>
 

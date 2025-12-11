@@ -121,12 +121,35 @@ const ExportGuide = () => {
 
               <h1 className="text-4xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
                 AI Chats Forget<br />
-                Context Packs Remember
+                We Remember
               </h1>
 
-              <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                Migrate or Backup Your AI Memory
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-6 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                A personalized memory system for your AI.
               </p>
+
+              {/* Trust badges - minimal */}
+              <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 max-w-2xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Migrate AI Chats</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Upload Chat Exports</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Long-term Memory</span>
+                </div>
+              </div>
+
               {/*If the user is not signed in, send them to /results/sample-1 (demo), if they are signed in send them to /packs */}
               <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
                 <a href={user ? "/packs" : "/results/sample-1"} className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl">

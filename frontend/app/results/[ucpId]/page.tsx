@@ -116,12 +116,12 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
 
   const handleDownloadPack = () => {
     setIsDownloading(true)
-    
+
     // Generate pack content based on pack type
     const totalChunks = demoData.sources.reduce((sum: number, s: any) => sum + s.total_chunks, 0)
-    
+
     let packContent = ''
-    
+
     if (params.ucpId === 'sample-1') {
       packContent = `POLAR BEAR RESEARCH - CONTEXT PACK
 Generated: ${new Date().toLocaleDateString()}
@@ -642,7 +642,7 @@ END OF CONTEXT PACK`
     a.click()
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
-    
+
     setIsDownloading(false)
   }
 
@@ -674,7 +674,7 @@ END OF CONTEXT PACK`
           {demoData.description && (
             <p className="text-xs text-gray-500">{demoData.description}</p>
           )}
-          
+
         </div>
 
         {/* Sources Header */}
@@ -742,127 +742,127 @@ END OF CONTEXT PACK`
               </button>
             </div>
 
-              {/* Upload Area */}
-              <div className="bg-gray-900/80 border-2 border-gray-600 hover:border-gray-500 rounded-2xl p-10 text-center transition-all duration-300 hover:bg-gray-900/90 mb-6">
-                <div className="w-20 h-20 rounded-xl bg-gray-700 flex items-center justify-center mx-auto mb-8">
-                  <Upload className="h-10 w-10 text-gray-300" />
-                </div>
-
-                <h3 className="text-xl font-medium text-white mb-4">Upload sources</h3>
-
-                <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto leading-relaxed">
-                  Choose an option to add sources to your pack for analysis. <br /> Large files will be processed and emailed when done.
-                </p>
-
-                <p className="text-xs text-gray-500 flex items-center justify-center gap-1 mt-2">
-                  <Lock className="h-3 w-3" />
-                  Sign in to upload sources
-                </p>
+            {/* Upload Area */}
+            <div className="bg-gray-900/80 border-2 border-gray-600 hover:border-gray-500 rounded-2xl p-10 text-center transition-all duration-300 hover:bg-gray-900/90 mb-6">
+              <div className="w-20 h-20 rounded-xl bg-gray-700 flex items-center justify-center mx-auto mb-8">
+                <Upload className="h-10 w-10 text-gray-300" />
               </div>
 
-              {/* Source Type Options */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60 relative">
-                  <button
-                    onClick={() => setShowChatGPTInfo(!showChatGPTInfo)}
-                    className="absolute top-4 right-4 p-1 hover:bg-gray-700 rounded-full transition-colors"
-                  >
-                    <Info className="h-4 w-4 text-gray-400 hover:text-gray-300" />
-                  </button>
-                  
-                  {showChatGPTInfo && (
-                    <div className="absolute top-12 right-4 z-10 w-72 bg-gray-900 border border-gray-700 rounded-lg p-4 shadow-xl">
-                      <button
-                        onClick={() => setShowChatGPTInfo(false)}
-                        className="absolute top-2 right-2 text-gray-500 hover:text-gray-300"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                      <h5 className="text-sm font-semibold text-white mb-2">Migrate Your AI Conversations</h5>
-                      <p className="text-xs text-gray-400 leading-relaxed">
-                        Use this to export all your ChatGPT conversations and migrate them to other AI platforms like Claude or Gemini. 
-                        Simply download your conversations.json from ChatGPT, upload it here, and get a clean context pack you can share with any AI assistant.
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
-                    <MessageSquare className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <h4 className="text-base font-semibold text-white mb-2">All ChatGPT Chats</h4>
-                  <p className="text-sm text-gray-400 mb-2">conversations.json</p>
-                  <a href="#" className="text-xs text-blue-400 hover:text-blue-300">How to download →</a>
-                </div>
+              <h3 className="text-xl font-medium text-white mb-4">Upload sources</h3>
 
-                <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60">
-                  <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
-                    <FileText className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <h4 className="text-base font-semibold text-white mb-2">One Chat</h4>
-                  <p className="text-sm text-gray-400">Import single conversation URL</p>
-                </div>
+              <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto leading-relaxed">
+                Migrate between AIs. Keep your AI’s memory fresh. Build a personal memory system.
+              </p>
 
-                <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60">
-                  <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
-                    <FileText className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <h4 className="text-base font-semibold text-white mb-2">Document</h4>
-                  <p className="text-sm text-gray-400">PDF, TXT, HTML, CSV</p>
-                </div>
-
-                <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60">
-                  <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
-                    <FileText className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <h4 className="text-base font-semibold text-white mb-2">Paste Text</h4>
-                  <p className="text-sm text-gray-400">Direct text input</p>
-                </div>
-              </div>
+              <p className="text-xs text-gray-500 flex items-center justify-center gap-1 mt-2">
+                <Lock className="h-3 w-3" />
+                Sign in to upload sources
+              </p>
             </div>
-          </div>
-        </div>
 
-        {/* Right Sidebar - Actions Panel */}
-        <div className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col">
-          <div className="p-4 border-b border-gray-800">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pack Actions</h3>
-          </div>
+            {/* Source Type Options */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60 relative">
+                <button
+                  onClick={() => setShowChatGPTInfo(!showChatGPTInfo)}
+                  className="absolute top-4 right-4 p-1 hover:bg-gray-700 rounded-full transition-colors"
+                >
+                  <Info className="h-4 w-4 text-gray-400 hover:text-gray-300" />
+                </button>
 
-          <div className="flex-1 p-4 space-y-4">
-            {/* Download Options */}
-            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <FolderOpen className="h-6 w-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-md text-white">{demoData.pack_name}</p>
-                </div>
-              </div>
-
-              <button
-                onClick={handleDownloadPack}
-                disabled={isDownloading}
-                className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${!isDownloading
-                  ? 'after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-gradient-to-r after:from-transparent after:via-green-400 after:to-transparent after:animate-shimmer-slide'
-                  : ''
-                  }`}
-              >
-                {isDownloading ? (
-                  <>
-                    <Loader className="h-4 w-4 animate-spin" />
-                    <span>Downloading...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4" />
-                    <span>Download Pack</span>
-                  </>
+                {showChatGPTInfo && (
+                  <div className="absolute top-12 right-4 z-10 w-72 bg-gray-900 border border-gray-700 rounded-lg p-4 shadow-xl">
+                    <button
+                      onClick={() => setShowChatGPTInfo(false)}
+                      className="absolute top-2 right-2 text-gray-500 hover:text-gray-300"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    <h5 className="text-sm font-semibold text-white mb-2">Migrate Your AI Conversations</h5>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Use this to export all your ChatGPT conversations and migrate them to other AI platforms like Claude or Gemini.
+                      Simply download your conversations.json from ChatGPT, upload it here, and get a clean context pack you can share with any AI assistant.
+                    </p>
+                  </div>
                 )}
-              </button>
+
+                <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
+                  <MessageSquare className="h-6 w-6 text-gray-400" />
+                </div>
+                <h4 className="text-base font-semibold text-white mb-2">All ChatGPT Chats</h4>
+                <p className="text-sm text-gray-400 mb-2">conversations.json</p>
+                <a href="#" className="text-xs text-blue-400 hover:text-blue-300">How to download →</a>
+              </div>
+
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60">
+                <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
+                  <FileText className="h-6 w-6 text-gray-400" />
+                </div>
+                <h4 className="text-base font-semibold text-white mb-2">One Chat</h4>
+                <p className="text-sm text-gray-400">Import single conversation URL</p>
+              </div>
+
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60">
+                <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
+                  <FileText className="h-6 w-6 text-gray-400" />
+                </div>
+                <h4 className="text-base font-semibold text-white mb-2">Document</h4>
+                <p className="text-sm text-gray-400">PDF, TXT, HTML, CSV</p>
+              </div>
+
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60">
+                <div className="w-12 h-12 rounded-lg bg-gray-700 flex items-center justify-center mb-4">
+                  <FileText className="h-6 w-6 text-gray-400" />
+                </div>
+                <h4 className="text-base font-semibold text-white mb-2">Paste Text</h4>
+                <p className="text-sm text-gray-400">Direct text input</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>  
+      </div>
+
+      {/* Right Sidebar - Actions Panel */}
+      <div className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col">
+        <div className="p-4 border-b border-gray-800">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Pack Actions</h3>
+        </div>
+
+        <div className="flex-1 p-4 space-y-4">
+          {/* Download Options */}
+          <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                <FolderOpen className="h-6 w-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-md text-white">{demoData.pack_name}</p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleDownloadPack}
+              disabled={isDownloading}
+              className={`w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden ${!isDownloading
+                ? 'after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-gradient-to-r after:from-transparent after:via-green-400 after:to-transparent after:animate-shimmer-slide'
+                : ''
+                }`}
+            >
+              {isDownloading ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  <span>Downloading...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  <span>Download Pack</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
