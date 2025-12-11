@@ -2082,73 +2082,47 @@ Conversation content:
                 
                 # Scenario C: Large Document (5+ chunks) - Broad analysis
                 elif len(chunks) >= 5:
-                    if MEMORY_TREE_ENABLED:
-                        # Return JSON for memory tree
-                        prompt = f"""
-                        Analyze this section of a large document and extract structured knowledge.
+                    # Text-based analysis (legacy)
+                    prompt = f"""
+                    Analyze this section of a large document.
 
-                        Return STRICT JSON with this shape:
+                    Your goal is to capture the high-level picture, not granular details.
 
-                        {{
-                        "sections": [
-                            {{
-                            "title": string,
-                            "summary": string,
-                            "topics": [string]
-                            }}
-                        ],
-                        "concepts": [
-                            {{
-                            "name": string,
-                            "definition": string,
-                            "category": string
-                            }}
-                        ],
-                        "entities": [
-                            {{
-                            "name": string,
-                                "type": string,
-                            "summary": string
-                            }}
-                        ],
-                        "facts": [
-                            {{
-                            "statement": string,
-                            "category": string
-                            }}
-                        ]
-                        }}
+                    Extract:
+                    - Main themes and topics covered in this section
+                    - Major concepts, arguments, or components
+                    - How this section fits into the likely overall document
+                    - Structural patterns (e.g., chapters, phases, modules, workflows)
 
-                            Rules:
-                            - Extract main themes and topics as sections
-                            - Identify key concepts and their definitions
-                            - List important entities (people, organizations, places)
-                            - Capture factual statements
-                            - DO NOT wrap JSON in backticks or markdown
-                            - DO NOT add commentary outside JSON
+                    Focus on clarity and breadth.  
+                    Do not dive into micro-details—this is just one piece of a much larger whole.
 
-                            Document content:
-                            {redacted_chunk}
-                            """
-                    else:
-                        # Text-based analysis (legacy)
-                        prompt = f"""
-                        Analyze this section of a large document.
+                    Document content:
+                    {redacted_chunk}
+                    """
 
-                        Your goal is to capture the high-level picture, not granular details.
+                else:
+                    # Text-based analysis (legacy)
+                    prompt = f"""
+                    Analyze this document section with high precision. 
+                    This is a small document, so details matter.
 
-                        Extract:
-                        - Main themes and topics covered in this section
-                        - Major concepts, arguments, or components
-                        - How this section fits into the likely overall document
-                        - Structural patterns (e.g., chapters, phases, modules, workflows)
+                    First figure out what this document could be about. Why would a user be interested in storing this document?
+                    
+                    Based on that reasoning extract information that would be relevent to that
+                    Extract all key factual information:
+                    - Important claims, data points, definitions, and steps
+                    - Specific arguments or evidence presented
+                    - Entities, roles, timelines, processes, or instructions
+                    - Any meaningful detail that contributes to understanding
 
-                        Focus on clarity and breadth.  
-                        Do not dive into micro-details—this is just one piece of a much larger whole.
+                    Do NOT summarize.
+                    Do NOT generalize.
+                    Preserve nuance and specificity.
 
-                        Document content:
-                        {redacted_chunk}
-                        """
+                    Document content:
+                    {redacted_chunk}
+                    """
 
                 # Build messages array
                 messages = [
