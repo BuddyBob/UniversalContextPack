@@ -774,18 +774,9 @@ export default function TreeViewerPage() {
 
                                     {/* Node Label */}
                                     {isEditing ? (
-                                        <input
-                                            type="text"
-                                            value={editedLabel}
-                                            onChange={(e) => setEditedLabel(e.target.value)}
-                                            className="w-full text-xl font-semibold bg-white/5 border border-white/20 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-white/30"
-                                            placeholder="Node label"
-                                        />
+                                        <input type="text" value={editedLabel} onChange={(e) => setEditedLabel(e.target.value)} className="w-full text-xl font-semibold bg-white/5 border border-white/20 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-white/30" placeholder="Node label" />
                                     ) : (
-                                        <h3
-                                            className="text-xl font-semibold leading-tight cursor-pointer hover:text-gray-300 transition-colors break-words"
-                                            title="Double-click to edit"
-                                            onDoubleClick={startEditing}
+                                        <h3 className="text-xl font-semibold leading-tight cursor-pointer hover:text-gray-300 transition-colors break-words" title="Double-click to edit" onDoubleClick={startEditing}
                                         >
                                             {selectedNode.label || 'Untitled'}
                                         </h3>
