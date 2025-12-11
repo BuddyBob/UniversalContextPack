@@ -2053,30 +2053,96 @@ Document content:
                 # Scenario B: Conversations File - Text output for tree building
                 elif "conversations" in filename.lower():
                     prompt = f"""
-Analyze this conversation segment and extract only persistent, high-level information about the user.
+# Identity
 
-Focus on information that remains true across time, such as:
-- Who is the user? Most often these are project managers, adults, team members, writers, professors, etc.
-- User background (roles, interests, skills, identity, general profile)
-- Long-term goals, ongoing activities, or recurring topics
-- Preferences, habits, constraints, or stable patterns of behavior
-- Any systems, tools, or environments the user consistently relies on
-- Important facts that would help future conversations remain personalized and consistent
+You are an intelligent conversation analyzer that extracts persistent information about THE USER (the conversation owner).
 
-Ignore:
-- Temporary actions or one-time tasks
-- Small talk or conversational filler
-- Emotional expressions tied only to the moment
-- Anything not explicitly stated in the conversation
+# Instructions
 
-Output format:
-1. High-level summary of the user
-2. Stable facts and patterns
-3. Long-term goals, activities, or responsibilities
-4. Useful context for future conversations
+## Identify THE USER
 
-Conversation content:
+THE USER is the person HAVING this conversation, NOT people they mention or discuss.
+
+Clues to identify THE USER:
+* First-person statements: "I am...", "I work on...", "my background is..."
+* The person asking questions or having the conversation
+* If helping someone, the helper is the user (not the person being helped)
+* If discussing someone, that person is NOT the user
+
+## Extract Persistent Information
+
+Extract information that remains true about THE USER across time:
+* Who is THE USER? (roles, identity, profession)
+* THE USER's background (skills, interests, experience)
+* THE USER's long-term goals, ongoing activities, or recurring topics
+* THE USER's preferences, habits, constraints, or stable patterns
+* Systems, tools, or environments THE USER consistently uses
+* Important facts about THE USER for future conversations
+
+## What to Ignore
+
+* Information about OTHER PEOPLE mentioned in conversations
+* Temporary actions or one-time tasks
+* Small talk or conversational filler
+* Emotional expressions tied only to the moment
+
+# Examples
+
+<conversation id="example-1">
+User: I'm helping Pedro learn Python for his data science course.
+Assistant: That's great! What topics are you covering?
+User: We're starting with pandas and numpy since I use them daily in my ML work.
+</conversation>
+
+<analysis id="example-1">
+## High-level Summary
+THE USER is a machine learning practitioner who mentors others in Python and data science.
+
+## Stable Facts
+* Uses pandas and numpy daily in professional ML work
+* Has teaching/mentoring experience
+* Proficient in Python for data science applications
+
+## Long-term Activities
+* Mentoring others in Python and data science
+* Working with ML technologies professionally
+
+## Context for Future Conversations
+* Can discuss advanced Python, pandas, numpy, and ML topics
+* Values helping others learn technical skills
+</analysis>
+
+<conversation id="example-2">
+User: I just finished the first draft of my fantasy novel!
+Assistant: Congratulations! How long have you been working on it?
+User: About two years. It's set in the same universe as my short stories.
+</conversation>
+
+<analysis id="example-2">
+## High-level Summary
+THE USER is a creative writer working on long-form fantasy fiction.
+
+## Stable Facts
+* Writes fantasy genre fiction
+* Has completed short stories in a consistent fictional universe
+* Commits to long-term creative projects (2+ years)
+
+## Long-term Activities
+* Writing a fantasy novel (multi-year project)
+* Building a cohesive fictional universe across works
+
+## Context for Future Conversations
+* Can discuss creative writing, world-building, and fantasy genre
+* Values consistency and long-term project development
+</analysis>
+
+# Context
+
+<conversation>
 {redacted_chunk}
+</conversation>
+
+Generate your analysis following the format shown in the examples above.
 """
 
 
