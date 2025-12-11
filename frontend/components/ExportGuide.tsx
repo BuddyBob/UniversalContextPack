@@ -229,8 +229,8 @@ const ExportGuide = () => {
               <div className="text-center md:text-left">
                 <ScrollReveal>
                   <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
-                    Your AI Memories <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 animate-text-shimmer bg-[length:200%_auto]">Fade Away.</span>
+                    Keep Your Memories <br />
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 animate-text-shimmer bg-[length:200%_auto]">Permanent</span>
                   </h2>
                 </ScrollReveal>
 
@@ -253,7 +253,7 @@ const ExportGuide = () => {
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-white mb-1">The Solution</h3>
-                        <p className="text-gray-400">Context Pack manages your chats</p>
+                        <p className="text-gray-400">Context Pack creates the missing memory layer</p>
                       </div>
                     </div>
                   </div>

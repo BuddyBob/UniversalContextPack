@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/AuthProvider'
-import { FileText, ArrowLeft, FolderOpen, CheckCircle, Upload, MessageSquare, Lock, X, Download, Loader, Info } from 'lucide-react'
+import { FileText, ArrowLeft, FolderOpen, CheckCircle, Upload, MessageSquare, Lock, X, Download, Loader, Info, Network } from 'lucide-react'
 
 // Demo data for sample packs
 const DEMO_PACKS: Record<string, any> = {
@@ -860,6 +860,17 @@ END OF CONTEXT PACK`
                 </>
               )}
             </button>
+
+            {/* View Memory Tree Button - Only for sample-1 */}
+            {params.ucpId === 'sample-1' && (
+              <button
+                onClick={() => router.push('/tree/sample-1')}
+                className="w-full px-4 py-3 bg-emerald-700/60 hover:bg-emerald-600/60 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 mt-3 shadow-lg"
+              >
+                <Network className="h-4 w-4" />
+                <span>View Memory Tree</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

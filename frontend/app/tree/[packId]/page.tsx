@@ -47,7 +47,11 @@ const nodeIcons: Record<string, any> = {
     Identity: User,
     Preference: Star,
     Project: Folder,
-    Skill: Zap
+    Skill: Zap,
+    Section: Folder,
+    Entity: User,
+    Concept: Star,
+    Event: Target
 };
 
 const nodeColors: Record<string, string> = {
@@ -57,7 +61,330 @@ const nodeColors: Record<string, string> = {
     Identity: 'text-purple-400',
     Preference: 'text-pink-400',
     Project: 'text-orange-400',
-    Skill: 'text-cyan-400'
+    Skill: 'text-cyan-400',
+    Section: 'text-indigo-400',
+    Entity: 'text-emerald-400',
+    Concept: 'text-violet-400',
+    Event: 'text-amber-400'
+};
+
+// Demo tree data for sample-1 (Polar Bear Research)
+const DEMO_TREE_DATA: TreeData = {
+    pack_id: 'sample-1',
+    pack_name: 'Polar Bear Research',
+    tree_available: true,
+    total_nodes: 24,
+    scopes: {
+        'knowledge:polar_bear_research': {
+            'Section': [
+                {
+                    id: 'demo-section-1',
+                    label: 'Arctic Field Observations',
+                    node_type: 'Section',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        title: 'Arctic Field Observations',
+                        summary: 'Field observations from Svalbard archipelago documenting polar bear behavior, denning patterns, and body condition assessments during March 2024 research expedition.',
+                        key_findings: ['Temperature 3-4°C above historical averages', 'Maternal dens closer to coastline', 'Body condition scores below optimal']
+                    },
+                    created_at: '2024-03-15T10:00:00Z',
+                    updated_at: '2024-03-20T15:30:00Z',
+                    evidence_count: 12
+                },
+                {
+                    id: 'demo-section-2',
+                    label: 'Climate Impact Analysis',
+                    node_type: 'Section',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        title: 'Climate Impact Analysis',
+                        summary: 'Comprehensive analysis of sea ice extent, temperature anomalies, and precipitation patterns showing accelerating Arctic warming trends.',
+                        key_findings: ['13% sea ice decline per decade', 'Multi-year ice collapse', 'Ice-free Arctic projected by 2050']
+                    },
+                    created_at: '2024-03-10T09:00:00Z',
+                    updated_at: '2024-03-18T14:20:00Z',
+                    evidence_count: 8
+                },
+                {
+                    id: 'demo-section-3',
+                    label: 'Population Dynamics',
+                    node_type: 'Section',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        title: 'Population Dynamics',
+                        summary: 'Population assessment revealing 15% decline in Svalbard population with concerning trends in reproductive rates and survival metrics.',
+                        key_findings: ['264 individuals (down from 310)', 'Reduced cub survival rates', '40% probability of 50% decline in 35 years']
+                    },
+                    created_at: '2024-03-12T11:00:00Z',
+                    updated_at: '2024-03-22T16:45:00Z',
+                    evidence_count: 15
+                }
+            ],
+            'Entity': [
+                {
+                    id: 'demo-entity-1',
+                    label: 'Polar Bear (Ursus maritimus)',
+                    node_type: 'Entity',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        name: 'Polar Bear',
+                        scientific_name: 'Ursus maritimus',
+                        description: 'Ice-dependent apex predator of the Arctic, primary subject of this research study.',
+                        conservation_status: 'Vulnerable',
+                        population_trend: 'Declining'
+                    },
+                    created_at: '2024-03-08T08:00:00Z',
+                    updated_at: '2024-03-25T10:15:00Z',
+                    evidence_count: 41
+                },
+                {
+                    id: 'demo-entity-2',
+                    label: 'Ringed Seal',
+                    node_type: 'Entity',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        name: 'Ringed Seal',
+                        description: 'Primary prey species for polar bears, showing northward distribution shift.',
+                        relationship: 'Primary prey of polar bears',
+                        status: 'Population stable but shifting distribution'
+                    },
+                    created_at: '2024-03-09T09:30:00Z',
+                    updated_at: '2024-03-19T11:20:00Z',
+                    evidence_count: 6
+                },
+                {
+                    id: 'demo-entity-3',
+                    label: 'Svalbard Archipelago',
+                    node_type: 'Entity',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        name: 'Svalbard Archipelago',
+                        type: 'Geographic Location',
+                        description: 'Arctic archipelago and primary study site for polar bear population research.',
+                        coordinates: '78°N 20°E',
+                        significance: 'Critical polar bear habitat experiencing rapid climate change'
+                    },
+                    created_at: '2024-03-07T07:00:00Z',
+                    updated_at: '2024-03-20T09:30:00Z',
+                    evidence_count: 18
+                },
+                {
+                    id: 'demo-entity-4',
+                    label: 'Sea Ice',
+                    node_type: 'Entity',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        name: 'Sea Ice',
+                        description: 'Critical habitat platform for polar bear hunting and movement.',
+                        current_status: 'Declining extent and thickness',
+                        importance: 'Essential for polar bear survival and hunting success'
+                    },
+                    created_at: '2024-03-08T10:00:00Z',
+                    updated_at: '2024-03-21T13:40:00Z',
+                    evidence_count: 22
+                }
+            ],
+            'Concept': [
+                {
+                    id: 'demo-concept-1',
+                    label: 'Arctic Amplification',
+                    node_type: 'Concept',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        name: 'Arctic Amplification',
+                        definition: 'Phenomenon where polar regions warm faster than the global average, currently showing +2.3°C above baseline.',
+                        significance: 'Drives accelerated sea ice loss and habitat degradation',
+                        evidence: 'Land areas showing +3.1°C increase vs +2.3°C regional average'
+                    },
+                    created_at: '2024-03-11T12:00:00Z',
+                    updated_at: '2024-03-19T15:20:00Z',
+                    evidence_count: 5
+                },
+                {
+                    id: 'demo-concept-2',
+                    label: 'Multi-year Ice',
+                    node_type: 'Concept',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        name: 'Multi-year Ice',
+                        definition: 'Sea ice that has survived at least one summer melt season, providing critical hunting platforms.',
+                        current_status: 'Virtual collapse - now only 30% vs 60% in 1980s',
+                        impact: 'Loss of stable hunting platforms reduces foraging success'
+                    },
+                    created_at: '2024-03-10T11:30:00Z',
+                    updated_at: '2024-03-18T14:50:00Z',
+                    evidence_count: 4
+                },
+                {
+                    id: 'demo-concept-3',
+                    label: 'Body Condition Index',
+                    node_type: 'Concept',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        name: 'Body Condition Index',
+                        definition: 'Metric for assessing polar bear health and nutritional status on a 5-point scale.',
+                        correlation: '-0.72 correlation with ice-free days (p<0.001)',
+                        current_findings: '60% of bears rated 3/5 or below'
+                    },
+                    created_at: '2024-03-13T13:00:00Z',
+                    updated_at: '2024-03-21T16:30:00Z',
+                    evidence_count: 7
+                }
+            ],
+            'Fact': [
+                {
+                    id: 'demo-fact-1',
+                    label: 'Sea ice extent at second-lowest on record',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: 'September 2024 sea ice extent reached 4.2 million km², second-lowest on record after 2012.',
+                        category: 'Climate Data',
+                        source: 'Climate Data Analysis.pdf',
+                        significance: 'Indicates continuing multi-decadal declining trend'
+                    },
+                    created_at: '2024-03-14T10:00:00Z',
+                    updated_at: '2024-03-14T10:00:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-2',
+                    label: 'Svalbard population declined 15% since 2015',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: 'Current Svalbard population estimated at 264 individuals, representing 15% decline from 2015 estimate of 310.',
+                        category: 'Population',
+                        source: 'Population Study Results.txt',
+                        confidence_interval: '95% CI: 221-307'
+                    },
+                    created_at: '2024-03-15T11:00:00Z',
+                    updated_at: '2024-03-15T11:00:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-3',
+                    label: 'Ice thickness reduced by 33%',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: 'Current ice thickness averages 1.2m compared to historical 1.8m, representing 33% reduction.',
+                        category: 'Climate Impact',
+                        source: 'Arctic Field Notes 2024.txt',
+                        implications: 'Reduced platform stability for hunting'
+                    },
+                    created_at: '2024-03-16T09:00:00Z',
+                    updated_at: '2024-03-16T09:00:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-4',
+                    label: 'Record swimming distance documented',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: 'GPS tracking documented 687km swim over 9 days, longest recorded for this region.',
+                        category: 'Behavior',
+                        source: 'Arctic Field Notes 2024.txt',
+                        interpretation: 'Bears compensating for fragmented ice with extended swimming'
+                    },
+                    created_at: '2024-03-17T14:00:00Z',
+                    updated_at: '2024-03-17T14:00:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-5',
+                    label: 'Cub survival rate below normal range',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: 'First-year cub survival at 55%, below typical 65-70% range.',
+                        category: 'Reproduction',
+                        source: 'Arctic Field Notes 2024.txt',
+                        concern: 'May reflect maternal nutritional stress'
+                    },
+                    created_at: '2024-03-18T10:30:00Z',
+                    updated_at: '2024-03-18T10:30:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-6',
+                    label: 'Reproductive rate below healthy range',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: 'Current reproductive rate of 0.42 cubs per adult female annually falls below expected 0.50-0.60 range.',
+                        category: 'Reproduction',
+                        source: 'Population Study Results.txt',
+                        implication: 'Indicates nutritional stress limiting breeding success'
+                    },
+                    created_at: '2024-03-19T11:00:00Z',
+                    updated_at: '2024-03-19T11:00:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-7',
+                    label: 'Home ranges expanded 50%',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: 'Adult male home ranges currently average 50% larger than 1990s data.',
+                        category: 'Behavior',
+                        source: 'Population Study Results.txt',
+                        interpretation: 'Bears traveling greater distances to access suitable habitat'
+                    },
+                    created_at: '2024-03-20T12:00:00Z',
+                    updated_at: '2024-03-20T12:00:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-8',
+                    label: 'Hunting efficiency decreased 25%',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: 'Current data suggests 25% more energy expenditure per successful hunt compared to historical estimates.',
+                        category: 'Foraging',
+                        source: 'Population Study Results.txt',
+                        driver: 'Need to search larger areas between ice floes'
+                    },
+                    created_at: '2024-03-21T13:30:00Z',
+                    updated_at: '2024-03-21T13:30:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-9',
+                    label: 'Human-bear encounters increased 2.5x',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: '12 bear-human encounters reported within 50km of research station, up from 4-5 in previous years.',
+                        category: 'Human-Wildlife Conflict',
+                        source: 'Arctic Field Notes 2024.txt',
+                        cause: 'Bears spending more time in terrestrial environments'
+                    },
+                    created_at: '2024-03-22T09:00:00Z',
+                    updated_at: '2024-03-22T09:00:00Z',
+                    evidence_count: 1
+                },
+                {
+                    id: 'demo-fact-10',
+                    label: 'Denning sites shifted coastward',
+                    node_type: 'Fact',
+                    scope: 'knowledge:polar_bear_research',
+                    data: {
+                        statement: '40% of traditional den sites now within 50m of coastline vs 15% in 1990s.',
+                        category: 'Habitat',
+                        source: 'Arctic Field Notes 2024.txt',
+                        risk: 'Increased vulnerability to storm surges and disturbance'
+                    },
+                    created_at: '2024-03-23T10:00:00Z',
+                    updated_at: '2024-03-23T10:00:00Z',
+                    evidence_count: 1
+                }
+            ]
+        }
+    }
 };
 
 export default function TreeViewerPage() {
@@ -178,6 +505,15 @@ export default function TreeViewerPage() {
     // Fetch tree data
     useEffect(() => {
         const fetchTreeData = async () => {
+            // Check if this is a demo pack
+            if (packId === 'sample-1') {
+                // Load demo data without authentication
+                setTreeData(DEMO_TREE_DATA);
+                setLoading(false);
+                return;
+            }
+
+            // For real packs, require authentication
             if (!user) return;
 
             try {
@@ -466,7 +802,7 @@ export default function TreeViewerPage() {
                     <div className="flex items-center justify-between gap-6">
                         {/* Left: Back button */}
                         <button
-                            onClick={() => router.push('/packs')}
+                            onClick={() => router.push(packId === 'sample-1' ? '/results/sample-1' : '/packs')}
                             className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
                         >
                             <ArrowLeft className="w-5 h-5" />
@@ -486,42 +822,44 @@ export default function TreeViewerPage() {
                             </div>
                         </div>
 
-                        {/* Right: Action buttons */}
-                        <div className="flex items-center gap-3">
-                            {/* Select Mode Toggle */}
-                            <button
-                                onClick={() => {
-                                    setIsSelectMode(!isSelectMode);
-                                    if (isSelectMode) {
-                                        setSelectedNodeIds(new Set());
-                                        setLastSelectedIndex(null);
-                                    }
-                                }}
-                                className={`text-sm px-3 py-1.5 rounded ${isSelectMode ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'} transition-colors`}
-                            >
-                                {isSelectMode ? 'Cancel Selection' : 'Select'}
-                            </button>
-
-                            {/* Delete button (only in select mode with selections) */}
-                            {selectedNodeIds.size > 0 && isSelectMode && (
+                        {/* Right: Action buttons - Hidden in demo mode */}
+                        {packId !== 'sample-1' && (
+                            <div className="flex items-center gap-3">
+                                {/* Select Mode Toggle */}
                                 <button
-                                    onClick={() => deleteNode(Array.from(selectedNodeIds))}
-                                    className="px-4 py-2 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-colors flex items-center gap-2"
+                                    onClick={() => {
+                                        setIsSelectMode(!isSelectMode);
+                                        if (isSelectMode) {
+                                            setSelectedNodeIds(new Set());
+                                            setLastSelectedIndex(null);
+                                        }
+                                    }}
+                                    className={`text-sm px-3 py-1.5 rounded ${isSelectMode ? 'text-emerald-400 bg-emerald-500/10' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'} transition-colors`}
                                 >
-                                    <Trash2 className="w-4 h-4" />
-                                    Delete {selectedNodeIds.size}
+                                    {isSelectMode ? 'Cancel Selection' : 'Select'}
                                 </button>
-                            )}
 
-                            {/* Create Node button */}
-                            <button
-                                onClick={() => setShowCreateModal(true)}
-                                className="px-4 py-2 bg-emerald-700/60 hover:bg-emerald-600/60 text-white rounded-lg transition-colors flex items-center gap-2"
-                            >
-                                <Plus className="w-4 h-4" />
-                                Create Node
-                            </button>
-                        </div>
+                                {/* Delete button (only in select mode with selections) */}
+                                {selectedNodeIds.size > 0 && isSelectMode && (
+                                    <button
+                                        onClick={() => deleteNode(Array.from(selectedNodeIds))}
+                                        className="px-4 py-2 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-colors flex items-center gap-2"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        Delete {selectedNodeIds.size}
+                                    </button>
+                                )}
+
+                                {/* Create Node button */}
+                                <button
+                                    onClick={() => setShowCreateModal(true)}
+                                    className="px-4 py-2 bg-emerald-700/60 hover:bg-emerald-600/60 text-white rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Create Node
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Search Bar */}
@@ -697,16 +1035,18 @@ export default function TreeViewerPage() {
                                                     <div className="text-xs text-gray-400">{node.node_type}</div>
                                                 </div>
                                             </div>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    deleteNode([node.id]);
-                                                }}
-                                                className="opacity-0 group-hover:opacity-100 p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-all"
-                                                title="Delete node"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            {packId !== 'sample-1' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        deleteNode([node.id]);
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-all"
+                                                    title="Delete node"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
                                         </div>
                                     );
                                 })
@@ -730,46 +1070,48 @@ export default function TreeViewerPage() {
                                             })()}
                                             <span className="text-xs text-gray-400 uppercase tracking-wide font-medium">{selectedNode.node_type}</span>
                                         </div>
-                                        {/* Edit Buttons */}
-                                        <div className="flex items-center gap-1">
-                                            {isEditing ? (
-                                                <>
-                                                    <button
-                                                        onClick={saveChanges}
-                                                        disabled={isSaving}
-                                                        className="p-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors disabled:opacity-50"
-                                                        title="Save changes"
-                                                    >
-                                                        <Save className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={cancelEditing}
-                                                        disabled={isSaving}
-                                                        className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors disabled:opacity-50"
-                                                        title="Cancel"
-                                                    >
-                                                        <X className="w-4 h-4" />
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <button
-                                                        onClick={startEditing}
-                                                        className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
-                                                        title="Edit node"
-                                                    >
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => selectedNode && deleteNode([selectedNode.id])}
-                                                        className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors"
-                                                        title="Delete node"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
+                                        {/* Edit Buttons - Hidden in demo mode */}
+                                        {packId !== 'sample-1' && (
+                                            <div className="flex items-center gap-1">
+                                                {isEditing ? (
+                                                    <>
+                                                        <button
+                                                            onClick={saveChanges}
+                                                            disabled={isSaving}
+                                                            className="p-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded transition-colors disabled:opacity-50"
+                                                            title="Save changes"
+                                                        >
+                                                            <Save className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={cancelEditing}
+                                                            disabled={isSaving}
+                                                            className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors disabled:opacity-50"
+                                                            title="Cancel"
+                                                        >
+                                                            <X className="w-4 h-4" />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={startEditing}
+                                                            className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
+                                                            title="Edit node"
+                                                        >
+                                                            <Edit2 className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => selectedNode && deleteNode([selectedNode.id])}
+                                                            className="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors"
+                                                            title="Delete node"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Node Label */}

@@ -1985,6 +1985,12 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         else:
             system_prompt = base_system_prompt
         
+        # Determine scope for memory tree (before chunk loop)
+        if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
+            scope = get_scope_for_source(source_id, filename, "")
+            print(f"🎯 Memory tree scope: {scope}")
+        else:
+            scope = None  # Not using memory tree
         
         for idx, chunk in enumerate(chunks):
             # Check for cancellation at the start of each chunk
@@ -2189,14 +2195,11 @@ Conversation content:
                             cleaned = cleaned[:-3]
                         cleaned = cleaned.strip()
                         
-                        print(f"🔍 [DEBUG] Attempting JSON parse of {len(cleaned)} chars")
                         # Try to parse as JSON
                         structured = json.loads(cleaned)
-                        print(f"✅ [DEBUG] JSON parsed successfully, keys: {list(structured.keys())}")
                         
                         # Apply to tree
                         from memory_tree import apply_chunk_to_memory_tree
-                        print(f"🌳 [TREE] Calling apply_chunk_to_memory_tree...")
                         apply_chunk_to_memory_tree(
                             structured_facts=structured,
                             scope=scope,
@@ -2209,7 +2212,6 @@ Conversation content:
                         
                     except json.JSONDecodeError as e:
                         print(f"⚠️ [TREE] Failed to parse JSON from chunk {idx}: {e}")
-                        print(f"   Response preview: {analysis[:200]}...")
                         # Continue with text-only storage
                     except Exception as e:
                         print(f"❌ [TREE] Failed to apply to tree for chunk {idx}: {e}")
