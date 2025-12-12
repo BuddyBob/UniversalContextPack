@@ -1155,25 +1155,50 @@ def download_from_r2_with_fallback(primary_key: str, job_id: str, filename: str,
     return None
 
 def list_r2_objects(prefix: str = "") -> List[str]:
-    """List objects in R2 bucket with optional prefix."""
+    """List objects in R2 bucket with optional prefix using boto3."""
     try:
-        if r2_client:
-            response = r2_client.list_objects_v2(Bucket=R2_BUCKET, Prefix=prefix)
+        # Use boto3 to list R2 objects (r2_client global is None, so create client here)
+        import boto3
+        from botocore.config import Config
+        
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=R2_ENDPOINT,
+            aws_access_key_id=R2_ACCESS_KEY,
+            aws_secret_access_key=R2_SECRET_KEY,
+            config=Config(signature_version='s3v4'),
+            region_name='auto'
+        )
+        
+        # List objects with pagination support
+        keys = []
+        continuation_token = None
+        
+        while True:
+            if continuation_token:
+                response = s3_client.list_objects_v2(
+                    Bucket=R2_BUCKET,
+                    Prefix=prefix,
+                    ContinuationToken=continuation_token
+                )
+            else:
+                response = s3_client.list_objects_v2(
+                    Bucket=R2_BUCKET,
+                    Prefix=prefix
+                )
+            
             if 'Contents' in response:
-                return [obj['Key'] for obj in response['Contents']]
+                for obj in response['Contents']:
+                    keys.append(obj['Key'])
+            
+            # Check if there are more results
+            if response.get('IsTruncated'):
+                continuation_token = response.get('NextContinuationToken')
+            else:
+                break
         
-        # Fallback to local storage
-        local_prefix = f"local_storage/{prefix}"
-        if os.path.exists(local_prefix):
-            files = []
-            for root, dirs, filenames in os.walk(local_prefix):
-                for filename in filenames:
-                    # Convert back to R2 path format
-                    rel_path = os.path.relpath(os.path.join(root, filename), "local_storage")
-                    files.append(rel_path.replace("\\", "/"))  # Normalize path separators
-            return files
+        return keys
         
-        return []
     except Exception as e:
         print(f"Error listing R2 objects: {e}")
         # Try local storage as final fallback
@@ -1513,24 +1538,57 @@ def extract_from_text_content(file_content: str) -> List[str]:
         quote_pattern = re.compile(r'^>\s*')  # Email-style quotes
         speaker_pattern = re.compile(r'^(assistant|user|chatgpt|human|ai):\s*', re.IGNORECASE)
         
-        # Split into paragraphs and process with better context preservation
+        # IMPROVED: Split into paragraphs with more flexible approach
+        # Try double newlines first, but also handle single newlines for PDFs
         paragraphs = re.split(r'\n\s*\n|\r\n\s*\r\n', file_content)
+        
+        # If we only got 1-2 paragraphs but have lots of content, try single newlines
+        if len(paragraphs) <= 2 and len(file_content) > 500:
+            # This is likely a PDF with poor paragraph separation
+            # Split on single newlines and group into logical paragraphs
+            lines = file_content.split('\n')
+            paragraphs = []
+            current_para = []
+            
+            for line in lines:
+                line = line.strip()
+                # Start new paragraph on certain conditions
+                if len(line) == 0:
+                    if current_para:
+                        paragraphs.append('\n'.join(current_para))
+                        current_para = []
+                elif len(current_para) > 0 and (
+                    # New paragraph indicators
+                    len(current_para[-1]) > 50 and not current_para[-1].endswith((',', 'and', 'or', 'the', 'a', 'an')) or
+                    line[0].isupper() and len(line) > 40  # Likely start of new sentence/paragraph
+                ):
+                    # Check if we should continue or start new
+                    if len('\n'.join(current_para)) > 200:  # Current para is substantial
+                        paragraphs.append('\n'.join(current_para))
+                        current_para = [line]
+                    else:
+                        current_para.append(line)
+                else:
+                    current_para.append(line)
+            
+            if current_para:
+                paragraphs.append('\n'.join(current_para))
         
         for para in paragraphs:
             # Clean up the paragraph
             para = para.strip()
             
-            # Skip if too short
-            if len(para) < 10:
+            # RELAXED: Reduced minimum length from 10 to 5 for short but meaningful content
+            if len(para) < 5:
                 continue
             
             # Skip metadata and navigation
             if metadata_regex.match(para):
                 continue
             
-            # Skip if it's mostly punctuation or numbers (but be less strict)
+            # RELAXED: Skip if it's mostly punctuation or numbers (but be less strict)
             alphanumeric_count = sum(c.isalnum() for c in para)
-            if alphanumeric_count < len(para) * 0.3:  # Reduced from 0.5 to 0.3
+            if alphanumeric_count < len(para) * 0.2:  # Reduced from 0.3 to 0.2
                 continue
             
             # Try to preserve multi-line content as paragraphs
@@ -1540,8 +1598,8 @@ def extract_from_text_content(file_content: str) -> List[str]:
             for line in lines:
                 cleaned_line = line.strip()
                 
-                # Skip empty or very short lines
-                if len(cleaned_line) < 5:
+                # RELAXED: Skip empty or very short lines (reduced from 5 to 3)
+                if len(cleaned_line) < 3:
                     continue
                 
                 # Remove quoted reply markers
@@ -1560,8 +1618,21 @@ def extract_from_text_content(file_content: str) -> List[str]:
                 if metadata_regex.match(cleaned_line):
                     continue
                 
-                # Check if this line is meaningful
-                if is_meaningful_text(cleaned_line):
+                # IMPROVED: For regular documents (not conversations), be much less strict
+                # Check if line has reasonable content - letters and reasonable length
+                has_letters = any(c.isalpha() for c in cleaned_line)
+                is_reasonable_length = len(cleaned_line) >= 3
+                
+                # Only use strict filtering for obvious technical junk
+                is_technical_junk = (
+                    _UUID_PATTERN.match(cleaned_line) or
+                    _CONVERSATION_ID_PATTERN.match(cleaned_line) or
+                    _GENERIC_ID_PATTERN.match(cleaned_line) or
+                    _FILE_REFERENCE_PATTERN.match(cleaned_line) or
+                    _NUMBERS_PATTERN.match(cleaned_line)
+                )
+                
+                if has_letters and is_reasonable_length and not is_technical_junk:
                     current_paragraph.append(cleaned_line)
             
             # Join lines into a cohesive paragraph
@@ -1589,8 +1660,8 @@ def extract_from_text_content(file_content: str) -> List[str]:
                 # Only collapse whitespace and lowercase - preserve numbers and meaningful punctuation
                 semantic_hash = ' '.join(combined.lower().split())[:250]
                 
-                # Only add if not duplicate (exact or semantic) and has substance
-                if combined not in text_set and semantic_hash not in semantic_set and len(combined) > 20:
+                # RELAXED: Reduced minimum length from 20 to 10 for shorter but meaningful content
+                if combined not in text_set and semantic_hash not in semantic_set and len(combined) > 10:
                     extracted_texts.append(combined)
                     text_set.add(combined)
                     semantic_set.add(semantic_hash)
@@ -1598,6 +1669,7 @@ def extract_from_text_content(file_content: str) -> List[str]:
     except Exception as e:
         print(f"Error processing text content: {e}")
     
+
     return extracted_texts
 
 from fastapi.responses import StreamingResponse
