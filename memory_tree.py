@@ -68,17 +68,12 @@ def get_scope_for_source(source_id: str, filename: str, source_type: str) -> str
     Returns:
         Scope string (e.g., 'user_profile', 'knowledge:book_name')
     """
-    print(f"\n🔍 [MEMORY TREE] Detecting scope for source_id={source_id}")
-    print(f"   📄 Filename: {filename}")
-    print(f"   🏷️  Type: {source_type}")
     
     # Chat exports and conversation files → user_profile scope
     if source_type == "chat_export":
-        print(f"   ✅ Scope: user_profile (matched source_type=chat_export)")
         return "user_profile"
     
     if filename and ("conversations" in filename.lower() or filename.lower().endswith('.json')):
-        print(f"   ✅ Scope: user_profile (matched filename pattern)")
         return "user_profile"
     
     # Documents and other sources → knowledge scope with topic name
@@ -90,11 +85,9 @@ def get_scope_for_source(source_id: str, filename: str, source_type: str) -> str
         # Limit length
         topic = topic[:50]
         scope = f"knowledge:{topic}"
-        print(f"   ✅ Scope: {scope} (document/knowledge type)")
         return scope
     
     # Fallback for sources without clear filenames
-    print(f"   ⚠️  Scope: knowledge:generic (fallback)")
     return "knowledge:generic"
 
 
@@ -149,11 +142,9 @@ def get_or_create_node(
     # If node exists, return it
     if result.data and len(result.data) > 0:
         node_id = result.data[0]['id']
-        print(f"      ♻️  Found existing node: {node_id[:8]}...")
         return result.data[0]
     
     # Otherwise, create new node
-    print(f"      ✨ Creating new {node_type} node")
     new_node = {
         "user_id": user_id,
         "pack_id": pack_id,
@@ -167,7 +158,6 @@ def get_or_create_node(
     
     if insert_result.data and len(insert_result.data) > 0:
         node_id = insert_result.data[0]['id']
-        print(f"      ✅ Created node: {node_id[:8]}...")
         return insert_result.data[0]
     
     raise Exception(f"Failed to create node: {node_type} in {scope}")
@@ -189,8 +179,6 @@ def merge_node_data(node_id: str, new_data: Dict[str, Any]) -> None:
     sb = _ensure_supabase()
     if not sb:
         raise Exception("Supabase client not initialized")
-    
-    print(f"      🔄 Merging data into node {node_id[:8]}...")
     
     # Get current node data
     result = sb.table("memory_nodes").select("data").eq("id", node_id).single().execute()
@@ -229,16 +217,12 @@ def merge_node_data(node_id: str, new_data: Dict[str, Any]) -> None:
             merged_data[key] = new_value
             merge_operations.append(f"{key}: updated")
     
-    if merge_operations:
-        print(f"         📝 Operations: {', '.join(merge_operations)}")
-    
     # Update node
     sb.table("memory_nodes") \
         .update({"data": merged_data, "updated_at": datetime.utcnow().isoformat()}) \
         .eq("id", node_id) \
         .execute()
     
-    print(f"      ✅ Data merged successfully")
 
 
 def create_evidence(
@@ -280,7 +264,6 @@ def create_evidence(
     
     if result.data and len(result.data) > 0:
         evidence_id = result.data[0]["id"]
-        print(f"      📎 Created evidence: chunk {chunk_index} → node {node_id[:8]}...")
         return evidence_id
     
     raise Exception("Failed to create evidence record")
@@ -426,7 +409,6 @@ def _apply_user_profile_facts(
             item_count += 1
         
         if item_count > 0:
-            print(f"   ✅ Processed {item_count} {field_name}")
             nodes_created += item_count
     
     print(f"\n   🎉 USER PROFILE SUMMARY: {nodes_created} nodes processed")
@@ -561,7 +543,6 @@ def _apply_knowledge_facts(
             concept_count += 1
     
     if concept_count > 0:
-        print(f"   ✅ Processed {concept_count} concepts")
         nodes_created += concept_count
     
     # Facts (for knowledge conversations)
@@ -612,7 +593,6 @@ def _apply_knowledge_facts(
                 fact_count += 1
     
     if fact_count > 0:
-        print(f"   ✅ Processed {fact_count} facts")
         nodes_created += fact_count
     
     # Code patterns (for technical conversations)
@@ -642,7 +622,6 @@ def _apply_knowledge_facts(
         pattern_count += 1
     
     if pattern_count > 0:
-        print(f"   ✅ Processed {pattern_count} code patterns")
         nodes_created += pattern_count
     
     print(f"\n   🎉 KNOWLEDGE SUMMARY: {nodes_created} nodes processed for {scope}")

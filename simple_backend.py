@@ -1473,7 +1473,7 @@ def extract_conversations_from_zip(zip_bytes: bytes) -> str:
         raise ValueError(f"Error extracting ZIP: {str(e)}")
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
-    """Extract text from PDF using PyPDF2"""
+    """Extract text from PDF using PyPDF2 and fix word-per-line formatting"""
     try:
         pdf_file = io.BytesIO(pdf_bytes)
         pdf_reader = PdfReader(pdf_file)
@@ -1485,13 +1485,22 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
             try:
                 text = page.extract_text()
                 if text and text.strip():
+                    # CRITICAL FIX: Check if this is word-per-line formatting
+                    lines = [line.strip() for line in text.split('\n') if line.strip()]
+                    
+                    # If most lines are very short (1-3 words), rejoin them
+                    short_line_count = sum(1 for line in lines if len(line.split()) <= 3)
+                    if len(lines) > 10 and short_line_count > len(lines) * 0.7:
+                        # Word-per-line formatting detected - rejoin into continuous text
+                        print(f"  📄 Page {page_num}: Detected word-per-line formatting, rejoining...")
+                        text = ' '.join(lines)
+                    
                     extracted_text.append(text)
             except Exception as page_error:
                 print(f"  Warning: Could not extract text from page {page_num}: {page_error}")
                 continue
         
         combined_text = "\n\n".join(extracted_text)
-        print(f"✅ PDF extraction complete: {len(combined_text):,} characters extracted")
         
         return combined_text
     except Exception as e:
@@ -1556,7 +1565,7 @@ def extract_from_text_content(file_content: str) -> List[str]:
                 if len(line) == 0:
                     if current_para:
                         paragraphs.append('\n'.join(current_para))
-                        current_para = []
+                    current_para = []
                 elif len(current_para) > 0 and (
                     # New paragraph indicators
                     len(current_para[-1]) > 50 and not current_para[-1].endswith((',', 'and', 'or', 'the', 'a', 'an')) or
@@ -1590,18 +1599,18 @@ def extract_from_text_content(file_content: str) -> List[str]:
             alphanumeric_count = sum(c.isalnum() for c in para)
             if alphanumeric_count < len(para) * 0.2:  # Reduced from 0.3 to 0.2
                 continue
-            
+                
             # Try to preserve multi-line content as paragraphs
             lines = para.split('\n')
             current_paragraph = []
             
             for line in lines:
                 cleaned_line = line.strip()
-                
+            
                 # RELAXED: Skip empty or very short lines (reduced from 5 to 3)
                 if len(cleaned_line) < 3:
                     continue
-                
+            
                 # Remove quoted reply markers
                 cleaned_line = quote_pattern.sub('', cleaned_line)
                 
@@ -1617,7 +1626,7 @@ def extract_from_text_content(file_content: str) -> List[str]:
                 # Skip metadata lines
                 if metadata_regex.match(cleaned_line):
                     continue
-                
+            
                 # IMPROVED: For regular documents (not conversations), be much less strict
                 # Check if line has reasonable content - letters and reasonable length
                 has_letters = any(c.isalpha() for c in cleaned_line)
@@ -1668,7 +1677,7 @@ def extract_from_text_content(file_content: str) -> List[str]:
     
     except Exception as e:
         print(f"Error processing text content: {e}")
-    
+
 
     return extracted_texts
 
