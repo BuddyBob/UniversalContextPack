@@ -530,7 +530,19 @@ def _apply_knowledge_facts(
                 node_type="Concept",
                 label=name[:120]
             )
-            merge_node_data(node["id"], concept)
+            
+            # Create a text field from definition or other descriptive fields
+            text_content = concept.get("definition", "")
+            if not text_content and concept.get("description"):
+                text_content = concept["description"]
+            if not text_content:
+                # Fallback: construct from name and category
+                text_content = f"{name}: {concept.get('category', 'concept')}"
+            
+            # Merge with text field added
+            concept_data = {**concept, "text": text_content}
+            merge_node_data(node["id"], concept_data)
+            
             snippet = concept.get("definition", json.dumps(concept))[:250]
             create_evidence(
                 user_id=user_id,

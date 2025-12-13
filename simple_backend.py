@@ -2374,6 +2374,18 @@ Generate your analysis following the format shown in the examples above.
             "error_message_param": warning_message  # Use error_message field for warning
         }).execute()
         
+        # Update chunks_analyzed counter in user_profiles
+        successfully_analyzed = len(chunks) - failed_chunks_count
+        if successfully_analyzed > 0:
+            try:
+                supabase.rpc("increment_chunks_analyzed", {
+                    "user_uuid": user.user_id,
+                    "increment_by": successfully_analyzed
+                }).execute()
+                print(f"📊 Updated user profile: +{successfully_analyzed} chunks analyzed")
+            except Exception as profile_error:
+                print(f"⚠️ Failed to update chunks_analyzed counter: {profile_error}")
+        
         if max_chunks is not None and len(chunks) < len(all_chunks):
             print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks (limited by available credits)")
         else:
