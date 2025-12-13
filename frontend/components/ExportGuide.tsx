@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell, Sparkles, TrendingUp } from 'lucide-react'
+import { LiquidGlassCard } from '@/components/ui/liquid-glass'
 import { analytics } from '@/lib/analytics'
 import Image from 'next/image'
 import DemoVideoPopover from './DemoVideoPopover'
@@ -55,7 +56,7 @@ const ExportGuide = () => {
       {/* Main Content */}
       <div className="relative z-10">
         {/* Hero Section - 3D Bubble Style */}
-        <section className="min-h-screen flex items-center justify-center px-6 py-20 relative overflow-hidden">
+        <section className="min-h-screen flex items-center justify-center px-6 py-40 relative overflow-hidden">
           {/* Floating star particles - Visible */}
           <div className="absolute inset-0 pointer-events-none z-50">
             {[...Array(12)].map((_, i) => {
@@ -92,25 +93,10 @@ const ExportGuide = () => {
             })}
           </div>
 
-          {/* Dark background with purple glow */}
-          <div className="absolute inset-0 bg-[#100f13]">
-            {/* Subtle purple glow - top left */}
-            <div
-              className="absolute top-0 left-0 w-[800px] h-[800px] opacity-20"
-              style={{
-                background: 'radial-gradient(circle, rgba(175, 107, 238, 0.4), transparent 70%)',
-                filter: 'blur(120px)'
-              }}
-            ></div>
-          </div>
-
           <div className="max-w-7xl mx-auto w-full relative z-10">
             {/* Centered Content */}
             <div className="text-center relative">
-              {/* Header Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8 animate-fade-in-down">
-                <span className="text-sm text-gray-400">1.2k+ users</span>
-              </div>
+
 
               {/* Main Headline */}
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
@@ -174,70 +160,67 @@ const ExportGuide = () => {
               <div className="relative animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
                 {/* Small Glass Stat Cards around bubble */}
 
-                {/* Users Card - Top Left */}
+                {/* Users Card - Top Left, overlapping sphere */}
                 <div
-                  className="absolute top-[15%] left-[5%] z-20"
-                  style={{ animationDelay: '0s' }}
+                  className="absolute top-[12%] left-[13%] z-20"
                 >
-                  <div
-                    className="px-6 py-5 rounded-2xl relative min-w-[160px]"
-                    style={{
-                      background: 'rgba(30, 30, 35, 0.6)',
-                      backdropFilter: 'blur(20px)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
-                    }}
+                  <LiquidGlassCard
+                    glowIntensity="none"
+                    shadowIntensity="xs"
+                    borderRadius="20px"
+                    blurIntensity="sm"
+                    className="p-5 w-[220px]"
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-xs text-gray-400">Users</div>
-                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                    <div className="relative z-30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-xs text-gray-300 font-medium">Users</div>
+                        <TrendingUp className="w-4 h-4 text-gray-300" />
+                      </div>
+                      <div className="text-3xl font-bold text-white">1.5k</div>
                     </div>
-                    <div className="text-3xl font-bold text-white">1.5k</div>
-                  </div>
+                  </LiquidGlassCard>
                 </div>
 
-                {/* Memories Card - Right Side */}
+                {/* Memories Card - Right Side, overlapping sphere */}
                 <div
-                  className="absolute top-[35%] right-[8%] z-20 "
-                  style={{ animationDelay: '1s' }}
+                  className="absolute top-[30%] right-[10%] z-20"
                 >
-                  <div
-                    className="px-6 py-5 rounded-2xl relative min-w-[160px]"
-                    style={{
-                      background: 'rgba(30, 30, 35, 0.6)',
-                      backdropFilter: 'blur(20px)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
-                    }}
+                  <LiquidGlassCard
+                    glowIntensity="none"
+                    shadowIntensity="xs"
+                    borderRadius="20px"
+                    blurIntensity="xl"
+                    className="p-5 w-[220px]"
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-xs text-gray-400">Memories</div>
-                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                    <div className="relative z-30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-xs text-gray-300 font-medium">Memories</div>
+                        <TrendingUp className="w-4 h-4 text-gray-300" />
+                      </div>
+                      <div className="text-3xl font-bold text-white">55k</div>
                     </div>
-                    <div className="text-3xl font-bold text-white">55k</div>
-                  </div>
+                  </LiquidGlassCard>
                 </div>
 
-                {/* Packs Card - Bottom Left */}
+                {/* Packs Card - Bottom Left, overlapping sphere */}
                 <div
-                  className="absolute bottom-[20%] left-[10%] z-20"
-                  style={{ animationDelay: '2s' }}
+                  className="absolute bottom-[18%] left-[12%] z-20"
                 >
-                  <div
-                    className="px-6 py-5 rounded-2xl relative min-w-[160px]"
-                    style={{
-                      background: 'rgba(30, 30, 35, 0.6)',
-                      backdropFilter: 'blur(20px)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
-                    }}
+                  <LiquidGlassCard
+                    glowIntensity="none"
+                    shadowIntensity="xs"
+                    borderRadius="20px"
+                    blurIntensity="xl"
+                    className="p-5 w-[220px]"
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-xs text-gray-400">Packs</div>
-                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                    <div className="relative z-30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-xs text-gray-300 font-medium">Packs</div>
+                        <TrendingUp className="w-4 h-4 text-gray-300" />
+                      </div>
+                      <div className="text-3xl font-bold text-white">7.2k</div>
                     </div>
-                    <div className="text-3xl font-bold text-white">7.2k</div>
-                  </div>
+                  </LiquidGlassCard>
                 </div>
 
                 {/* 3D Glass Sphere - Apple Style */}
@@ -247,7 +230,7 @@ const ExportGuide = () => {
                   <div
                     className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[840px] h-[840px] opacity-40"
                     style={{
-                      background: 'radial-gradient(circle at 50% 50%, rgba(88, 28, 135, 0.15), transparent 60%)',
+                      background: 'radial-gradient(circle at 50% 50%, rgba(88, 28, 135, 0.12), transparent 60%)',
                       filter: 'blur(60px)',
                     }}
                   />
@@ -256,16 +239,16 @@ const ExportGuide = () => {
                   <div
                     className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full z-10"
                     style={{
-                      // Base texture - subtle and mostly transparent
-                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.01) 0%, rgba(255, 255, 255, 0.005) 100%)',
-                      // Detailed border for glass edge
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      // Much darker, more subtle gradient
+                      background: 'radial-gradient(circle at 30% 20%, rgba(41, 26, 70, 0.43) 0%, rgba(40, 30, 50, 0.06) 20%, rgba(25, 20, 30, 0.12) 50%, rgba(10, 10, 12, 0.98) 100%)',
+                      // Very subtle border
+                      border: '1px solid rgba(255, 255, 255, 0.03)',
                       boxShadow: `
-                        0 20px 50px -20px rgba(0, 0, 0, 0.8),
-                        inset -20px -20px 80px rgba(40, 10, 80, 0.6),
-                        inset 20px 20px 40px rgba(120, 80, 255, 0.1),
-                        inset 0 0 0 2px rgba(255, 255, 255, 0.03),
-                        inset 10px 10px 100px rgba(0,0,0,0.8)
+                        0 20px 50px -20px rgba(0, 0, 0, 0.9),
+                        inset -30px -30px 100px rgba(20, 15, 25, 0.3),
+                        inset 30px 30px 60px rgba(50, 40, 65, 0.03),
+                        inset 0 0 0 2px rgba(255, 255, 255, 0.01),
+                        inset 10px 10px 100px rgba(0,0,0,0.9)
                       `,
                       backdropFilter: 'blur(3px)'
                     }}
@@ -274,7 +257,7 @@ const ExportGuide = () => {
                     <div
                       className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[80%] h-[40%] rounded-[100%]"
                       style={{
-                        background: 'radial-gradient(ellipse at center, rgba(167, 139, 250, 0.25), transparent 70%)',
+                        background: 'radial-gradient(ellipse at center, rgba(147, 120, 200, 0.18), transparent 70%)',
                         filter: 'blur(20px)',
                         mixBlendMode: 'screen'
                       }}
@@ -306,9 +289,9 @@ const ExportGuide = () => {
                     <div
                       className="absolute bottom-[5%] left-1/2 transform -translate-x-1/2 w-[70%] h-[15%] rounded-[100%]"
                       style={{
-                        background: 'radial-gradient(circle, rgba(192, 132, 252, 0.3) 0%, transparent 70%)',
+                        background: 'radial-gradient(circle, rgba(179, 145, 218, 0.15) 0%, transparent 70%)',
                         filter: 'blur(8px)',
-                        borderTop: '1px solid rgba(255,255,255,0.15)'
+                        borderTop: '1px solid rgba(255, 255, 255, 0.15)'
                       }}
                     />
 
@@ -344,64 +327,6 @@ const ExportGuide = () => {
         </section>
 
 
-        {/* Fading Memory Section */}
-        <section className="py-12 md:py-24 px-6 relative overflow-hidden">
-          <div className="max-w-7xl mx-auto relative z-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center">
-              {/* Left Column: Text Content */}
-              <div className="text-center md:text-left">
-                <ScrollReveal>
-                  <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight">
-                    Keep Your Memories <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-400 to-gray-600 animate-text-shimmer bg-[length:200%_auto]">Permanent</span>
-                  </h2>
-                </ScrollReveal>
-
-                <ScrollReveal delay={0.4}>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4 p-4 -mx-4 rounded-xl hover:bg-white/5 transition-all duration-300 group cursor-default">
-                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
-                        <Database className="h-6 w-6 text-gray-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-white mb-1">Context Limits</h3>
-                        <p className="text-gray-400">Limited memory erases old conversations.</p>
-                      </div>
-                    </div>
-
-
-                    <div className="flex items-center gap-4 p-4 -mx-4 rounded-xl hover:bg-white/5 transition-all duration-300 group cursor-default">
-                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
-                        <Sparkles className="h-6 w-6 text-gray-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-white mb-1">The Solution</h3>
-                        <p className="text-gray-400">Context Pack creates the missing memory layer</p>
-                      </div>
-                    </div>
-                  </div>
-                </ScrollReveal>
-              </div>
-
-              {/* Right Column: Visual Representation - Hidden on mobile */}
-              <div className="hidden md:block relative">
-                <ScrollReveal delay={0.3}>
-                  <div className="relative rounded-2xl bg-gradient-to-b from-white/[0.05] to-transparent p-1">
-                    <div className="relative bg-[#0A0A0A] rounded-xl overflow-hidden">
-                      <Image
-                        src="/main2-image.png"
-                        alt="AI Memories Fading"
-                        width={800}
-                        height={600}
-                        className="w-full h-auto animate-float-subtle"
-                      />
-                    </div>
-                  </div>
-                </ScrollReveal>
-              </div>
-            </div>
-          </div>
-        </section>
         <section id="export" className="py-16 md:py-32 px-6 relative overflow-hidden">
           <div className="max-w-6xl mx-auto relative z-10">
             <div className="text-center mb-12 md:mb-20">
