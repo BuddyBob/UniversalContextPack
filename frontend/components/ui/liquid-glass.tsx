@@ -41,12 +41,10 @@ export const LiquidGlassCard = ({
 }: LiquidGlassCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const handleToggleExpansion = (e: {
-    target: { closest: (arg0: string) => any };
-  }) => {
+  const handleToggleExpansion = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!expandable) return;
     // Don't toggle if clicking on interactive elements
-    if (e.target.closest('a, button, input, select, textarea')) return;
+    if ((e.target as HTMLElement).closest('a, button, input, select, textarea')) return;
     setIsExpanded(!isExpanded);
   };
 
@@ -81,53 +79,53 @@ export const LiquidGlassCard = ({
 
   const containerVariants = expandable
     ? {
-        collapsed: {
-          width: width || 'auto',
-          height: height || 'auto',
-          transition: {
-            duration: 0.4,
-            ease: [0.5, 1.5, 0.5, 1],
-          },
+      collapsed: {
+        width: width || 'auto',
+        height: height || 'auto',
+        transition: {
+          duration: 0.4,
+          ease: [0.5, 1.5, 0.5, 1] as [number, number, number, number],
         },
-        expanded: {
-          width: expandedWidth || 'auto',
-          height: expandedHeight || 'auto',
-          transition: {
-            duration: 0.4,
-            ease: [0.5, 1.5, 0.5, 1],
-          },
+      },
+      expanded: {
+        width: expandedWidth || 'auto',
+        height: expandedHeight || 'auto',
+        transition: {
+          duration: 0.4,
+          ease: [0.5, 1.5, 0.5, 1] as [number, number, number, number],
         },
-      }
-    : {};
+      },
+    }
+    : undefined;
 
   const MotionComponent = draggable || expandable ? motion.div : 'div';
 
   const motionProps =
     draggable || expandable
       ? {
-          variants: expandable ? containerVariants : undefined,
-          animate: expandable
-            ? isExpanded
-              ? 'expanded'
-              : 'collapsed'
-            : undefined,
-          onClick: expandable ? handleToggleExpansion : undefined,
-          drag: draggable,
-          dragConstraints: draggable
-            ? { left: 0, right: 0, top: 0, bottom: 0 }
-            : undefined,
-          dragElastic: draggable ? 0.3 : undefined,
-          dragTransition: draggable
-            ? {
-                bounceStiffness: 300,
-                bounceDamping: 10,
-                power: 0.3,
-              }
-            : undefined,
-          whileDrag: draggable ? { scale: 1.02 } : undefined,
-          whileHover: { scale: 1.01 },
-          whileTap: { scale: 0.98 },
-        }
+        variants: expandable ? containerVariants : undefined,
+        animate: expandable
+          ? isExpanded
+            ? 'expanded'
+            : 'collapsed'
+          : undefined,
+        onClick: expandable ? handleToggleExpansion : undefined,
+        drag: draggable,
+        dragConstraints: draggable
+          ? { left: 0, right: 0, top: 0, bottom: 0 }
+          : undefined,
+        dragElastic: draggable ? 0.3 : undefined,
+        dragTransition: draggable
+          ? {
+            bounceStiffness: 300,
+            bounceDamping: 10,
+            power: 0.3,
+          }
+          : undefined,
+        whileDrag: draggable ? { scale: 1.02 } : undefined,
+        whileHover: { scale: 1.01 },
+        whileTap: { scale: 0.98 },
+      }
       : {};
 
   return (
