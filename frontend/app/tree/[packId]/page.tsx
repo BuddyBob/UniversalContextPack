@@ -1027,8 +1027,8 @@ export default function TreeViewerPage() {
                                                 }`}
                                         >
                                             <div className="flex-1 flex items-center gap-3">
-                                                <div className={`p-1.5 rounded ${nodeIcons[node.node_type]?.color || 'bg-gray-500/20'}`}>
-                                                    {React.createElement(nodeIcons[node.node_type]?.icon || FileText, { className: 'w-4 h-4' })}
+                                                <div className={`p-1.5 rounded bg-white/5`}>
+                                                    <Icon className={`w-4 h-4 ${color}`} />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-medium truncate">{node.label || 'Untitled'}</div>

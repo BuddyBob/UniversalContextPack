@@ -2581,7 +2581,7 @@ The input is a human-readable analysis of a document. Based on this analysis, ex
 - sections: high-level topics or subtopics discussed
 - events: concrete events mentioned (with dates or periods if present)
 - entities: important people, organizations, or places
-- concepts: key ideas, themes, or issues
+- concepts: key ideas, themes, or issues (with definitions)
 
 Return STRICT JSON:
 
@@ -2607,11 +2607,17 @@ Return STRICT JSON:
       "summary": "string"
     }}
   ],
-  "concepts": ["string"]
+  "concepts": [
+    {{
+      "name": "string",
+      "definition": "brief explanation of this concept"
+    }}
+  ]
 }}
 
 Rules:
 - Extract as many useful sections/events/entities/concepts as the analysis supports.
+- For concepts, provide both name AND definition (not just the name)
 - Be specific and detailed.
 - Do NOT add commentary outside the JSON.
 - Do NOT wrap in backticks or code blocks.

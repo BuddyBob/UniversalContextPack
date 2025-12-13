@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell, Sparkles } from 'lucide-react'
+import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell, Sparkles, TrendingUp } from 'lucide-react'
 import { analytics } from '@/lib/analytics'
 import Image from 'next/image'
 import DemoVideoPopover from './DemoVideoPopover'
 import ScrollReveal from './ScrollReveal'
 import { useAuth } from './AuthProvider'
+import UseCaseTabs from './UseCaseTabs'
 
 const ExportGuide = () => {
   const { user } = useAuth()
@@ -46,180 +47,302 @@ const ExportGuide = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-[#090909] text-white relative overflow-hidden">
-      {/* Floating star particles - Very faint */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(30)].map((_, i) => {
-          const positions = [
-            { left: 10, top: 20, delay: 0, size: 1 },
-            { left: 85, top: 15, delay: 1.2, size: 1.5 },
-            { left: 25, top: 80, delay: 2.4, size: 1 },
-            { left: 70, top: 60, delay: 0.8, size: 2 },
-            { left: 50, top: 30, delay: 3.6, size: 1 },
-            { left: 15, top: 70, delay: 1.8, size: 1.5 },
-            { left: 90, top: 45, delay: 4.2, size: 1 },
-            { left: 35, top: 85, delay: 0.6, size: 1 },
-            { left: 75, top: 25, delay: 2.8, size: 1.5 },
-            { left: 55, top: 75, delay: 3.2, size: 1 },
-            { left: 20, top: 40, delay: 1.5, size: 2 },
-            { left: 80, top: 70, delay: 4.0, size: 1 },
-            { left: 45, top: 10, delay: 2.2, size: 1.5 },
-            { left: 65, top: 55, delay: 0.4, size: 1 },
-            { left: 30, top: 65, delay: 3.8, size: 1 },
-            { left: 85, top: 35, delay: 1.0, size: 1.5 },
-            { left: 40, top: 90, delay: 2.6, size: 1 },
-            { left: 75, top: 20, delay: 4.4, size: 2 },
-            { left: 60, top: 50, delay: 1.4, size: 1 },
-            { left: 25, top: 35, delay: 3.0, size: 1.5 },
-            { left: 5, top: 50, delay: 0.5, size: 1 },
-            { left: 95, top: 80, delay: 3.5, size: 1.5 },
-            { left: 50, top: 5, delay: 2.0, size: 1 },
-            { left: 12, top: 90, delay: 4.5, size: 1 },
-            { left: 88, top: 25, delay: 1.8, size: 2 },
-            { left: 42, top: 68, delay: 2.5, size: 1 },
-            { left: 68, top: 42, delay: 3.8, size: 1.5 },
-            { left: 33, top: 15, delay: 1.2, size: 1 },
-            { left: 78, top: 88, delay: 4.8, size: 1 },
-            { left: 58, top: 92, delay: 2.8, size: 1.5 }
-          ];
-          const pos = positions[i] || { left: 50, top: 50, delay: 0, size: 1 };
-
-          return (
-            <div
-              key={i}
-              className="absolute bg-white/10 rounded-full"
-              style={{
-                width: `${pos.size}px`,
-                height: `${pos.size}px`,
-                left: `${pos.left}%`,
-                top: `${pos.top}%`,
-                animation: `float 8s ease-in-out infinite ${pos.delay}s`,
-                boxShadow: '0 0 2px rgba(255, 255, 255, 0.1)'
-              }}
-            />
-          );
-        })}
-      </div>
-
+    <div className="min-h-screen bg-[#100f13] text-white relative overflow-hidden">
 
       {/* Floating Value Proposition - Always visible on desktop, positioned on left */}
 
 
       {/* Main Content */}
       <div className="relative z-10">
-        {/* Hero Section - Mem0 Style */}
+        {/* Hero Section - 3D Bubble Style */}
         <section className="min-h-screen flex items-center justify-center px-6 py-20 relative overflow-hidden">
-          {/* Pure black background for image area */}
-          <div className="absolute inset-0 bg-[#090909]"></div>
+          {/* Floating star particles - Visible */}
+          <div className="absolute inset-0 pointer-events-none z-50">
+            {[...Array(12)].map((_, i) => {
+              const positions = [
+                { left: 10, top: 20, delay: 0, size: 1 },
+                { left: 85, top: 15, delay: 1.2, size: 1 },
+                { left: 25, top: 75, delay: 2.4, size: 1 },
+                { left: 70, top: 55, delay: 0.8, size: 1 },
+                { left: 50, top: 30, delay: 3.6, size: 1 },
+                { left: 15, top: 65, delay: 1.8, size: 1 },
+                { left: 90, top: 45, delay: 4.2, size: 1 },
+                { left: 35, top: 80, delay: 0.6, size: 1 },
+                { left: 75, top: 25, delay: 2.8, size: 1 },
+                { left: 55, top: 70, delay: 3.2, size: 1 },
+                { left: 20, top: 40, delay: 1.5, size: 1 },
+                { left: 80, top: 60, delay: 4.0, size: 1 }
+              ];
+              const pos = positions[i] || { left: 50, top: 50, delay: 0, size: 1 };
+
+              return (
+                <div
+                  key={i}
+                  className="absolute bg-white/40 rounded-full"
+                  style={{
+                    width: `${pos.size * 2}px`,
+                    height: `${pos.size * 2}px`,
+                    left: `${pos.left}%`,
+                    top: `${pos.top}%`,
+                    animation: `float 8s ease-in-out infinite ${pos.delay}s`,
+                    boxShadow: '0 0 4px rgba(255, 255, 255, 0.3)'
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          {/* Dark background with purple glow */}
+          <div className="absolute inset-0 bg-[#100f13]">
+            {/* Subtle purple glow - top left */}
+            <div
+              className="absolute top-0 left-0 w-[800px] h-[800px] opacity-20"
+              style={{
+                background: 'radial-gradient(circle, rgba(175, 107, 238, 0.4), transparent 70%)',
+                filter: 'blur(120px)'
+              }}
+            ></div>
+          </div>
 
           <div className="max-w-7xl mx-auto w-full relative z-10">
-            {/* Header */}
-            <div className="text-center mb-16">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 border border-slate-700/50 mb-6 animate-fade-in-down">
-                <span className="text-sm text-gray-400">1000+ users</span>
+            {/* Centered Content */}
+            <div className="text-center relative">
+              {/* Header Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8 animate-fade-in-down">
+                <span className="text-sm text-gray-400">1.2k+ users</span>
               </div>
 
-              <h1 className="text-4xl md:text-4xl lg:text-5xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                AI Chats Forget<br />
+              {/* Main Headline */}
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                AI Chats Forget
+                <br />
                 We Remember
               </h1>
 
-              <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-6 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                A personalized memory system for your AI.
+              {/* Subheadline */}
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                Build a personalized memory system for your AI
               </p>
 
-              {/* Trust badges - minimal */}
-              <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 max-w-2xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {/* Trust Badges */}
+              <div className="flex flex-wrap items-center justify-center gap-6 mb-10 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>Migrate AI Chats</span>
+                  <span className="text-sm text-gray-400">Migrate AI Chats</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>Upload Chat Exports</span>
+                  <span className="text-sm text-gray-400">Upload Chat Exports</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>Long-term Memory</span>
+                  <span className="text-sm text-gray-400">Long-term Memory</span>
                 </div>
               </div>
 
-              {/*If the user is not signed in, send them to /results/sample-1 (demo), if they are signed in send them to /packs */}
-              <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                <a href={user ? "/packs" : "/results/sample-1"} className="inline-block bg-white hover:bg-gray-100 text-black px-8 py-4 rounded-lg text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-xl">
-                  Get Started
+              {/* CTA Button - Overlapping bubble */}
+              <div className="relative z-30 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                <a
+                  href={user ? "/packs" : "/results/sample-1"}
+                  className="inline-block px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)',
+                    color: 'white'
+                  }}
+                >
+                  <span className="relative z-10">Start Your Pack</span>
+                  {/* Hover glow effect */}
+                  <div
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    style={{
+                      background: 'radial-gradient(circle at center, rgba(255, 255, 255, 0.1), transparent)',
+                    }}
+                  ></div>
                 </a>
               </div>
-            </div>
 
-            {/* Main Visual - Hidden on mobile */}
-            <div className="hidden md:block max-w-5xl mx-auto md:pl-16 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-              <Image
-                src="/main-image.png"
-                alt="Memory Fading vs Organized Memory"
-                width={1400}
-                height={700}
-                className="w-full h-auto animate-float-subtle"
-                priority
-              />
-            </div>
-          </div>
+              {/* 3D Bubble Container - Overlapped by button */}
+              <div className="relative animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                {/* Small Glass Stat Cards around bubble */}
 
-        </section>
-
-        {/* Cross Platform Section */}
-        <section className="py-12 md:py-24 px-6 relative overflow-hidden">
-          <div className="max-w-7xl mx-auto relative z-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 md:gap-16 items-center">
-              {/* Left Column: Visual Representation - Hidden on mobile */}
-              <div className="hidden md:block relative lg:col-span-3">
-                <ScrollReveal delay={0.3}>
-                  <div className="relative">
-                    <video
-                      src="/main3_video.mp4"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="w-full h-auto scale-110 animate-float-subtle"
-                    />
+                {/* Users Card - Top Left */}
+                <div
+                  className="absolute top-[15%] left-[5%] z-20"
+                  style={{ animationDelay: '0s' }}
+                >
+                  <div
+                    className="px-6 py-5 rounded-2xl relative min-w-[160px]"
+                    style={{
+                      background: 'rgba(30, 30, 35, 0.6)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-xs text-gray-400">Users</div>
+                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div className="text-3xl font-bold text-white">1.5k</div>
                   </div>
-                </ScrollReveal>
-              </div>
+                </div>
 
-              {/* Right Column: Text Content */}
-              <div className="lg:col-span-2 md:col-span-2">
-                <ScrollReveal>
-                  <h2 className="text-3xl md:text-4xl lg:text-6xl font-bold text-white mb-8 leading-tight text-center md:text-left">
-                    Move Chats <br />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 animate-text-shimmer bg-[length:200%_auto]">Across Platforms.</span>
-                  </h2>
-                </ScrollReveal>
+                {/* Memories Card - Right Side */}
+                <div
+                  className="absolute top-[35%] right-[8%] z-20 "
+                  style={{ animationDelay: '1s' }}
+                >
+                  <div
+                    className="px-6 py-5 rounded-2xl relative min-w-[160px]"
+                    style={{
+                      background: 'rgba(30, 30, 35, 0.6)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-xs text-gray-400">Memories</div>
+                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div className="text-3xl font-bold text-white">55k</div>
+                  </div>
+                </div>
 
-                <ScrollReveal delay={0.4}>
-                  <div className="space-y-4">
+                {/* Packs Card - Bottom Left */}
+                <div
+                  className="absolute bottom-[20%] left-[10%] z-20"
+                  style={{ animationDelay: '2s' }}
+                >
+                  <div
+                    className="px-6 py-5 rounded-2xl relative min-w-[160px]"
+                    style={{
+                      background: 'rgba(30, 30, 35, 0.6)',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-xs text-gray-400">Packs</div>
+                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div className="text-3xl font-bold text-white">7.2k</div>
+                  </div>
+                </div>
 
-                    <div className="flex items-center gap-4 p-4 -mx-4 rounded-xl hover:bg-white/5 transition-all duration-300 group cursor-default">
-                      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
-                        <Zap className="h-6 w-6 text-gray-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-white mb-1">Seamless Migration</h3>
-                        <p className="text-gray-400">Switch from ChatGPT to Claude or Gemini without losing context.</p>
-                      </div>
+                {/* 3D Glass Sphere - Apple Style */}
+                <div className="relative w-full max-w-4xl mx-auto h-[600px]">
+
+                  {/* Ambient Background Glow (Behind the sphere) */}
+                  <div
+                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[840px] h-[840px] opacity-40"
+                    style={{
+                      background: 'radial-gradient(circle at 50% 50%, rgba(88, 28, 135, 0.15), transparent 60%)',
+                      filter: 'blur(60px)',
+                    }}
+                  />
+
+                  {/* The Main Sphere Volume */}
+                  <div
+                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full z-10"
+                    style={{
+                      // Base texture - subtle and mostly transparent
+                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.01) 0%, rgba(255, 255, 255, 0.005) 100%)',
+                      // Detailed border for glass edge
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      boxShadow: `
+                        0 20px 50px -20px rgba(0, 0, 0, 0.8),
+                        inset -20px -20px 80px rgba(40, 10, 80, 0.6),
+                        inset 20px 20px 40px rgba(120, 80, 255, 0.1),
+                        inset 0 0 0 2px rgba(255, 255, 255, 0.03),
+                        inset 10px 10px 100px rgba(0,0,0,0.8)
+                      `,
+                      backdropFilter: 'blur(3px)'
+                    }}
+                  >
+                    {/* The "Liquid" Internal Reflection */}
+                    <div
+                      className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[80%] h-[40%] rounded-[100%]"
+                      style={{
+                        background: 'radial-gradient(ellipse at center, rgba(167, 139, 250, 0.25), transparent 70%)',
+                        filter: 'blur(20px)',
+                        mixBlendMode: 'screen'
+                      }}
+                    />
+
+                    {/* Top Specular Highlight - FIXED with Radial Gradients */}
+
+                    {/* Layer A: The Soft "Dome" Light - anchored to top edge */}
+                    <div
+                      className="absolute top-0 left-0 right-0 h-[45%] rounded-t-full"
+                      style={{
+                        background: 'radial-gradient(100% 80% at 50% 0%, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 30%, transparent 80%)',
+                        filter: 'blur(5px)',
+                      }}
+                    />
+
+                    {/* Layer B: The Glossy Reflection - elliptical with vertical squish */}
+                    <div
+                      className="absolute top-[5%] left-[15%] w-[70%] h-[25%] rounded-[100%]"
+                      style={{
+                        background: 'radial-gradient(ellipse at top, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.1) 40%, transparent 70%)',
+                        filter: 'blur(12px)',
+                        opacity: 0.6,
+                        transform: 'scaleY(0.6)'
+                      }}
+                    />
+
+                    {/* Bottom Bounce Light (Refraction/Caustics) */}
+                    <div
+                      className="absolute bottom-[5%] left-1/2 transform -translate-x-1/2 w-[70%] h-[15%] rounded-[100%]"
+                      style={{
+                        background: 'radial-gradient(circle, rgba(192, 132, 252, 0.3) 0%, transparent 70%)',
+                        filter: 'blur(8px)',
+                        borderTop: '1px solid rgba(255,255,255,0.15)'
+                      }}
+                    />
+
+                    {/* Center Text */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center z-20">
+                      <div className="text-2xl font-bold text-white tracking-wide drop-shadow-lg">Context Pack</div>
+                      <div className="text-sm text-purple-200/60 mt-2 font-light tracking-wider uppercase">Unified Knowledge</div>
                     </div>
                   </div>
-                </ScrollReveal>
+                </div>
               </div>
             </div>
           </div>
+
         </section>
+
+        {/* Tabbed Use Cases Section */}
+        <section className="py-16 md:py-24 px-6 bg-secondary">
+          <div className="max-w-6xl mx-auto">
+            {/* Section Header */}
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold text-primary mb-4">
+                Built for how you actually work
+              </h2>
+              <p className="text-lg text-muted">
+                Context Pack adapts to your workflow, not the other way around.
+              </p>
+            </div>
+
+            {/* Tab Navigation */}
+            <UseCaseTabs />
+          </div>
+        </section>
+
 
         {/* Fading Memory Section */}
         <section className="py-12 md:py-24 px-6 relative overflow-hidden">
