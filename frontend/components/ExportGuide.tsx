@@ -51,6 +51,21 @@ const ExportGuide = () => {
 
       {/* Floating Value Proposition - Always visible on desktop, positioned on left */}
 
+      {/* Stats Display - Bottom Left */}
+      <div className="fixed bottom-8 left-8 z-50 hidden md:block">
+        <div className="flex flex-row gap-6 items-center">
+          {/* Packs Count */}
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-white">5.5k+</span>
+            <span className="text-sm text-gray-400">packs</span>
+          </div>
+          {/* Memories Count */}
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-white">55k</span>
+            <span className="text-sm text-gray-400">memories</span>
+          </div>
+        </div>
+      </div>
 
       {/* Main Content */}
       <div className="relative z-10">
@@ -158,13 +173,13 @@ const ExportGuide = () => {
               </div>
 
               {/* Right Column - Hero Image */}
-              <div className="relative animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-                <div className="relative w-full">
+              <div className="hidden lg:block relative animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                <div className="relative w-full transform scale-125 origin-center">
                   <Image
                     src="/main-image.png"
                     alt="Context Pack Hero"
-                    width={1200}
-                    height={600}
+                    width={1600}
+                    height={800}
                     className="w-full h-auto"
                     priority
                   />
