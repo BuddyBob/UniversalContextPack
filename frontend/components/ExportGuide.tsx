@@ -122,7 +122,7 @@ const ExportGuide = () => {
 
                 {/* Subheadline */}
                 <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Context Pack saves your important conversations and documents so every new AI chat starts informed.
+                  Keep your AI chats continued across conversations and platforms.
                 </p>
 
                 {/* Trust Badges */}
