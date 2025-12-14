@@ -24,7 +24,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setLoading(true)
       setError(null)
       await signInWithGoogle()
-      
+
       // Since the backend now handles OpenAI API keys, we don't need user to provide their own
       onClose()
     } catch (error: any) {
@@ -38,7 +38,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setError('Please enter your OpenAI API key')
       return
     }
-    
+
     if (!apiKey.startsWith('sk-')) {
       setError('Please enter a valid OpenAI API key (starts with sk-)')
       return
