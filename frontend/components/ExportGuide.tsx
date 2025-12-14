@@ -150,7 +150,7 @@ const ExportGuide = () => {
                 {/* CTA Button */}
                 <div className="relative z-30 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
                   <a
-                    href={user ? "/packs" : "/results/sample-1"}
+                    href="/packs"
                     className="inline-block px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group"
                     style={{
                       background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
