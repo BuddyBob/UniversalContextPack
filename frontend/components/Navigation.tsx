@@ -92,7 +92,8 @@ export default function Navigation() {
     <>
       <header className="nav-header">
         <div className="nav-container">
-          <div className="nav-content">
+          <div className="nav-content flex items-center relative">
+            {/* Logo - Left */}
             <Link href="/" className="nav-brand">
               <Image
                 src="/Logo2.png"
@@ -104,21 +105,8 @@ export default function Navigation() {
               <h1 className="nav-title font-medium text-lg tracking-tight">Context Pack</h1>
             </Link>
 
-            {/* Mobile Hamburger - Always visible on mobile */}
-            <button
-              onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="md:hidden p-2 rounded-md text-white hover:bg-gray-800 transition-colors ml-auto"
-              aria-label="Toggle mobile menu"
-            >
-              {showMobileMenu ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
-            </button>
-
-            {/* Desktop Navigation Links */}
-            <nav className="nav-links hidden md:flex flex-1">
+            {/* Navigation Links - Absolutely Centered */}
+            <nav className="nav-links hidden md:flex absolute left-1/2 transform -translate-x-1/2">
               <Link
                 href="/packs"
                 className={`nav-link ${pathname === '/packs' ? 'active' : ''}`}
@@ -139,76 +127,85 @@ export default function Navigation() {
               </Link>
             </nav>
 
-            {/* Desktop Right Side Navigation */}
+            {/* Mobile Hamburger */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="md:hidden p-2 rounded-md text-white hover:bg-gray-800 transition-colors ml-auto"
+              aria-label="Toggle mobile menu"
+            >
+              {showMobileMenu ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </button>
+
+            {/* Right Side - Auth/User Menu */}
             <div className="hidden md:flex items-center gap-4 ml-auto">
               {/* Status Indicator */}
               <Link href="/status" className="flex items-center text-sm hover:opacity-80 transition-opacity" title="System Status">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
               </Link>
 
-              {/* Desktop User Menu */}
-              <div className="nav-user-section flex items-center gap-3">
-                {user ? (
-                  <>
-                    <div className="relative" ref={dropdownRef}>
-                      <div
-                        className="nav-user-dropdown"
-                        onClick={() => setShowUserDropdown(!showUserDropdown)}
-                      >
-                        {userProfile?.avatar_url && (
-                          <img
-                            src={userProfile.avatar_url}
-                            alt={userProfile.full_name || 'User'}
-                            className="nav-user-avatar"
-                          />
-                        )}
-                        <div className="nav-user-info">
-                          <p className="nav-user-name">
-                            {userProfile?.full_name || user.email?.split('@')[0]}
-                          </p>
-                          <p className="nav-user-email">{user.email}</p>
-                        </div>
-                      </div>
-
-
-                      {showUserDropdown && (
-                        <div className="nav-dropdown-menu">
-                          <button
-                            onClick={signOut}
-                            className="nav-dropdown-item"
-                          >
-                            <LogOut className="h-4 w-4" />
-                            Sign Out
-                          </button>
-                        </div>
+              {user ? (
+                <>
+                  <div className="relative" ref={dropdownRef}>
+                    <div
+                      className="nav-user-dropdown"
+                      onClick={() => setShowUserDropdown(!showUserDropdown)}
+                    >
+                      {userProfile?.avatar_url && (
+                        <img
+                          src={userProfile.avatar_url}
+                          alt={userProfile.full_name || 'User'}
+                          className="nav-user-avatar"
+                        />
                       )}
-
+                      <div className="nav-user-info">
+                        <p className="nav-user-name">
+                          {userProfile?.full_name || user.email?.split('@')[0]}
+                        </p>
+                      </div>
                     </div>
-                    {user && (
-                      <a
-                        href="/pricing"
-                        className="flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all ml-auto"
-                        title="Buy more credits"
-                      >
-                        <CreditCard className="w-5 h-5 text-gray-400" />
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400 uppercase tracking-wide">Credits</span>
-                          <span className="text-lg font-semibold text-white">
-                            {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance || userProfile?.credits_balance)?.toLocaleString() || '0'}
-                          </span>
-                        </div>
-                      </a>
+
+
+                    {showUserDropdown && (
+                      <div className="nav-dropdown-menu">
+                        <button
+                          onClick={signOut}
+                          className="nav-dropdown-item"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          Sign Out
+                        </button>
+                      </div>
                     )}
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setShowAuthModal(true)}
-                    className="btn-white"
-                  >
-                    Sign In
-                  </button>
-                )}
-              </div>
+
+                  </div>
+                  {user && (
+                    <a
+                      href="/pricing"
+                      className="flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all"
+                      title="Buy more credits"
+                    >
+                      <CreditCard className="w-5 h-5 text-gray-400" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 uppercase tracking-wide">Credits</span>
+                        <span className="text-lg font-semibold text-white">
+                          {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance || userProfile?.credits_balance)?.toLocaleString() || '0'}
+                        </span>
+                      </div>
+                    </a>
+                  )}
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="btn-white"
+                >
+                  Sign In
+                </button>
+              )}
             </div>
           </div>
 
@@ -218,44 +215,40 @@ export default function Navigation() {
               <nav className="flex flex-col pt-6 px-2 space-y-1">
                 <Link
                   href="/"
-                  className={`px-4 py-3 rounded-xl font-medium transition-all ${
-                    pathname === '/' 
-                      ? 'bg-white/10 text-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
+                  className={`px-4 py-3 rounded-xl font-medium transition-all ${pathname === '/'
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Home
                 </Link>
                 <Link
                   href="/packs"
-                  className={`px-4 py-3 rounded-xl font-medium transition-all ${
-                    pathname === '/packs' 
-                      ? 'bg-white/10 text-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
+                  className={`px-4 py-3 rounded-xl font-medium transition-all ${pathname === '/packs'
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Packs
                 </Link>
                 <Link
                   href="/pricing"
-                  className={`px-4 py-3 rounded-xl font-medium transition-all ${
-                    pathname === '/pricing' 
-                      ? 'bg-white/10 text-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
+                  className={`px-4 py-3 rounded-xl font-medium transition-all ${pathname === '/pricing'
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Pricing
                 </Link>
                 <Link
                   href="/how-to-port"
-                  className={`px-4 py-3 rounded-xl font-medium transition-all ${
-                    pathname === '/how-to-port' 
-                      ? 'bg-white/10 text-white' 
-                      : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
+                  className={`px-4 py-3 rounded-xl font-medium transition-all ${pathname === '/how-to-port'
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Docs
@@ -301,7 +294,7 @@ export default function Navigation() {
                           {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance)?.toLocaleString() || '0'}
                         </span>
                       </Link>
-                      
+
                       <Link
                         href="/profile"
                         className="flex items-center space-x-3 w-full text-left px-4 py-3 text-gray-300 hover:text-white hover:bg-white/5 rounded-xl font-medium transition-all"

@@ -814,8 +814,8 @@
   /* =========================== */
   
   .nav-header {
-    background-color: var(--bg-secondary) !important;
-    border-bottom: 1px solid var(--border-primary) !important;
+    background-color: #100f13 !important;
+    border-bottom: none !important;
     backdrop-filter: blur(10px) !important;
     position: relative !important;
     z-index: 100 !important;
@@ -824,7 +824,7 @@
   .nav-container {
     max-width: 100rem !important;
     margin: 0 auto !important;
-    padding: 1rem 1.5rem !important;
+    padding: 2rem 1.5rem 1rem 1.5rem !important;
   }
   
   .nav-content {
