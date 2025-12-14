@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell, Sparkles, TrendingUp } from 'lucide-react'
-import { LiquidGlassCard } from '@/components/ui/liquid-glass'
+import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell, Sparkles } from 'lucide-react'
 import { analytics } from '@/lib/analytics'
 import Image from 'next/image'
 import DemoVideoPopover from './DemoVideoPopover'
@@ -48,7 +47,7 @@ const ExportGuide = () => {
   ]
 
   return (
-    <div className="min-h-screen bg-[#100f13] text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[#080a09] text-white relative overflow-hidden">
 
       {/* Floating Value Proposition - Always visible on desktop, positioned on left */}
 
@@ -94,213 +93,81 @@ const ExportGuide = () => {
           </div>
 
           <div className="max-w-7xl mx-auto w-full relative z-10">
-            {/* Centered Content */}
-            <div className="text-center relative">
+            {/* Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
+              {/* Left Column - Text Content */}
+              <div className="text-left">
+                {/* Main Headline */}
+                <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                  AI Chats Forget
+                  <br />
+                  We Remember
+                </h1>
 
-              {/* Main Headline */}
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                AI Chats Forget
-                <br />
-                We Remember
-              </h1>
+                {/* Subheadline */}
+                <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                  Build a personalized memory system for your AI
+                </p>
 
-              {/* Subheadline */}
-              <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                Build a personalized memory system for your AI
-              </p>
-
-              {/* Trust Badges */}
-              <div className="flex flex-wrap items-center justify-center gap-6 mb-10 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-sm text-gray-400">Migrate AI Chats</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-sm text-gray-400">Upload Chat Exports</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-sm text-gray-400">Long-term Memory</span>
-                </div>
-              </div>
-
-              {/* CTA Button - Overlapping bubble */}
-              <div className="relative z-30 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                <a
-                  href={user ? "/packs" : "/results/sample-1"}
-                  className="inline-block px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)',
-                    color: 'white'
-                  }}
-                >
-                  <span className="relative z-10">Start Your Pack</span>
-                  {/* Hover glow effect */}
-                  <div
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                    style={{
-                      background: 'radial-gradient(circle at center, rgba(255, 255, 255, 0.1), transparent)',
-                    }}
-                  ></div>
-                </a>
-              </div>
-
-              {/* 3D Bubble Container - Overlapped by button */}
-              <div className="relative animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-                {/* Small Glass Stat Cards around bubble */}
-
-                {/* Users Card - Top Left, overlapping sphere */}
-                <div
-                  className="absolute top-[12%] left-[13%] z-20"
-                >
-                  <LiquidGlassCard
-                    glowIntensity="none"
-                    shadowIntensity="xs"
-                    borderRadius="20px"
-                    blurIntensity="sm"
-                    className="p-5 w-[220px]"
-                  >
-                    <div className="relative z-30">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-xs text-gray-300 font-medium">Users</div>
-                        <TrendingUp className="w-4 h-4 text-gray-300" />
-                      </div>
-                      <div className="text-3xl font-bold text-white">1.5k</div>
-                    </div>
-                  </LiquidGlassCard>
-                </div>
-
-                {/* Memories Card - Right Side, overlapping sphere */}
-                <div
-                  className="absolute top-[30%] right-[10%] z-20"
-                >
-                  <LiquidGlassCard
-                    glowIntensity="none"
-                    shadowIntensity="xs"
-                    borderRadius="20px"
-                    blurIntensity="xl"
-                    className="p-5 w-[220px]"
-                  >
-                    <div className="relative z-30">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-xs text-gray-300 font-medium">Memories</div>
-                        <TrendingUp className="w-4 h-4 text-gray-300" />
-                      </div>
-                      <div className="text-3xl font-bold text-white">55k</div>
-                    </div>
-                  </LiquidGlassCard>
-                </div>
-
-                {/* Packs Card - Bottom Left, overlapping sphere */}
-                <div
-                  className="absolute bottom-[18%] left-[12%] z-20"
-                >
-                  <LiquidGlassCard
-                    glowIntensity="none"
-                    shadowIntensity="xs"
-                    borderRadius="20px"
-                    blurIntensity="xl"
-                    className="p-5 w-[220px]"
-                  >
-                    <div className="relative z-30">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-xs text-gray-300 font-medium">Packs</div>
-                        <TrendingUp className="w-4 h-4 text-gray-300" />
-                      </div>
-                      <div className="text-3xl font-bold text-white">7.2k</div>
-                    </div>
-                  </LiquidGlassCard>
-                </div>
-
-                {/* 3D Glass Sphere - Apple Style */}
-                <div className="relative w-full max-w-4xl mx-auto h-[600px]">
-
-                  {/* Ambient Background Glow (Behind the sphere) */}
-                  <div
-                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[840px] h-[840px] opacity-40"
-                    style={{
-                      background: 'radial-gradient(circle at 50% 50%, rgba(88, 28, 135, 0.12), transparent 60%)',
-                      filter: 'blur(60px)',
-                    }}
-                  />
-
-                  {/* The Main Sphere Volume */}
-                  <div
-                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full z-10"
-                    style={{
-                      // Much darker, more subtle gradient
-                      background: 'radial-gradient(circle at 30% 20%, rgba(41, 26, 70, 0.43) 0%, rgba(40, 30, 50, 0.06) 20%, rgba(25, 20, 30, 0.12) 50%, rgba(10, 10, 12, 0.98) 100%)',
-                      // Very subtle border
-                      border: '1px solid rgba(255, 255, 255, 0.03)',
-                      boxShadow: `
-                        0 20px 50px -20px rgba(0, 0, 0, 0.9),
-                        inset -30px -30px 100px rgba(20, 15, 25, 0.3),
-                        inset 30px 30px 60px rgba(50, 40, 65, 0.03),
-                        inset 0 0 0 2px rgba(255, 255, 255, 0.01),
-                        inset 10px 10px 100px rgba(0,0,0,0.9)
-                      `,
-                      backdropFilter: 'blur(3px)'
-                    }}
-                  >
-                    {/* The "Liquid" Internal Reflection */}
-                    <div
-                      className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-[80%] h-[40%] rounded-[100%]"
-                      style={{
-                        background: 'radial-gradient(ellipse at center, rgba(147, 120, 200, 0.18), transparent 70%)',
-                        filter: 'blur(20px)',
-                        mixBlendMode: 'screen'
-                      }}
-                    />
-
-                    {/* Top Specular Highlight - FIXED with Radial Gradients */}
-
-                    {/* Layer A: The Soft "Dome" Light - anchored to top edge */}
-                    <div
-                      className="absolute top-0 left-0 right-0 h-[45%] rounded-t-full"
-                      style={{
-                        background: 'radial-gradient(100% 80% at 50% 0%, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 30%, transparent 80%)',
-                        filter: 'blur(5px)',
-                      }}
-                    />
-
-                    {/* Layer B: The Glossy Reflection - elliptical with vertical squish */}
-                    <div
-                      className="absolute top-[5%] left-[15%] w-[70%] h-[25%] rounded-[100%]"
-                      style={{
-                        background: 'radial-gradient(ellipse at top, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.1) 40%, transparent 70%)',
-                        filter: 'blur(12px)',
-                        opacity: 0.6,
-                        transform: 'scaleY(0.6)'
-                      }}
-                    />
-
-                    {/* Bottom Bounce Light (Refraction/Caustics) */}
-                    <div
-                      className="absolute bottom-[5%] left-1/2 transform -translate-x-1/2 w-[70%] h-[15%] rounded-[100%]"
-                      style={{
-                        background: 'radial-gradient(circle, rgba(179, 145, 218, 0.15) 0%, transparent 70%)',
-                        filter: 'blur(8px)',
-                        borderTop: '1px solid rgba(255, 255, 255, 0.15)'
-                      }}
-                    />
-
-                    {/* Center Text */}
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center z-20">
-                      <div className="text-2xl font-bold text-white tracking-wide drop-shadow-lg">Context Pack</div>
-                      <div className="text-sm text-purple-200/60 mt-2 font-light tracking-wider uppercase">Unified Knowledge</div>
-                    </div>
+                {/* Trust Badges */}
+                <div className="flex flex-wrap items-center gap-6 mb-10 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-sm text-gray-400">Migrate AI Chats</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-sm text-gray-400">Upload Chat Exports</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-sm text-gray-400">Long-term Memory</span>
+                  </div>
+                </div>
+
+                {/* CTA Button */}
+                <div className="relative z-30 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                  <a
+                    href={user ? "/packs" : "/results/sample-1"}
+                    className="inline-block px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+                      backdropFilter: 'blur(20px)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)',
+                      color: 'white'
+                    }}
+                  >
+                    <span className="relative z-10">Start Your Pack</span>
+                    {/* Hover glow effect */}
+                    <div
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      style={{
+                        background: 'radial-gradient(circle at center, rgba(255, 255, 255, 0.1), transparent)',
+                      }}
+                    ></div>
+                  </a>
+                </div>
+              </div>
+
+              {/* Right Column - Hero Image */}
+              <div className="relative animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+                <div className="relative w-full">
+                  <Image
+                    src="/main-image.png"
+                    alt="Context Pack Hero"
+                    width={1200}
+                    height={600}
+                    className="w-full h-auto"
+                    priority
+                  />
                 </div>
               </div>
             </div>
