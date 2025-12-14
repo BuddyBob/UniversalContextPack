@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_BASE_URL || 'https://www.context-pack.com';
-  
+
   return [
     {
       url: `${base}/`,
@@ -27,6 +27,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.5,
+    },
+    {
+      url: `${base}/how-to-port`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${base}/security`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
+    {
+      url: `${base}/dpa`,
+      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.4,
     },
     {
       url: `${base}/privacy-policy`,

@@ -47,7 +47,7 @@ export const metadata: Metadata = {
       'Turn your AI chat history into a single portable Context Pack. Keep your data, move it anywhere, and make every model remember you.',
     images: [
       {
-        url: '/og-image.png',
+        url: '/og-image.jpeg',
         width: 1200,
         height: 630,
         alt: 'Context Pack – AI Long-Term Memory'
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
     title: 'Context Pack – AI Memory Migration Platform',
     description:
       'Transform your ChatGPT, Claude, and Gemini conversations into portable Context Packs. Migrate your AI memory across platforms.',
-    images: ['/og-image.png'],
+    images: ['/og-image.jpeg'],
     creator: '@UCPlatform'
   },
   robots: {
@@ -74,7 +74,7 @@ export const metadata: Metadata = {
     }
   },
   verification: {
-    google: 'your-google-verification-code-here'
+    google: 'y0ov938-bNbHn9KUyi_jwRuUdcwDbUrbKu5ZD7Y1lzQ'
   },
   icons: {
     icon: [
