@@ -3631,7 +3631,10 @@ export default function ProcessPage() {
                 <p className="text-sm text-gray-400">Organize your chats and documents</p>
               </div>
               <button
-                onClick={() => setShowCreatePack(false)}
+                onClick={() => {
+                  setShowCreatePack(false);
+                  router.push('/packs');
+                }}
                 className="text-gray-500 hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />

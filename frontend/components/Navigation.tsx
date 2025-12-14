@@ -182,21 +182,6 @@ export default function Navigation() {
                     )}
 
                   </div>
-                  {user && (
-                    <a
-                      href="/pricing"
-                      className="flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-all"
-                      title="Buy more credits"
-                    >
-                      <CreditCard className="w-5 h-5 text-gray-400" />
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400 uppercase tracking-wide">Credits</span>
-                        <span className="text-lg font-semibold text-white">
-                          {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance || userProfile?.credits_balance)?.toLocaleString() || '0'}
-                        </span>
-                      </div>
-                    </a>
-                  )}
                 </>
               ) : (
                 <button
@@ -331,6 +316,28 @@ export default function Navigation() {
           )}
         </div>
       </header>
+
+      {/* Floating Credits Card - Top Right */}
+      {user && (
+        <a
+          href="/pricing"
+          className="fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl transition-all backdrop-blur-xl hover:scale-105"
+          style={{
+            background: 'rgba(30, 25, 40, 0.8)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+          }}
+          title="Buy more credits"
+        >
+          <CreditCard className="w-5 h-5 text-gray-400" />
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Credits</span>
+            <span className="text-xl font-bold text-white">
+              {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance)?.toLocaleString() || '0'}
+            </span>
+          </div>
+        </a>
+      )}
 
       <AuthModal
         isOpen={showAuthModal}
