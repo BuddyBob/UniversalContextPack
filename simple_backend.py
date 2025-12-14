@@ -2374,17 +2374,8 @@ Generate your analysis following the format shown in the examples above.
             "error_message_param": warning_message  # Use error_message field for warning
         }).execute()
         
-        # Update chunks_analyzed counter in user_profiles
-        successfully_analyzed = len(chunks) - failed_chunks_count
-        if successfully_analyzed > 0:
-            try:
-                supabase.rpc("increment_chunks_analyzed", {
-                    "user_uuid": user.user_id,
-                    "increment_by": successfully_analyzed
-                }).execute()
-                print(f"📊 Updated user profile: +{successfully_analyzed} chunks analyzed")
-            except Exception as profile_error:
-                print(f"⚠️ Failed to update chunks_analyzed counter: {profile_error}")
+        # Note: chunks_analyzed counter removed (legacy only)
+        # V2 packs track processed_chunks at pack_sources level
         
         if max_chunks is not None and len(chunks) < len(all_chunks):
             print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks (limited by available credits)")
@@ -4624,9 +4615,16 @@ async def start_source_analysis(
         filename = source.get("file_name", "unknown")
         custom_system_prompt = None
         try:
-            pack_settings = supabase.table("packs_v2").select("custom_system_prompt").eq("pack_id", pack_id).eq("user_id", user.user_id).single().execute()
-            if pack_settings.data:
-                custom_system_prompt = pack_settings.data.get("custom_system_prompt")
+            # Use RPC function to get pack details (bypasses RLS)
+            pack_result = supabase.rpc("get_pack_details_v2", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id
+            }).execute()
+            
+            if pack_result.data:
+                pack_data = pack_result.data if isinstance(pack_result.data, dict) else pack_result.data[0]
+                if pack_data.get("pack"):
+                    custom_system_prompt = pack_data["pack"].get("custom_system_prompt")
         except Exception as pack_settings_error:
             print(f"⚠️ Could not load custom system prompt for pack {pack_id}: {pack_settings_error}")
         
