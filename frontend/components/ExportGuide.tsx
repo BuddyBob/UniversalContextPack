@@ -114,15 +114,15 @@ const ExportGuide = () => {
               {/* Left Column - Text Content */}
               <div className="text-left">
                 {/* Main Headline */}
-                <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
                   AI Chats Forget
                   <br />
-                  We Remember
+                  Context Packs Remembers
                 </h1>
 
                 {/* Subheadline */}
                 <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Build a personalized memory system for your AI
+                  Context Pack saves your important conversations and documents so every new AI chat starts informed.
                 </p>
 
                 {/* Trust Badges */}

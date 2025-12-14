@@ -149,6 +149,18 @@ export default function Navigation() {
 
               {user ? (
                 <>
+                  {/* Credits Display */}
+                  <Link
+                    href="/pricing"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+                    title="Buy more credits"
+                  >
+                    <CreditCard className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm font-semibold text-white">
+                      {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance)?.toLocaleString() || '0'}
+                    </span>
+                  </Link>
+
                   <div className="relative" ref={dropdownRef}>
                     <div
                       className="nav-user-dropdown"
