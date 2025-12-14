@@ -3246,7 +3246,7 @@ export default function ProcessPage() {
                               <FileText className="h-6 w-6 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
                             </div>
                           </div>
-                          <h3 className="text-lg font-bold text-white mb-2">One Chat</h3>
+                          <h3 className="text-lg font-bold text-white mb-2">Chat URL</h3>
                           <p className="text-gray-400 text-sm leading-relaxed">Import single conversation URL</p>
                           <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
                             <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
