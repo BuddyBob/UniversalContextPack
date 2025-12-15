@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Play, X, HelpCircle } from 'lucide-react'
+import { Play, X, HelpCircle, ExternalLink } from 'lucide-react'
 
 export default function DemoVideoPopover() {
   const [isOpen, setIsOpen] = useState(false)
@@ -131,7 +131,19 @@ export default function DemoVideoPopover() {
                     <h3 className="text-white font-medium text-base">How to Use Context Pack</h3>
                     <p className="text-gray-500 text-sm mt-0.5">A quick walkthrough of the platform</p>
                   </div>
-                  <HelpCircle className="w-5 h-5 text-gray-600" />
+                  <div className="flex items-center gap-3">
+                    <a
+                      href="https://youtu.be/ywnsNDI1imY"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-4 py-2 bg-[#252525] hover:bg-[#2a2a2a] text-gray-300 hover:text-white rounded-lg transition-all duration-200 text-sm font-medium border border-gray-800/50 hover:border-gray-700"
+                      aria-label="Open in YouTube"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>View In-Depth Explanation</span>
+                    </a>
+                    <HelpCircle className="w-5 h-5 text-gray-600" />
+                  </div>
                 </div>
               </div>
             </div>
