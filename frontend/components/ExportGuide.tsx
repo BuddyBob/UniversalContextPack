@@ -114,15 +114,15 @@ const ExportGuide = () => {
               {/* Left Column - Text Content */}
               <div className="text-left">
                 {/* Main Headline */}
-                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                  AI Forgets
+                <h1 className="text-7xl md:text-7xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                  Portable
                   <br />
-                  Context Pack Remembers
+                  AI Memory
                 </h1>
 
                 {/* Subheadline */}
                 <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Create Universal Context Packs to move memories and chats across AI platforms.
+                  Move your AI’s context, history, and preferences across ChatGPT, Claude, Gemini, and more.
                 </p>
 
                 {/* Trust Badges */}
