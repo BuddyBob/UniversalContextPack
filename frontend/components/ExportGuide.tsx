@@ -122,7 +122,7 @@ const ExportGuide = () => {
 
                 {/* Subheadline */}
                 <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Create universal context to move across AI platforms.
+                  Create universal context to move memoories and chats across AI platforms.
                 </p>
 
                 {/* Trust Badges */}
