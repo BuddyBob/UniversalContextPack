@@ -115,14 +115,14 @@ const ExportGuide = () => {
               <div className="text-left">
                 {/* Main Headline */}
                 <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                  Unified
+                  Universal
                   <br />
                   AI Memory
                 </h1>
 
                 {/* Subheadline */}
                 <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Create a universal context pack to move across AI platforms.
+                  Create universal context to move across AI platforms.
                 </p>
 
                 {/* Trust Badges */}
