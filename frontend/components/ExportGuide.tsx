@@ -177,7 +177,7 @@ const ExportGuide = () => {
                 <div className="relative w-full transform scale-125 origin-center">
                   <Image
                     src="/main-image.png"
-                    alt="Context Pack Hero"
+                    alt="Context Pack interface showing AI chat memory portability across ChatGPT, Claude, and Gemini platforms"
                     width={1600}
                     height={800}
                     className="w-full h-auto"

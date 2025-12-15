@@ -3,9 +3,14 @@
 import { useState } from 'react'
 import { ArrowLeft, Copy, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
+import type { Metadata } from 'next'
+
+// Note: Metadata export only works in server components
+// This page is 'use client', so metadata should be in parent layout or moved to server component wrapper
+
 
 const HowToPortPage = () => {
-  const [copiedSteps, setCopiedSteps] = useState<{[key: string]: boolean}>({})
+  const [copiedSteps, setCopiedSteps] = useState<{ [key: string]: boolean }>({})
 
   const copyToClipboard = (text: string, stepId: string) => {
     navigator.clipboard.writeText(text)
@@ -31,7 +36,7 @@ const HowToPortPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Link 
+              <Link
                 href="/"
                 className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
@@ -75,7 +80,7 @@ const HowToPortPage = () => {
           {/* Platform Integration */}
           <div className="mb-12">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Platform Integration</h2>
-            
+
             {codeExamples.map((example, index) => (
               <div key={example.platform} className="mb-8">
                 <h3 className="text-lg font-medium text-gray-900 mb-3">{example.platform}</h3>
@@ -139,7 +144,7 @@ const HowToPortPage = () => {
           <div className="border-t border-gray-200 pt-8">
             <div className="text-center">
               <p className="text-gray-600 mb-4">Need help with integration?</p>
-              <Link 
+              <Link
                 href="/process"
                 className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
               >
