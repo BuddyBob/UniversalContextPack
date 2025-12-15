@@ -48,6 +48,21 @@ from urllib.parse import urlparse
 # Load environment variables with override to refresh from file
 load_dotenv(override=True)
 
+# Import Email Service module
+try:
+    from email_service import (
+        send_account_creation_email,
+        send_incomplete_activation_email,
+        log_email_event,
+        update_user_email_flag,
+        has_email_been_sent
+    )
+    EMAIL_SERVICE_AVAILABLE = True
+    print("✅ Email service module loaded")
+except ImportError as e:
+    print(f"⚠️ Email service module not available: {e}")
+    EMAIL_SERVICE_AVAILABLE = False
+
 # Import Memory Tree module (if enabled)
 try:
     from memory_tree import (
@@ -1794,59 +1809,137 @@ async def submit_feedback(request: FeedbackRequest):
         if len(feedback_text) > 1000:
             raise HTTPException(status_code=400, detail="Feedback is too long (max 1000 characters)")
         
-        # Send email to admin
-        RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-        admin_email = "thavasantonio@gmail.com"
+        # Log feedback to console (replace with actual feedback storage later)
+        timestamp = datetime.utcnow().isoformat()
+        print(f"\n{'='*60}")
+        print(f"📝 FEEDBACK RECEIVED - {timestamp}")
+        print(f"{'='*60}")
+        print(feedback_text)
+        print(f"{'='*60}\n")
         
-        if RESEND_API_KEY:
-            try:
-                import requests
-                from datetime import datetime
-                
-                # Use verified domain for from address (same as notification emails)
-                from_email = "noreply@context-pack.com"
-                
-                response = requests.post(
-                    "https://api.resend.com/emails",
-                    headers={
-                        "Authorization": f"Bearer {RESEND_API_KEY}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "from": f"Context Pack Feedback <{from_email}>",
-                        "to": [admin_email],
-                        "subject": f"💡 New Feedback/Feature Request - {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                        "text": f"""New anonymous feedback received:
-                        {feedback_text}
+        # TODO: Store feedback in database or send to a service
+        
+        return {"status": "received", "timestamp": timestamp}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error receiving feedback: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
 
-                        ---
-                        Submitted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
-                        Source: Context Pack Website Feedback Banner
-                        """
-                    },
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    print(f"✅ Feedback email sent successfully to {admin_email}")
-                    return {"success": True, "message": "Thank you for your feedback!"}
-                else:
-                    print(f"❌ Failed to send feedback email: {response.status_code} - {response.text}")
-                    raise HTTPException(status_code=500, detail="Failed to send feedback")
-                    
-            except Exception as email_error:
-                print(f"❌ Error sending feedback email: {email_error}")
-                raise HTTPException(status_code=500, detail="Failed to send feedback")
+# ============================================================================
+# EMAIL ENGAGEMENT ENDPOINTS
+# ============================================================================
+
+class SendAccountEmailRequest(BaseModel):
+    """Request to send account creation email"""
+    user_id: Optional[str] = None  # Will use authenticated user if not provided
+    email: Optional[str] = None    # Will use user's email if not provided
+
+@app.post("/api/email/send-account-creation")
+async def send_account_creation_email_endpoint(
+    request: SendAccountEmailRequest = None,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Send account creation welcome email to user.
+    
+    This can be called:
+    1. After user signs up (triggered by frontend)
+    2. By admin to manually send welcome email
+    
+    Prevents duplicate sends by checking database.
+    """
+    try:
+        if not EMAIL_SERVICE_AVAILABLE:
+            raise HTTPException(status_code=503, detail="Email service not available")
+        
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Determine user_id and email
+        target_user_id = request.user_id if request else user.user_id
+        target_email = request.email if request and request.email else user.email
+        
+        print(f"📧 Account creation email requested for user {target_user_id} ({target_email})")
+        
+        # Check if email was already sent
+        already_sent = has_email_been_sent(
+            supabase_client=supabase,
+            user_id=target_user_id,
+            event_type="account_created"
+        )
+        
+        if already_sent:
+            print(f"⚠️ Account creation email already sent to {target_email}")
+            return {
+                "status": "already_sent",
+                "message": "Account creation email was already sent to this user"
+            }
+        
+        # Get user profile for first name
+        user_profile_result = supabase.rpc(
+            "get_user_profile_for_backend",
+            {"user_uuid": target_user_id}
+        ).execute()
+        
+        first_name = None
+        if user_profile_result.data:
+            full_name = user_profile_result.data.get("full_name")
+            if full_name:
+                first_name = full_name.split()[0] if full_name else None
+        
+        # Send email
+        resend_email_id = send_account_creation_email(
+            user_email=target_email,
+            first_name=first_name
+        )
+        
+        if resend_email_id:
+            # Update user profile flag
+            update_user_email_flag(
+                supabase_client=supabase,
+                user_id=target_user_id,
+                flag_name="account_creation_email_sent",
+                value=True
+            )
+            
+            # Log email event
+            log_email_event(
+                supabase_client=supabase,
+                user_id=target_user_id,
+                event_type="account_created",
+                email_address=target_email,
+                status="sent",
+                resend_email_id=resend_email_id
+            )
+            
+            print(f"✅ Account creation email sent to {target_email} (ID: {resend_email_id})")
+            
+            return {
+                "status": "sent",
+                "message": "Account creation email sent successfully",
+                "email_id": resend_email_id,
+                "recipient": target_email
+            }
         else:
-            # Fallback: just log it if no email service configured
-            print(f"💡 FEEDBACK (no email service): {feedback_text}")
-            return {"success": True, "message": "Thank you for your feedback!"}
+            # Log failed email
+            log_email_event(
+                supabase_client=supabase,
+                user_id=target_user_id,
+                event_type="account_created",
+                email_address=target_email,
+                status="failed",
+                error_message="Resend API returned None"
+            )
+            
+            raise HTTPException(status_code=500, detail="Failed to send email via Resend")
             
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Error processing feedback: {e}")
-        raise HTTPException(status_code=500, detail="Failed to process feedback")
+        print(f"❌ Error sending account creation email: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
 class ConversationURLRequest(BaseModel):
     url: str

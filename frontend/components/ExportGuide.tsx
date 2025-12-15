@@ -190,6 +190,7 @@ const ExportGuide = () => {
 
         </section>
 
+
         {/* Tabbed Use Cases Section */}
         <section className="py-16 md:py-24 px-6 bg-secondary">
           <div className="max-w-6xl mx-auto">
