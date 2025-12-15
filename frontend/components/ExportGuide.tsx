@@ -122,7 +122,7 @@ const ExportGuide = () => {
 
                 {/* Subheadline */}
                 <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Move your AI’s context, history, and preferences across ChatGPT, Claude, Gemini, and more.
+                  Move your AI’s context, chats, and preferences across ChatGPT, Claude, Gemini, and more.
                 </p>
 
                 {/* Trust Badges */}

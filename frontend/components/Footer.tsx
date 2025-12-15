@@ -65,7 +65,7 @@ export default function Footer() {
               <p>
                 {/* <a href="mailto:thavasantonio@gmail.com" className="hover:text-primary transition-colors"></a> */}
                 <a className="hover:text-primary transition-colors">
-                  thavasantonio@gmail.com
+                  support@context-pack.com
                 </a>
               </p>
               <p>San Francisco, CA</p>
