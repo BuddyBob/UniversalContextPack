@@ -122,7 +122,7 @@ const ExportGuide = () => {
 
                 {/* Subheadline */}
                 <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Move your AI’s memories, chats, and preferences across ChatGPT, Claude, Gemini, and more.
+                  Persistent AI memory that stays with you across <br /> chats, sessions, and AI platforms.
                 </p>
 
                 {/* Trust Badges */}
