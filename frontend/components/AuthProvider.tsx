@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, UserProfile } from '@/lib/supabase'
-import { API_ENDPOINTS } from '@/lib/api'
+import { API_ENDPOINTS, API_BASE_URL } from '@/lib/api'
 
 interface AuthContextType {
   user: User | null
@@ -39,14 +39,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      
+
       setSession(session)
       setUser(session?.user ?? null)
-      
+
       // Handle different auth events appropriately
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         if (session?.user) {
           fetchUserProfile(session.user.id)
+
+          // Send welcome email for new signups
+          // Only send if user just signed in (not on page refresh)
+          if (event === 'SIGNED_IN') {
+            try {
+              const response = await fetch(`${API_BASE_URL}/api/email/send-account-creation`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${session.access_token}`,
+                  'Content-Type': 'application/json'
+                }
+              })
+
+              if (response.ok) {
+                const data = await response.json()
+                console.log('✅ Welcome email sent:', data.status)
+              } else {
+                const error = await response.json()
+                // Log but don't block - email is non-critical
+                console.log('⚠️ Welcome email skipped:', error.message)
+              }
+            } catch (emailError) {
+              // Non-blocking - don't stop user flow if email fails
+              console.log('⚠️ Welcome email failed (non-blocking):', emailError)
+            }
+          }
         } else {
           setUserProfile(null)
         }
@@ -55,25 +81,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (event === 'TOKEN_REFRESHED') {
         // Don't fetch profile on token refresh to avoid unnecessary API calls
       }
-      
+
       setLoading(false)
     })
 
     // Set up token refresh check
     const tokenRefreshInterval = setInterval(async () => {
       const { data: { session }, error } = await supabase.auth.getSession()
-      
+
       if (error) {
         console.error('Error checking session:', error)
         return
       }
-      
+
       if (session) {
         // Check if token is close to expiring (within 10 minutes)
         const expiresAt = session.expires_at ? session.expires_at * 1000 : 0
         const now = Date.now()
         const tenMinutes = 10 * 60 * 1000
-        
+
         if (expiresAt - now < tenMinutes && expiresAt > now) {
           const { error: refreshError } = await supabase.auth.refreshSession()
           if (refreshError) {
@@ -92,16 +118,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const fetchUserProfile = async (userId: string) => {
-    
+
     // Debounce: Don't fetch if we fetched within the last 5 seconds
     const now = Date.now()
     if (now - lastProfileFetch < 5000) {
       return
     }
-    
+
     try {
       setLastProfileFetch(now)
-      
+
       const { data, error } = await supabase
         .from('user_profiles')
         .select('id, email, full_name, avatar_url, r2_user_directory, credits_balance, payment_plan, created_at, updated_at')
@@ -119,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log('✅ User profile loaded:', { credits_balance: data.credits_balance, payment_plan: data.payment_plan })
-      
+
       setUserProfile(data)
     } catch (error) {
       console.error('Error fetching user profile:', error)
@@ -134,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const isDemoPage = currentPath.includes('/results/sample-')
       const redirectPath = (currentPath === '/process' || isDemoPage) ? '/packs' : currentPath
       const redirectTo = `${window.location.origin}${redirectPath}`
-      
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -166,13 +192,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}): Promise<Response> => {
     // Server health check and warming for critical operations
     const isCriticalOperation = url.includes('/api/analyze/') || url.includes('/api/extract') || url.includes('/api/chunk/')
-    
+
     if (isCriticalOperation) {
       try {
         // Quick health check to warm up the server
         const healthController = new AbortController()
         const healthTimeout = setTimeout(() => healthController.abort(), 10000) // 10 second timeout for health check
-        
+
         const baseUrl = new URL(url).origin
         const healthResponse = await fetch(`${baseUrl}/api/health`, {
           method: 'GET',
@@ -181,15 +207,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             'Cache-Control': 'no-cache'
           }
         })
-        
+
         clearTimeout(healthTimeout)
-        
+
         if (!healthResponse.ok) {
           console.warn('Server health check failed, proceeding anyway...')
         } else {
           const healthData = await healthResponse.json()
           console.log('Server health check passed:', healthData.status)
-          
+
           // If server is unhealthy, add extra delay
           if (healthData.status !== 'healthy') {
             console.warn('Server reports unhealthy status, adding delay...')
@@ -203,10 +229,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await new Promise(resolve => setTimeout(resolve, 3000))
       }
     }
-    
+
     // Get fresh session to ensure token is valid
     const { data: { session }, error } = await supabase.auth.getSession()
-    
+
     if (error || !session) {
       console.error('No valid session available:', error)
       await signOut()
@@ -217,7 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const expiresAt = session.expires_at ? session.expires_at * 1000 : 0
     const now = Date.now()
     const fiveMinutes = 5 * 60 * 1000
-    
+
     if (expiresAt <= now + fiveMinutes) {
       console.log('Token expiring soon, refreshing...')
       const { error: refreshError } = await supabase.auth.refreshSession()
@@ -226,14 +252,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await signOut()
         throw new Error('Authentication expired')
       }
-      
+
       // Get the refreshed session
       const { data: { session: refreshedSession } } = await supabase.auth.getSession()
       if (!refreshedSession) {
         await signOut()
         throw new Error('Authentication refresh failed')
       }
-      
+
       // Use the refreshed session
       options.headers = {
         ...options.headers,
@@ -250,10 +276,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set up timeout if not already provided
     if (!options.signal) {
       const controller = new AbortController()
-      
+
       // Use different timeouts based on the endpoint
       let timeoutMs = 60000 // Default 60 seconds (increased from 30)
-      
+
       if (url.includes('/api/analyze/')) {
         timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
       } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
@@ -267,28 +293,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (url.includes('/api/health')) {
         timeoutMs = 20000 // 20 seconds for health checks
       }
-      
+
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
       options.signal = controller.signal
-      
+
       // Store timeout ID for cleanup
       options.signal.addEventListener('abort', () => clearTimeout(timeoutId))
     }
 
     try {
       const response = await fetch(url, options)
-      
+
       // If we get a 401, the token might be invalid - try refresh once
       if (response.status === 401) {
         console.log('Got 401, attempting token refresh...')
         const { error: refreshError } = await supabase.auth.refreshSession()
-        
+
         if (refreshError) {
           console.error('Token refresh failed on 401:', refreshError)
           await signOut()
           throw new Error('Authentication expired')
         }
-        
+
         // Retry the request with refreshed token and new timeout
         const { data: { session: newSession } } = await supabase.auth.getSession()
         if (newSession) {
@@ -299,10 +325,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               'Authorization': `Bearer ${newSession.access_token}`,
             },
           }
-          
+
           // Set up new timeout for retry
           const retryController = new AbortController()
-          
+
           // Use appropriate timeout for retry based on endpoint
           let retryTimeoutMs = 30000 // Default 30 seconds
           if (url.includes('/api/analyze/')) {
@@ -316,35 +342,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } else if (url.includes('/api/health')) {
             retryTimeoutMs = 20000 // 20 seconds for health checks
           }
-          
+
           const retryTimeoutId = setTimeout(() => retryController.abort(), retryTimeoutMs)
           retryOptions.signal = retryController.signal
           retryController.signal.addEventListener('abort', () => clearTimeout(retryTimeoutId))
-          
+
           return await fetch(url, retryOptions)
         } else {
           await signOut()
           throw new Error('Authentication refresh failed')
         }
       }
-      
+
       return response
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        const timeoutType = url.includes('/api/analyze/') ? 'Analysis request' 
-                          : url.includes('/api/chunk/') ? 'Chunking request'
-                          : url.includes('/api/extract/') ? 'Extraction request'
-                          : url.includes('/sources') ? 'File upload request'
-                          : url.includes('/api/profile/quick') ? 'Quick profile request'
-                          : url.includes('/api/health') ? 'Health check request'
-                          : 'Request'
-        
+        const timeoutType = url.includes('/api/analyze/') ? 'Analysis request'
+          : url.includes('/api/chunk/') ? 'Chunking request'
+            : url.includes('/api/extract/') ? 'Extraction request'
+              : url.includes('/sources') ? 'File upload request'
+                : url.includes('/api/profile/quick') ? 'Quick profile request'
+                  : url.includes('/api/health') ? 'Health check request'
+                    : 'Request'
+
         const timeoutDuration = url.includes('/api/analyze/') ? '30 minutes'
-                              : url.includes('/api/chunk/') || url.includes('/api/extract/') || url.includes('/sources') ? '10 minutes'
-                              : url.includes('/api/profile/quick') ? '10 seconds'
-                              : url.includes('/api/health') ? '20 seconds'
-                              : '30 seconds'
-        
+          : url.includes('/api/chunk/') || url.includes('/api/extract/') || url.includes('/sources') ? '10 minutes'
+            : url.includes('/api/profile/quick') ? '10 seconds'
+              : url.includes('/api/health') ? '20 seconds'
+                : '30 seconds'
+
         console.warn(`${timeoutType} timed out after ${timeoutDuration}`)
         throw new Error(`${timeoutType} timeout (${timeoutDuration})`)
       }
