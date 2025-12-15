@@ -115,14 +115,14 @@ const ExportGuide = () => {
               <div className="text-left">
                 {/* Main Headline */}
                 <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                  AI Chats Forget
+                  Unified
                   <br />
-                  Context Pack Remembers
+                  AI Memory
                 </h1>
 
                 {/* Subheadline */}
                 <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Keep your AI chats persistent across conversations and platforms.
+                  Create a universal context pack to move across AI platforms.
                 </p>
 
                 {/* Trust Badges */}
