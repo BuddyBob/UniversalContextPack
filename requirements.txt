@@ -15,3 +15,4 @@ psutil==5.9.8
 selenium==4.15.2
 webdriver-manager==4.0.1
 pypdf2==3.0.1
+resend>=2.0.0
