@@ -12,9 +12,11 @@ export default function Navigation() {
   const { user, userProfile, signOut, loading, session, makeAuthenticatedRequest } = useAuth()
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
+  const [showResourcesDropdown, setShowResourcesDropdown] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [theme, setTheme] = useState('dark')
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const resourcesDropdownRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
 
   // Debug: Log userProfile changes
@@ -45,6 +47,9 @@ export default function Navigation() {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowUserDropdown(false)
+      }
+      if (resourcesDropdownRef.current && !resourcesDropdownRef.current.contains(event.target as Node)) {
+        setShowResourcesDropdown(false)
       }
     }
 
@@ -113,17 +118,44 @@ export default function Navigation() {
               >
                 Packs
               </Link>
+
+              {/* Resources Dropdown */}
+              <div className="relative" ref={resourcesDropdownRef}>
+                <button
+                  onClick={() => setShowResourcesDropdown(!showResourcesDropdown)}
+                  className={`nav-link ${pathname?.startsWith('/blog') || pathname?.startsWith('/how-to-port') ? 'active' : ''}`}
+                >
+                  Resources
+                  <svg className="w-4 h-4 ml-1 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showResourcesDropdown && (
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-white backdrop-blur-xl border border-gray-200 rounded-xl shadow-2xl py-2 z-50">
+                    <Link
+                      href="/blog"
+                      className="block px-4 py-3 text-gray-700 hover:text-black hover:bg-gray-50 transition-colors"
+                      onClick={() => setShowResourcesDropdown(false)}
+                    >
+                      Blog
+                    </Link>
+                    <Link
+                      href="/how-to-port"
+                      className="block px-4 py-3 text-gray-700 hover:text-black hover:bg-gray-50 transition-colors"
+                      onClick={() => setShowResourcesDropdown(false)}
+                    >
+                      Docs
+                    </Link>
+                  </div>
+                )}
+              </div>
+
               <Link
                 href="/pricing"
                 className={`nav-link ${pathname === '/pricing' ? 'active' : ''}`}
               >
                 Pricing
-              </Link>
-              <Link
-                href="/how-to-port"
-                className={`nav-link ${pathname === '/how-to-port' ? 'active' : ''}`}
-              >
-                Docs
               </Link>
             </nav>
 
@@ -230,6 +262,32 @@ export default function Navigation() {
                 >
                   Packs
                 </Link>
+
+                {/* Resources Section */}
+                <div className="px-2 py-2">
+                  <div className="text-xs text-gray-500 uppercase tracking-wider px-2 mb-2">Resources</div>
+                  <Link
+                    href="/blog"
+                    className={`block px-4 py-3 rounded-xl font-medium transition-all ${pathname?.startsWith('/blog')
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    onClick={() => setShowMobileMenu(false)}
+                  >
+                    Blog
+                  </Link>
+                  <Link
+                    href="/how-to-port"
+                    className={`block px-4 py-3 rounded-xl font-medium transition-all ${pathname === '/how-to-port'
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    onClick={() => setShowMobileMenu(false)}
+                  >
+                    Documentation
+                  </Link>
+                </div>
+
                 <Link
                   href="/pricing"
                   className={`px-4 py-3 rounded-xl font-medium transition-all ${pathname === '/pricing'
@@ -239,16 +297,6 @@ export default function Navigation() {
                   onClick={() => setShowMobileMenu(false)}
                 >
                   Pricing
-                </Link>
-                <Link
-                  href="/how-to-port"
-                  className={`px-4 py-3 rounded-xl font-medium transition-all ${pathname === '/how-to-port'
-                    ? 'bg-white/10 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    }`}
-                  onClick={() => setShowMobileMenu(false)}
-                >
-                  Docs
                 </Link>
 
                 {/* Mobile User Section */}
