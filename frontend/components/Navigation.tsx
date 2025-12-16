@@ -73,7 +73,7 @@ export default function Navigation() {
           <div className="nav-content">
             <div className="nav-brand">
               <Image
-                src="/Logo2.png"
+                src="/images/logo/logo-714x1280.png"
                 alt="UCP Logo"
                 width={32}
                 height={32}
@@ -96,7 +96,7 @@ export default function Navigation() {
             {/* Logo - Left */}
             <Link href="/" className="nav-brand">
               <Image
-                src="/Logo2.png"
+                src="/images/logo/logo-714x1280.png"
                 alt="UCP Logo"
                 width={25}
                 height={25}

@@ -176,7 +176,7 @@ const ExportGuide = () => {
               <div className="hidden lg:block relative animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
                 <div className="relative w-full transform scale-125 origin-center">
                   <Image
-                    src="/main-image.png"
+                    src="/images/hero/main-hero-1536x1024.png"
                     alt="Context Pack interface showing AI chat memory portability across ChatGPT, Claude, and Gemini platforms"
                     width={1600}
                     height={800}
