@@ -3262,9 +3262,9 @@ export default function ProcessPage() {
                             return;
                           }
                           setUploadMethod('document');
-                          // Update file input to accept documents including Google Docs exports
+                          // Update file input to accept documents
                           if (fileInputRef.current) {
-                            fileInputRef.current.accept = '.pdf,.txt,.md,.doc,.docx';
+                            fileInputRef.current.accept = '.pdf,.txt,.csv,.md,.doc,.docx';
                           }
                           fileInputRef.current?.click();
                         }}
@@ -3277,7 +3277,7 @@ export default function ProcessPage() {
                             </div>
                           </div>
                           <h3 className="text-lg font-bold text-white mb-2">Document</h3>
-                          <p className="text-gray-400 text-sm leading-relaxed">PDF, TXT, HTML, CSV</p>
+                          <p className="text-gray-400 text-sm leading-relaxed">PDF, TXT, CSV</p>
                           <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
                             <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
                           </div>

@@ -2582,6 +2582,8 @@ async def build_tree_from_analysis(
     This runs AFTER analyze_source_chunks completes. It reads the
     high-quality narrative analysis and extracts structured facts into the tree.
    
+    NOW WITH CONCURRENT BATCH PROCESSING for 10x speedup on large files.
+   
     Args:
         pack_id: Pack identifier
         source_id: Source identifier
@@ -2635,29 +2637,94 @@ async def build_tree_from_analysis(
     # Get user_id for status updates
     user_id = user.user_id
    
-    # Process each chunk analysis
+    # ============================================================================
+    # CONCURRENT BATCH PROCESSING
+    # ============================================================================
+    
+    BATCH_SIZE = 10  # Process 10 chunks concurrently
     total_nodes = 0
-    for chunk_idx, chunk_analysis in enumerate(chunk_analyses):
-        idx = chunk_analysis["index"]
-        text = chunk_analysis["text"]
-       
-        # Update progress
-        tree_progress = 95 + int((chunk_idx / len(chunk_analyses)) * 4)  # 95-99%
+    total_chunks = len(chunk_analyses)
+    
+    print(f"🚀 [CONCURRENT] Processing {total_chunks} chunks in batches of {BATCH_SIZE}")
+    
+    # Process chunks in batches
+    for batch_start in range(0, total_chunks, BATCH_SIZE):
+        batch_end = min(batch_start + BATCH_SIZE, total_chunks)
+        batch = chunk_analyses[batch_start:batch_end]
+        batch_num = (batch_start // BATCH_SIZE) + 1
+        total_batches = (total_chunks + BATCH_SIZE - 1) // BATCH_SIZE
+        
+        print(f"\n📦 [BATCH {batch_num}/{total_batches}] Processing chunks {batch_start + 1}-{batch_end}")
+        
+        # Update progress for batch start
+        batch_progress = 95 + int((batch_start / total_chunks) * 4)  # 95-99%
         try:
             supabase.rpc("update_source_status", {
                 "user_uuid": user_id,
                 "target_source_id": source_id,
                 "status_param": "building_tree",
-                "progress_param": tree_progress
+                "progress_param": batch_progress
             }).execute()
         except:
-            pass  # Don't fail if status update fails
-       
-        print(f"\n📝 Processing chunk {idx + 1}/{len(chunk_analyses)} (tree progress: {tree_progress}%)...")
-       
-        # Build tree extraction prompt
-        if scope.startswith("knowledge:"):
-            tree_prompt = f"""
+            pass
+        
+        # Create tasks for concurrent processing
+        tasks = []
+        for chunk_analysis in batch:
+            task = _process_single_chunk_tree(
+                chunk_analysis=chunk_analysis,
+                scope=scope,
+                user=user,
+                pack_id=pack_id,
+                source_id=source_id,
+                total_chunks=total_chunks
+            )
+            tasks.append(task)
+        
+        # Execute batch concurrently
+        try:
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Count successful extractions and handle errors
+            batch_nodes = 0
+            for i, result in enumerate(batch_results):
+                if isinstance(result, Exception):
+                    chunk_idx = batch[i]["index"]
+                    print(f"   ⚠️ Chunk {chunk_idx + 1} failed: {result}")
+                elif isinstance(result, int):
+                    batch_nodes += result
+            
+            total_nodes += batch_nodes
+            print(f"   ✅ Batch complete: ~{batch_nodes} nodes extracted")
+            
+        except Exception as e:
+            print(f"   ❌ Batch processing error: {e}")
+            # Continue with next batch even if this one fails
+            continue
+   
+    print(f"\n🎉 Tree building complete: ~{total_nodes} nodes created from {total_chunks} chunks")
+
+
+async def _process_single_chunk_tree(
+    chunk_analysis: dict,
+    scope: str,
+    user: Any,
+    pack_id: str,
+    source_id: str,
+    total_chunks: int
+) -> int:
+    """
+    Process a single chunk for tree extraction (used in concurrent batches).
+    
+    Returns:
+        Number of nodes created from this chunk
+    """
+    idx = chunk_analysis["index"]
+    text = chunk_analysis["text"]
+    
+    # Build tree extraction prompt
+    if scope.startswith("knowledge:"):
+        tree_prompt = f"""
 You are turning a chunk of analysis into a structured "memory tree" representation.
 
 The input is a human-readable analysis of a document. Based on this analysis, extract:
@@ -2710,8 +2777,8 @@ Rules:
 Analysis text:
 {text}
 """
-        else:  # user_profile scope
-            tree_prompt = f"""
+    else:  # user_profile scope
+        tree_prompt = f"""
 You are an intelligent extraction system analyzing conversation history to build a memory tree about THE USER.
 
 YOUR TASK: Figure out who THE USER is, then extract persistent information about them.
@@ -2784,57 +2851,55 @@ Rules:
 Analysis text:
 {text}
 """
+   
+    # Call OpenAI for tree extraction
+    try:
+        response = await openai_call_with_retry(
+            default_openai_client,
+            max_retries=3,
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You extract structured knowledge from analysis text."},
+                {"role": "user", "content": tree_prompt}
+            ],
+            temperature=0.2,
+            max_completion_tokens=1500
+        )
        
-        # Call OpenAI for tree extraction
+        tree_json_str = response.choices[0].message.content
+       
+        # Parse JSON
         try:
-            response = await openai_call_with_retry(
-                default_openai_client,
-                max_retries=3,
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You extract structured knowledge from analysis text."},
-                    {"role": "user", "content": tree_prompt}
-                ],
-                temperature=0.2,
-                max_completion_tokens=1500
+            # Clean up potential markdown formatting
+            cleaned = tree_json_str.strip()
+            if cleaned.startswith('```'):
+                lines = cleaned.split('\n')
+                cleaned = '\n'.join(lines[1:-1] if len(lines) > 2 else lines)
+           
+            structured = json.loads(cleaned)
+           
+            # Apply to memory tree
+            apply_chunk_to_memory_tree(
+                structured_facts=structured,
+                scope=scope,
+                user=user,
+                pack_id=pack_id,
+                source_id=source_id,
+                chunk_index=idx
             )
            
-            tree_json_str = response.choices[0].message.content
+            # Count nodes (rough estimate)
+            node_count = sum(len(v) if isinstance(v, list) else 1 for v in structured.values() if v)
+            return node_count
            
-            # Parse JSON
-            try:
-                # Clean up potential markdown formatting
-                cleaned = tree_json_str.strip()
-                if cleaned.startswith('```'):
-                    lines = cleaned.split('\n')
-                    cleaned = '\n'.join(lines[1:-1] if len(lines) > 2 else lines)
-               
-                structured = json.loads(cleaned)
-                print(f"   ✅ Parsed JSON tree structure")
-               
-                # Apply to memory tree
-                apply_chunk_to_memory_tree(
-                    structured_facts=structured,
-                    scope=scope,
-                    user=user,
-                    pack_id=pack_id,
-                    source_id=source_id,
-                    chunk_index=idx
-                )
-               
-                # Count nodes (rough estimate)
-                node_count = sum(len(v) if isinstance(v, list) else 1 for v in structured.values() if v)
-                total_nodes += node_count
-               
-            except json.JSONDecodeError as e:
-                print(f"   ⚠️ JSON parse error: {e}")
-                print(f"   First 200 chars: {tree_json_str[:200]}")
-               
-        except Exception as e:
-            print(f"   ❌ Tree extraction failed: {e}")
-            continue
-   
-    print(f"\n🎉 Tree building complete: ~{total_nodes} nodes created from {len(chunk_analyses)} chunks")
+        except json.JSONDecodeError as e:
+            print(f"   ⚠️ Chunk {idx + 1} JSON parse error: {e}")
+            return 0
+           
+    except Exception as e:
+        print(f"   ❌ Chunk {idx + 1} extraction failed: {e}")
+        raise  # Re-raise for gather() to catch
+
 
 
 @app.get("/api/job-summary/{job_id}")

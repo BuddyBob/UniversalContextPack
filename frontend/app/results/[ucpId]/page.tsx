@@ -807,7 +807,7 @@ END OF CONTEXT PACK`
                   <FileText className="h-6 w-6 text-gray-400" />
                 </div>
                 <h4 className="text-base font-semibold text-white mb-2">Document</h4>
-                <p className="text-sm text-gray-400">PDF, TXT, HTML, CSV</p>
+                <p className="text-sm text-gray-400">PDF, TXT, CSV</p>
               </div>
 
               <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:bg-gray-750 transition-all cursor-not-allowed opacity-60">

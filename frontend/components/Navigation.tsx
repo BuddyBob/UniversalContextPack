@@ -141,11 +141,18 @@ export default function Navigation() {
                       Blog
                     </Link>
                     <Link
-                      href="/how-to-port"
+                      href="/docs"
                       className="block px-4 py-3 text-gray-700 hover:text-black hover:bg-gray-50 transition-colors"
                       onClick={() => setShowResourcesDropdown(false)}
                     >
                       Docs
+                    </Link>
+                    <Link
+                      href="/how-to-port"
+                      className="block px-4 py-3 text-gray-700 hover:text-black hover:bg-gray-50 transition-colors"
+                      onClick={() => setShowResourcesDropdown(false)}
+                    >
+                      How to Port
                     </Link>
                   </div>
                 )}
@@ -277,6 +284,16 @@ export default function Navigation() {
                     Blog
                   </Link>
                   <Link
+                    href="/docs"
+                    className={`block px-4 py-3 rounded-xl font-medium transition-all ${pathname?.startsWith('/docs')
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    onClick={() => setShowMobileMenu(false)}
+                  >
+                    Docs
+                  </Link>
+                  <Link
                     href="/how-to-port"
                     className={`block px-4 py-3 rounded-xl font-medium transition-all ${pathname === '/how-to-port'
                       ? 'bg-white/10 text-white'
@@ -284,7 +301,7 @@ export default function Navigation() {
                       }`}
                     onClick={() => setShowMobileMenu(false)}
                   >
-                    Documentation
+                    How to Port
                   </Link>
                 </div>
 

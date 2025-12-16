@@ -4,7 +4,7 @@ export default function Footer() {
   return (
     <footer className="bg-secondary border-t border-primary mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-8">
           {/* Brand Section */}
           <div className="md:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
@@ -35,6 +35,33 @@ export default function Footer() {
               <li>
                 <Link href="/pricing" className="text-sm text-secondary hover:text-primary transition-colors">
                   Pricing
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Documentation Links */}
+          <div>
+            <h3 className="text-sm font-medium text-primary mb-4">Documentation</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/docs/move-chatgpt-memory" className="text-sm text-secondary hover:text-primary transition-colors">
+                  Move ChatGPT Memory
+                </Link>
+              </li>
+              <li>
+                <Link href="/docs/move-chatgpt-memory-to-another-account" className="text-sm text-secondary hover:text-primary transition-colors">
+                  Move Memory to Account
+                </Link>
+              </li>
+              <li>
+                <Link href="/docs/transfer-chatgpt-to-claude" className="text-sm text-secondary hover:text-primary transition-colors">
+                  Transfer to Claude
+                </Link>
+              </li>
+              <li>
+                <Link href="/docs/manage-chatgpt-personal-memory" className="text-sm text-secondary hover:text-primary transition-colors">
+                  Manage Personal Memory
                 </Link>
               </li>
             </ul>
