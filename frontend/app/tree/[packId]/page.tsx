@@ -15,9 +15,6 @@ interface TreeNode {
     node_type: string;
     scope: string;
     data: any;
-    created_at: string;
-    updated_at: string;
-    evidence_count: number;
 }
 
 interface TreeData {
@@ -34,7 +31,6 @@ interface Evidence {
     source_name: string | null;
     chunk_index: number;
     snippet: string;
-    created_at: string;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -87,9 +83,6 @@ const DEMO_TREE_DATA: TreeData = {
                         summary: 'Field observations from Svalbard archipelago documenting polar bear behavior, denning patterns, and body condition assessments during March 2024 research expedition.',
                         key_findings: ['Temperature 3-4°C above historical averages', 'Maternal dens closer to coastline', 'Body condition scores below optimal']
                     },
-                    created_at: '2024-03-15T10:00:00Z',
-                    updated_at: '2024-03-20T15:30:00Z',
-                    evidence_count: 12
                 },
                 {
                     id: 'demo-section-2',
@@ -101,9 +94,6 @@ const DEMO_TREE_DATA: TreeData = {
                         summary: 'Comprehensive analysis of sea ice extent, temperature anomalies, and precipitation patterns showing accelerating Arctic warming trends.',
                         key_findings: ['13% sea ice decline per decade', 'Multi-year ice collapse', 'Ice-free Arctic projected by 2050']
                     },
-                    created_at: '2024-03-10T09:00:00Z',
-                    updated_at: '2024-03-18T14:20:00Z',
-                    evidence_count: 8
                 },
                 {
                     id: 'demo-section-3',
@@ -115,9 +105,6 @@ const DEMO_TREE_DATA: TreeData = {
                         summary: 'Population assessment revealing 15% decline in Svalbard population with concerning trends in reproductive rates and survival metrics.',
                         key_findings: ['264 individuals (down from 310)', 'Reduced cub survival rates', '40% probability of 50% decline in 35 years']
                     },
-                    created_at: '2024-03-12T11:00:00Z',
-                    updated_at: '2024-03-22T16:45:00Z',
-                    evidence_count: 15
                 }
             ],
             'Entity': [
@@ -133,9 +120,6 @@ const DEMO_TREE_DATA: TreeData = {
                         conservation_status: 'Vulnerable',
                         population_trend: 'Declining'
                     },
-                    created_at: '2024-03-08T08:00:00Z',
-                    updated_at: '2024-03-25T10:15:00Z',
-                    evidence_count: 41
                 },
                 {
                     id: 'demo-entity-2',
@@ -148,9 +132,6 @@ const DEMO_TREE_DATA: TreeData = {
                         relationship: 'Primary prey of polar bears',
                         status: 'Population stable but shifting distribution'
                     },
-                    created_at: '2024-03-09T09:30:00Z',
-                    updated_at: '2024-03-19T11:20:00Z',
-                    evidence_count: 6
                 },
                 {
                     id: 'demo-entity-3',
@@ -164,9 +145,6 @@ const DEMO_TREE_DATA: TreeData = {
                         coordinates: '78°N 20°E',
                         significance: 'Critical polar bear habitat experiencing rapid climate change'
                     },
-                    created_at: '2024-03-07T07:00:00Z',
-                    updated_at: '2024-03-20T09:30:00Z',
-                    evidence_count: 18
                 },
                 {
                     id: 'demo-entity-4',
@@ -179,9 +157,6 @@ const DEMO_TREE_DATA: TreeData = {
                         current_status: 'Declining extent and thickness',
                         importance: 'Essential for polar bear survival and hunting success'
                     },
-                    created_at: '2024-03-08T10:00:00Z',
-                    updated_at: '2024-03-21T13:40:00Z',
-                    evidence_count: 22
                 }
             ],
             'Concept': [
@@ -196,9 +171,6 @@ const DEMO_TREE_DATA: TreeData = {
                         significance: 'Drives accelerated sea ice loss and habitat degradation',
                         evidence: 'Land areas showing +3.1°C increase vs +2.3°C regional average'
                     },
-                    created_at: '2024-03-11T12:00:00Z',
-                    updated_at: '2024-03-19T15:20:00Z',
-                    evidence_count: 5
                 },
                 {
                     id: 'demo-concept-2',
@@ -211,9 +183,6 @@ const DEMO_TREE_DATA: TreeData = {
                         current_status: 'Virtual collapse - now only 30% vs 60% in 1980s',
                         impact: 'Loss of stable hunting platforms reduces foraging success'
                     },
-                    created_at: '2024-03-10T11:30:00Z',
-                    updated_at: '2024-03-18T14:50:00Z',
-                    evidence_count: 4
                 },
                 {
                     id: 'demo-concept-3',
@@ -226,9 +195,6 @@ const DEMO_TREE_DATA: TreeData = {
                         correlation: '-0.72 correlation with ice-free days (p<0.001)',
                         current_findings: '60% of bears rated 3/5 or below'
                     },
-                    created_at: '2024-03-13T13:00:00Z',
-                    updated_at: '2024-03-21T16:30:00Z',
-                    evidence_count: 7
                 }
             ],
             'Fact': [
@@ -243,9 +209,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Climate Data Analysis.pdf',
                         significance: 'Indicates continuing multi-decadal declining trend'
                     },
-                    created_at: '2024-03-14T10:00:00Z',
-                    updated_at: '2024-03-14T10:00:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-2',
@@ -258,9 +221,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Population Study Results.txt',
                         confidence_interval: '95% CI: 221-307'
                     },
-                    created_at: '2024-03-15T11:00:00Z',
-                    updated_at: '2024-03-15T11:00:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-3',
@@ -273,9 +233,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Arctic Field Notes 2024.txt',
                         implications: 'Reduced platform stability for hunting'
                     },
-                    created_at: '2024-03-16T09:00:00Z',
-                    updated_at: '2024-03-16T09:00:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-4',
@@ -288,9 +245,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Arctic Field Notes 2024.txt',
                         interpretation: 'Bears compensating for fragmented ice with extended swimming'
                     },
-                    created_at: '2024-03-17T14:00:00Z',
-                    updated_at: '2024-03-17T14:00:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-5',
@@ -303,9 +257,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Arctic Field Notes 2024.txt',
                         concern: 'May reflect maternal nutritional stress'
                     },
-                    created_at: '2024-03-18T10:30:00Z',
-                    updated_at: '2024-03-18T10:30:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-6',
@@ -318,9 +269,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Population Study Results.txt',
                         implication: 'Indicates nutritional stress limiting breeding success'
                     },
-                    created_at: '2024-03-19T11:00:00Z',
-                    updated_at: '2024-03-19T11:00:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-7',
@@ -333,9 +281,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Population Study Results.txt',
                         interpretation: 'Bears traveling greater distances to access suitable habitat'
                     },
-                    created_at: '2024-03-20T12:00:00Z',
-                    updated_at: '2024-03-20T12:00:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-8',
@@ -348,9 +293,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Population Study Results.txt',
                         driver: 'Need to search larger areas between ice floes'
                     },
-                    created_at: '2024-03-21T13:30:00Z',
-                    updated_at: '2024-03-21T13:30:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-9',
@@ -363,9 +305,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Arctic Field Notes 2024.txt',
                         cause: 'Bears spending more time in terrestrial environments'
                     },
-                    created_at: '2024-03-22T09:00:00Z',
-                    updated_at: '2024-03-22T09:00:00Z',
-                    evidence_count: 1
                 },
                 {
                     id: 'demo-fact-10',
@@ -378,9 +317,6 @@ const DEMO_TREE_DATA: TreeData = {
                         source: 'Arctic Field Notes 2024.txt',
                         risk: 'Increased vulnerability to storm surges and disturbance'
                     },
-                    created_at: '2024-03-23T10:00:00Z',
-                    updated_at: '2024-03-23T10:00:00Z',
-                    evidence_count: 1
                 }
             ]
         }
@@ -403,8 +339,8 @@ export default function TreeViewerPage() {
     // Filter state
     const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
     const [sortBy, setSortBy] = useState<{ field: string; order: 'asc' | 'desc' }>({
-        field: 'updated_at',
-        order: 'desc'
+        field: 'type',
+        order: 'asc'
     });
 
     // Editing state
@@ -477,21 +413,9 @@ export default function TreeViewerPage() {
                     bVal = b.label || '';
                     break;
                 case 'type':
+                default:
                     aVal = a.node_type;
                     bVal = b.node_type;
-                    break;
-                case 'evidence':
-                    aVal = a.evidence_count;
-                    bVal = b.evidence_count;
-                    break;
-                case 'created_at':
-                    aVal = new Date(a.created_at).getTime();
-                    bVal = new Date(b.created_at).getTime();
-                    break;
-                case 'updated_at':
-                default:
-                    aVal = new Date(a.updated_at).getTime();
-                    bVal = new Date(b.updated_at).getTime();
             }
 
             if (aVal < bVal) return sortBy.order === 'asc' ? -1 : 1;
@@ -1191,16 +1115,6 @@ export default function TreeViewerPage() {
 
                                 {/* Meta Footer */}
                                 <div className="p-4 border-t border-white/10 bg-black/40">
-                                    <div className="grid grid-cols-2 gap-3 text-xs">
-                                        <div>
-                                            <div className="text-gray-500 mb-1">First seen</div>
-                                            <div className="text-gray-300">{new Date(selectedNode.created_at).toLocaleDateString()}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-gray-500 mb-1">Last updated</div>
-                                            <div className="text-gray-300">{new Date(selectedNode.updated_at).toLocaleDateString()}</div>
-                                        </div>
-                                    </div>
                                     {selectedEvidence.length > 0 && (
                                         <div className="mt-3 pt-3 border-t border-white/5">
                                             <div className="text-gray-500">Sources: <span className="text-gray-300">{selectedEvidence.length}</span></div>

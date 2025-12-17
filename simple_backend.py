@@ -5079,20 +5079,18 @@ async def get_pack_tree_nodes(
             if node_type not in scopes[scope]:
                 scopes[scope][node_type] = []
             
-            # Format node data
+            # Format node data - simplified for export
             formatted_node = {
-                "id": node["id"],
+                "id": node["id"],  # Keep id for frontend functionality
                 "label": node.get("label"),
                 "node_type": node_type,
-                "data": node.get("data", {}),
-                "created_at": node.get("created_at"),
-                "updated_at": node.get("updated_at"),
-                "evidence_count": len(node.get("memory_evidence", []))
+                "data": node.get("data", {})
             }
             
             scopes[scope][node_type].append(formatted_node)
         
         return {
+            "prompt": f"This is a Context Pack containing structured memory data for '{pack_name}'. Use this information to understand the user's profile, projects, preferences, and knowledge across different topics. The data is organized into scopes (user_profile for personal info, knowledge:* for topic-specific information) and categorized by node types (Identity, Preference, Project, Skill, Goal, Event, Entity, Concept, etc.).",
             "pack_id": pack_id,
             "pack_name": pack_name,
             "scopes": scopes,
@@ -5156,7 +5154,19 @@ async def update_node(
             else:
                 raise HTTPException(status_code=403, detail="Node belongs to different user")
         
-        return {"success": True, "node": result.data[0]}
+        
+        # Format response to match simplified format from GET endpoint
+        updated_node = result.data[0]
+        formatted_node = {
+            "id": updated_node["id"],
+            "label": updated_node.get("label"),
+            "node_type": updated_node.get("node_type"),
+            "scope": updated_node.get("scope"),  # Frontend needs scope for display
+            "data": updated_node.get("data", {})
+        }
+        
+        return {"success": True, "node": formatted_node}
+
         
     except HTTPException:
         raise
@@ -5216,9 +5226,21 @@ async def create_node(
         if not result.data:
             raise HTTPException(status_code=500, detail="Failed to create node")
         
+        
         print(f"Created node: {result.data[0]['id']}")
         
-        return {"success": True, "node": result.data[0]}
+        # Format response to match simplified format from GET endpoint
+        created_node = result.data[0]
+        formatted_node = {
+            "id": created_node["id"],
+            "label": created_node.get("label"),
+            "node_type": created_node.get("node_type"),
+            "scope": created_node.get("scope"),  # Frontend needs scope for display
+            "data": created_node.get("data", {})
+        }
+        
+        return {"success": True, "node": formatted_node}
+
         
     except HTTPException:
         raise
