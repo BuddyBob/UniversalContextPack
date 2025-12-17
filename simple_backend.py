@@ -32,7 +32,6 @@ import jwt
 import hashlib
 import hmac
 import unicodedata
-import re
 import requests
 import certifi
 import traceback
@@ -42,7 +41,6 @@ from dotenv import load_dotenv
 import stripe
 from collections import defaultdict
 from datetime import timedelta
-import stripe
 from urllib.parse import urlparse
 
 # Load environment variables with override to refresh from file
@@ -75,13 +73,6 @@ except ImportError as e:
     print(f"⚠️ Memory Tree module not available: {e}")
     MEMORY_TREE_AVAILABLE = False
 
-def reload_env_vars():
-    """Reload environment variables from .env file"""
-    load_dotenv(override=True)
-    global OPENAI_API_KEY
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-    return OPENAI_API_KEY
 
 # Configuration from environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -530,15 +521,6 @@ def get_job_progress(job_id: str):
         "last_updated": datetime.utcnow().timestamp()
     })
 
-def get_job_progress_history(job_id: str, since_timestamp: float = 0):
-    """Get job progress history since a specific timestamp"""
-    if job_id not in job_progress_history:
-        return []
-    
-    return [
-        entry for entry in job_progress_history[job_id]
-        if entry["last_updated"] > since_timestamp
-    ]
 
 async def get_user_payment_status(user_id: str) -> dict:
     """Get user's payment status and chunk limits"""
@@ -569,12 +551,7 @@ async def get_user_payment_status(user_id: str) -> dict:
         # Default to free plan
         return {"plan": "free", "chunks_used": 0, "chunks_allowed": get_new_user_credits(), "can_process": True}
 
-async def update_user_chunks_used(user_id: str, chunks_processed: int):
-    """Update chunks - now handled automatically by database trigger when job status = 'analyzed'"""
-    # This function is now obsolete - the database trigger handles chunk updates
-    # when a job is marked as 'analyzed' with processed_chunks set
 
-    pass
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
     """Validate JWT token and return authenticated user"""
@@ -651,45 +628,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
-# Optional authentication for backwards compatibility
-async def get_current_user_optional(authorization: Optional[str] = Header(None)) -> Optional[AuthenticatedUser]:
-    """Get current user if authenticated, otherwise return None for legacy support"""
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    
-    try:
-        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=authorization[7:])
-        return await get_current_user(credentials)
-    except:
-        return None
-
-# Database helper functions
-async def create_job_in_db(user: AuthenticatedUser, job_id: str, file_name: str = None, file_size: int = None, status: str = "pending"):
-    """Create a job record in Supabase - Updated to use backend function"""
-
-    
-    if not supabase:
-        return None
-    
-    try:
-        # Use backend function to create job (bypasses RLS)
-        result = supabase.rpc("create_job_for_backend", {
-            "user_uuid": user.user_id,
-            "target_job_id": job_id,
-            "file_name_param": file_name or "unknown",
-            "r2_path_param": f"{user.r2_directory}/{job_id}",
-            "file_size_param": file_size or 0,
-            "status_param": status
-        }).execute()
-        
-        if result.data and len(result.data) > 0:
-            return result.data[0]
-        else:
-            return None
-            return None
-            
-    except Exception as e:
-        return None
 
 async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: str, progress: int = None, error_message: str = None, metadata: dict = None):
     """Update job status in Supabase with enhanced cost tracking"""
@@ -746,71 +684,6 @@ async def update_job_status_in_db(user: AuthenticatedUser, job_id: str, status: 
         print(f"❌ Error updating job status in DB: {e}")
         return None
 
-async def update_job_chunks_in_db(user: AuthenticatedUser, job_id: str, total_chunks: int):
-    """Update job total_chunks count in Supabase after chunking"""
-    
-    if not supabase:
-        return None
-
-    try:
-        result = supabase.rpc("update_job_chunks_for_backend", {
-            "user_uuid": user.user_id,
-            "target_job_id": job_id,
-            "total_chunks_param": total_chunks
-        }).execute()
-        
-        if result.data and len(result.data) > 0:
-            print(f"✅ Updated job {job_id} total_chunks to {total_chunks}")
-            return result.data[0]
-        else:
-            return None
-            
-    except Exception as e:
-        print(f"❌ Error updating job chunks in DB: {e}")
-        return None
-
-async def create_pack_in_db(user: AuthenticatedUser, job_id: str, pack_name: str, r2_pack_path: str, extraction_stats: dict = None, chunk_stats: dict = None, analysis_stats: dict = None, file_size: int = None):
-    """Create a pack record in Supabase"""
-    
-    if not supabase:
-        return None
-    
-    try:
-        # First check if the job exists using backend function
-        job_check_result = supabase.rpc("check_job_exists_for_backend", {
-            "user_uuid": user.user_id,
-            "target_job_id": job_id
-        }).execute()
-        
-        if not job_check_result.data or not job_check_result.data[0]["job_exists"]:
-            return None
-        else:
-            job_status = job_check_result.data[0]["current_status"]
-        
-        # Create pack using backend function
-        result = supabase.rpc("create_pack_for_backend", {
-            "user_uuid": user.user_id,
-            "target_job_id": job_id,
-            "pack_name_param": pack_name,
-            "r2_pack_path_param": r2_pack_path,
-            "extraction_stats_param": extraction_stats,
-            "chunk_stats_param": chunk_stats,
-            "analysis_stats_param": analysis_stats,
-            "file_size_param": file_size
-        }).execute()
-        
-        if result.data and len(result.data) > 0:
-            print(f"✅ Successfully created pack in database: {result.data[0]}")
-            return result.data[0]
-        else:
-            print(f"❌ Pack insertion returned no data: {result}")
-            return None
-            
-    except Exception as e:
-        print(f"❌ Error creating pack in database: {e}")
-        import traceback
-        print(f"📍 Full error traceback: {traceback.format_exc()}")
-        return None
 
 # Initialize clients
 # Default OpenAI client (fallback)
@@ -914,9 +787,6 @@ async def openai_call_with_retry(openai_client, max_retries=3, job_id=None, **kw
     raise Exception(f"OpenAI API failed after {max_retries} attempts")
 
 # R2 client configuration - let's try with requests directly to avoid boto3 SSL issues
-import requests
-from urllib.parse import urlparse
-
 # Import for AWS signature v4
 import hashlib
 import hmac
@@ -1366,19 +1236,6 @@ _TIMESTAMP_PATTERN = re.compile(r'^\[\d{4}-\d{2}-\d{2}.*?\]')
 _TIME_PATTERN = re.compile(r'^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?', re.IGNORECASE)
 _USERNAME_PATTERN = re.compile(r'^[A-Za-z]+:')
 
-def clean_text(text: str) -> str:
-    """OPTIMIZED: Clean and normalize text content"""
-    if not text:
-        return ""
-    
-    # Decode HTML entities
-    text = html.unescape(text)
-    
-    # OPTIMIZED: Single regex operation for whitespace
-    text = _WHITESPACE_PATTERN.sub(' ', text)
-    
-    # Strip leading/trailing whitespace
-    return text.strip()
 
 def extract_text_from_structure(obj: Any, extracted_texts=None, depth=0, progress_callback=None, total_items=None, current_item=None, seen_objects=None, text_set=None) -> List[str]:
     """Recursively extract meaningful text from any data structure - OPTIMIZED for speed"""
@@ -1777,22 +1634,6 @@ async def detailed_health_check():
             "timestamp": time.time(),
             "error": str(e)
         }
-
-@app.post("/api/reload-env")
-async def reload_environment():
-    """Reload environment variables from .env file"""
-    try:
-        old_key = OPENAI_API_KEY
-        new_key = reload_env_vars()
-        return {
-            "status": "reloaded",
-            "old_key_ending": f"...{old_key[-4:]}" if old_key and len(old_key) > 4 else "None",
-            "new_key_ending": f"...{new_key[-4:]}" if new_key and len(new_key) > 4 else "None",
-            "changed": old_key != new_key
-        }
-    except Exception as e:
-        print(f"Error reloading environment: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to reload environment: {str(e)}")
 
 class FeedbackRequest(BaseModel):
     feedback: str
@@ -3988,72 +3829,6 @@ async def download_result_file(job_id: str, filename: str, user: AuthenticatedUs
         print(f"Attempted key: {user.r2_directory}/{job_id}/{filename}")
         raise HTTPException(status_code=404, detail=f"Result file not found: {str(e)}")
 
-@app.get("/api/debug/{job_id}/files")
-async def debug_job_files(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Debug endpoint to check which files exist for a job."""
-    try:
-        base_path = f"{user.r2_directory}/{job_id}"
-        files_to_check = [
-            "extracted.txt",
-            "complete_ucp.txt", 
-            "summary.json",
-            "job_summary.json",
-            "chunks_metadata.json"
-        ]
-        
-        file_status = {}
-        for filename in files_to_check:
-            full_path = f"{base_path}/{filename}"
-            try:
-                content = download_from_r2(full_path, silent_404=True)
-                file_status[filename] = {
-                    "exists": content is not None,
-                    "size": len(content) if content else 0,
-                    "path": full_path
-                }
-            except Exception as e:
-                file_status[filename] = {
-                    "exists": False,
-                    "error": str(e),
-                    "path": full_path
-                }
-        
-        # Check chunks
-        chunks_info = {"total_chunks": 0, "existing_chunks": []}
-        chunk_metadata = download_from_r2(f"{base_path}/chunks_metadata.json", silent_404=True)
-        if chunk_metadata:
-            try:
-                metadata = json.loads(chunk_metadata)
-                total_chunks = metadata.get("total_chunks", 0)
-                chunks_info["total_chunks"] = total_chunks
-                
-                for i in range(1, total_chunks + 1):
-                    chunk_content = download_from_r2(f"{base_path}/chunk_{i:03d}.txt", silent_404=True)
-                    if chunk_content:
-                        chunks_info["existing_chunks"].append(i)
-            except Exception as e:
-                chunks_info["error"] = str(e)
-        
-        return {
-            "job_id": job_id,
-            "user_directory": user.r2_directory,
-            "base_path": base_path,
-            "files": file_status,
-            "chunks": chunks_info
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Debug failed: {str(e)}")
-
-@app.get("/api/debug/user")
-async def debug_user_info(user: AuthenticatedUser = Depends(get_current_user)):
-    """Debug endpoint to check user authentication and directory."""
-    return {
-        "user_id": user.user_id,
-        "email": user.email,
-        "r2_directory": user.r2_directory,
-        "expected_path_format": f"{user.r2_directory}/{{job_id}}/{{filename}}"
-    }
 
 @app.get("/api/jobs/{job_id}/exists")
 async def check_job_exists(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -5024,23 +4799,6 @@ async def download_pack_export_v2(
     except Exception as e:
         print(f"Error downloading pack export: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to download export: {str(e)}")
-
-@app.get("/api/debug-jobs")
-async def debug_jobs(user: AuthenticatedUser = Depends(get_current_user)):
-    """Debug: List all jobs for the current user"""
-    if not supabase:
-        return {"error": "Supabase not available"}
-    
-    try:
-        result = supabase.table("jobs").select("*").eq("user_id", user.user_id).execute()
-        return {
-            "user_id": user.user_id,
-            "jobs_count": len(result.data),
-            "jobs": result.data
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
 
 """
 New API endpoint for Memory Tree Viewer
