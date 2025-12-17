@@ -93,7 +93,7 @@ export default function PaymentNotification({
   if (!show) return null
 
   return (
-    <div className="fixed top-4 right-4 z-50 max-w-md">
+    <div className="fixed top-4 right-4 z-[9999] max-w-md">
       <div className={`
         transform transition-all duration-150 ease-in-out
         ${isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}

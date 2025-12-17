@@ -76,6 +76,7 @@ export default function ProcessPage() {
   const [currentProcessedChunks, setCurrentProcessedChunks] = useState<number>(0);
   const [showUploadOptions, setShowUploadOptions] = useState(false);
   const [uploadMethod, setUploadMethod] = useState<'files' | 'url' | 'chat_export' | 'document' | 'text' | null>(null);
+  const [showChatExportOptions, setShowChatExportOptions] = useState(false);
   const [showCreditsTooltip, setShowCreditsTooltip] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [pastedText, setPastedText] = useState<string>('');
@@ -1885,7 +1886,7 @@ export default function ProcessPage() {
       if (uploadMethod === 'chat_export') {
         // Allow conversations.json or .zip files for chat export
         if (fileName !== 'conversations.json') {
-          showNotification('warning', 'Please upload a conversations.json file from ChatGPT');
+          showNotification('warning', 'Please upload a conversations.json file');
           if (event.target) event.target.value = '';
           return;
         }
@@ -3206,7 +3207,6 @@ export default function ProcessPage() {
                       ref={folderInputRef}
                       type="file"
                       {...({ webkitdirectory: 'true' } as any)}
-                      multiple
                       onChange={handleFolderSelect}
                       className="hidden"
                     />
@@ -3214,49 +3214,114 @@ export default function ProcessPage() {
                     {/* Source Type Tabs */}
                     <div className={`grid grid-cols-2 gap-4 transition-all duration-300 ${shouldHighlightOptions ? 'animate-shake ring-2 ring-blue-500/50 rounded-xl p-1' : ''}`}>
                       {/* Chat Exports */}
-                      <button
-                        onClick={() => {
-                          if (!user) {
-                            setShowAuthModal(true);
-                            return;
-                          }
-                          setUploadMethod('chat_export');
-                          // Update file input to accept conversations.json or zip
-                          if (fileInputRef.current) {
-                            fileInputRef.current.accept = '.json,.zip';
-                          }
-                          fileInputRef.current?.click();
-                        }}
-                        className="group relative text-left h-full"
-                      >
-                        <div className="relative h-full p-6 rounded-2xl bg-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-300">
-                          <div className="mb-4">
-                            <div className="w-12 h-12 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:scale-105 group-hover:bg-white/[0.08] transition-all duration-300">
-                              <MessageSquare className="h-6 w-6 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
+                      <div className="relative">
+                        {/* Backdrop to close dropdown when clicking outside */}
+                        {showChatExportOptions && (
+                          <div 
+                            className="fixed inset-0 z-40"
+                            onClick={() => setShowChatExportOptions(false)}
+                          />
+                        )}
+
+                        <button
+                          onClick={() => {
+                            if (!user) {
+                              setShowAuthModal(true);
+                              return;
+                            }
+                            setShowChatExportOptions(!showChatExportOptions);
+                          }}
+                          className="group relative text-left h-full w-full"
+                        >
+                          <div className="relative h-full p-6 rounded-2xl bg-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-300">
+                            <div className="mb-4">
+                              <div className="w-12 h-12 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:scale-105 group-hover:bg-white/[0.08] transition-all duration-300">
+                                <MessageSquare className="h-6 w-6 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
+                              </div>
+                            </div>
+                            <h3 className="text-lg font-bold text-white mb-2">All ChatGPT Chats</h3>
+                            <p className="text-gray-400 text-sm leading-relaxed">
+                              ZIP, Folder, or conversations.json
+                            </p>
+                            <p className="text-gray-500 text-xs mt-2">
+                              <a
+                                href="https://chatgpt.com/#settings/DataControls"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-400/70 hover:text-blue-400 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                }}
+                              >
+                                How to download →
+                              </a>
+                            </p>
+                            <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
+                              <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
                             </div>
                           </div>
-                          <h3 className="text-lg font-bold text-white mb-2">All ChatGPT Chats</h3>
-                          <p className="text-gray-400 text-sm leading-relaxed">
-                            conversations.json
-                          </p>
-                          <p className="text-gray-500 text-xs mt-2">
-                            <a
-                              href="https://chatgpt.com/#settings/DataControls"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400/70 hover:text-blue-400 transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
+                        </button>
+
+                        {/* Dropdown menu for upload options */}
+                        {showChatExportOptions && (
+                          <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                            <button
+                              onClick={() => {
+                                setUploadMethod('chat_export');
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.accept = '.zip';
+                                }
+                                fileInputRef.current?.click();
+                                setShowChatExportOptions(false);
                               }}
+                              className="w-full px-4 py-3 text-left hover:bg-gray-800 transition-colors border-b border-gray-800"
                             >
-                              How to download →
-                            </a>
-                          </p>
-                          <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
-                            <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-4 w-4 text-gray-400" />
+                                <div>
+                                  <div className="text-sm font-medium text-white">Upload ZIP File</div>
+                                  <div className="text-xs text-gray-500">Direct ChatGPT export</div>
+                                </div>
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setUploadMethod('chat_export');
+                                folderInputRef.current?.click();
+                                setShowChatExportOptions(false);
+                              }}
+                              className="w-full px-4 py-3 text-left hover:bg-gray-800 transition-colors border-b border-gray-800"
+                            >
+                              <div className="flex items-center gap-3">
+                                <FolderOpen className="h-4 w-4 text-gray-400" />
+                                <div>
+                                  <div className="text-sm font-medium text-white">Choose Folder</div>
+                                  <div className="text-xs text-gray-500">Browse extracted export</div>
+                                </div>
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setUploadMethod('chat_export');
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.accept = '.json';
+                                }
+                                fileInputRef.current?.click();
+                                setShowChatExportOptions(false);
+                              }}
+                              className="w-full px-4 py-3 text-left hover:bg-gray-800 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <FileText className="h-4 w-4 text-gray-400" />
+                                <div>
+                                  <div className="text-sm font-medium text-white">Select conversations.json</div>
+                                  <div className="text-xs text-gray-500">Already extracted file</div>
+                                </div>
+                              </div>
+                            </button>
                           </div>
-                        </div>
-                      </button>
+                        )}
+                      </div>
 
                       {/* One Chat */}
                       <button
