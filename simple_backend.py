@@ -2350,7 +2350,14 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         # CONCURRENT CHUNK ANALYSIS (10x faster than sequential)
         # ============================================================================
         
-        BATCH_SIZE = 10  # Process 10 chunks concurrently
+        # Adaptive batch size based on total chunks for better progress feedback
+        if len(chunks) <= 15:
+            BATCH_SIZE = 3  # Small files: more frequent updates
+        elif len(chunks) <= 50:
+            BATCH_SIZE = 5  # Medium files: balance speed and feedback
+        else:
+            BATCH_SIZE = 10  # Large files: maximum speed
+        
         all_analyses = []  # Store all analysis results with their indices
         total_input_tokens = 0
         total_output_tokens = 0
@@ -2652,11 +2659,35 @@ async def build_tree_from_analysis(
     # CONCURRENT BATCH PROCESSING (10x faster than sequential)
     # ============================================================================
     
-    BATCH_SIZE = 10  # Process 10 chunks concurrently
-    total_nodes = 0
+    # Adaptive batch size based on total chunks for better progress feedback
     total_chunks = len(chunk_analyses)
+    if total_chunks <= 15:
+        BATCH_SIZE = 3  # Small files: more frequent updates
+    elif total_chunks <= 50:
+        BATCH_SIZE = 5  # Medium files: balance speed and feedback
+    else:
+        BATCH_SIZE = 10  # Large files: maximum speed
+    
+    total_nodes = 0
+    total_batches = (total_chunks + BATCH_SIZE - 1) // BATCH_SIZE
     
     print(f"🚀 [CONCURRENT] Processing {total_chunks} chunks in batches of {BATCH_SIZE}")
+    
+    # Set initial progress to 0 to clear any stale data from previous runs
+    try:
+        initial_message = f"Building tree.."
+        supabase.rpc("update_source_status", {
+            "user_uuid": user_id,
+            "target_source_id": source_id,
+            "status_param": "building_tree",
+            "progress_param": 0,
+            "processed_chunks_param": 0,
+            "total_chunks_param": total_chunks,
+            "error_message_param": initial_message
+        }).execute()
+        print(f" Initial status: {initial_message}")
+    except:
+        pass
     
     # Process chunks in batches
     for batch_start in range(0, total_chunks, BATCH_SIZE):
@@ -2666,18 +2697,6 @@ async def build_tree_from_analysis(
         total_batches = (total_chunks + BATCH_SIZE - 1) // BATCH_SIZE
         
         print(f"\n📦 [BATCH {batch_num}/{total_batches}] Processing chunks {batch_start + 1}-{batch_end}")
-        
-        # Update progress for batch start
-        batch_progress = 95 + int((batch_start / total_chunks) * 4)  # 95-99%
-        try:
-            supabase.rpc("update_source_status", {
-                "user_uuid": user_id,
-                "target_source_id": source_id,
-                "status_param": "building_tree",
-                "progress_param": batch_progress
-            }).execute()
-        except:
-            pass
         
         # Create tasks for concurrent processing
         tasks = []
@@ -2707,6 +2726,28 @@ async def build_tree_from_analysis(
             
             total_nodes += batch_nodes
             print(f"   ✅ Batch complete: ~{batch_nodes} nodes extracted")
+            
+            # Update progress AFTER batch completes with correct chunk count
+            # Progress is relative to chunks processed (0-100% of tree building)
+            chunks_processed = batch_end  # Chunks completed so far
+            progress_percent = int((chunks_processed / total_chunks) * 100)
+            
+            # Create detailed progress message
+            progress_message = f"Building tree: Batch {batch_num}/{total_batches} ({chunks_processed}/{total_chunks} chunks)"
+            
+            try:
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user_id,
+                    "target_source_id": source_id,
+                    "status_param": "building_tree",
+                    "progress_param": progress_percent,
+                    "processed_chunks_param": chunks_processed,
+                    "total_chunks_param": total_chunks,
+                    "error_message_param": progress_message
+                }).execute()
+                print(f"Progress: {progress_message} ({progress_percent}%)")
+            except:
+                pass
             
         except Exception as e:
             print(f"   ❌ Batch processing error: {e}")

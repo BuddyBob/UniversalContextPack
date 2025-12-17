@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Upload, Brain, FileText, BarChart3, CheckCircle, Play, Download, Terminal, X, ExternalLink, CreditCard, Loader, Lock, Info, HelpCircle, ChevronDown, Plus, FolderOpen, MessageSquare, AlertCircle, Network } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -2495,6 +2495,33 @@ export default function ProcessPage() {
     setTimeout(() => setShouldHighlightOptions(false), 1000);
   };
 
+  // Memoize tree building state to prevent re-calculation on every render
+  const treeBuildingState = useMemo(() => {
+    const buildingSource = packSources.find((s: any) => s.status === 'building_tree');
+    const isBuildingTree = !!buildingSource;
+    const hasTree = packSources.some((s: any) => s.status === 'completed');
+
+    // Extract progress details from the source
+    const progressMessage = buildingSource?.error_message || 'Building Tree...';
+    const processedChunks = buildingSource?.processed_chunks || 0;
+    const totalChunks = buildingSource?.total_chunks || 0;
+
+    // Calculate percentage
+    const progressPercent = totalChunks > 0
+      ? Math.round((processedChunks / totalChunks) * 100)
+      : 0;
+
+    return {
+      buildingSource,
+      isBuildingTree,
+      hasTree,
+      progressMessage,
+      processedChunks,
+      totalChunks,
+      progressPercent
+    };
+  }, [packSources]);
+
   return (
     <div className="min-h-screen bg-gray-950 flex">
       {/* Payment Notification */}
@@ -2651,7 +2678,7 @@ export default function ProcessPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white truncate">{source.source_name}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {(source.status === 'extracting' || source.status === 'processing') && `Extracting and chunking... ${source.progress || 0}%`}
+                        {(source.status === 'extracting') && `Extracting and chunking... ${source.progress || 0}%`}
                         {source.status === 'ready_for_analysis' && `Ready (${source.total_chunks || 0} chunks) - Click to analyze`}
                         {source.status === 'analyzing' && (
                           source.processed_chunks && source.total_chunks
@@ -2663,7 +2690,9 @@ export default function ProcessPage() {
                             ? `Processing chunk ${source.processed_chunks}/${source.total_chunks}`
                             : `Processing... ${source.progress || 0}%`
                         )}
-                        {source.status === 'building_tree' && `Building Memory Tree... ${source.progress || 95}%`}
+                        {source.status === 'building_tree' && (
+                          source.error_message || `Building Memory Tree... ${source.progress || 95}%`
+                        )}
                         {source.status === 'completed' && `Complete (${source.total_chunks || 0} chunks)`}
                         {source.status === 'failed' && 'Failed'}
                         {source.status === 'pending' && 'Pending'}
@@ -3448,7 +3477,7 @@ export default function ProcessPage() {
                     <FolderOpen className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white">Pack Downloads</h3>
+                    <h3 className="text-base font-medium text-white">Pack Downloads</h3>
                     <p className="text-sm text-gray-400">{selectedPack.pack_name}</p>
                   </div>
                 </div>
@@ -3464,12 +3493,12 @@ export default function ProcessPage() {
                   {isDownloading ? (
                     <>
                       <Loader className="h-4 w-4 animate-spin" />
-                      <span>Downloading...</span>
+                      <span className="text-sm">Downloading...</span>
                     </>
                   ) : (
                     <>
                       <Download className="h-4 w-4" />
-                      <span>Download Pack</span>
+                      <span className="text-sm">Download Pack</span>
                     </>
                   )}
                 </button>
@@ -3482,7 +3511,7 @@ export default function ProcessPage() {
                     <Network className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white">Memory Tree</h3>
+                    <h3 className="text-base font-medium text-white">Memory Tree</h3>
                     <p className="text-sm text-gray-400">View and export</p>
                   </div>
                 </div>
@@ -3511,37 +3540,50 @@ export default function ProcessPage() {
                   className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 mb-2"
                 >
                   <Download className="h-4 w-4" />
-                  <span>Download Tree JSON</span>
+                  <span className="text-sm">Download Tree JSON</span>
                 </button>
 
                 {/* View Memory Tree Button */}
-                {(() => {
-                  const isBuildingTree = packSources.some((s: any) => s.status === 'building_tree');
-                  const hasTree = packSources.some((s: any) => s.status === 'completed');
-
-                  return (
-                    <button
-                      onClick={() => !isBuildingTree && router.push(`/tree/${selectedPack.pack_id}`)}
-                      disabled={isBuildingTree}
-                      className={`w-full px-4 py-3 ${isBuildingTree
-                        ? 'bg-gray-600 cursor-wait'
-                        : 'bg-emerald-700/60 hover:bg-emerald-600/60'
-                        } text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-75`}
-                    >
-                      {isBuildingTree ? (
-                        <>
-                          <Network className="h-5 w-5 animate-pulse" />
-                          <span>Building Tree...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Network className="h-5 w-5" />
-                          <span>View Memory Tree</span>
-                        </>
+                <button
+                  onClick={() => !treeBuildingState.isBuildingTree && router.push(`/tree/${selectedPack.pack_id}`)}
+                  disabled={treeBuildingState.isBuildingTree}
+                  className={`w-full px-5 py-4 ${treeBuildingState.isBuildingTree
+                    ? 'bg-gray-700/50 cursor-wait'
+                    : 'bg-emerald-700/60 hover:bg-emerald-600/60'
+                    } text-white rounded-lg transition-all duration-300 flex flex-col items-start justify-center gap-3 disabled:opacity-90`}
+                >
+                  {treeBuildingState.isBuildingTree ? (
+                    <>
+                      <div className="flex items-center gap-2.5 w-full">
+                        <Network className="h-5 w-5 text-emerald-400 animate-pulse flex-shrink-0" />
+                        <span className="text-sm text-gray-200">{treeBuildingState.progressMessage}</span>
+                      </div>
+                      {treeBuildingState.totalChunks > 0 && (
+                        <div className="w-full space-y-2">
+                          <div className="w-full bg-gray-600/50 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2 rounded-full transition-all duration-500 ease-out"
+                              style={{ width: `${treeBuildingState.progressPercent}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-400">
+                              {treeBuildingState.processedChunks} of {treeBuildingState.totalChunks} chunks
+                            </span>
+                            <span className="text-xs font-medium text-emerald-400">
+                              {treeBuildingState.progressPercent}%
+                            </span>
+                          </div>
+                        </div>
                       )}
-                    </button>
-                  );
-                })()}
+                    </>
+                  ) : (
+                    <div className="flex items-center gap-2.5 w-full justify-center">
+                      <Network className="h-5 w-5" />
+                      <span>View Memory Tree</span>
+                    </div>
+                  )}
+                </button>
               </div>
             </div>
           )}
