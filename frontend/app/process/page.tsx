@@ -2597,7 +2597,7 @@ export default function ProcessPage() {
                 value={customSystemPrompt}
                 onChange={(e) => setCustomSystemPrompt(e.target.value)}
                 placeholder={`Custom System Prompt (optional)\nExample: Focus only on business logic."`}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 px-3 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 px-3 py-3 resize-none focus:outline-none focus:ring-2 focus:ring-purple-600/30 focus:border-purple-600"
                 rows={4}
               />
               <div className="flex items-center justify-between">
@@ -2700,7 +2700,7 @@ export default function ProcessPage() {
                       </p>
                     </div>
                     {(source.status === 'extracting' || source.status === 'processing' || source.status === 'analyzing') && (
-                      <Loader className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+                      <Loader className="w-4 h-4 text-purple-400 animate-spin flex-shrink-0" />
                     )}
                     {source.status === 'building_tree' && (
                       <span className="text-lg animate-pulse flex-shrink-0">🌳</span>
@@ -2716,7 +2716,7 @@ export default function ProcessPage() {
                     <div className="mt-2">
                       <div className="w-full bg-gray-700 rounded-full h-1">
                         <div
-                          className="bg-blue-500 h-1 rounded-full transition-all duration-300"
+                          className="bg-purple-600 h-1 rounded-full transition-all duration-300"
                           style={{ width: `${source.progress}%` }}
                         />
                       </div>
@@ -2742,7 +2742,7 @@ export default function ProcessPage() {
                       </p>
                     </div>
                     {currentStep === 'analyzing' && (
-                      <Loader className="w-4 h-4 text-blue-400 animate-spin flex-shrink-0" />
+                      <Loader className="w-4 h-4 text-purple-400 animate-spin flex-shrink-0" />
                     )}
                     {currentStep === 'analyzed' && (
                       <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
@@ -2752,7 +2752,7 @@ export default function ProcessPage() {
                     <div className="mt-2">
                       <div className="w-full bg-gray-700 rounded-full h-1">
                         <div
-                          className="bg-blue-500 h-1 rounded-full transition-all duration-300"
+                          className="bg-purple-600 h-1 rounded-full transition-all duration-300"
                           style={{ width: `${progress}%` }}
                         />
                       </div>
@@ -2991,7 +2991,7 @@ export default function ProcessPage() {
                       <button
                         onClick={() => processConversationUrl(conversationUrl)}
                         disabled={!conversationUrl.trim()}
-                        className="w-full bg-black-600 border-2 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/25 disabled:shadow-none transform hover:scale-[1.02] disabled:transform-none"
+                        className="w-full bg-black-600 border-2 hover:from-purple-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/25 disabled:shadow-none transform hover:scale-[1.02] disabled:transform-none"
                       >
                         Start Extraction
                       </button>
@@ -3048,7 +3048,7 @@ export default function ProcessPage() {
                       <button
                         onClick={() => processPastedText(pastedText)}
                         disabled={!pastedText.trim()}
-                        className="w-full bg-black-600 border-2 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/25 disabled:shadow-none transform hover:scale-[1.02] disabled:transform-none"
+                        className="w-full bg-black-600 border-2 hover:from-purple-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 px-6 rounded-xl font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/25 disabled:shadow-none transform hover:scale-[1.02] disabled:transform-none"
                       >
                         Process Text
                       </button>
@@ -3072,9 +3072,9 @@ export default function ProcessPage() {
 
                   return (
                     /* Credit Confirmation Card - Replaces Upload Area */
-                    <div className="bg-gray-900/90 border-blue-500/50 rounded-2xl p-8 shadow-md mb-6">
+                    <div className="bg-gray-900/90 border-purple-600/50 rounded-2xl p-8 shadow-md mb-6">
                       <div className="flex items-center space-x-4 mb-6">
-                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center">
+                        <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center">
                           <Brain className="h-6 w-6 text-white" />
                         </div>
                         <div>
@@ -3183,12 +3183,12 @@ export default function ProcessPage() {
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
                       className={`border-2 border-dashed rounded-2xl p-12 mb-6 text-center transition-all ${isDragOver
-                        ? 'border-blue-500 bg-blue-500/5'
+                        ? 'border-purple-600 bg-purple-600/5'
                         : 'border-gray-700 bg-gray-900/50'
                         }`}
                     >
-                      <div className="w-20 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Upload className="w-8 h-8 text-blue-400" />
+                      <div className="w-20 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Upload className="w-8 h-8 text-purple-400" />
                       </div>
                       <h3 className="text-lg font-semibold text-white mb-2">Upload sources</h3>
                       <p className="text-sm text-gray-400 mb-4">
@@ -3212,12 +3212,12 @@ export default function ProcessPage() {
                     />
 
                     {/* Source Type Tabs */}
-                    <div className={`grid grid-cols-2 gap-4 transition-all duration-300 ${shouldHighlightOptions ? 'animate-shake ring-2 ring-blue-500/50 rounded-xl p-1' : ''}`}>
+                    <div className={`grid grid-cols-2 gap-4 transition-all duration-300 ${shouldHighlightOptions ? 'animate-shake ring-2 ring-purple-600/50 rounded-xl p-1' : ''}`}>
                       {/* Chat Exports */}
                       <div className="relative">
                         {/* Backdrop to close dropdown when clicking outside */}
                         {showChatExportOptions && (
-                          <div 
+                          <div
                             className="fixed inset-0 z-40"
                             onClick={() => setShowChatExportOptions(false)}
                           />
@@ -3248,7 +3248,7 @@ export default function ProcessPage() {
                                 href="https://chatgpt.com/#settings/DataControls"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-400/70 hover:text-blue-400 transition-colors"
+                                className="text-blue-400 hover:text-blue-300 transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                 }}
@@ -3538,7 +3538,7 @@ export default function ProcessPage() {
               {/* Pack Downloads Card */}
               <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-900/90 to-purple-900/90 rounded-xl flex items-center justify-center shadow-lg">
                     <FolderOpen className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">

@@ -19,6 +19,7 @@ export default function Navigation() {
   const resourcesDropdownRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
 
+
   // Debug: Log userProfile changes
   useEffect(() => {
     if (userProfile) {
@@ -73,20 +74,20 @@ export default function Navigation() {
 
   if (loading) {
     return (
-      <header className="nav-header">
-        <div className="nav-container">
+      <header className="nav-header-minimal">
+        <div className="nav-container-minimal">
           <div className="nav-content">
             <div className="nav-brand">
               <Image
                 src="/images/logo/logo-714x1280.png"
                 alt="UCP Logo"
-                width={32}
-                height={32}
+                width={24}
+                height={24}
                 className="nav-logo-img"
               />
-              <h1 className="nav-title">Universal Context Pack</h1>
+              <h1 className="nav-title-minimal">Context Pack</h1>
             </div>
-            <div className="w-20 h-8 bg-card animate-pulse rounded"></div>
+            <div className="w-16 h-6 bg-gray-800 animate-pulse rounded"></div>
           </div>
         </div>
       </header>
@@ -95,26 +96,26 @@ export default function Navigation() {
 
   return (
     <>
-      <header className="nav-header">
-        <div className="nav-container">
+      <header className="nav-header-minimal">
+        <div className="nav-container-minimal">
           <div className="nav-content flex items-center relative">
             {/* Logo - Left */}
             <Link href="/" className="nav-brand">
               <Image
                 src="/images/logo/logo-714x1280.png"
                 alt="UCP Logo"
-                width={25}
-                height={25}
+                width={24}
+                height={24}
                 className="nav-logo-img"
               />
-              <h1 className="nav-title font-medium text-lg tracking-tight">Context Pack</h1>
+              <h1 className="nav-title-minimal">Context Pack</h1>
             </Link>
 
             {/* Navigation Links - Absolutely Centered */}
-            <nav className="nav-links hidden md:flex absolute left-1/2 transform -translate-x-1/2">
+            <nav className="nav-links-minimal hidden md:flex absolute left-1/2 transform -translate-x-1/2">
               <Link
                 href="/packs"
-                className={`nav-link ${pathname === '/packs' ? 'active' : ''}`}
+                className={`nav-link-minimal ${pathname === '/packs' ? 'active' : ''}`}
               >
                 Packs
               </Link>
@@ -123,33 +124,33 @@ export default function Navigation() {
               <div className="relative" ref={resourcesDropdownRef}>
                 <button
                   onClick={() => setShowResourcesDropdown(!showResourcesDropdown)}
-                  className={`nav-link ${pathname?.startsWith('/blog') || pathname?.startsWith('/how-to-port') ? 'active' : ''}`}
+                  className={`nav-link-minimal ${pathname?.startsWith('/blog') || pathname?.startsWith('/how-to-port') ? 'active' : ''}`}
                 >
                   Resources
-                  <svg className="w-4 h-4 ml-1 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3.5 h-3.5 ml-1 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
 
                 {showResourcesDropdown && (
-                  <div className="absolute top-full left-0 mt-2 w-56 bg-white backdrop-blur-xl border border-gray-200 rounded-xl shadow-2xl py-2 z-50">
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-gray-900 backdrop-blur-xl border border-gray-700 rounded-lg shadow-2xl py-1.5 z-50">
                     <Link
                       href="/blog"
-                      className="block px-4 py-3 text-gray-700 hover:text-black hover:bg-gray-50 transition-colors"
+                      className="block px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
                       onClick={() => setShowResourcesDropdown(false)}
                     >
                       Blog
                     </Link>
                     <Link
                       href="/docs"
-                      className="block px-4 py-3 text-gray-700 hover:text-black hover:bg-gray-50 transition-colors"
+                      className="block px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
                       onClick={() => setShowResourcesDropdown(false)}
                     >
                       Docs
                     </Link>
                     <Link
                       href="/how-to-port"
-                      className="block px-4 py-3 text-gray-700 hover:text-black hover:bg-gray-50 transition-colors"
+                      className="block px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
                       onClick={() => setShowResourcesDropdown(false)}
                     >
                       How to Port
@@ -160,7 +161,7 @@ export default function Navigation() {
 
               <Link
                 href="/pricing"
-                className={`nav-link ${pathname === '/pricing' ? 'active' : ''}`}
+                className={`nav-link-minimal ${pathname === '/pricing' ? 'active' : ''}`}
               >
                 Pricing
               </Link>
@@ -180,51 +181,41 @@ export default function Navigation() {
             </button>
 
             {/* Right Side - Auth/User Menu */}
-            <div className="hidden md:flex items-center gap-4 ml-auto">
-              {/* Status Indicator */}
-              <Link href="/status" className="flex items-center text-sm hover:opacity-80 transition-opacity" title="System Status">
-                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              </Link>
-
+            <div className="hidden md:flex items-center gap-3 ml-auto">
               {user ? (
                 <>
-                  {/* Credits Display */}
+                  {/* Credits Display - Minimal */}
                   <Link
                     href="/pricing"
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all"
+                    className="flex items-center gap-2.5 px-5 py-2 rounded-lg bg-gray-800/50 border border-gray-700 hover:border-gray-600 transition-all "
                     title="Buy more credits"
                   >
                     <CreditCard className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-semibold text-white">
+                    <span className="text-sm text-gray-300 font-medium">
                       {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance)?.toLocaleString() || '0'}
                     </span>
                   </Link>
 
                   <div className="relative" ref={dropdownRef}>
                     <div
-                      className="nav-user-dropdown"
+                      className="nav-user-dropdown-minimal"
                       onClick={() => setShowUserDropdown(!showUserDropdown)}
                     >
                       {userProfile?.avatar_url && (
                         <img
                           src={userProfile.avatar_url}
                           alt={userProfile.full_name || 'User'}
-                          className="nav-user-avatar"
+                          className="w-7 h-7 rounded-full object-cover"
                         />
                       )}
-                      <div className="nav-user-info">
-                        <p className="nav-user-name">
-                          {userProfile?.full_name || user.email?.split('@')[0]}
-                        </p>
-                      </div>
                     </div>
 
 
                     {showUserDropdown && (
-                      <div className="nav-dropdown-menu">
+                      <div className="absolute top-full right-0 mt-2 w-40 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl py-1.5 z-50">
                         <button
                           onClick={signOut}
-                          className="nav-dropdown-item"
+                          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors w-full text-left"
                         >
                           <LogOut className="h-4 w-4" />
                           Sign Out
@@ -237,7 +228,7 @@ export default function Navigation() {
               ) : (
                 <button
                   onClick={() => setShowAuthModal(true)}
-                  className="btn-white"
+                  className="px-4 py-1.5 bg-white text-black text-sm font-medium rounded-md hover:bg-gray-100 transition-colors"
                 >
                   Sign In
                 </button>
@@ -394,27 +385,6 @@ export default function Navigation() {
         </div>
       </header>
 
-      {/* Floating Credits Card - Top Right */}
-      {user && (
-        <a
-          href="/pricing"
-          className="fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl transition-all backdrop-blur-xl hover:scale-105"
-          style={{
-            background: 'rgba(30, 25, 40, 0.8)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-          }}
-          title="Buy more credits"
-        >
-          <CreditCard className="w-5 h-5 text-gray-400" />
-          <div className="flex items-center gap-2.5">
-            <span className="text-xs text-gray-400 uppercase tracking-wider font-medium">Credits</span>
-            <span className="text-xl font-bold text-white">
-              {userProfile?.payment_plan === 'unlimited' ? '∞' : (userProfile?.credits_balance)?.toLocaleString() || '0'}
-            </span>
-          </div>
-        </a>
-      )}
 
       <AuthModal
         isOpen={showAuthModal}

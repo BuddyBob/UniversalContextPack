@@ -15,10 +15,12 @@
   --bg-muted: #1e1e1e;          /* Muted sections */
   
   /* === ACCENT COLORS === */
-  --accent-primary: rgba(102, 57, 208, 0.65);    /* Professional blue */
-  --accent-primary-hover: rgba(99, 51, 210, 0.733);;  /* Blue hover */
-  --accent-primary-light: rgba(115, 59, 246, 0.457);  /* Light blue */
-  --accent-primary-dark: #1d4ed8;   /* Dark blue */
+  --accent-primary: #3d2b70;        /* Much darker purple - buttons, icons */
+  --accent-primary-hover: #543d96;  /* Slightly lighter on hover */
+  --accent-primary-light: #674fb8;  /* Light purple */
+  --accent-primary-dark: #2a1f4f;   /* Very dark purple */
+  --accent-link: #5b9cde;           /* Blue for text links */
+  --accent-link-hover: #7db3e8;     /* Lighter blue on hover */
   
   /* === TEXT COLORS === */
   --text-primary: #ffffff;      /* White text */
@@ -34,10 +36,10 @@
   --border-card: #2e2e2e;       /* Soft card borders */
   
   /* === STATUS COLORS === */
-  --status-success: #10b981;    /* Green */
+  --status-success: #17523e;    /* Brand green */
   --status-warning: #f59e0b;    /* Amber */
   --status-error: #ef4444;      /* Red */
-  --status-info: var(--accent-primary);  /* Brand blue */
+  --status-info: var(--accent-primary);  /* Brand purple */
   
   /* === PROFESSIONAL SHADOWS === */
   --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
@@ -58,10 +60,12 @@
   --bg-muted: #f6f8fa;          /* Muted sections */
   
   /* === ACCENT COLORS === */
-  --accent-primary: rgba(79, 41, 167, 0.832);    /* Professional blue */
-  --accent-primary-hover: rgba(104, 57, 214, 0.837);;  /* Blue hover */
-  --accent-primary-light: rgb(76, 37, 167);  /* Light blue */
-  --accent-primary-dark: #1d4ed8;   /* Dark blue */
+  --accent-primary: #3d2b70;        /* Darker purple - buttons, icons */
+  --accent-primary-hover: #543d96;  /* Lighter purple hover */
+  --accent-primary-light: #674fb8;  /* Light purple */
+  --accent-primary-dark: #2a1f4f;   /* Very dark purple */
+  --accent-link: #5b9cde;           /* Blue for text links */
+  --accent-link-hover: #7db3e8;     /* Lighter blue on hover */
   
   /* === TEXT COLORS === */
   --text-primary: #1f2328;      /* Sharp dark text */
@@ -77,10 +81,10 @@
   --border-card: #e8ecf0;       /* Soft card borders */
   
   /* === STATUS COLORS === */
-  --status-success: #1a7f37;    /* Professional green */
+  --status-success: #17523e;    /* Brand green */
   --status-warning: #d1242f;    /* Corporate amber */
   --status-error: #cf222e;      /* Standard red */
-  --status-info: var(--accent-primary);  /* Brand blue */
+  --status-info: var(--accent-primary);  /* Brand purple */
   
   /* === PROFESSIONAL SHADOWS === */
   --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
@@ -1804,3 +1808,68 @@
     @apply bg-background text-foreground;
   }
 }
+
+  /* =========================== */
+  /* =========================== */
+  /* MINIMAL NAVBAR (Supabase-style) - UPDATED */
+  /* =========================== */
+  
+  .nav-header-minimal {
+    background-color: rgba(16, 15, 19, 0.8) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+    backdrop-filter: blur(12px) !important;
+    position: relative !important;
+    z-index: 100 !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+  
+  .nav-container-minimal {
+    max-width: 100rem !important;
+    margin: 0 auto !important;
+    padding: 0 1.5rem !important;
+  }
+  
+  .nav-title-minimal {
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    color: #ffffff !important;
+    letter-spacing: -0.01em !important;
+  }
+  
+  .nav-links-minimal {
+    align-items: center !important;
+    gap: 1.5rem !important;
+  }
+  
+  .nav-link-minimal {
+    color: #9ca3af !important;
+    text-decoration: none !important;
+    font-weight: 400 !important;
+    font-size: 0.875rem !important;
+    padding: 0 !important;
+    transition: color 0.2s ease !important;
+    background: none !important;
+    border: none !important;
+    cursor: pointer !important;
+  }
+  
+  .nav-link-minimal:hover,
+  .nav-link-minimal.active {
+    color: #ffffff !important;
+  }
+  
+  .nav-user-dropdown-minimal {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 4px !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    border: 1px solid transparent !important;
+  }
+  
+  .nav-user-dropdown-minimal:hover {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
