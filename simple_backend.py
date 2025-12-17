@@ -2089,6 +2089,186 @@ def apply_redaction_filters(text: str) -> str:
         print(f"⚠️ Redaction filter failed: {redaction_error}")
         return text
 
+async def _analyze_single_chunk(
+    chunk: str,
+    chunk_idx: int,
+    total_chunks: int,
+    filename: str,
+    system_prompt: str,
+    openai_client: Any
+) -> dict:
+    """
+    Process a single chunk for analysis (used in concurrent batches).
+    
+    Returns:
+        dict with analysis, input_tokens, output_tokens, cost, index
+    """
+    try:
+        redacted_chunk = apply_redaction_filters(chunk)
+        
+        # Build appropriate prompt based on file type and chunk count
+        if total_chunks == 1:
+            # Single chunk - comprehensive extraction
+            prompt = f"""
+You are an expert extraction system. Your job is to extract all unique, meaningful information from the document with maximum precision.
+
+PRIMARY RULES:
+1. Do NOT summarize.
+2. Do NOT omit meaningful details.
+3. Do NOT restate the same information twice. 
+4. Do NOT include filler text, greetings, conversational fluff, or irrelevant lines.
+5. Preserve exact values whenever they appear:
+   (names, dates, values, terminology, labels, instructions, rules, constraints, etc.)
+
+STEP 1 — Document Identification (1–2 sentences ONLY)
+Identify what type of document this is (technical, design, business, personal, research, chat, etc.).
+
+STEP 2 — Unique, Comprehensive Extraction
+Extract every meaningful piece of information without changing its specificity.
+Group related ideas together only for organization. Do NOT compress or combine ideas.
+
+**Complete Unique Information Extract**
+List all meaningful details found in the document. Include:
+- Specific facts, values, descriptions, instructions
+- Stated preferences, rules, constraints, or workflows
+- Examples, scenarios, references
+- Any other concrete, meaningful information
+
+Ensure:
+- No duplicates
+- No summaries
+- No omission of important details
+
+**Context & Relationships**
+Describe how extracted items relate to each other (if relationships exist).
+
+Use only the information explicitly present in the document.
+
+Document content:
+{redacted_chunk}
+"""
+        elif "conversations" in filename.lower():
+            # Conversations file - extract user information
+            prompt = f"""
+# Identity
+
+You are an intelligent conversation analyzer that extracts persistent information about THE USER (the conversation owner).
+
+# Instructions
+
+## Identify THE USER
+
+THE USER is the person HAVING this conversation, NOT people they mention or discuss.
+
+Clues to identify THE USER:
+* First-person statements: "I am...", "I work on...", "my background is..."
+* The person asking questions or having the conversation
+* If helping someone, the helper is the user (not the person being helped)
+* If discussing someone, that person is NOT the user
+
+## Extract Persistent Information
+
+Extract information that remains true about THE USER across time:
+* Who is THE USER? (roles, identity, profession)
+* THE USER's background (skills, interests, experience)
+* THE USER's projects (what they're working on)
+* THE USER's goals or aspirations
+* THE USER's constraints or preferences
+* Any other facts about THE USER
+
+Do NOT extract:
+* Temporary project details or specific task lists  
+* Details about other people (unless directly related to the user)
+* One-time events or situational context
+
+Focus on extracting comprehensive, factual information about the user.
+
+Conversation content:
+{redacted_chunk}
+"""
+        elif 5 <= total_chunks <= 50:
+            # Medium document - condensed but comprehensive
+            prompt = f"""
+You are analyzing a medium-length document.
+Your goal is to extract condensed but comprehensive key facts from this chunk.
+
+First figure out what this document could be about. Why would a user be interested in storing this document?
+
+Based on that reasoning extract information that would be relevant to that:
+- Important claims, data points, definitions, and steps
+- Specific arguments or evidence presented
+- Entities, roles, timelines, processes, or instructions
+- Any meaningful detail that contributes to understanding
+
+Do NOT summarize.
+Do NOT generalize.
+Preserve nuance and specificity.
+
+Document content:
+{redacted_chunk}
+"""
+        else:
+            # Default - small document, high precision
+            prompt = f"""
+Analyze this document section with high precision.
+
+First figure out what this document could be about. Why would a user be interested in storing this document?
+
+Based on that reasoning extract information that would be relevant to that.
+Extract all key factual information:
+- Important claims, data points, definitions, and steps
+- Specific arguments or evidence presented
+- Entities, roles, timelines, processes, or instructions
+- Any meaningful detail that contributes to understanding
+
+Do NOT summarize.
+Do NOT generalize.
+Preserve nuance and specificity.
+
+Document content:
+{redacted_chunk}
+"""
+        
+        # Build messages
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+        
+        # Call OpenAI
+        response = await openai_call_with_retry(
+            openai_client,
+            max_retries=3,
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.3,
+            max_completion_tokens=3000
+        )
+        
+        analysis = response.choices[0].message.content
+        
+        # Check for content policy refusal
+        if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
+            raise Exception("Content policy refusal")
+        
+        # Calculate cost
+        input_tokens = response.usage.prompt_tokens
+        output_tokens = response.usage.completion_tokens
+        cost = (input_tokens * 0.00015 / 1000) + (output_tokens * 0.0006 / 1000)
+        
+        return {
+            "index": chunk_idx,
+            "analysis": analysis,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost": cost
+        }
+        
+    except Exception as e:
+        # Re-raise so gather() can catch it
+        raise
+
+
 async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, user: AuthenticatedUser, max_chunks: int = None, custom_system_prompt: Optional[str] = None):
     """Step 2: Analyze the chunks (OpenAI calls, deduct credits)
     
@@ -2166,286 +2346,117 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         else:
             scope = None  # Not using memory tree
         
-        for idx, chunk in enumerate(chunks):
-            # Check for cancellation at the start of each chunk
+        # ============================================================================
+        # CONCURRENT CHUNK ANALYSIS (10x faster than sequential)
+        # ============================================================================
+        
+        BATCH_SIZE = 10  # Process 10 chunks concurrently
+        all_analyses = []  # Store all analysis results with their indices
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cost = 0.0
+        failed_chunks_count = 0
+        
+        print(f"\n🚀 [CONCURRENT ANALYSIS] Processing {len(chunks)} chunks in batches of {BATCH_SIZE}")
+        
+        # Process chunks in batches
+        for batch_start in range(0, len(chunks), BATCH_SIZE):
+            # Check for cancellation before processing batch
             if source_id in cancelled_jobs:
-                print(f"🛑 Cancellation detected for source {source_id}. Stopping at chunk {idx+1}/{len(chunks)}")
-                # Update status to cancelled
+                print(f"🛑 Cancellation detected for source {source_id}. Stopping at chunk {batch_start+1}/{len(chunks)}")
                 supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
                     "target_source_id": source_id,
                     "status_param": "cancelled",
                     "progress_param": 0,
-                    "processed_chunks_param": idx  # Save how many were processed before cancel
+                    "processed_chunks_param": batch_start
                 }).execute()
-                cancelled_jobs.discard(source_id)
                 return
             
-            try:
-                redacted_chunk = apply_redaction_filters(chunk)
-                # Scenario A: Single Chunk - Extract all details (no summarization)
-                if len(chunks) == 1:
-                    prompt = f"""
-You are an expert extraction system. Your job is to extract all unique, meaningful information from the document with maximum precision.
-
-PRIMARY RULES:
-1. Do NOT summarize.
-2. Do NOT omit meaningful details.
-3. Do NOT restate the same information twice. 
-4. Do NOT include filler text, greetings, conversational fluff, or irrelevant lines.
-5. Preserve exact values whenever they appear:
-   (names, dates, values, terminology, labels, instructions, or precise descriptions).
-6. If a detail seems important or specific, include it.
-
-STEP 1 — Document Identification (1–2 sentences ONLY)
-Identify what type of document this is (technical, design, business, personal, research, chat, etc.).
-
-STEP 2 — Unique, Comprehensive Extraction
-Extract every meaningful piece of information without changing its specificity.
-Group related ideas together only for organization. Do NOT compress or combine ideas.
-
-**Complete Unique Information Extract**
-List all meaningful details found in the document. Include:
-- Specific facts, values, descriptions, instructions
-- Stated preferences, rules, constraints, or workflows
-- Examples, scenarios, references
-- Any other concrete, meaningful information
-
-Ensure:
-- No duplicates
-- No summaries
-- No omission of important details
-
-**Context & Relationships**
-Describe how extracted items relate to each other (if relationships exist).
-
-Use only the information explicitly present in the document.
-
-Document content:
-{redacted_chunk}
-"""
-                # Scenario B: Conversations File - Text output for tree building
-                elif "conversations" in filename.lower():
-                    prompt = f"""
-# Identity
-
-You are an intelligent conversation analyzer that extracts persistent information about THE USER (the conversation owner).
-
-# Instructions
-
-## Identify THE USER
-
-THE USER is the person HAVING this conversation, NOT people they mention or discuss.
-
-Clues to identify THE USER:
-* First-person statements: "I am...", "I work on...", "my background is..."
-* The person asking questions or having the conversation
-* If helping someone, the helper is the user (not the person being helped)
-* If discussing someone, that person is NOT the user
-
-## Extract Persistent Information
-
-Extract information that remains true about THE USER across time:
-* Who is THE USER? (roles, identity, profession)
-* THE USER's background (skills, interests, experience)
-* THE USER's long-term goals, ongoing activities, or recurring topics
-* THE USER's preferences, habits, constraints, or stable patterns
-* Systems, tools, or environments THE USER consistently uses
-* Important facts about THE USER for future conversations
-
-## What to Ignore
-
-* Information about OTHER PEOPLE mentioned in conversations
-* Temporary actions or one-time tasks
-* Small talk or conversational filler
-* Emotional expressions tied only to the moment
-
-# Examples
-
-<conversation id="example-1">
-User: I'm helping Pedro learn Python for his data science course.
-Assistant: That's great! What topics are you covering?
-User: We're starting with pandas and numpy since I use them daily in my ML work.
-</conversation>
-
-<analysis id="example-1">
-## High-level Summary
-THE USER is a machine learning practitioner who mentors others in Python and data science.
-
-## Stable Facts
-* Uses pandas and numpy daily in professional ML work
-* Has teaching/mentoring experience
-* Proficient in Python for data science applications
-
-## Long-term Activities
-* Mentoring others in Python and data science
-* Working with ML technologies professionally
-
-## Context for Future Conversations
-* Can discuss advanced Python, pandas, numpy, and ML topics
-* Values helping others learn technical skills
-</analysis>
-
-<conversation id="example-2">
-User: I just finished the first draft of my fantasy novel!
-Assistant: Congratulations! How long have you been working on it?
-User: About two years. It's set in the same universe as my short stories.
-</conversation>
-
-<analysis id="example-2">
-## High-level Summary
-THE USER is a creative writer working on long-form fantasy fiction.
-
-## Stable Facts
-* Writes fantasy genre fiction
-* Has completed short stories in a consistent fictional universe
-* Commits to long-term creative projects (2+ years)
-
-## Long-term Activities
-* Writing a fantasy novel (multi-year project)
-* Building a cohesive fictional universe across works
-
-## Context for Future Conversations
-* Can discuss creative writing, world-building, and fantasy genre
-* Values consistency and long-term project development
-</analysis>
-
-# Context
-
-<conversation>
-{redacted_chunk}
-</conversation>
-
-Generate your analysis following the format shown in the examples above.
-"""
-
-
-                
-                # Scenario C: Large Document (5+ chunks) - Broad analysis
-                elif len(chunks) >= 5:
-                    # Text-based analysis (legacy)
-                    prompt = f"""
-                    Analyze this section of a large document.
-
-                    Your goal is to capture the high-level picture, not granular details.
-
-                    Extract:
-                    - Main themes and topics covered in this section
-                    - Major concepts, arguments, or components
-                    - How this section fits into the likely overall document
-                    - Structural patterns (e.g., chapters, phases, modules, workflows)
-
-                    Focus on clarity and breadth.  
-                    Do not dive into micro-details—this is just one piece of a much larger whole.
-
-                    Document content:
-                    {redacted_chunk}
-                    """
-
-                else:
-                    # Text-based analysis (legacy)
-                    prompt = f"""
-                    Analyze this document section with high precision. 
-                    This is a small document, so details matter.
-
-                    First figure out what this document could be about. Why would a user be interested in storing this document?
-                    
-                    Based on that reasoning extract information that would be relevent to that
-                    Extract all key factual information:
-                    - Important claims, data points, definitions, and steps
-                    - Specific arguments or evidence presented
-                    - Entities, roles, timelines, processes, or instructions
-                    - Any meaningful detail that contributes to understanding
-
-                    Do NOT summarize.
-                    Do NOT generalize.
-                    Preserve nuance and specificity.
-
-                    Document content:
-                    {redacted_chunk}
-                    """
-
-                # Build messages array
-                messages = [
-                    {
-                        "role": "system", 
-                        "content": system_prompt
-                    },
-                    {
-                        "role": "user", 
-                        "content": prompt
-                    }
-                ]
-                
-                print(f"DEBUG: Final messages count: {len(messages)}")
-                
-                response = await openai_call_with_retry(
-                    openai_client,
-                    max_retries=3,
-                    model="gpt-4o-mini",
-                    messages=messages,
-                    temperature=0.3,
-                    max_completion_tokens=3000  # Increased for richer analysis
+            batch_end = min(batch_start + BATCH_SIZE, len(chunks))
+            batch = chunks[batch_start:batch_end]
+            batch_num = (batch_start // BATCH_SIZE) + 1
+            total_batches = (len(chunks) + BATCH_SIZE - 1) // BATCH_SIZE
+            
+            print(f"\n📦 [BATCH {batch_num}/{total_batches}] Processing chunks {batch_start + 1}-{batch_end}")
+           
+            # Create concurrent tasks for this batch
+            tasks = []
+            for i, chunk in enumerate(batch):
+                chunk_idx = batch_start + i
+                task = _analyze_single_chunk(
+                    chunk=chunk,
+                    chunk_idx=chunk_idx,
+                    total_chunks=len(chunks),
+                    filename=filename,
+                    system_prompt=system_prompt,
+                    openai_client=openai_client
                 )
+                tasks.append(task)
+            
+            # Execute batch concurrently
+            try:
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
                 
-                analysis = response.choices[0].message.content
+                # Process results
+                for i, result in enumerate(batch_results):
+                    chunk_idx = batch_start + i
+                    
+                    if isinstance(result, Exception):
+                        print(f"   ⚠️ Chunk {chunk_idx + 1} failed: {result}")
+                        failed_chunks_count += 1
+                        # Add error placeholder
+                        all_analyses.append({
+                            "index": chunk_idx,
+                            "analysis": f"[Chunk {chunk_idx+1} could not be analyzed due to content policy restrictions.]",
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "cost": 0.0
+                        })
+                    elif isinstance(result, dict):
+                        # Successful analysis
+                        all_analyses.append(result)
+                        total_input_tokens += result["input_tokens"]
+                        total_output_tokens += result["output_tokens"]
+                        total_cost += result["cost"]
+                        print(f"   ✅ Chunk {chunk_idx + 1}/{len(chunks)}: {result['output_tokens']} tokens out, {result['input_tokens']} tokens in")
                 
-                
-                # Check if OpenAI refused to analyze due to content policy
-                if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
-                    raise Exception(f"Content policy refusal: OpenAI declined to analyze this content. This may occur with documents containing sensitive personal information.")
-                
-                # Track tokens and cost
-                input_tokens = response.usage.prompt_tokens
-                output_tokens = response.usage.completion_tokens
-                total_input_tokens += input_tokens
-                total_output_tokens += output_tokens
-                total_cost += (input_tokens * 0.00015 / 1000) + (output_tokens * 0.0006 / 1000)
-                
-                print(f"✅ Chunk {idx+1}/{len(chunks)} analyzed: {output_tokens} tokens out, {input_tokens} tokens in")
-                
-                # Append this chunk's analysis to files
-                chunk_sep = f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
-                
-                # Append to pack file
-                if idx == 0:
-                    # First chunk - add source header
-                    upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis)
-                else:
-                    current = download_from_r2(pack_analyzed_path) or ""
-                    upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis)
-                
-                # Append to individual source file
-                current_source = download_from_r2(analyzed_path, silent_404=True) or ""
-                upload_to_r2(analyzed_path, current_source + chunk_sep + analysis)
-                
-                
-                # Update progress with chunk count (more reliable than percentage for large files)
-                progress = 50 + int((idx + 1) / len(chunks) * 40)
+                # Update progress
+                progress = 50 + int((batch_end / len(chunks)) * 40)
                 supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
                     "target_source_id": source_id,
                     "status_param": "processing",
                     "progress_param": progress,
-                    "processed_chunks_param": idx + 1  # Current chunk number for frontend display
+                    "processed_chunks_param": batch_end
                 }).execute()
                 
-                print(f"📊 Progress updated: {progress}% (chunk {idx+1}/{len(chunks)} complete)")
+                print(f"   📊 Progress: {progress}% ({batch_end}/{len(chunks)} chunks complete)")
                 
             except Exception as e:
-                error_msg = str(e)
-                print(f"❌ Error analyzing chunk {idx}: {error_msg}")
-                
-                # Check if this is a content policy refusal
-                if "cannot assist" in error_msg.lower() or "content policy" in error_msg.lower() or "safety" in error_msg.lower():
-                    print(f"🚫 Content policy refusal detected. This may be due to sensitive information in the document.")
-                    failed_chunks_count += 1
-                    # Save a placeholder for this chunk
-                    error_analysis = f"[Chunk {idx+1} could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records.]"
-                    current_source = download_from_r2(analyzed_path, silent_404=True) or ""
-                    upload_to_r2(analyzed_path, current_source + f"\n\n--- Chunk {idx+1}/{len(chunks)} ---\n\n" + error_analysis)
-                
+                print(f"   ❌ Batch processing error: {e}")
                 continue
+        
+        # Sort analyses by index to maintain correct order
+        all_analyses.sort(key=lambda x: x["index"])
+        
+        # Write all analyses to files in correct order
+        print(f"\n📝 Writing {len(all_analyses)} analyses to files...")
+        for i, analysis_result in enumerate(all_analyses):
+            chunk_sep = f"\n\n--- Chunk {analysis_result['index']+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
+            
+            # Append to pack file
+            if i == 0:
+                upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis_result["analysis"])
+            else:
+                current = download_from_r2(pack_analyzed_path) or ""
+                upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis_result["analysis"])
+            
+            # Append to individual source file
+            current_source = download_from_r2(analyzed_path, silent_404=True) or ""
+            upload_to_r2(analyzed_path, current_source + chunk_sep + analysis_result["analysis"])
+        
+        print(f"✅ All analyses written to R2")
         
         # Update source status to completed (whether full or partial analysis)
         # If user had limited credits, they successfully completed what they could afford
@@ -2638,7 +2649,7 @@ async def build_tree_from_analysis(
     user_id = user.user_id
    
     # ============================================================================
-    # CONCURRENT BATCH PROCESSING
+    # CONCURRENT BATCH PROCESSING (10x faster than sequential)
     # ============================================================================
     
     BATCH_SIZE = 10  # Process 10 chunks concurrently
