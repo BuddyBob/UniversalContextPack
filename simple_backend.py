@@ -1863,7 +1863,20 @@ async def send_account_creation_email_endpoint(
         
         print(f"📧 Account creation email requested for user {target_user_id} ({target_email})")
         
-        # Check if email was already sent
+        # FIRST: Check user_profiles column (faster, primary source of truth)
+        user_profile_result = supabase.rpc(
+            "get_user_profile_for_backend",
+            {"user_uuid": target_user_id}
+        ).execute()
+        
+        if user_profile_result.data and user_profile_result.data.get("account_creation_email_sent"):
+            print(f"⚠️ Account creation email already sent to {target_email} (user_profiles check)")
+            return {
+                "status": "already_sent",
+                "message": "Account creation email was already sent to this user"
+            }
+        
+        # SECOND: Check email_events table (backup check)
         already_sent = has_email_been_sent(
             supabase_client=supabase,
             user_id=target_user_id,
@@ -1871,13 +1884,20 @@ async def send_account_creation_email_endpoint(
         )
         
         if already_sent:
-            print(f"⚠️ Account creation email already sent to {target_email}")
+            print(f"⚠️ Account creation email already sent to {target_email} (email_events check)")
+            # Update user_profiles to reflect this (sync the two sources of truth)
+            update_user_email_flag(
+                supabase_client=supabase,
+                user_id=target_user_id,
+                flag_name="account_creation_email_sent",
+                value=True
+            )
             return {
                 "status": "already_sent",
                 "message": "Account creation email was already sent to this user"
             }
         
-        # Get user profile for first name
+        # Get first name for email personalization
         user_profile_result = supabase.rpc(
             "get_user_profile_for_backend",
             {"user_uuid": target_user_id}
@@ -2362,7 +2382,8 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         total_input_tokens = 0
         total_output_tokens = 0
         total_cost = 0.0
-        failed_chunks_count = 0
+        failed_chunks_count = 0  # Track chunks that failed due to content policy
+        successfully_processed_chunks = 0  # Track chunks that were successfully analyzed
         
         print(f"\n🚀 [CONCURRENT ANALYSIS] Processing {len(chunks)} chunks in batches of {BATCH_SIZE}")
         
@@ -2423,6 +2444,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                     elif isinstance(result, dict):
                         # Successful analysis
                         all_analyses.append(result)
+                        successfully_processed_chunks += 1  # Only count successful chunks for credit deduction
                         total_input_tokens += result["input_tokens"]
                         total_output_tokens += result["output_tokens"]
                         total_cost += result["cost"]
@@ -2470,7 +2492,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         # Add warning if some chunks failed due to content policy
         warning_message = None
         if failed_chunks_count > 0:
-            warning_message = f"⚠️ {failed_chunks_count} chunk(s) could not be analyzed due to content policy restrictions. This may occur with documents containing sensitive personal information like receipts, invoices, or official records."
+            warning_message = f"⚠️ WARNING: {failed_chunks_count} chunk(s) failed due to content policy restrictions. No credits were deducted for failed chunks. This may occur with documents containing sensitive personal information like receipts, invoices, or official records."
         
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
@@ -2478,7 +2500,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             "status_param": "completed",
             "progress_param": 100,
             "total_chunks_param": len(all_chunks),  # Total chunks available in source
-            "processed_chunks_param": len(chunks),   # Chunks actually analyzed
+            "processed_chunks_param": successfully_processed_chunks,   # Only successfully analyzed chunks (triggers credit deduction)
             "total_input_tokens_param": total_input_tokens,
             "total_output_tokens_param": total_output_tokens,
             "total_cost_param": total_cost,
@@ -2495,6 +2517,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         
         if failed_chunks_count > 0:
             print(f"⚠️  WARNING: {failed_chunks_count} chunk(s) failed due to content policy restrictions")
+            print(f"💳 Credits deducted: {successfully_processed_chunks} (failed chunks did NOT deduct credits)")
         
         # NEW: Build Memory Tree from analysis (if enabled)
         print(f"\n🔍 [DEBUG] Post-analysis tree building check: ENABLED={MEMORY_TREE_ENABLED}, AVAILABLE={MEMORY_TREE_AVAILABLE}")
@@ -2557,8 +2580,8 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             except Exception as email_error:
                 print(f"⚠️ Failed to send email notification: {email_error}")
         
-        # Deduct credits from user
-        await update_user_chunks_used(user.user_id, len(chunks))
+        # Credits are automatically deducted by database trigger based on processed_chunks_param
+        # (only successfully processed chunks trigger deduction, not failed ones)
         
     except Exception as e:
         print(f"❌ Error analyzing source {source_id}: {e}")

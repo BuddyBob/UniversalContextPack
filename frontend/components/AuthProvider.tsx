@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase, UserProfile } from '@/lib/supabase'
 import { API_ENDPOINTS, API_BASE_URL } from '@/lib/api'
@@ -23,6 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastProfileFetch, setLastProfileFetch] = useState<number>(0)
+  const welcomeEmailSent = useRef<Set<string>>(new Set()) // Track which user IDs have received welcome emails
 
   useEffect(() => {
     // Get initial session
@@ -49,8 +50,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           fetchUserProfile(session.user.id)
 
           // Send welcome email for new signups
-          // Only send if user just signed in (not on page refresh)
-          if (event === 'SIGNED_IN') {
+          // Only send if user just signed in (not on page refresh) AND we haven't already sent it for this user
+          if (event === 'SIGNED_IN' && !welcomeEmailSent.current.has(session.user.id)) {
+            // Mark as sent immediately to prevent duplicate sends if multiple SIGNED_IN events fire
+            welcomeEmailSent.current.add(session.user.id)
+
             try {
               const response = await fetch(`${API_BASE_URL}/api/email/send-account-creation`, {
                 method: 'POST',
@@ -78,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else if (event === 'SIGNED_OUT') {
         setUserProfile(null)
+        welcomeEmailSent.current.clear() // Clear tracking on sign out
       } else if (event === 'TOKEN_REFRESHED') {
         // Don't fetch profile on token refresh to avoid unnecessary API calls
       }
