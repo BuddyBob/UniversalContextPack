@@ -362,13 +362,13 @@ export default function PricingPageClient() {
                       <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-sm text-white font-medium">Create and manage unlimited Context Packs</span>
+                      <span className="text-sm text-white font-medium">Unlimited Context Packs</span>
                     </div>
                     <div className="flex items-center justify-center gap-2">
                       <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-sm text-white font-medium">Credits used for processing and analysis</span>
+                      <span className="text-sm text-white font-medium">Unlimited credits</span>
                     </div>
                     <div className="flex items-center justify-center gap-2">
                       <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -432,7 +432,7 @@ export default function PricingPageClient() {
                     <>
                       <p className="text-sm text-[#9ca3af] text-center mb-2">Pay only for what you use</p>
                       <p className="text-sm text-[#9ca3af] text-center mb-2">Use credits across any pack</p>
-                      <p className="text-xs text-[#6b7280] text-center">Most conversations use 10–30 credits</p>
+                      <p className="text-xs text-[#6b7280] text-center">Full conversations.json: 50-100 credits</p>
                     </>
                   ) : (
                     <div className="space-y-4">
