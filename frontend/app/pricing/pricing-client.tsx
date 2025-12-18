@@ -74,7 +74,7 @@ export default function PricingPageClient() {
     }
   }
 
-  const handlePurchase = async () => {
+  const handlePurchase = async (forceUnlimited?: boolean) => {
     if (!user) {
       // Open auth modal if not authenticated
       setShowAuthModal(true)
@@ -84,15 +84,18 @@ export default function PricingPageClient() {
     setError(null)
     setProcessingPurchase(true)
 
+    // Use the forceUnlimited parameter if provided, otherwise use state
+    const unlimited = forceUnlimited !== undefined ? forceUnlimited : isUnlimitedSelected
+
     try {
       // Create checkout session and redirect directly to Stripe
       const requestBody: any = {
-        credits: isUnlimitedSelected ? 0 : fixedCreditPack, // 0 for unlimited, 50 for credit pack
-        amount: calculatePrice(isUnlimitedSelected)
+        credits: unlimited ? 0 : fixedCreditPack, // 0 for unlimited, 100 for credit pack
+        amount: calculatePrice(unlimited)
       }
 
       // Only include unlimited field if it's true (for backward compatibility)
-      if (isUnlimitedSelected) {
+      if (unlimited) {
         requestBody.unlimited = true
       }
 
@@ -298,7 +301,7 @@ export default function PricingPageClient() {
                   </div>
 
                   <button
-                    onClick={handlePurchase}
+                    onClick={() => setShowAuthModal(true)}
                     className="w-full border border-[#323232] hover:border-[#3a3a3a] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200"
                   >
                     Sign Up Free
@@ -355,7 +358,7 @@ export default function PricingPageClient() {
                 <button
                   onClick={() => {
                     setIsUnlimitedSelected(true)
-                    handlePurchase()
+                    handlePurchase(true) // Pass true for unlimited
                   }}
                   disabled={processingPurchase}
                   className="w-full bg-white hover:bg-gray-100 text-black py-4 px-6 rounded-lg font-semibold transition-all duration-200 shadow-lg"
@@ -400,7 +403,7 @@ export default function PricingPageClient() {
                 <button
                   onClick={() => {
                     setIsUnlimitedSelected(false)
-                    handlePurchase()
+                    handlePurchase(false) // Pass false for credits
                   }}
                   disabled={processingPurchase}
                   className="w-full border border-[#323232] hover:border-[#3a3a3a] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
