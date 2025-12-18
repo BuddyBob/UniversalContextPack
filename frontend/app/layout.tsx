@@ -170,7 +170,7 @@ export default function RootLayout({
           <div className="flex flex-col min-h-screen">
             {/* <HolidayBanner /> */}
             {/* <FeedbackBanner /> */}
-            {/* <MaintenanceBanner /> */}
+            <MaintenanceBanner />
             <Navigation />
             <main className="flex-1">{children}</main>
             <Footer />
