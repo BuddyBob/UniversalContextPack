@@ -460,6 +460,10 @@ export default function PricingPageClient() {
                           ${getPricePerCredit(customCredits)} per credit
                           {getDiscountPercent(customCredits) > 0 && ` • ${getDiscountPercent(customCredits)}% discount`}
                         </p>
+                        <br/>
+                        <p>
+                          <p className="text-xs text-[#6b7280] text-center">Estimated conversations.json: 30-75 credits</p>
+                        </p>
                       </div>
                     </div>
                   )}
