@@ -6070,28 +6070,19 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 def calculate_credit_price(credits: int) -> float:
-    """Calculate price for credits with volume discounts"""
+    """Calculate price for credits - fixed 100-credit pack at $4.99"""
     # Special case: unlimited plan
     if credits == -1:
         return 4.99
     
-    # Special pricing for 25 credits
-    if credits == 25:
-        return 1.50
+    # Standard credit pack: 100 credits for $4.99
+    if credits == 100:
+        return 4.99
     
+    # Backward compatibility: fallback to base price for any other amount
+    # This handles edge cases or legacy purchases
     base_price = 0.10  # $0.10 per credit
-    
-    if credits >= 250:
-        # 20% off for 250+ credits
-        return round(credits * base_price * 0.8, 2)
-    elif credits >= 100:
-        # 15% off for 100+ credits  
-        return round(credits * base_price * 0.85, 2)
-    elif credits >= 50:
-        # 10% off for 50+ credits
-        return round(credits * base_price * 0.9, 2)
-    else:
-        return round(credits * base_price, 2)
+    return round(credits * base_price, 2)
 
 async def add_credits_to_user(user_id: str, credits: int, amount: float, stripe_payment_id: str):
     """Add credits to user account after successful payment"""

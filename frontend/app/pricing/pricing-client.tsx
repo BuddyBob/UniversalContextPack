@@ -26,8 +26,8 @@ export default function PricingPageClient() {
   const [loading, setLoading] = useState(true)
   const [processingPurchase, setProcessingPurchase] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [customCredits, setCustomCredits] = useState(25)
-  const [customCreditsInput, setCustomCreditsInput] = useState('25')
+  const fixedCreditPack = 100
+  const fixedCreditPrice = 4.99
   const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(true) // Default to unlimited
   const [showAuthModal, setShowAuthModal] = useState(false)
   const router = useRouter()
@@ -35,48 +35,15 @@ export default function PricingPageClient() {
   const supabase = createClientComponentClient()
   const { user, session, loading: authLoading } = useAuth()
 
-  // Handle URL parameters for pre-filling credits
-  useEffect(() => {
-    const creditsParam = searchParams?.get('credits')
-    if (creditsParam) {
-      const credits = parseInt(creditsParam)
-      if (credits > 0 && credits <= 10000) {
-        const finalCredits = Math.max(2, credits) // Ensure minimum 2
-        setCustomCredits(finalCredits)
-        setCustomCreditsInput(finalCredits.toString())
-      }
-    }
-  }, [searchParams])
+  // No URL parameter handling needed for fixed pack
 
-  // Calculate pricing with updated rates
-  const calculatePrice = (credits: number, unlimited: boolean = false) => {
+  // Calculate pricing
+  const calculatePrice = (unlimited: boolean = false) => {
     if (unlimited) return 5.99 // Pro subscription for $5.99/month
-
-    // Special pricing for 25 credits
-    if (credits === 25) return 1.50
-
-    let basePrice = 0.10 // Base price per credit ($0.10)
-
-    // Volume discounts
-    if (credits >= 250) basePrice = 0.08     // 20% off for 250+
-    else if (credits >= 100) basePrice = 0.085 // 15% off for 100+
-    else if (credits >= 50) basePrice = 0.09  // 10% off for 50+
-
-    return Number((credits * basePrice).toFixed(2))
+    return fixedCreditPrice // Fixed 50-credit pack at $4.99
   }
 
-  const getDiscountPercent = (credits: number) => {
-    if (isUnlimitedSelected) return 0
-    if (credits >= 250) return 20
-    if (credits >= 100) return 15
-    if (credits >= 50) return 10
-    return 0
-  }
-
-  const getPricePerCredit = (credits: number) => {
-    if (isUnlimitedSelected) return "∞"
-    return (calculatePrice(credits) / credits).toFixed(3)
-  }
+  // Removed getDiscountPercent and getPricePerCredit - no longer needed
 
   useEffect(() => {
     if (authLoading) return
@@ -120,8 +87,8 @@ export default function PricingPageClient() {
     try {
       // Create checkout session and redirect directly to Stripe
       const requestBody: any = {
-        credits: isUnlimitedSelected ? 0 : customCredits, // 0 for unlimited (rely on unlimited flag)
-        amount: calculatePrice(isUnlimitedSelected ? 0 : customCredits, isUnlimitedSelected)
+        credits: isUnlimitedSelected ? 0 : fixedCreditPack, // 0 for unlimited, 50 for credit pack
+        amount: calculatePrice(isUnlimitedSelected)
       }
 
       // Only include unlimited field if it's true (for backward compatibility)
@@ -410,63 +377,24 @@ export default function PricingPageClient() {
               <div className="bg-[#0a0a0a] border border-[#2e2e2e] rounded-xl p-8 flex flex-col">
                 <div className="text-center mb-8">
                   <h3 className="text-xl font-semibold text-white mb-3">Flexible</h3>
-                  {!user ? (
-                    <>
-                      <div className="mb-2">
-                        <span className="text-5xl font-bold text-white">$0.08</span>
-                      </div>
-                      <p className="text-sm text-[#6b7280]">per credit</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="mb-2">
-                        <span className="text-5xl font-bold text-white">${calculatePrice(customCredits, false)}</span>
-                      </div>
-                      <p className="text-sm text-[#6b7280]">total price</p>
-                    </>
-                  )}
+                  <div className="mb-2">
+                    <span className="text-5xl font-bold text-white">${fixedCreditPrice}</span>
+                  </div>
+                  <p className="text-sm text-[#6b7280]">one-time</p>
                 </div>
 
                 <div className="flex-grow mb-8">
-                  {!user ? (
-                    <>
-                      <p className="text-sm text-[#9ca3af] text-center mb-2">Pay only for what you use</p>
-                      <p className="text-sm text-[#9ca3af] text-center mb-2">Use credits across any pack</p>
-                      <p className="text-xs text-[#6b7280] text-center">Full conversations.json: 50-100 credits</p>
-                    </>
-                  ) : (
-                    <div className="space-y-4">
-                      <label className="block">
-                        <span className="text-sm text-[#9ca3af] mb-2 block text-center">Number of credits</span>
-                        <input
-                          type="number"
-                          min="2"
-                          max="10000"
-                          value={customCreditsInput}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            setCustomCreditsInput(value)
-                            const credits = parseInt(value) || 2
-                            const finalCredits = Math.max(2, Math.min(10000, credits))
-                            setCustomCredits(finalCredits)
-                            setIsUnlimitedSelected(false)
-                          }}
-                          onFocus={() => setIsUnlimitedSelected(false)}
-                          className="w-full bg-[#181818] border border-[#2e2e2e] rounded-lg px-4 py-3 text-white text-center text-2xl font-bold focus:outline-none focus:border-[#3a3a3a]"
-                        />
-                      </label>
-                      <div className="text-center pt-2">
-                        <p className="text-xs text-[#6b7280]">
-                          ${getPricePerCredit(customCredits)} per credit
-                          {getDiscountPercent(customCredits) > 0 && ` • ${getDiscountPercent(customCredits)}% discount`}
-                        </p>
-                        <br/>
-                        <p>
-                          <p className="text-xs text-[#6b7280] text-center">Estimated conversations.json: 30-75 credits</p>
-                        </p>
-                      </div>
+                  <div className="space-y-4">
+                    <div className="bg-[#181818] border border-[#2e2e2e] rounded-lg px-4 py-4 text-center">
+                      <span className="text-3xl font-bold text-white">{fixedCreditPack}</span>
+                      <span className="text-sm text-[#9ca3af] ml-2">credits</span>
                     </div>
-                  )}
+                    <div className="text-center">
+                      <p className="text-sm text-[#9ca3af] mb-2">Credits stack and never expire.</p>
+                      <p className="text-sm text-[#9ca3af] mb-3">You can buy multiple packs.</p>
+                      <p className="text-xs text-[#6b7280]">Estimated conversations.json: 30-75 credits</p>
+                    </div>
+                  </div>
                 </div>
 
                 <button
@@ -483,7 +411,7 @@ export default function PricingPageClient() {
                       Processing...
                     </>
                   ) : user ? (
-                    `Buy ${customCredits} Credits`
+                    `Buy ${fixedCreditPack} Credits`
                   ) : (
                     'Get Started'
                   )}
