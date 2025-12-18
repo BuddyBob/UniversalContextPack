@@ -1,347 +1,343 @@
-import { Lock, Shield, Eye, Server, FileKey, Users, AlertTriangle, Zap, CheckCircle, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
 export default function SecurityPage() {
   return (
-    <main className="min-h-screen bg-white dark:bg-gray-900">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <main className="min-h-screen bg-[#080a09] text-white">
+      <div className="max-w-5xl mx-auto px-6 py-32">
         {/* Header */}
-        <div className="text-center mb-12">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Shield className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-h1-lg text-primary mb-4">Security Center</h1>
-          <p className="text-body-lg text-secondary max-w-2xl mx-auto">
-            Enterprise-grade security measures protecting your data with transparency and trust
+        <div className="mb-20">
+          <p className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-4 font-mono">Security</p>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+            Security Whitepaper
+          </h1>
+          <p className="text-lg text-gray-500">
+            Enterprise-grade protection for your AI conversation data
           </p>
         </div>
 
-        {/* Security Overview Cards */}
-        <div className="grid-12 mb-12">
-          <div className="col-span-12 md:col-span-4 card-enterprise text-center">
-            <Lock className="h-8 w-8 text-green-400 mx-auto mb-3" />
-            <h3 className="font-semibold text-primary mb-2">256-bit Encryption</h3>
-            <p className="text-sm text-secondary">Data encrypted in transit and at rest</p>
-          </div>
-          <div className="col-span-12 md:col-span-4 card-enterprise text-center">
-            <Server className="h-8 w-8 text-blue-400 mx-auto mb-3" />
-            <h3 className="font-semibold text-primary mb-2">Enterprise Infrastructure</h3>
-            <p className="text-sm text-secondary">SOC 2 compliant cloud services</p>
-          </div>
-          <div className="col-span-12 md:col-span-4 card-enterprise text-center">
-            <Eye className="h-8 w-8 text-purple-400 mx-auto mb-3" />
-            <h3 className="font-semibold text-primary mb-2">Audit Logs</h3>
-            <p className="text-sm text-secondary">Complete access & activity tracking</p>
-          </div>
-        </div>
+        {/* Security Specifications - Table Format */}
+        <div className="space-y-32">
 
-        <div className="space-y-8">
           {/* Data Protection */}
-          <section className="card-enterprise">
-            <div className="flex items-center space-x-3 mb-6">
-              <Shield className="h-6 w-6 text-green-400" />
-              <h2 className="text-h2 text-primary">Data Protection</h2>
+          <section>
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-white mb-2">Data Protection</h2>
+              <p className="text-sm text-gray-500">Encryption and data handling procedures</p>
             </div>
-            <div className="grid-12">
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Encryption Standards</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>AES-256 encryption for data at rest</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>TLS 1.3 for data in transit</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>End-to-end encryption for sensitive data</span>
-                  </li>
-                </ul>
+
+            <div className="space-y-0">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Encryption at Rest</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400"><span className="text-purple-400">AES-256</span> encryption for all stored data</p>
+                </div>
               </div>
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Data Handling</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>GDPR & CCPA compliant processing</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Automatic data retention policies</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Secure data disposal procedures</span>
-                  </li>
-                </ul>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Encryption in Transit</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400"><span className="text-purple-400">TLS 1.3</span> for all data transmission</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Data Privacy</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Your data is <span className="text-purple-400">never used</span> to train AI models</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Data Retention</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Automated policies, user-controlled deletion</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Data Sovereignty</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">You own your data. Export or delete anytime</p>
+                </div>
               </div>
             </div>
           </section>
 
           {/* Infrastructure Security */}
-          <section className="card-enterprise">
-            <div className="flex items-center space-x-3 mb-6">
-              <Server className="h-6 w-6 text-blue-400" />
-              <h2 className="text-h2 text-primary">Infrastructure Security</h2>
+          <section>
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-white mb-2">Infrastructure Security</h2>
+              <p className="text-sm text-gray-500">Cloud and application security measures</p>
             </div>
-            <div className="grid-12">
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Cloud Security</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Multi-region deployment</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>DDoS protection & WAF</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Network isolation & VPC</span>
-                  </li>
-                </ul>
+
+            <div className="space-y-0">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Hosting</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Multi-region deployment on enterprise cloud infrastructure</p>
+                </div>
               </div>
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Application Security</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Regular security audits</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Penetration testing</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>OWASP compliance</span>
-                  </li>
-                </ul>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">DDoS Protection</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Web Application Firewall (WAF) and DDoS mitigation</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Network Isolation</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Virtual Private Cloud (VPC) with network segmentation</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Security Audits</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Regular security assessments and penetration testing</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">OWASP Compliance</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Following OWASP Top 10 security best practices</p>
+                </div>
               </div>
             </div>
           </section>
 
-          {/* Monitoring & Compliance */}
-          <section className="card-enterprise">
-            <div className="flex items-center space-x-3 mb-6">
-              <Eye className="h-6 w-6 text-purple-400" />
-              <h2 className="text-h2 text-primary">Monitoring & Compliance</h2>
+          {/* Compliance & Monitoring */}
+          <section>
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-white mb-2">Compliance & Monitoring</h2>
+              <p className="text-sm text-gray-500">Standards certification and security monitoring</p>
             </div>
-            <div className="grid-12">
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Security Monitoring</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>24/7 security monitoring</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Automated threat detection</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Real-time alerting</span>
-                  </li>
-                </ul>
-              </div>
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Compliance Standards</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>SOC 2 Type II certified</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>ISO 27001 aligned</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>GDPR & CCPA compliant</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </section>
 
-          {/* Vulnerability Management */}
-          <section className="card-enterprise">
-            <div className="flex items-center space-x-3 mb-6">
-              <AlertTriangle className="h-6 w-6 text-yellow-400" />
-              <h2 className="text-h2 text-primary">Vulnerability Management</h2>
-            </div>
-            <div className="grid-12">
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Proactive Security</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Automated dependency scanning</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Regular security assessments</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Zero-day response procedures</span>
-                  </li>
-                </ul>
+            <div className="space-y-0">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">SOC 2 Type II</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Independently audited security controls</p>
+                </div>
               </div>
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Incident Response</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>24-hour response SLA</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Documented incident procedures</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Post-incident analysis & improvement</span>
-                  </li>
-                </ul>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">ISO 27001</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Information security management system aligned</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">GDPR & CCPA</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Compliant data processing and privacy controls</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">24/7 Monitoring</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Automated threat detection and real-time alerting</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Incident Response</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">24-hour response SLA with documented procedures</p>
+                </div>
               </div>
             </div>
           </section>
 
           {/* Business Continuity */}
-          <section className="card-enterprise">
-            <div className="flex items-center space-x-3 mb-6">
-              <Zap className="h-6 w-6 text-orange-400" />
-              <h2 className="text-h2 text-primary">Business Continuity</h2>
+          <section>
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-white mb-2">Business Continuity</h2>
+              <p className="text-sm text-gray-500">Backup, recovery, and high availability</p>
             </div>
-            <div className="grid-12">
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">Backup & Recovery</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Automated daily backups</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Cross-region data replication</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Point-in-time recovery</span>
-                  </li>
-                </ul>
+
+            <div className="space-y-0">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Automated Backups</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Daily backups with cross-region replication</p>
+                </div>
               </div>
-              <div className="col-span-12 md:col-span-6">
-                <h3 className="font-semibold text-primary mb-3">High Availability</h3>
-                <ul className="space-y-2 text-secondary">
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>99.9% uptime SLA</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Load balancing & failover</span>
-                  </li>
-                  <li className="flex items-center space-x-2">
-                    <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                    <span>Real-time health monitoring</span>
-                  </li>
-                </ul>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Point-in-Time Recovery</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Restore data to any point within retention period</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Uptime SLA</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">99.9% uptime guarantee with load balancing</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Health Monitoring</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Real-time system health checks and failover</p>
+                </div>
               </div>
             </div>
           </section>
 
           {/* Sub-processors */}
-          <section className="card-enterprise">
-            <div className="flex items-center space-x-3 mb-6">
-              <Users className="h-6 w-6 text-indigo-400" />
-              <h2 className="text-h2 text-primary">Sub-processors & Partners</h2>
+          <section>
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-white mb-2">Sub-processors & Partners</h2>
+              <p className="text-sm text-gray-500">Trusted third-party service providers with DPAs</p>
             </div>
-            <div className="space-y-4">
-              <p className="text-secondary">
-                We work with trusted sub-processors who meet our security standards and have Data Processing Agreements (DPAs) in place:
-              </p>
-              <div className="grid-12">
-                <div className="col-span-12 md:col-span-6">
-                  <h3 className="font-semibold text-primary mb-3">Infrastructure Partners</h3>
-                  <ul className="space-y-2 text-secondary">
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                      <span>Google Cloud Platform (hosting)</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                      <span>Supabase (database)</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                      <span>Vercel (frontend hosting)</span>
-                    </li>
-                  </ul>
+
+            <div className="space-y-0">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Cloud Infrastructure</h3>
                 </div>
-                <div className="col-span-12 md:col-span-6">
-                  <h3 className="font-semibold text-primary mb-3">Service Partners</h3>
-                  <ul className="space-y-2 text-secondary">
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                      <span>Stripe (payment processing)</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                      <span>Sentry (error monitoring)</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
-                      <span>OpenAI (AI processing)</span>
-                    </li>
-                  </ul>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Google Cloud Platform, Vercel</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Database</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Supabase (PostgreSQL)</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Payment Processing</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Stripe (PCI DSS compliant)</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">AI Processing</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">OpenAI API (SOC 2 certified)</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Error Monitoring</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Sentry</p>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* Legal & Compliance Documents */}
-          <section className="card-enterprise">
-            <div className="flex items-center space-x-3 mb-6">
-              <FileKey className="h-6 w-6 text-blue-400" />
-              <h2 className="text-h2 text-primary">Legal & Compliance Documents</h2>
+          {/* Legal Documents */}
+          <section>
+            <div className="mb-12">
+              <h2 className="text-2xl font-bold text-white mb-2">Legal & Compliance Documents</h2>
+              <p className="text-sm text-gray-500">Policies and agreements</p>
             </div>
-            <div className="grid-12">
-              <div className="col-span-12 md:col-span-6 space-y-4">
-                <Link href="/privacy-policy" className="flex items-center space-x-2 text-blue-400 hover:text-blue-300 transition-colors">
-                  <ExternalLink className="h-4 w-4" />
-                  <span>Privacy Policy</span>
-                </Link>
-                <Link href="/terms-of-service" className="flex items-center space-x-2 text-blue-400 hover:text-blue-300 transition-colors">
-                  <ExternalLink className="h-4 w-4" />
-                  <span>Terms of Service</span>
-                </Link>
-                <Link href="/dpa" className="flex items-center space-x-2 text-blue-400 hover:text-blue-300 transition-colors">
-                  <ExternalLink className="h-4 w-4" />
-                  <span>Data Processing Agreement</span>
-                </Link>
-              </div>
-              <div className="col-span-12 md:col-span-6 space-y-4">
-                <div className="p-4 border border-primary/30 rounded-lg">
-                  <h3 className="font-semibold text-primary mb-2">Security Certifications</h3>
-                  <p className="text-sm text-secondary">
-                    View our current security certifications and compliance reports
-                  </p>
+
+            <div className="space-y-0">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Privacy Policy</h3>
                 </div>
-                <div className="p-4 border border-primary/30 rounded-lg">
-                  <h3 className="font-semibold text-primary mb-2">Contact Security Team</h3>
-                  <p className="text-sm text-secondary">
+                <div className="md:col-span-8">
+                  <Link href="/privacy-policy" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
+                    View Privacy Policy →
+                  </Link>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Terms of Service</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <Link href="/terms-of-service" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
+                    View Terms of Service →
+                  </Link>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Data Processing Agreement</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <Link href="/dpa" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
+                    View DPA →
+                  </Link>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Security Contact</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <a href="mailto:security@universalchatprompt.com" className="text-sm text-purple-400 hover:text-purple-300 transition-colors font-mono">
                     security@universalchatprompt.com
-                  </p>
+                  </a>
                 </div>
               </div>
             </div>
           </section>
+
         </div>
       </div>
     </main>

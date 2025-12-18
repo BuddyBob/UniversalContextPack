@@ -1,5 +1,22 @@
 # Context Pack - Design Guide
 
+## Design Philosophy
+
+Context Pack follows an **enterprise-grade, minimal design aesthetic** inspired by Vercel, Stripe, and Linear. The focus is on:
+
+- **Professionalism over vibrancy**: Trust and credibility through restraint
+- **Tables over cards**: Data sheets and specifications instead of bento boxes
+- **Typography over containers**: Hierarchy through type, not backgrounds
+- **Monochrome with strategic accents**: Purple highlights only where meaningful
+- **Technical precision**: Clean interfaces that feel like infrastructure tools
+
+**Anti-Patterns to Avoid**:
+- ❌ Colorful "bento box" grid layouts
+- ❌ Multiple accent colors (rainbow security icons)
+- ❌ Rounded glassmorphic cards everywhere
+- ❌ Vibe-coded aesthetics (playful, consumer-focused)
+- ❌ Gradients and decorative elements
+
 ## Brand Identity
 
 ### Logo
@@ -13,372 +30,400 @@
 
 ### Color Palette
 
-#### Dark Theme (Default)
+#### Core Colors (Enterprise Dark Theme)
 ```css
-/* Background Colors */
---bg-primary: #1d1d1d        /* Main dark background */
---bg-secondary: #0E0E0E      /* Header/footer background */
---bg-card: #181818           /* Card backgrounds */
---bg-card-hover: #333333     /* Interactive card hover */
---bg-card-elevated: #2d2d2d  /* Elevated/modal backgrounds */
+/* Background Colors - Pure Dark */
+--bg-primary: #080a09          /* Main background (nearly black) */
+--bg-secondary: #0a0c0b         /* Section backgrounds */
+--bg-elevated: #0E0E0E          /* Modals, dropdowns */
 
-/* Accent Colors */
---accent-primary: rgba(102, 57, 208, 0.65)      /* Purple primary */
---accent-primary-hover: rgba(99, 51, 210, 0.733) /* Purple hover */
---accent-primary-light: rgba(115, 59, 246, 0.457) /* Light purple */
---accent-primary-dark: #1d4ed8                   /* Dark blue accent */
+/* Text Colors - Monochrome Scale */
+--text-white: #ffffff           /* Primary headings */
+--text-gray-300: #d1d5db        /* Body text */
+--text-gray-400: #9ca3af        /* Secondary text */
+--text-gray-500: #6b7280        /* Muted text */
+--text-gray-600: #4b5563        /* Tertiary text */
 
-/* Text Colors */
---text-primary: #ffffff      /* Primary white text */
---text-secondary: #e5e7eb    /* Light gray text */
---text-muted: #9ca3af        /* Muted gray */
---text-disabled: #6b7280     /* Disabled state */
+/* Border Colors - Subtle Separation */
+--border-white-5: rgba(255, 255, 255, 0.05)   /* Very subtle */
+--border-white-10: rgba(255, 255, 255, 0.10)  /* Default dividers */
+--border-white-20: rgba(255, 255, 255, 0.20)  /* Emphasized */
+--border-white-30: rgba(255, 255, 255, 0.30)  /* Interactive */
 
-/* Border Colors */
---border-primary: #323232    /* Subtle borders */
---border-secondary: #3a3a3a  /* Secondary borders */
---border-card: #2e2e2e       /* Card borders */
-
-/* Status Colors */
---status-success: #10b981    /* Green */
---status-warning: #f59e0b    /* Amber */
---status-error: #ef4444      /* Red */
+/* Accent Color - Strategic Purple */
+--accent-purple-400: #c084fc   /* Primary accent (links, highlights) */
+--accent-purple-300: #d8b4fe   /* Hover state */
 ```
 
-#### Light Theme
-```css
-/* Background Colors */
---bg-primary: #ffffff        /* Clean white */
---bg-secondary: #f8f9fa      /* Light gray */
---bg-card: #ffffff           /* Card white */
---bg-card-hover: #f8f9fa     /* Subtle hover */
+#### Strategic Use of Purple
+Purple should be used **sparingly** for:
+- Key technical specifications (e.g., "AES-256", "TLS 1.3")
+- Important guarantees (e.g., "never used", "Zero lock-in")
+- Links and interactive elements
+- Pipeline indicators and node dots
 
-/* Accent Colors */
---accent-primary: rgba(79, 41, 167, 0.832)      /* Purple primary */
---accent-primary-hover: rgba(104, 57, 214, 0.837) /* Purple hover */
---accent-primary-light: rgb(76, 37, 167)         /* Light purple */
-
-/* Text Colors */
---text-primary: #1f2328      /* Dark text */
---text-secondary: #413c43    /* Gray text */
---text-muted: #848d97        /* Muted text */
-```
+**Do NOT use purple for**:
+- Large backgrounds or cards
+- Decorative elements
+- Section headers (use white instead)
 
 ## Typography
 
 ### Font Family
 - **Primary**: Inter (Google Fonts)
+- **Monospace**: `font-mono` for technical specs, code, email addresses
 - **Fallback**: system-ui, -apple-system, sans-serif
 
-### Font Sizes
+### Font Sizes (Enterprise Scale)
 ```css
-.text-h1  { font-size: 3.5rem; }   /* 56px - Hero headings */
-.text-h2  { font-size: 2.25rem; }  /* 36px - Section headings */
-.text-h3  { font-size: 1.875rem; } /* 30px - Subsection headings */
-.text-lg  { font-size: 1.125rem; } /* 18px - Large body */
-.text-base { font-size: 1rem; }    /* 16px - Default body */
-.text-sm  { font-size: 0.875rem; } /* 14px - Small text */
-.text-xs  { font-size: 0.75rem; }  /* 12px - Captions */
+/* Headers - Restrained */
+.text-5xl { font-size: 3rem; }      /* 48px - Page titles */
+.text-4xl { font-size: 2.25rem; }   /* 36px - Hero headings */
+.text-3xl { font-size: 1.875rem; }  /* 30px - Section headings */
+.text-2xl { font-size: 1.5rem; }    /* 24px - Subsections */
+
+/* Body - Readable */
+.text-lg  { font-size: 1.125rem; }  /* 18px - Large body */
+.text-base { font-size: 1rem; }     /* 16px - Default */
+.text-sm  { font-size: 0.875rem; }  /* 14px - Table text */
+.text-xs  { font-size: 0.75rem; }   /* 12px - Labels, monospace specs */
 ```
 
 ### Font Weights
-- **Light**: 300 - Subtle text
 - **Regular**: 400 - Body text
-- **Medium**: 500 - Nav links, buttons
-- **Semibold**: 600 - Headings, emphasis
-- **Bold**: 700 - Strong emphasis
+- **Medium**: 500 - Navigation
+- **Semibold**: 600 - Table headers, subsections
+- **Bold**: 700 - Section headings
 
-## Layout
+### Typography Best Practices
+✅ Use **bold white** for section headers  
+✅ Use **gray-400** for body text  
+✅ Use **gray-500** for descriptions  
+✅ Use **monospace** for technical specs (→ .json, AES-256)  
+✅ Keep line lengths readable (max-w-5xl)  
 
-### Navigation
+## Layout Patterns
+
+### Table/Data Sheet Format (Preferred)
+Use a 2-column grid with left-aligned labels:
+
+```tsx
+<div className="space-y-0">
+  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+    <div className="md:col-span-4">
+      <h3 className="text-sm font-semibold text-white">Label</h3>
+    </div>
+    <div className="md:col-span-8">
+      <p className="text-sm text-gray-400">Specification details</p>
+    </div>
+  </div>
+</div>
 ```
-Structure: Logo | Nav Links | [Spacer] | Status | User Profile | Credits
-- Logo: 25x25px + "Context Pack" text
-- Nav Links: Home, Packs, Pricing, Docs
-- Status: Green dot indicator
-- User: Avatar + dropdown
-- Credits: Card with balance display
+
+### Pipeline Diagram (Technical Flows)
+For "How It Works" or process flows:
+
+```tsx
+{/* Horizontal line connecting nodes */}
+<div className="hidden md:block absolute top-8 left-0 right-0 h-px 
+                bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+{/* Node indicators */}
+<div className="w-4 h-4 rounded-full bg-purple-500/20 border-2 border-purple-500/50" />
+
+{/* Step labels */}
+<p className="text-xs font-mono text-gray-600">01</p>
+<h3 className="text-base font-semibold text-white">STEP NAME</h3>
+
+{/* Technical specs */}
+<div className="space-y-1.5 font-mono text-xs text-gray-600">
+  <div>→ .json</div>
+  <div>→ .pdf</div>
+</div>
 ```
 
-### Spacing Scale
+### Section Spacing
 ```css
-gap-1: 0.25rem    /* 4px - Tight spacing */
-gap-2: 0.5rem     /* 8px - Small spacing */
-gap-3: 0.75rem    /* 12px - Default spacing */
-gap-4: 1rem       /* 16px - Medium spacing */
-gap-6: 1.5rem     /* 24px - Large spacing */
-gap-8: 2rem       /* 32px - Section spacing */
-gap-12: 3rem      /* 48px - Major sections */
-gap-16: 4rem      /* 64px - Hero spacing */
-```
+/* Between major sections */
+space-y-32: 8rem (128px)
 
-### Border Radius
-```css
-rounded-md: 6px    /* Default cards */
-rounded-lg: 8px    /* Buttons, inputs */
-rounded-xl: 12px   /* Large cards */
-rounded-2xl: 16px  /* Hero sections */
-rounded-full: 50%  /* Avatars, badges */
+/* Within sections */
+mb-20: 5rem (80px) for section headers
+mb-12: 3rem (48px) for subsections
+mb-4: 1rem (16px) for small groups
 ```
 
 ## Components
 
+### Navigation Bar
+```tsx
+<header className="sticky top-0 z-50 bg-[#0E0E0E] border-b border-white/10">
+  <div className="max-w-7xl mx-auto px-6 py-4">
+    {/* Logo + Links + User */}
+  </div>
+</header>
+```
+
+**Dropdowns** (e.g., Sign Out):
+```tsx
+<div className="absolute top-full right-0 mt-4 min-w-max 
+                bg-gray-900 border border-gray-700 rounded-lg shadow-2xl py-2 z-50">
+  <button className="flex items-center gap-3 px-5 py-3 text-sm text-gray-400 
+                     hover:text-white hover:bg-gray-800 transition-colors 
+                     w-full text-left whitespace-nowrap">
+    <LogOut className="h-4 w-4 flex-shrink-0" />
+    Sign Out
+  </button>
+</div>
+```
+
 ### Buttons
 
-#### Primary Button (CTA)
-```css
-Background: white
-Text: black
-Font: 600 semibold
-Padding: 0.75rem 1.5rem
-Rounded: rounded-xl (12px)
-Hover: bg-gray-100
-Shadow: shadow-lg
+#### Primary CTA (Light)
+```tsx
+<button className="px-6 py-3 bg-white text-black font-semibold 
+                   rounded-xl hover:bg-gray-100 transition-colors">
+  Get Started
+</button>
 ```
 
-#### Secondary Button
-```css
-Background: bg-card (#181818)
-Text: white
-Border: 1px solid border-primary
-Padding: 0.75rem 1.5rem
-Rounded: rounded-xl
-Hover: bg-card-hover
+#### Secondary (Minimal)
+```tsx
+<button className="px-6 py-3 bg-white/[0.02] border border-white/10 
+                   text-white rounded-xl hover:bg-white/[0.04] 
+                   hover:border-white/20 transition-colors">
+  Learn More
+</button>
 ```
 
-#### Credit Button
-```css
-Background: bg-gray-800
-Border: 1px solid gray-700
-Icon: CreditCard (gray-400)
-Text: "Credits" (gray-400) + Balance (white, bold)
-Hover: bg-gray-700, border-gray-600
+### Cards (Use Sparingly)
+When cards are absolutely necessary:
+
+```tsx
+<div className="p-6 rounded-xl border border-white/10 bg-white/[0.02] 
+                hover:border-white/20 transition-all">
+  {/* Content */}
+</div>
 ```
 
-### Cards
-```css
-Background: var(--bg-card)
-Border: 1px solid var(--border-card)
-Rounded: rounded-xl (12px)
-Padding: 1.5rem (24px)
-Shadow: shadow-md
-Hover: bg-card-hover, border-border-accent
-Transition: all 200ms
+**Prefer tables over cards for most content.**
+
+### Links
+```tsx
+{/* Internal navigation */}
+<Link href="/security" className="text-gray-400 hover:text-white transition-colors">
+  Documentation
+</Link>
+
+{/* Highlighted/CTA links */}
+<Link href="/security" className="text-purple-400 hover:text-purple-300 transition-colors">
+  Security whitepaper →
+</Link>
 ```
 
-### Inputs
-```css
-Background: var(--bg-input)
-Border: 1px solid var(--border-primary)
-Rounded: rounded-lg (8px)
-Padding: 0.75rem 1rem
-Text: var(--text-primary)
-Focus: border-accent-primary, ring-accent-primary
+## Page Patterns
+
+### Hero Section
+```tsx
+<section className="py-32 px-6 bg-[#080a09]">
+  <div className="max-w-5xl mx-auto">
+    <p className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-4 font-mono">
+      Category
+    </p>
+    <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
+      Page Title
+    </h1>
+    <p className="text-lg text-gray-500">
+      Brief description of the page
+    </p>
+  </div>
+</section>
 ```
 
-### Badges
-```css
-Background: var(--accent-primary-light)
-Text: var(--accent-primary)
-Padding: 0.25rem 0.75rem
-Rounded: rounded-full
-Font: 0.875rem, 600 semibold
+### Content Section
+```tsx
+<section className="py-32 px-6 bg-[#080a09] relative border-t border-white/5">
+  <div className="max-w-5xl mx-auto">
+    {/* Section header */}
+    <div className="mb-12">
+      <h2 className="text-2xl font-bold text-white mb-2">Section Title</h2>
+      <p className="text-sm text-gray-500">Section description</p>
+    </div>
+    
+    {/* Table/grid content */}
+    <div className="space-y-0">
+      {/* Rows with border-b border-white/10 */}
+    </div>
+  </div>
+</section>
 ```
 
-## Icons
+## Mobile Responsiveness
 
-### Icon Library
-- **Lucide React**: Primary icon system
-- **Size**: 20-24px default, 16-18px for small UI
-
-### Common Icons
-```typescript
-import { 
-  CreditCard,    // Credits display
-  User,          // User profile
-  Settings,      // Settings menu
-  LogOut,        // Sign out
-  Menu, X,       // Mobile menu toggle
-  Sun, Moon,     // Theme toggle
-  Home,          // Navigation
-  Package,       // Packs
-  DollarSign,    // Pricing
-  BookOpen,      // Documentation
-} from 'lucide-react'
-```
-
-## Shadows
-
-### Shadow Scale
-```css
-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3)      /* Subtle depth */
-shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3)      /* Card elevation */
-shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.3)     /* Buttons, modals */
-shadow-professional: 0 8px 25px -5px rgba(0, 0, 0, 0.3) /* Hero sections */
-```
-
-## Animation
-
-### Transitions
-```css
-Default: transition-all 200ms ease
-Hover: 150ms ease-out
-Focus: 100ms ease-in
-```
-
-### Common Animations
-```css
-/* Fade In */
-opacity: 0 → 1 (300ms)
-
-/* Slide Up */
-transform: translateY(20px) → translateY(0)
-opacity: 0 → 1 (400ms)
-
-/* Scale Hover */
-transform: scale(1) → scale(1.05) (150ms)
-```
-
-## Responsive Breakpoints
-
+### Breakpoints
 ```css
 sm: 640px    /* Small tablets */
-md: 768px    /* Tablets */
-lg: 1024px   /* Small laptops */
+md: 768px    /* Tablets - table columns stack */
+lg: 1024px   /* Laptops */
 xl: 1280px   /* Desktops */
-2xl: 1536px  /* Large screens */
 ```
 
-### Mobile-First Approach
-- Default styles for mobile
-- Use `md:` prefix for tablet+
-- Use `lg:` prefix for desktop+
+### Mobile Patterns
+```tsx
+{/* Stack table columns on mobile */}
+<div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6">
+  <div className="md:col-span-4">Label</div>
+  <div className="md:col-span-8">Value</div>
+</div>
+
+{/* Hide pipeline line on mobile */}
+<div className="hidden md:block absolute top-8 h-px bg-white/20" />
+
+{/* Responsive text sizes */}
+<h1 className="text-3xl md:text-4xl lg:text-5xl font-bold">
+```
+
+## Icons (Lucide React)
+
+### Strategic Icon Use
+✅ Navigation items  
+✅ User actions (LogOut, Settings)  
+✅ Technical indicators (small, monochrome)  
+❌ Large decorative icons in colored boxes  
+❌ Multiple colored section icons (green/blue/purple/yellow)  
+
+```tsx
+import { ArrowRight, LogOut } from 'lucide-react'
+
+{/* Small, inline icons */}
+<ArrowRight className="w-3 h-3" />
+<LogOut className="h-4 w-4 flex-shrink-0" />
+```
+
+## Shadows (Minimal)
+
+Enterprise designs use very subtle shadows:
+
+```css
+/* Dropdowns and modals only */
+box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+
+/* No shadows on cards or sections */
+```
+
+## Animation (Restrained)
+
+```css
+/* Default transitions */
+transition-colors duration-200
+
+/* Hover effects */
+hover:translate-x-1 transition-transform  /* Arrow links */
+hover:bg-white/[0.04]                     /* Subtle highlights */
+
+/* No elaborate animations or parallax effects */
+```
 
 ## Accessibility
 
 ### Color Contrast
-- Text on dark: minimum 4.5:1 ratio
-- Text on light: minimum 4.5:1 ratio
-- Interactive elements: 3:1 ratio
+- White text on dark background: Excellent (21:1)
+- Gray-400 text on dark: Good (7:1)
+- Purple-400 accents: Acceptable (4.5:1)
 
 ### Focus States
-```css
+```tsx
 focus:outline-none
 focus:ring-2
-focus:ring-accent-primary
+focus:ring-purple-400
 focus:ring-offset-2
-focus:ring-offset-bg-primary
+focus:ring-offset-[#080a09]
 ```
 
-### Screen Readers
-- Always include `alt` text for images
-- Use `aria-label` for icon-only buttons
-- Semantic HTML (`nav`, `main`, `section`, `article`)
+### Semantic HTML
+```tsx
+<main>
+  <section>
+    <h1>...</h1>
+    {/* Use proper heading hierarchy */}
+  </section>
+</main>
+```
 
 ## Best Practices
 
-### Do's
-✅ Use CSS variables for colors (var(--text-primary))
-✅ Maintain consistent spacing (use spacing scale)
-✅ Keep shadows subtle and consistent
-✅ Use semantic class names
-✅ Test both light and dark themes
-✅ Ensure mobile responsiveness
+### Do's ✅
+- Use **table layouts** for specifications
+- Keep **monochromatic** color scheme (white/gray)
+- Add **purple** only for key highlights
+- Use **horizontal lines** for structure (`border-b border-white/10`)
+- Employ **typography** for hierarchy
+- Keep **spacing** consistent (8rem between sections)
+- Use **monospace font** for technical specs
+- Maintain **professional tone** throughout
 
-### Don'ts
-❌ Hardcode color values (#ffffff)
-❌ Use random spacing values (padding: 13px)
-❌ Mix border radius styles inconsistently
-❌ Forget hover/focus states
-❌ Ignore accessibility standards
-❌ Create theme-specific components without testing both
+### Don'ts ❌
+- Don't create colorful card grids
+- Don't use multiple accent colors
+- Don't add decorative gradients
+- Don't make rounded glassmorphic boxes
+- Don't use large colored icons as section headers
+- Don't add playful or consumer-focused elements
+- Don't use arbitrary spacing values
+
+## Example Comparisons
+
+### ❌ Avoid: Vibe-Coded
+```tsx
+{/* Colorful cards with icons */}
+<div className="grid grid-cols-3 gap-6">
+  <div className="p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 
+                  rounded-2xl border border-blue-500/20">
+    <Shield className="h-8 w-8 text-green-400 mb-3" />
+    <h3 className="text-lg font-semibold">256-bit Encryption</h3>
+  </div>
+</div>
+```
+
+### ✅ Prefer: Enterprise
+```tsx
+{/* Clean table row */}
+<div className="grid grid-cols-12 gap-4 py-6 border-b border-white/10">
+  <div className="col-span-4">
+    <h3 className="text-sm font-semibold text-white">Encryption</h3>
+  </div>
+  <div className="col-span-8">
+    <p className="text-sm text-gray-400">
+      <span className="text-purple-400">AES-256</span> bit at rest, 
+      <span className="text-purple-400">TLS 1.3</span> in transit
+    </p>
+  </div>
+</div>
+```
 
 ## File Structure
 
 ```
 frontend/
 ├── app/
-│   ├── globals.css          # All design system variables
-│   ├── layout.tsx           # Root layout with theme
-│   └── page.tsx             # Homepage
+│   ├── globals.css          # Design system variables
+│   ├── layout.tsx           # Root layout
+│   ├── page.tsx             # Landing page (enterprise tables)
+│   └── security/
+│       └── page.tsx         # Security whitepaper (data sheet format)
 ├── components/
-│   ├── Navigation.tsx       # Main nav component
-│   ├── Footer.tsx           # Footer component
-│   └── AuthModal.tsx        # Modal components
-├── public/
-│   ├── Logo2.png           # Primary logo
-│   ├── og-image.png        # Social preview
-│   └── images/             # Other assets
-└── lib/
-    └── supabase.ts         # Client utilities
-```
-
-## Component Examples
-
-### Navigation Bar
-```tsx
-<header className="nav-header">
-  <div className="nav-container">
-    <div className="nav-content">
-      {/* Left: Logo + Nav Links */}
-      <Link href="/" className="nav-brand">
-        <Image src="/Logo2.png" width={25} height={25} />
-        <h1 className="nav-title">Context Pack</h1>
-      </Link>
-      
-      <nav className="nav-links">
-        <Link href="/" className="nav-link">Home</Link>
-        <Link href="/packs" className="nav-link">Packs</Link>
-        <Link href="/pricing" className="nav-link">Pricing</Link>
-        <Link href="/docs" className="nav-link">Docs</Link>
-      </nav>
-      
-      {/* Right: Status + User + Credits */}
-      <div className="flex items-center gap-4">
-        <Link href="/status">
-          <div className="w-2 h-2 bg-green-400 rounded-full" />
-        </Link>
-        <UserDropdown />
-        <CreditButton />
-      </div>
-    </div>
-  </div>
-</header>
-```
-
-### Card Component
-```tsx
-<div className="bg-card border border-card rounded-xl p-6 
-                hover:bg-card-hover hover:border-border-accent 
-                transition-all shadow-md">
-  <h3 className="text-xl font-semibold text-primary mb-2">
-    Card Title
-  </h3>
-  <p className="text-muted">
-    Card description text
-  </p>
-</div>
-```
-
-### Button Component
-```tsx
-{/* Primary CTA */}
-<button className="px-6 py-3 bg-white text-black font-semibold 
-                   rounded-xl hover:bg-gray-100 shadow-lg 
-                   transition-all">
-  Get Started
-</button>
-
-{/* Secondary */}
-<button className="px-6 py-3 bg-card border border-primary 
-                   text-white rounded-xl hover:bg-card-hover 
-                   transition-all">
-  Learn More
-</button>
+│   ├── Navigation.tsx       # Main nav
+│   ├── ExportGuide.tsx      # Landing sections
+│   └── DocsLayout.tsx       # Documentation pages
+└── public/
+    ├── Logo2.png           # Brand logo
+    └── og-image.png        # Social preview
 ```
 
 ---
 
-**Last Updated**: December 7, 2025
-**Version**: 1.0
+**Design Philosophy**: Lines > Boxes. Typography > Decoration. Restraint > Vibrancy.
+
+**Last Updated**: December 17, 2025  
+**Version**: 2.0 (Enterprise Redesign)  
 **Maintainer**: Context Pack Team

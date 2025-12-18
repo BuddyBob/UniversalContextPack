@@ -212,12 +212,12 @@ export default function Navigation() {
 
 
                     {showUserDropdown && (
-                      <div className="absolute top-full right-0 mt-2 w-40 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl py-1.5 z-50">
+                      <div className="absolute top-full right-0 mt-4 min-w-max bg-gray-900 border border-gray-700 rounded-lg shadow-2xl py-2 z-50">
                         <button
                           onClick={signOut}
-                          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors w-full text-left"
+                          className="flex items-center gap-3 px-5 py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors w-full text-left whitespace-nowrap"
                         >
-                          <LogOut className="h-4 w-4" />
+                          <LogOut className="h-4 w-4 flex-shrink-0" />
                           Sign Out
                         </button>
                       </div>

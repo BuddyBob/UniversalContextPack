@@ -153,10 +153,9 @@ const ExportGuide = () => {
                     href="/packs"
                     className="inline-block px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group"
                     style={{
-                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))',
+                      background: 'rgba(255, 255, 255, 0.05)',
                       backdropFilter: 'blur(20px)',
                       border: '1px solid rgba(255, 255, 255, 0.2)',
-                      boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)',
                       color: 'white'
                     }}
                   >
@@ -210,83 +209,185 @@ const ExportGuide = () => {
         </section>
 
 
-        <section id="export" className="py-16 md:py-32 px-6 relative overflow-hidden">
-          <div className="max-w-6xl mx-auto relative z-10">
-            <div className="text-center mb-12 md:mb-20">
-              <div className="inline-block mb-4">
-                <span className="px-4 py-2 rounded-full bg-white/5 border border-white/10 text-gray-400 text-sm font-medium">
-                  Step 1
-                </span>
-              </div>
-              <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                Export Your Conversations
+        {/* How It Works - Enterprise Pipeline Diagram */}
+        <section className="py-32 px-6 bg-[#080a09] relative">
+          <div className="max-w-5xl mx-auto">
+            {/* Section Header */}
+            <div className="mb-20">
+              <p className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-4 font-mono">Architecture</p>
+              <h2 className="text-3xl font-bold text-white mb-2">
+                How It Works
               </h2>
-              <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-8">
-                One click to download your entire chat history
+              <p className="text-sm text-gray-500">
+                Three-step pipeline for portable AI memory
               </p>
+            </div>
 
-              {/* How to get chats info */}
-              <div className="max-w-xl mx-auto p-4 rounded-xl bg-white/[0.02] border border-white/10 backdrop-blur-sm">
-                <p className="text-sm text-gray-400">
-                  Click your platform below → Settings → Export Data → Check your email in 5-10 minutes
+            {/* Unified Pipeline Diagram */}
+            <div className="relative">
+              {/* The Main Pipeline Line */}
+              <div className="hidden md:block absolute top-8 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+              {/* Steps */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-16 md:gap-8">
+                {/* Step 01 */}
+                <div className="relative">
+                  {/* Node Dot */}
+                  <div className="hidden md:block absolute -top-px left-0 w-4 h-4 rounded-full bg-purple-500/20 border-2 border-purple-500/50" />
+
+                  {/* Content */}
+                  <div className="md:pt-12">
+                    <p className="text-xs font-mono text-gray-600 mb-3">01</p>
+                    <h3 className="text-base font-semibold text-white mb-3">INGEST</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed mb-4">
+                      Connect ChatGPT/Claude exports or upload PDFs
+                    </p>
+
+                    {/* Specs */}
+                    <div className="space-y-1.5 font-mono text-xs text-gray-600">
+                      <div>→ conversations.json</div>
+                      <div>→ .pdf</div>
+                      <div>→ .txt</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 02 */}
+                <div className="relative">
+                  {/* Node Dot */}
+                  <div className="hidden md:block absolute -top-px left-0 w-4 h-4 rounded-full bg-purple-500/20 border-2 border-purple-500/50" />
+
+                  {/* Content */}
+                  <div className="md:pt-12">
+                    <p className="text-xs font-mono text-gray-600 mb-3">02</p>
+                    <h3 className="text-base font-semibold text-white mb-3">PROCESS</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed mb-4">
+                      AI analysis extracts facts into structured memory nodes
+                    </p>
+
+                    {/* Specs */}
+                    <div className="space-y-1.5 font-mono text-xs text-gray-600">
+                      <div>→ GPT-4o analysis</div>
+                      <div>→ Entity extraction</div>
+                      <div>→ Context synthesis</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 03 */}
+                <div className="relative">
+                  {/* Node Dot */}
+                  <div className="hidden md:block absolute -top-px left-0 w-4 h-4 rounded-full bg-purple-500/20 border-2 border-purple-500/50" />
+
+                  {/* Content */}
+                  <div className="md:pt-12">
+                    <p className="text-xs font-mono text-gray-600 mb-3">03</p>
+                    <h3 className="text-base font-semibold text-white mb-3">DEPLOY</h3>
+                    <p className="text-sm text-gray-400 leading-relaxed mb-4">
+                      Export as portable pack & memory tree to paste into any AI chat
+                    </p>
+
+                    {/* Specs */}
+                    <div className="space-y-1.5 font-mono text-xs text-gray-600">
+                      <div>→ JSON format</div>
+                      <div>→ Markdown format</div>
+                      <div>→ Cross-platform</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical Note */}
+              <div className="mt-16 pt-8 border-t border-white/5">
+                <p className="text-xs text-gray-600 font-mono">
+                  <span className="text-purple-400">Zero lock-in:</span> Your memory pack is a plain-text file. No API calls required.
                 </p>
               </div>
             </div>
+          </div>
+        </section>
 
-            {/* Glass cards */}
-            <div className="flex flex-col md:flex-row gap-6 max-w-5xl mx-auto">
-              {exportSteps.map((step, index) => (
-                <a
-                  key={step.platform}
-                  href={step.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group relative flex-1 animate-fade-in-up"
-                  style={{ animationDelay: `${0.6 + index * 0.1}s` }}
-                >
-                  {/* Glass card */}
-                  <div className="relative h-full p-8 rounded-2xl bg-white/[0.02] backdrop-blur-xl border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all duration-300">
-                    {/* Icon */}
-                    <div className="mb-6">
-                      <div className="w-16 h-16 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center group-hover:scale-105 group-hover:bg-white/[0.08] transition-all duration-300">
-                        <step.icon className="h-8 w-8 text-gray-400 group-hover:text-gray-300 transition-colors duration-300" />
-                      </div>
-                    </div>
 
-                    {/* Platform name */}
-                    <h3 className="text-2xl font-bold text-white mb-3">
-                      {step.platform}
-                    </h3>
-
-                    {/* Description */}
-                    <p className="text-gray-400 mb-8 text-sm leading-relaxed">
-                      Request your complete chat history and receive it via email
-                    </p>
-
-                    {/* CTA */}
-                    <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-300 transition-colors duration-300">
-                      <span className="text-sm font-medium">
-                        Get My Data
-                      </span>
-                      <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-300" />
-                    </div>
-
-                    {/* Subtle shine effect */}
-                    <div className="absolute top-0 left-0 w-full h-full rounded-2xl overflow-hidden pointer-events-none">
-                      <div className="absolute top-0 -left-full w-1/2 h-full bg-gradient-to-r from-transparent via-white/[0.03] to-transparent skew-x-12 group-hover:left-full transition-all duration-1000"></div>
-                    </div>
-                  </div>
-                </a>
-              ))}
+        {/* Security & Privacy - Data Sheet Format */}
+        <section className="py-32 px-6 bg-[#080a09] relative border-t border-white/5">
+          <div className="max-w-5xl mx-auto">
+            {/* Section Header */}
+            <div className="mb-20">
+              <p className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-4 font-mono">Security</p>
+              <h2 className="text-3xl font-bold text-white mb-2">
+                Security & Privacy
+              </h2>
+              <p className="text-sm text-gray-500">
+                Enterprise-grade data protection
+              </p>
             </div>
 
-            {/* Info badge */}
-            <div className="text-center mt-16">
-              <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-white/[0.02] border border-white/10 backdrop-blur-sm">
-                <Clock className="h-4 w-4 text-gray-500" />
-                <span className="text-gray-400 text-sm">
-                  Delivered to your inbox in 5-10 minutes
-                </span>
+            {/* Specifications Table */}
+            <div className="space-y-0">
+              {/* Row 1 */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Encryption</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400"><span className="text-purple-400">AES-256</span> bit at rest, <span className="text-purple-400">TLS 1.3</span> in transit</p>
+                </div>
+              </div>
+
+              {/* Row 2 */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Data Privacy</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">Your data is <span className="text-purple-400">never used</span> to train our models</p>
+                </div>
+              </div>
+
+              {/* Row 3 */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Data Ownership</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <p className="text-sm text-gray-400">You own your data. Export or delete anytime</p>
+                </div>
+              </div>
+
+              {/* Row 4 */}
+              {/* <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6 border-b border-white/10">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Compliance</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <div className="flex flex-wrap gap-3">
+                    <span className="px-3 py-1 bg-white/5 border border-white/10 rounded text-xs font-mono text-gray-400">
+                      SOC 2 Type II
+                    </span>
+                    <span className="px-3 py-1 bg-white/5 border border-white/10 rounded text-xs font-mono text-gray-400">
+                      GDPR
+                    </span>
+                    <span className="px-3 py-1 bg-white/5 border border-white/10 rounded text-xs font-mono text-gray-400">
+                      CCPA
+                    </span>
+                  </div>
+                </div>
+              </div> */}
+
+              {/* Row 5 */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 py-6">
+                <div className="md:col-span-4">
+                  <h3 className="text-sm font-semibold text-white">Documentation</h3>
+                </div>
+                <div className="md:col-span-8">
+                  <a
+                    href="/security"
+                    className="inline-flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors group"
+                  >
+                    <span>Security whitepaper</span>
+                    <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+                  </a>
+                </div>
               </div>
             </div>
           </div>
