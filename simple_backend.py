@@ -544,6 +544,20 @@ async def get_user_payment_status(user_id: str) -> dict:
                     "r2_dir": f"user_{user_id}"
                 }).execute()
                 
+            # Get profile data directly
+            profile = supabase.table('user_profiles').select('*').eq('id', user_id).execute()
+            if profile.data and len(profile.data) > 0:
+                user_data = profile.data[0]
+                return {
+                    "plan": user_data.get('payment_plan', 'free'),
+                    "chunks_used": 0,
+                    "chunks_allowed": user_data.get('credits_balance', get_new_user_credits()),
+                    "credits_balance": user_data.get('credits_balance', get_new_user_credits()),
+                    "subscription_status": user_data.get('subscription_status'),
+                    "subscription_tier": user_data.get('subscription_tier'),
+                    "can_process": True
+                }
+            
             return {"plan": "free", "chunks_used": 0, "chunks_allowed": get_new_user_credits(), "can_process": True}
         
     except Exception as e:
@@ -5441,11 +5455,11 @@ async def create_checkout_session(
         
         # Validate the amount matches our pricing
         if request.unlimited:
-            expected_amount = 4.99  # Updated to match frontend pricing
+            expected_amount = 5.99  # Updated to Pro monthly subscription pricing
             if abs(request.amount - expected_amount) > 0.01:
                 raise HTTPException(
                     status_code=400, 
-                    detail=f"Amount mismatch for unlimited plan. Expected $4.99, got ${request.amount}"
+                    detail=f"Amount mismatch for Pro plan. Expected $5.99, got ${request.amount}"
                 )
         else:
             expected_amount = calculate_credit_price(request.credits)
@@ -5459,40 +5473,64 @@ async def create_checkout_session(
         frontend_url = os.getenv("FRONTEND_URL", "https://www.context-pack.com")
         
         # Create Stripe checkout session
-        session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {
-                        'name': 'Unlimited Access' if request.unlimited else f'{request.credits} Analysis Credits',
-                        'description': 'Lifetime unlimited access to Universal Context Pack analysis' if request.unlimited else f'Credits for Universal Context Pack analysis (1 credit = 1 conversation chunk ~150k tokens)',
-                    },
-                    'unit_amount': int(request.amount * 100),  # Convert to cents
+        # For Pro subscription, use subscription mode; for credits, use payment mode
+        if request.unlimited:
+            # Pro Monthly Subscription - use the Stripe product ID
+            session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=[{
+                    'price': 'price_1Sfa6KEA934vxoltfSaRH4cQ',  # Pro subscription price ID from Stripe
+                    'quantity': 1,
+                }],
+                mode='subscription',
+                success_url=f"{frontend_url}/process?payment_success=true&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{frontend_url}/process?payment_cancelled=true",
+                metadata={
+                    'user_id': user.user_id,
+                    'email': user.email,
+                    'plan_type': 'pro_subscription'
                 },
-                'quantity': 1,
-            }],
-            mode='payment',
-            success_url=f"{frontend_url}/process?payment_success=true&session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{frontend_url}/process?payment_cancelled=true",
-            metadata={
-                'user_id': user.user_id,
-                'credits': request.credits,
-                'email': user.email,
-                'unlimited': str(request.unlimited)
-            },
-            payment_intent_data={
-                'metadata': {
+                subscription_data={
+                    'metadata': {
+                        'user_id': user.user_id,
+                        'email': user.email,
+                        'plan_type': 'pro_subscription'
+                    }
+                },
+                customer_email=user.email,
+            )
+        else:
+            # One-time credit purchase
+            session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=[{
+                    'price_data': {
+                        'currency': 'usd',
+                        'product_data': {
+                            'name': f'{request.credits} Analysis Credits',
+                            'description': f'Credits for Universal Context Pack analysis (1 credit = 1 conversation chunk ~150k tokens)',
+                        },
+                        'unit_amount': int(request.amount * 100),  # Convert to cents
+                    },
+                    'quantity': 1,
+                }],
+                mode='payment',
+                success_url=f"{frontend_url}/process?payment_success=true&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{frontend_url}/process?payment_cancelled=true",
+                metadata={
                     'user_id': user.user_id,
                     'credits': request.credits,
                     'email': user.email,
-                    'unlimited': str(request.unlimited)
-                }
-            },
-            customer_email=user.email,
-            # Add automatic tax calculation if needed
-            # automatic_tax={'enabled': True},
-        )
+                },
+                payment_intent_data={
+                    'metadata': {
+                        'user_id': user.user_id,
+                        'credits': request.credits,
+                        'email': user.email,
+                    }
+                },
+                customer_email=user.email,
+            )
         
         return {
             "checkout_url": session.url,
@@ -5924,12 +5962,75 @@ async def stripe_webhook(request: Request):
                 except Exception as e:
                     print(f"❌ [{webhook_id}] Error retrieving checkout session: {e}")
 
+        # ================================================================
+        # SUBSCRIPTION EVENT HANDLERS
+        # ================================================================
+        
+        elif event['type'] == 'customer.subscription.created':
+            subscription = event['data']['object']
+            user_id = subscription['metadata'].get('user_id')
+            
+            print(f"🌟 [{webhook_id}] Subscription created: {subscription['id']}")
+            print(f"🌟 [{webhook_id}] User ID: {user_id}")
+            print(f"🌟 [{webhook_id}] Status: {subscription.get('status')}")
+            
+            if user_id:
+                await activate_subscription(user_id, subscription)
+            else:
+                print(f"❌ [{webhook_id}] Missing user_id in subscription metadata")
+        
+        elif event['type'] == 'customer.subscription.updated':
+            subscription = event['data']['object']
+            user_id = subscription['metadata'].get('user_id')
+            
+            print(f"🔄 [{webhook_id}] Subscription updated: {subscription['id']}")
+            print(f"🔄 [{webhook_id}] User ID: {user_id}")
+            print(f"🔄 [{webhook_id}] New status: {subscription.get('status')}")
+            
+            if user_id:
+                await update_subscription_status(user_id, subscription)
+            else:
+                print(f"❌ [{webhook_id}] Missing user_id in subscription metadata")
+        
+        elif event['type'] == 'customer.subscription.deleted':
+            subscription = event['data']['object']
+            user_id = subscription['metadata'].get('user_id')
+            
+            print(f"❌ [{webhook_id}] Subscription deleted/canceled: {subscription['id']}")
+            print(f"❌ [{webhook_id}] User ID: {user_id}")
+            
+            if user_id:
+                await cancel_subscription(user_id, subscription)
+            else:
+                print(f"❌ [{webhook_id}] Missing user_id in subscription metadata")
+
         elif event['type'] == 'invoice.payment_succeeded':
             invoice = event['data']['object']
-            print(f"🧾 [{webhook_id}] Invoice payment succeeded: {invoice['id']}")
-            print(f"🧾 [{webhook_id}] Amount paid: ${invoice['amount_paid'] / 100}")
-            print(f"🧾 [{webhook_id}] Subscription: {invoice.get('subscription', 'none')}")
-            # Note: This usually handles subscription payments, not one-time purchases
+            subscription_id = invoice.get('subscription')
+            
+            print(f"💳 [{webhook_id}] Invoice payment succeeded: {invoice['id']}")
+            print(f"💳 [{webhook_id}] Amount paid: ${invoice['amount_paid'] / 100}")
+            print(f"💳 [{webhook_id}] Subscription ID: {subscription_id}")
+            
+            if subscription_id:
+                # This is a subscription payment (monthly billing)
+                await renew_subscription(subscription_id, invoice)
+            else:
+                print(f"ℹ️ [{webhook_id}] One-time payment, not a subscription renewal")
+            
+        elif event['type'] == 'invoice.payment_failed':
+            invoice = event['data']['object']
+            subscription_id = invoice.get('subscription')
+            
+            print(f"⚠️ [{webhook_id}] Invoice payment FAILED: {invoice['id']}")
+            print(f"⚠️ [{webhook_id}] Amount: ${invoice['amount_due'] / 100}")
+            print(f"⚠️ [{webhook_id}] Subscription ID: {subscription_id}")
+            
+            if subscription_id:
+                # Subscription payment failed - handle gracefully
+                await handle_failed_payment(subscription_id, invoice)
+            else:
+                print(f"ℹ️ [{webhook_id}] One-time payment failed, not a subscription")
             
         else:
             print(f"📝 [{webhook_id}] Unhandled webhook event: {event['type']}")
@@ -6028,6 +6129,149 @@ async def add_credits_to_user(user_id: str, credits: int, amount: float, stripe_
         # Try to log more details about the error
         if hasattr(e, '__dict__'):
             print(f"❌ Error details: {e.__dict__}")
+
+# ============================================================================
+# SUBSCRIPTION MANAGEMENT FUNCTIONS
+# ============================================================================
+
+async def activate_subscription(user_id: str, subscription):
+    """Grant unlimited access when subscription is created"""
+    try:
+        if not supabase:
+            print(f"❌ Supabase not available - cannot activate subscription for {user_id}")
+            return
+        
+        subscription_id = subscription['id']
+        status = subscription['status']
+        current_period_end = subscription['current_period_end']
+        
+        print(f"🌟 Activating Pro subscription for user {user_id}")
+        print(f"🌟 Subscription ID: {subscription_id}")
+        print(f"🌟 Status: {status}")
+        
+        # Update user profile with subscription details
+        result = supabase.table('user_profiles').update({
+            'payment_plan': 'unlimited',  # Keep as 'unlimited' for backend compatibility
+            'subscription_id': subscription_id,
+            'subscription_status': status,
+            'subscription_tier': 'pro',
+            'current_period_end': datetime.fromtimestamp(current_period_end).isoformat(),
+        }).eq('id', user_id).execute()
+        
+        if result.data:
+            print(f"✅ Pro subscription activated for user {user_id}")
+        else:
+            print(f"⚠️ No rows updated for user {user_id}")
+            
+    except Exception as e:
+        print(f"❌ Error activating subscription for {user_id}: {e}")
+
+async def update_subscription_status(user_id: str, subscription):
+    """Update subscription status when it changes"""
+    try:
+        if not supabase:
+            print(f"❌ Supabase not available - cannot update subscription for {user_id}")
+            return
+        
+        status = subscription['status']
+        current_period_end = subscription['current_period_end']
+        
+        print(f"🔄 Updating subscription status for user {user_id} to {status}")
+        
+        supabase.table('user_profiles').update({
+            'subscription_status': status,
+            'current_period_end': datetime.fromtimestamp(current_period_end).isoformat(),
+        }).eq('id', user_id).execute()
+        
+        print(f"✅ Subscription status updated for user {user_id}")
+        
+    except Exception as e:
+        print(f"❌ Error updating subscription for {user_id}: {e}")
+
+async def cancel_subscription(user_id: str, subscription):
+    """Handle subscription cancellation - downgrade to credit-based plan"""
+    try:
+        if not supabase:
+            print(f"❌ Supabase not available - cannot cancel subscription for {user_id}")
+            return
+        
+        print(f"❌ Canceling subscription for user {user_id}")
+        print(f"❌ Subscription ID: {subscription['id']}")
+        
+        # Downgrade to credit-based plan, remove unlimited access
+        supabase.table('user_profiles').update({
+            'payment_plan': 'credits',  # Downgrade from unlimited
+            'subscription_status': 'canceled',
+            'subscription_id': None,
+            'subscription_tier': None,
+        }).eq('id', user_id).execute()
+        
+        print(f"✅ Subscription canceled for user {user_id} - downgraded to credit plan")
+        
+    except Exception as e:
+        print(f"❌ Error canceling subscription for {user_id}: {e}")
+
+async def renew_subscription(subscription_id: str, invoice):
+    """Ensure unlimited access continues after monthly payment"""
+    try:
+        if not supabase:
+            print(f"❌ Supabase not available - cannot renew subscription")
+            return
+        
+        print(f"💳 Processing monthly renewal for subscription {subscription_id}")
+        
+        # Find user by subscription_id
+        result = supabase.table('user_profiles').select('*').eq('subscription_id', subscription_id).execute()
+        
+        if result.data and len(result.data) > 0:
+            user = result.data[0]
+            user_id = user['id']
+            
+            print(f"💳 Renewing subscription for user {user_id}")
+            
+            # Ensure plan is still unlimited and status is active
+            supabase.table('user_profiles').update({
+                'subscription_status': 'active',
+                'payment_plan': 'unlimited',  # Ensure unlimited access continues
+            }).eq('id', user_id).execute()
+            
+            print(f"✅ Subscription renewed for user {user_id}")
+        else:
+            print(f"⚠️ No user found with subscription_id {subscription_id}")
+            
+    except Exception as e:
+        print(f"❌ Error renewing subscription {subscription_id}: {e}")
+
+async def handle_failed_payment(subscription_id: str, invoice):
+    """Handle failed monthly payment - mark as past_due but don't immediately revoke"""
+    try:
+        if not supabase:
+            print(f"❌ Supabase not available - cannot handle failed payment")
+            return
+        
+        print(f"⚠️ Payment failed for subscription {subscription_id}")
+        
+        # Find user by subscription_id
+        result = supabase.table('user_profiles').select('*').eq('subscription_id', subscription_id).execute()
+        
+        if result.data and len(result.data) > 0:
+            user = result.data[0]
+            user_id = user['id']
+            
+            print(f"⚠️ Marking user {user_id} as past_due")
+            
+            # Mark as past_due but don't immediately revoke access
+            # Stripe will retry and eventually cancel if payment keeps failing
+            supabase.table('user_profiles').update({
+                'subscription_status': 'past_due'
+            }).eq('id', user_id).execute()
+            
+            print(f"⚠️ User {user_id} marked as past_due - access maintained for now")
+        else:
+            print(f"⚠️ No user found with subscription_id {subscription_id}")
+            
+    except Exception as e:
+        print(f"❌ Error handling failed payment for {subscription_id}: {e}")
 
 async def grant_unlimited_access(user_id: str, amount: float, stripe_payment_id: str):
     """Grant unlimited access to user after successful payment"""

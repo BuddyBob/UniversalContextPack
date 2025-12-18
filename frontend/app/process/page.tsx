@@ -2270,7 +2270,6 @@ export default function ProcessPage() {
       if (response.ok) {
         const data = await response.json();
         addLog('✅ Cancellation request sent successfully');
-        addLog('⏱️ Stopping OpenAI requests and analysis...');
 
         // Reset state immediately for better UX
         setIsProcessing(false);
@@ -2293,7 +2292,6 @@ export default function ProcessPage() {
           // Return to chunked state so user can reselect
           setCurrentStep('chunked');
         } else {
-          addLog('🆓 Job cancelled before significant processing - no charges applied');
           showNotification('info', 'Job cancelled successfully. No charges applied.');
 
           // Return to chunked state for reselection
@@ -2304,7 +2302,6 @@ export default function ProcessPage() {
         setCurrentProcessedChunks(0);
         setIsCancelling(false);
 
-        addLog('🔄 Ready to start a new analysis');
       } else {
         throw new Error(`Server responded with status ${response.status}`);
       }
@@ -2712,6 +2709,14 @@ export default function ProcessPage() {
                       <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
                     )}
                   </div>
+
+                  {/* Content Policy Warning Banner */}
+                  {source.status === 'completed' && source.error_message && source.error_message.includes('content policy') && (
+                    <div className="mt-2 px-2 py-1.5 bg-yellow-900/20 border border-yellow-600/30 rounded text-xs text-yellow-300">
+                      Some chunks couldn't be analyzed
+                    </div>
+                  )}
+
                   {(source.status === 'extracting' || source.status === 'processing' || source.status === 'analyzing') && source.progress > 0 && (
                     <div className="mt-2">
                       <div className="w-full bg-gray-700 rounded-full h-1">

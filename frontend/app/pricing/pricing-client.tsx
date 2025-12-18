@@ -16,6 +16,7 @@ interface PaymentStatus {
   chunks_allowed: number
   credits_balance?: number
   subscription_status?: string
+  subscription_tier?: string
   plan_start_date?: string
   plan_end_date?: string
 }
@@ -49,7 +50,7 @@ export default function PricingPageClient() {
 
   // Calculate pricing with updated rates
   const calculatePrice = (credits: number, unlimited: boolean = false) => {
-    if (unlimited) return 4.99 // Unlimited for $4.99
+    if (unlimited) return 5.99 // Pro subscription for $5.99/month
 
     // Special pricing for 25 credits
     if (credits === 25) return 1.50
@@ -214,7 +215,7 @@ export default function PricingPageClient() {
                   ACTIVE PLAN
                 </span>
               </div>
-              
+
               {/* Icon */}
               <div className="flex justify-center mb-6 mt-2">
                 <div className="w-16 h-16 bg-[#2d2d2d] rounded-lg flex items-center justify-center">
@@ -260,22 +261,35 @@ export default function PricingPageClient() {
                 </div>
               </div>
 
-              {/* CTA Button */}
-              <button
-                onClick={() => router.push('/process')}
-                className="w-full bg-white hover:bg-gray-100 text-black py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg flex items-center justify-center"
-              >
-                Start Processing
-                <ArrowLeft className="ml-2 h-5 w-5 rotate-180" />
-              </button>
+              {/* CTA Buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={() => router.push('/process')}
+                  className="w-full bg-white hover:bg-gray-100 text-black py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg flex items-center justify-center"
+                >
+                  Start Processing
+                  <ArrowLeft className="ml-2 h-5 w-5 rotate-180" />
+                </button>
+
+                {paymentStatus?.subscription_status === 'active' && (
+                  <a
+                    href="https://billing.stripe.com/p/login/14A6oH2q54ikbYG1Ln3VC00"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full block text-center border border-[#323232] hover:border-[#3a3a3a] text-white py-3 px-6 rounded-xl font-medium transition-all duration-200 hover:bg-[#1a1a1a]"
+                  >
+                    Manage Subscription
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         ) : (
           /* Non-Unlimited Users - 3 Column Pricing Cards Layout */
           <>
-            {/* Shared Features Strip */}
+            {/* Explanatory Text */}
             <div className="mb-12 text-center">
-              <p className="text-sm text-[#9ca3af] mb-6">All plans include</p>
+              <p className="text-sm text-[#9ca3af] mb-6">All plans use credits for processing and analysis</p>
               <div className="flex flex-wrap justify-center gap-8 max-w-2xl mx-auto">
                 <div className="flex items-center gap-2">
                   <svg className="w-4 h-4 text-[#6b7280]" fill="currentColor" viewBox="0 0 20 20">
@@ -306,13 +320,14 @@ export default function PricingPageClient() {
                   <div className="text-center mb-8">
                     <h3 className="text-xl font-semibold text-white mb-3">Free</h3>
                     <div className="mb-2">
-                      <span className="text-5xl font-bold text-white">{getNewUserCredits()}</span>
+                      <span className="text-5xl font-bold text-white">10</span>
                     </div>
                     <p className="text-sm text-[#6b7280]">credits to start</p>
                   </div>
-                  
+
                   <div className="flex-grow mb-8">
-                    <p className="text-sm text-[#9ca3af] text-center">Perfect for trying out the platform</p>
+                    <p className="text-sm text-[#9ca3af] text-center mb-2">Create your first Context Pack</p>
+                    <p className="text-xs text-[#6b7280] text-center">Credits used for processing</p>
                   </div>
 
                   <button
@@ -324,30 +339,42 @@ export default function PricingPageClient() {
                 </div>
               )}
 
-              {/* Unlimited Plan Card - DOMINANT */}
+              {/* Pro Monthly Subscription Card - DOMINANT */}
               <div className="bg-[#1E1E1E] border-2 border-white/20 rounded-xl p-10 flex flex-col relative transform md:scale-105 shadow-[0_0_50px_-12px_rgba(255,255,255,0.15)]">
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <span className="inline-flex items-center px-4 py-1 rounded-full text-xs font-semibold bg-white text-black">
                     RECOMMENDED
                   </span>
                 </div>
-                
+
                 <div className="text-center mb-10">
-                  <h3 className="text-xl font-semibold text-white mb-4">Unlimited</h3>
+                  <h3 className="text-xl font-semibold text-white mb-4">Pro</h3>
                   <div className="mb-2">
-                    <span className="text-6xl font-bold text-white">$4.99</span>
+                    <span className="text-6xl font-bold text-white">$5.99</span>
                   </div>
-                  <p className="text-sm text-[#9ca3af]">one-time payment</p>
+                  <p className="text-sm text-[#9ca3af]">per month</p>
                 </div>
-                
+
                 <div className="flex-grow mb-10">
-                  <p className="text-sm text-[#9ca3af] text-center mb-6">Unlimited conversations forever</p>
+                  <p className="text-sm text-[#9ca3af] text-center mb-6">Includes Unlimited credits</p>
                   <div className="space-y-3">
                     <div className="flex items-center justify-center gap-2">
                       <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-sm text-white font-medium">No limits</span>
+                      <span className="text-sm text-white font-medium">Create and manage unlimited Context Packs</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm text-white font-medium">Credits used for processing and analysis</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm text-white font-medium">Cancel anytime</span>
                     </div>
                     <div className="flex items-center justify-center gap-2">
                       <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -372,7 +399,7 @@ export default function PricingPageClient() {
                       Processing...
                     </>
                   ) : user ? (
-                    'Get Unlimited'
+                    'Subscribe to Pro'
                   ) : (
                     'Get Started'
                   )}
@@ -399,10 +426,14 @@ export default function PricingPageClient() {
                     </>
                   )}
                 </div>
-                
+
                 <div className="flex-grow mb-8">
                   {!user ? (
-                    <p className="text-sm text-[#9ca3af] text-center">Pay only for what you use</p>
+                    <>
+                      <p className="text-sm text-[#9ca3af] text-center mb-2">Pay only for what you use</p>
+                      <p className="text-sm text-[#9ca3af] text-center mb-2">Use credits across any pack</p>
+                      <p className="text-xs text-[#6b7280] text-center">Most conversations use 10–30 credits</p>
+                    </>
                   ) : (
                     <div className="space-y-4">
                       <label className="block">
@@ -481,9 +512,9 @@ export default function PricingPageClient() {
 
       </div>
 
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)} 
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
       />
     </div>
   )
