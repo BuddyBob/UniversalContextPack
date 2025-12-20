@@ -6099,10 +6099,9 @@ async def activate_subscription(user_id: str, subscription):
         print(f"🌟 Subscription ID: {subscription_id}")
         print(f"🌟 Status: {status}")
         
-        # Update user profile with subscription details AND grant unlimited credits
+        # Update user profile with subscription details
         result = supabase.table('user_profiles').update({
             'payment_plan': 'unlimited',  # Keep as 'unlimited' for backend compatibility
-            'credits_balance': 999999,  # Grant unlimited credits
             'subscription_id': subscription_id,
             'subscription_status': status,
             'subscription_tier': 'pro',
@@ -6110,7 +6109,7 @@ async def activate_subscription(user_id: str, subscription):
         }).eq('id', user_id).execute()
         
         if result.data:
-            print(f"✅ Pro subscription activated for user {user_id} with unlimited credits (999999)")
+            print(f"✅ Pro subscription activated for user {user_id}")
         else:
             print(f"⚠️ No rows updated for user {user_id}")
             
@@ -6180,14 +6179,13 @@ async def renew_subscription(subscription_id: str, invoice):
             
             print(f"💳 Renewing subscription for user {user_id}")
             
-            # Ensure plan is still unlimited, status is active, AND credits are unlimited
+            # Ensure plan is still unlimited and status is active
             supabase.table('user_profiles').update({
                 'subscription_status': 'active',
                 'payment_plan': 'unlimited',  # Ensure unlimited access continues
-                'credits_balance': 999999,  # Ensure unlimited credits are maintained
             }).eq('id', user_id).execute()
             
-            print(f"✅ Subscription renewed for user {user_id} with unlimited credits")
+            print(f"✅ Subscription renewed for user {user_id}")
         else:
             print(f"⚠️ No user found with subscription_id {subscription_id}")
             
