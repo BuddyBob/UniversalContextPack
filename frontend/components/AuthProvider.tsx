@@ -149,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      console.log('✅ User profile loaded:', { credits_balance: data.credits_balance, payment_plan: data.payment_plan })
+      console.log('User profile loaded')
 
       setUserProfile(data)
     } catch (error) {

@@ -20,13 +20,6 @@ export default function Navigation() {
   const pathname = usePathname()
 
 
-  // Debug: Log userProfile changes
-  useEffect(() => {
-    if (userProfile) {
-      console.log('  - credits_balance:', userProfile.credits_balance)
-      console.log('  - payment_plan:', userProfile.payment_plan)
-    }
-  }, [userProfile])
 
   // Theme toggle function
   const toggleTheme = () => {
