@@ -88,7 +88,7 @@ export default function Footer() {
           <div>
             <h3 className="text-sm font-medium text-primary mb-4">Company</h3>
             <div className="space-y-2 text-sm text-secondary">
-              <p>Universal Context Pack, LLC</p>
+              <p>Context Labs LLC</p>
               <p>
                 {/* <a href="mailto:thavasantonio@gmail.com" className="hover:text-primary transition-colors"></a> */}
                 <a className="hover:text-primary transition-colors">
@@ -104,7 +104,7 @@ export default function Footer() {
         <div className="border-t border-primary mt-8 pt-6 flex flex-col sm:flex-row justify-between items-center">
           <div className="flex items-center space-x-4">
             <p className="text-sm text-muted">
-              © {new Date().getFullYear()} Universal Context Pack, LLC. All rights reserved.
+              © {new Date().getFullYear()} Context Labs LLC. All rights reserved.
             </p>
             <Link href="/status" className="flex items-center space-x-2 text-sm text-muted hover:text-secondary transition-colors">
               <div className="w-2 h-2 bg-green-400 rounded-full"></div>

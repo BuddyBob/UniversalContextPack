@@ -38,7 +38,7 @@ export default function DPAPage() {
             <h2 className="text-h2 text-primary mb-6">1. Definitions</h2>
             <div className="space-y-4 text-secondary">
               <p><strong>"Controller"</strong> means the entity that determines the purposes and means of processing personal data (typically, you as our customer).</p>
-              <p><strong>"Processor"</strong> means Universal Context Pack, LLC, which processes personal data on behalf of the Controller.</p>
+              <p><strong>"Processor"</strong> means Context Labs LLC, which processes personal data on behalf of the Controller.</p>
               <p><strong>"Personal Data"</strong> means any information relating to an identified or identifiable natural person contained in files you upload to our service.</p>
               <p><strong>"Processing"</strong> means any operation performed on personal data, including analysis, transformation, and context pack generation.</p>
               <p><strong>"Data Subject"</strong> means the natural person to whom personal data relates.</p>
@@ -251,14 +251,14 @@ export default function DPAPage() {
             Need clarification on our data processing practices or have questions about this DPA?
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a 
-              href="mailto:privacy@universalcontextpack.com" 
+            <a
+              href="mailto:privacy@universalcontextpack.com"
               className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg transition-colors"
             >
               Contact Privacy Team
             </a>
-            <Link 
-              href="/security" 
+            <Link
+              href="/security"
               className="bg-secondary border border-primary hover:bg-primary text-primary hover:text-secondary px-6 py-3 rounded-lg transition-colors"
             >
               View Security Center
