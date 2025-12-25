@@ -310,7 +310,7 @@ export default function PricingPageClient() {
               )}
 
               {/* Pro Monthly Subscription Card - DOMINANT */}
-              <div className="bg-[#1E1E1E] border-2 border-white/20 rounded-xl p-10 flex flex-col relative transform md:scale-105 shadow-[0_0_50px_-12px_rgba(255,255,255,0.15)]">
+              {/* <div className="bg-[#1E1E1E] border-2 border-white/20 rounded-xl p-10 flex flex-col relative transform md:scale-105 shadow-[0_0_50px_-12px_rgba(255,255,255,0.15)]">
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <span className="inline-flex items-center px-4 py-1 rounded-full text-xs font-semibold bg-white text-black">
                     RECOMMENDED
@@ -374,7 +374,7 @@ export default function PricingPageClient() {
                     'Get Started'
                   )}
                 </button>
-              </div>
+              </div> */}
 
               {/* Pay Per Use Card */}
               <div className="bg-[#0a0a0a] border border-[#2e2e2e] rounded-xl p-8 flex flex-col">
