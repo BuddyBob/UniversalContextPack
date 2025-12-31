@@ -304,13 +304,7 @@ export default function PacksPage() {
   const handleViewPack = (pack: UCPPack) => {
     const packId = pack.ucpId || pack.id
 
-    // Allow viewing demo/sample packs without authentication
-    if (!user && packId?.startsWith('sample-')) {
-      router.push(`/results/${packId}`)
-      return
-    }
-
-    // If not authenticated and not a demo pack, trigger auth prompt
+    // If not authenticated, trigger auth prompt for all packs (including demos)
     if (!user) {
       freeCreditsPrompt.triggerPrompt("accessing context packs")
       return

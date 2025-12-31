@@ -309,23 +309,67 @@ export default function PricingPageClient() {
                 </div>
               )}
 
-              {/* Pro Monthly Subscription Card - DOMINANT */}
-              {/* <div className="bg-[#1E1E1E] border-2 border-white/20 rounded-xl p-10 flex flex-col relative transform md:scale-105 shadow-[0_0_50px_-12px_rgba(255,255,255,0.15)]">
+              {/* Pay Per Use Card - RECOMMENDED */}
+              <div className="bg-[#1E1E1E] border-2 border-white/20 rounded-xl p-10 flex flex-col relative transform md:scale-105 shadow-[0_0_50px_-12px_rgba(255,255,255,0.15)]">
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                   <span className="inline-flex items-center px-4 py-1 rounded-full text-xs font-semibold bg-white text-black">
                     RECOMMENDED
                   </span>
                 </div>
-
                 <div className="text-center mb-10">
-                  <h3 className="text-xl font-semibold text-white mb-4">Pro</h3>
+                  <h3 className="text-xl font-semibold text-white mb-4">Flexible</h3>
                   <div className="mb-2">
-                    <span className="text-6xl font-bold text-white">$3.99</span>
+                    <span className="text-6xl font-bold text-white">${fixedCreditPrice}</span>
                   </div>
-                  <p className="text-sm text-[#9ca3af]">per month</p>
+                  <p className="text-sm text-[#9ca3af]">one-time</p>
                 </div>
 
                 <div className="flex-grow mb-10">
+                  <div className="space-y-4">
+                    <div className="bg-[#181818] border border-[#2e2e2e] rounded-lg px-4 py-4 text-center">
+                      <span className="text-3xl font-bold text-white">{fixedCreditPack}</span>
+                      <span className="text-sm text-[#9ca3af] ml-2">credits</span>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-[#9ca3af] mb-2">Credits stack and never expire.</p>
+                      <p className="text-sm text-[#9ca3af] mb-3">You can buy multiple packs.</p>
+                      <p className="text-xs text-[#6b7280]">Estimated conversations.json: 30-75 credits</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setIsUnlimitedSelected(false)
+                    handlePurchase(false) // Pass false for credits
+                  }}
+                  disabled={processingPurchase}
+                  className="w-full bg-white hover:bg-gray-100 text-black py-4 px-6 rounded-lg font-semibold transition-all duration-200 shadow-lg"
+                >
+                  {processingPurchase && !isUnlimitedSelected ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2 inline-block"></div>
+                      Processing...
+                    </>
+                  ) : user ? (
+                    `Buy ${fixedCreditPack} Credits`
+                  ) : (
+                    'Get Started'
+                  )}
+                </button>
+              </div>
+
+              {/* Pro Monthly Subscription Card */}
+              <div className="bg-[#0a0a0a] border border-[#2e2e2e] rounded-xl p-8 flex flex-col">
+                <div className="text-center mb-8">
+                  <h3 className="text-xl font-semibold text-white mb-3">Pro</h3>
+                  <div className="mb-2">
+                    <span className="text-5xl font-bold text-white">$3.99</span>
+                  </div>
+                  <p className="text-sm text-[#6b7280]">per month</p>
+                </div>
+
+                <div className="flex-grow mb-8">
                   <p className="text-sm text-[#9ca3af] text-center mb-6">Includes Unlimited credits</p>
                   <div className="space-y-3">
                     <div className="flex items-center justify-center gap-2">
@@ -361,7 +405,7 @@ export default function PricingPageClient() {
                     handlePurchase(true) // Pass true for unlimited
                   }}
                   disabled={processingPurchase}
-                  className="w-full bg-white hover:bg-gray-100 text-black py-4 px-6 rounded-lg font-semibold transition-all duration-200 shadow-lg"
+                  className="w-full border border-[#323232] hover:border-[#3a3a3a] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {processingPurchase ? (
                     <>
@@ -370,51 +414,6 @@ export default function PricingPageClient() {
                     </>
                   ) : user ? (
                     'Subscribe to Pro'
-                  ) : (
-                    'Get Started'
-                  )}
-                </button>
-              </div> */}
-
-              {/* Pay Per Use Card */}
-              <div className="bg-[#0a0a0a] border border-[#2e2e2e] rounded-xl p-8 flex flex-col">
-                <div className="text-center mb-8">
-                  <h3 className="text-xl font-semibold text-white mb-3">Flexible</h3>
-                  <div className="mb-2">
-                    <span className="text-5xl font-bold text-white">${fixedCreditPrice}</span>
-                  </div>
-                  <p className="text-sm text-[#6b7280]">one-time</p>
-                </div>
-
-                <div className="flex-grow mb-8">
-                  <div className="space-y-4">
-                    <div className="bg-[#181818] border border-[#2e2e2e] rounded-lg px-4 py-4 text-center">
-                      <span className="text-3xl font-bold text-white">{fixedCreditPack}</span>
-                      <span className="text-sm text-[#9ca3af] ml-2">credits</span>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-[#9ca3af] mb-2">Credits stack and never expire.</p>
-                      <p className="text-sm text-[#9ca3af] mb-3">You can buy multiple packs.</p>
-                      <p className="text-xs text-[#6b7280]">Estimated conversations.json: 30-75 credits</p>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setIsUnlimitedSelected(false)
-                    handlePurchase(false) // Pass false for credits
-                  }}
-                  disabled={processingPurchase}
-                  className="w-full border border-[#323232] hover:border-[#3a3a3a] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {processingPurchase && !isUnlimitedSelected ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2 inline-block"></div>
-                      Processing...
-                    </>
-                  ) : user ? (
-                    `Buy ${fixedCreditPack} Credits`
                   ) : (
                     'Get Started'
                   )}

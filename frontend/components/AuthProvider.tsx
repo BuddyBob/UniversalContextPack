@@ -10,6 +10,10 @@ interface AuthContextType {
   session: Session | null
   userProfile: UserProfile | null
   signInWithGoogle: () => Promise<void>
+  signInWithGitHub: () => Promise<void>
+  signInWithEmail: (email: string, password: string) => Promise<void>
+  signUpWithEmail: (email: string, password: string) => Promise<void>
+  signInWithMagicLink: (email: string) => Promise<void>
   signOut: () => Promise<void>
   loading: boolean
   makeAuthenticatedRequest: (url: string, options?: RequestInit) => Promise<Response>
@@ -47,12 +51,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Handle different auth events appropriately
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         if (session?.user) {
-          fetchUserProfile(session.user.id)
+          // Fetch user profile first
+          const profileExists = await fetchUserProfile(session.user.id)
 
-          // Send welcome email for new signups
-          // Only send if user just signed in (not on page refresh) AND we haven't already sent it for this user
-          if (event === 'SIGNED_IN' && !welcomeEmailSent.current.has(session.user.id)) {
-            // Mark as sent immediately to prevent duplicate sends if multiple SIGNED_IN events fire
+          // Send welcome email ONLY on first successful sign-in
+          // - Email must be verified (email_confirmed_at is not null)
+          // - Profile doesn't exist yet (new user)
+          // - Haven't already sent welcome email in this session
+          const isEmailVerified = session.user.email_confirmed_at !== null
+
+          if (event === 'SIGNED_IN' && isEmailVerified && !profileExists && !welcomeEmailSent.current.has(session.user.id)) {
+            // Mark as sent immediately to prevent duplicate sends
             welcomeEmailSent.current.add(session.user.id)
 
             try {
@@ -122,12 +131,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (userId: string): Promise<boolean> => {
 
     // Debounce: Don't fetch if we fetched within the last 5 seconds
     const now = Date.now()
     if (now - lastProfileFetch < 5000) {
-      return
+      return true // Assume exists if we just fetched
     }
 
     try {
@@ -141,19 +150,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('❌ Error fetching user profile:', error)
-        return
+        return false // Profile doesn't exist or error occurred
       }
 
       if (!data) {
         console.error('❌ No data returned from user_profiles query')
-        return
+        return false
       }
 
       console.log('User profile loaded')
 
       setUserProfile(data)
+      return true // Profile exists
     } catch (error) {
       console.error('Error fetching user profile:', error)
+      return false
     }
   }
 
@@ -174,11 +185,94 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             access_type: 'offline',
             prompt: 'consent',
           },
+          // Skip email confirmation for Google OAuth
+          skipBrowserRedirect: false,
         },
       })
       if (error) throw error
     } catch (error) {
       console.error('Error signing in with Google:', error)
+      throw error
+    }
+  }
+
+  const signInWithGitHub = async () => {
+    try {
+      // Store current page to return to after auth
+      const currentPath = window.location.pathname
+      const isDemoPage = currentPath.includes('/results/sample-')
+      const redirectPath = (currentPath === '/process' || isDemoPage) ? '/packs' : currentPath
+      const redirectTo = `${window.location.origin}${redirectPath}`
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo,
+          // Skip email confirmation for GitHub OAuth
+          skipBrowserRedirect: false,
+        },
+      })
+      if (error) throw error
+    } catch (error) {
+      console.error('Error signing in with GitHub:', error)
+      throw error
+    }
+  }
+
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) throw error
+    } catch (error) {
+      console.error('Error signing in with email:', error)
+      throw error
+    }
+  }
+
+  const signUpWithEmail = async (email: string, password: string) => {
+    try {
+      const currentPath = window.location.pathname
+      const isDemoPage = currentPath.includes('/results/sample-')
+      const redirectPath = (currentPath === '/process' || isDemoPage) ? '/packs' : currentPath
+      const redirectTo = `${window.location.origin}${redirectPath}`
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectTo,
+          // Require email confirmation for email signups
+          data: {
+            email_confirmed: false,
+          },
+        },
+      })
+      if (error) throw error
+    } catch (error) {
+      console.error('Error signing up with email:', error)
+      throw error
+    }
+  }
+
+  const signInWithMagicLink = async (email: string) => {
+    try {
+      const currentPath = window.location.pathname
+      const isDemoPage = currentPath.includes('/results/sample-')
+      const redirectPath = (currentPath === '/process' || isDemoPage) ? '/packs' : currentPath
+      const redirectTo = `${window.location.origin}${redirectPath}`
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: redirectTo,
+        },
+      })
+      if (error) throw error
+    } catch (error) {
+      console.error('Error sending magic link:', error)
       throw error
     }
   }
@@ -389,6 +483,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     userProfile,
     signInWithGoogle,
+    signInWithGitHub,
+    signInWithEmail,
+    signUpWithEmail,
+    signInWithMagicLink,
     signOut,
     loading,
     makeAuthenticatedRequest,

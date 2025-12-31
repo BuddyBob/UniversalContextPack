@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Chrome, Loader2, Key, Eye, EyeOff } from 'lucide-react'
+import { X, Chrome, Github, Loader2, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from './AuthProvider'
 
 interface AuthModalProps {
@@ -10,12 +10,16 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const { signInWithGoogle, user } = useAuth()
+  const { signInWithGoogle, signInWithGitHub, signInWithEmail, signUpWithEmail, user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [step, setStep] = useState<'signin' | 'apikey'>('signin')
+  const [isSignUp, setIsSignUp] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   if (!isOpen) return null
 
@@ -24,11 +28,52 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setLoading(true)
       setError(null)
       await signInWithGoogle()
-
-      // Since the backend now handles OpenAI API keys, we don't need user to provide their own
       onClose()
     } catch (error: any) {
       setError(error.message || 'Failed to sign in with Google')
+      setLoading(false)
+    }
+  }
+
+  const handleGitHubSignIn = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      await signInWithGitHub()
+      onClose()
+    } catch (error: any) {
+      setError(error.message || 'Failed to sign in with GitHub')
+      setLoading(false)
+    }
+  }
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter email and password')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters')
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      if (isSignUp) {
+        await signUpWithEmail(email, password)
+        setError('Check your email to verify your account!')
+        setLoading(false)
+      } else {
+        await signInWithEmail(email, password)
+        onClose()
+      }
+    } catch (error: any) {
+      setError(error.message || `Failed to ${isSignUp ? 'sign up' : 'sign in'}`)
       setLoading(false)
     }
   }
@@ -44,50 +89,41 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       return
     }
 
-    // Store API key securely in localStorage
     localStorage.setItem('openai_api_key', apiKey.trim())
     setError(null)
     onClose()
   }
 
   const handleSkipApiKey = () => {
-    // Allow users to skip for now but they'll need it for processing
     onClose()
   }
 
   if (step === 'apikey') {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative">
-          {/* Close Button */}
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+        <div className="bg-gray-900/95 border border-white/10 rounded-2xl max-w-md w-full p-8 relative shadow-2xl backdrop-blur-xl">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
 
-          {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-gray-600 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <Key className="h-6 w-6 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Add Your OpenAI API Key</h2>
-            <p className="text-gray-600">
+            <h2 className="text-2xl font-bold text-white mb-2">Add Your OpenAI API Key</h2>
+            <p className="text-gray-300">
               To process and analyze your chat exports, we need your OpenAI API key
             </p>
           </div>
 
-          {/* Error Message */}
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-6">
               {error}
             </div>
           )}
 
-          {/* API Key Input */}
           <div className="mb-6">
-            <label htmlFor="apikey" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="apikey" className="block text-sm font-medium text-gray-300 mb-2">
               OpenAI API Key
             </label>
             <div className="relative">
@@ -97,12 +133,12 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="sk-..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-500 pr-12"
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 text-white placeholder-gray-400 pr-12"
               />
               <button
                 type="button"
                 onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
               >
                 {showApiKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
@@ -112,25 +148,23 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
             </p>
           </div>
 
-          {/* Action Buttons */}
           <div className="space-y-3">
             <button
               onClick={handleApiKeySubmit}
-              className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium"
+              className="w-full bg-white hover:bg-gray-100 text-black px-4 py-3 rounded-lg font-semibold transition-colors"
             >
               Save and Continue
             </button>
             <button
               onClick={handleSkipApiKey}
-              className="w-full bg-gray-100 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              className="w-full bg-white/10 hover:bg-white/20 text-white px-4 py-3 rounded-lg font-medium transition-colors"
             >
               Skip for Now
             </button>
           </div>
 
-          {/* Info */}
-          <div className="mt-6 text-center text-sm text-gray-500">
-            <p>Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-gray-900 underline">OpenAI Platform</a></p>
+          <div className="mt-6 text-center text-sm text-gray-400">
+            <p>Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-white underline">OpenAI Platform</a></p>
           </div>
         </div>
       </div>
@@ -138,46 +172,101 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative">
-        {/* Close Button */}
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900/95 border border-white/10 rounded-2xl max-w-md w-full p-8 relative shadow-2xl backdrop-blur-xl">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+          className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
           disabled={loading}
         >
           <X className="h-5 w-5" />
         </button>
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in to Continue</h2>
-          <p className="text-gray-600">
-            You'll get 10 processing credits to start immediately. Quick Google sign-in.
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-white mb-2">Sign in to Continue</h2>
+          <p className="text-gray-300">
+            You'll get <strong className="text-white">10 processing credits</strong> to get started immediately.
           </p>
         </div>
 
-        {/* Error Message */}
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+          <div className={`border px-4 py-3 rounded-lg mb-6 text-sm ${error.includes('Check your email')
+            ? 'bg-green-500/10 border-green-500/20 text-green-400'
+            : 'bg-red-500/10 border-red-500/20 text-red-400'
+            }`}>
             {error}
           </div>
         )}
 
-        {/* Google Sign In Button */}
-        <button
-          onClick={handleGoogleSignIn}
-          disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition-colors flex items-center justify-center space-x-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Chrome className="h-5 w-5" />
-          )}
-          <span>{loading ? 'Opening Google...' : 'Sign in with Google'}</span>
-        </button>
+        {/* OAuth Buttons */}
+        <div className="space-y-3 mb-6">
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+            className="w-full bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3.5 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg"
+          >
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Chrome className="h-5 w-5" />}
+            <span>Sign in with Google</span>
+          </button>
+        </div>
 
+        {/* Divider */}
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-white/10"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-gray-900 text-gray-400">Or</span>
+          </div>
+        </div>
+
+        {/* Email Form */}
+        <form onSubmit={handleEmailAuth} className="space-y-4">
+          <div>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 text-white placeholder-gray-400"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 text-white placeholder-gray-400 pr-10"
+              disabled={loading}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+            >
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3.5 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+          >
+            {loading ? 'Processing...' : isSignUp ? 'Sign Up' : 'Sign In'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="w-full text-sm text-gray-400 hover:text-white"
+          >
+            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+          </button>
+        </form>
       </div>
     </div>
   )

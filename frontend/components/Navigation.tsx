@@ -194,12 +194,16 @@ export default function Navigation() {
                       className="nav-user-dropdown-minimal"
                       onClick={() => setShowUserDropdown(!showUserDropdown)}
                     >
-                      {userProfile?.avatar_url && (
+                      {userProfile?.avatar_url ? (
                         <img
                           src={userProfile.avatar_url}
                           alt={userProfile.full_name || 'User'}
                           className="w-7 h-7 rounded-full object-cover"
                         />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center cursor-pointer hover:bg-gray-600 transition-colors">
+                          <User className="w-4 h-4 text-gray-300" />
+                        </div>
                       )}
                     </div>
 

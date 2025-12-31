@@ -115,7 +115,7 @@ const ExportGuide = () => {
               <div className="text-left">
                 {/* Main Headline */}
                 <h1 className="text-7xl md:text-7xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                  Portable
+                  User Owned
                   <br />
                   AI Memory
                 </h1>
