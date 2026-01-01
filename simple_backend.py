@@ -1982,58 +1982,93 @@ async def _analyze_single_chunk(
         redacted_chunk = apply_redaction_filters(chunk)
         
         # Build appropriate prompt based on file type and chunk count
-        if total_chunks == 1:
-            # Single chunk - comprehensive extraction
+        if total_chunks <= 4:
             prompt = f"""
-You are an expert extraction system. Your job is to extract all unique, meaningful information from the document with maximum precision.
+            You are an expert extraction system. Your job is to extract ALL unique, meaningful information from the document with maximum precision.
 
-PRIMARY RULES:
-1. Do NOT summarize.
-2. Do NOT omit meaningful details.
-3. Do NOT restate the same information twice. 
-4. Do NOT include filler text, greetings, conversational fluff, or irrelevant lines.
-5. Preserve exact values whenever they appear:
-   (names, dates, values, terminology, labels, instructions, rules, constraints, etc.)
+            NON-NEGOTIABLE RULES
+            1) Do NOT summarize. Extract details as-is.
+        2) Do NOT omit meaningful details.
+        3) Do NOT duplicate. If two lines restate the same fact, keep the most explicit version once.
+        4) Do NOT include filler, greetings, conversational fluff, or irrelevant lines.
+        5) Preserve exact values and wording for:
+        names, dates, numbers, prices, IDs, URLs, file names, commands, labels, definitions, rules, constraints.
+        6) No speculation. If something is unclear, mark it as "ambiguous" and quote the source snippet.
+        7) Atomicity: ONE bullet = ONE fact/rule/instruction. Do not pack multiple facts into one bullet.
 
-STEP 1 — Document Identification (1–2 sentences ONLY)
-Identify what type of document this is (technical, design, business, personal, research, chat, etc.).
+        OUTPUT REQUIREMENTS
+        - Use the exact sections and formatting below.
+        - Use concise, literal phrasing.
+        - Prefer quoting short key phrases when precision matters (do not exceed ~20 words per quote).
+        - Return plain text (no JSON, no markdown code blocks).
 
-STEP 2 — Unique, Comprehensive Extraction
-Extract every meaningful piece of information without changing its specificity.
-Group related ideas together only for organization. Do NOT compress or combine ideas.
+        SECTION 1 — DOCUMENT IDENTIFICATION (1–2 sentences only)
+        - Identify the document type (technical/design/business/personal/research/chat/etc.).
+        - State the apparent purpose in one sentence.
 
-**Complete Unique Information Extract**
-List all meaningful details found in the document. Include:
-- Specific facts, values, descriptions, instructions
-- Stated preferences, rules, constraints, or workflows
-- Examples, scenarios, references
-- Any other concrete, meaningful information
+        SECTION 2 — COMPLETE UNIQUE INFORMATION EXTRACT (exhaustive)
+        Extract all meaningful details as atomic bullets, grouped under these headings.
+        Include a heading even if empty (write "None").
 
-Ensure:
-- No duplicates
-- No summaries
-- No omission of important details
+        A) Entities (people, orgs, products, systems)
+        - Bullet per entity with any explicit attributes (names, roles, identifiers).
 
-**Context & Relationships**
-Describe how extracted items relate to each other (if relationships exist).
+        B) Definitions & Terminology
+        - Bullet per defined term with its meaning.
 
-Use only the information explicitly present in the document.
+        C) Facts & Claims
+        - Bullet per factual statement, preserving values and specificity.
 
-Document content:
-{redacted_chunk}
-"""
+        D) Instructions / Procedures / Workflows
+        - Bullet per instruction or step.
+
+        E) Requirements / Constraints / Rules
+        - Bullet per requirement, limit, prohibition, condition, or rule.
+
+        F) Data / Metrics / Numbers
+        - Bullet per quantitative item (include units and context).
+
+        G) Examples / Scenarios / Edge Cases
+        - Bullet per example, scenario, exception, or special case.
+
+        H) Open Questions / Ambiguities
+        - Bullet per unclear item; include a short quote showing why it is ambiguous.
+
+        SECTION 3 — RELATIONSHIPS & DEPENDENCIES (machine-usable)
+        List explicit relationships as edges, one per line, using this format:
+
+        [SUBJECT] -> [RELATION] -> [OBJECT] (evidence: "short quote")
+
+        Only include relationships that are explicitly supported by the document.
+        Examples of relations: "requires", "depends on", "part of", "owned by", "uses", "causes", "blocks", "prevents", "defines", "example of".
+
+        SECTION 4 — DEDUPLICATION NOTES (short)
+        If you removed duplicates or merged near-identical items, list what you merged in 1–5 bullets.
+        Otherwise write: None.
+
+        DOCUMENT CONTENT
+        <document>
+        {redacted_chunk}
+        </document>
+        """
+        
         elif "conversations" in filename.lower():
             # Conversations file - extract user information
             prompt = f"""
 # Identity
 
 You are an intelligent conversation analyzer that extracts persistent information about THE USER (the conversation owner).
+You are reading a specific chunk of the complete users chat extractions
 
 # Instructions
 
-## Identify THE USER
+Rules:
+- THE USER is the "I/my/me" speaker. Do not profile people they mention.
+- Extract ONLY persistent info (roles, long-term projects, durable preferences, stable constraints, skills, long-term goals).
+- No speculation. If unclear, omit.
+- No duplicates inside this chunk.
 
-THE USER is the person HAVING this conversation, NOT people they mention or discuss.
+## Identify THE USER
 
 Clues to identify THE USER:
 * First-person statements: "I am...", "I work on...", "my background is..."
@@ -2052,9 +2087,7 @@ Extract information that remains true about THE USER across time:
 * Any other facts about THE USER
 
 Do NOT extract:
-* Temporary project details or specific task lists  
 * Details about other people (unless directly related to the user)
-* One-time events or situational context
 
 Focus on extracting comprehensive, factual information about the user.
 
@@ -2366,16 +2399,15 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         # V2 packs track processed_chunks at pack_sources level
         
         if max_chunks is not None and len(chunks) < len(all_chunks):
-            print(f"✅ Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks (limited by available credits)")
+            print(f"Source {source_id} analyzed: {len(chunks)} of {len(all_chunks)} chunks (limited by available credits)")
         else:
-            print(f"✅ Source {source_id} analyzed successfully")
+            print(f"Source {source_id} analyzed successfully")
         
         if failed_chunks_count > 0:
-            print(f"⚠️  WARNING: {failed_chunks_count} chunk(s) failed due to content policy restrictions")
-            print(f"💳 Credits deducted: {successfully_processed_chunks} (failed chunks did NOT deduct credits)")
+            print(f"WARNING: {failed_chunks_count} chunk(s) failed due to content policy restrictions")
+            print(f"Credits deducted: {successfully_processed_chunks} (failed chunks did NOT deduct credits)")
         
         # NEW: Build Memory Tree from analysis (if enabled)
-        print(f"\n🔍 [DEBUG] Post-analysis tree building check: ENABLED={MEMORY_TREE_ENABLED}, AVAILABLE={MEMORY_TREE_AVAILABLE}")
         if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
             try:
                 # Update status to show tree is building
@@ -2386,7 +2418,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                     "progress_param": 95
                 }).execute()
                 
-                print(f"\n🌳 [MEMORY TREE] Starting second-pass tree extraction...")
+                print(f"\n[MEMORY TREE] Starting second-pass tree extraction...")
                 print(f"   Pack ID: {pack_id}")
                 print(f"   Source ID: {source_id}")
                 print(f"   Filename: {filename}")
@@ -2405,7 +2437,6 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                     "status_param": "completed",
                     "progress_param": 100
                 }).execute()
-                print(f"✅ [TREE] Second-pass tree extraction completed successfully")
                 
             except Exception as tree_error:
                 print(f"❌ [TREE] Tree building failed (non-fatal): {tree_error}")
@@ -2709,7 +2740,7 @@ Analysis text:
 """
     else:  # user_profile scope
         tree_prompt = f"""
-You are an intelligent extraction system analyzing conversation history to build a memory tree about THE USER.
+You are an information extraction system. You will read conversation history and extract ONLY persistent, user-owned information to build a memory profile about THE USER (the owner of the conversations).
 
 YOUR TASK: Figure out who THE USER is, then extract persistent information about them.
 
@@ -2962,54 +2993,6 @@ async def get_extraction_results(job_id: str, user: AuthenticatedUser = Depends(
         print(f"Error getting results for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get results: {str(e)}")
 
-@app.get("/api/estimate/{job_id}")
-async def estimate_processing_cost(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Estimate the cost of processing based on extracted text."""
-    try:
-        # Download extracted text from R2
-        extracted_content = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt")
-        if not extracted_content:
-            raise HTTPException(status_code=404, detail="Extracted text not found")
-
-        # Count total tokens in extracted content
-        total_tokens = count_tokens(extracted_content)
-        
-        # Estimate chunks (same logic as chunking process)
-        max_tokens = 150000  # Same as chunking process
-        estimated_chunks = max(1, (total_tokens + max_tokens - 1) // max_tokens)  # Ceiling division
-        
-        # GPT-5-nano pricing
-        input_cost_per_million = 0.050  # $0.050 per 1M input tokens
-        output_cost_per_million = 0.400  # $0.400 per 1M output tokens
-        estimated_output_tokens_per_chunk = 15000  # Same as max_completion_tokens in analyze
-        
-        # Calculate costs
-        total_input_tokens = total_tokens
-        total_output_tokens = estimated_chunks * estimated_output_tokens_per_chunk
-        
-        input_cost = (total_input_tokens / 1_000_000) * input_cost_per_million
-        output_cost = (total_output_tokens / 1_000_000) * output_cost_per_million
-        total_cost = input_cost + output_cost
-        
-        return {
-            "job_id": job_id,
-            "total_tokens": total_tokens,
-            "estimated_chunks": estimated_chunks,
-            "total_input_tokens": total_input_tokens,
-            "estimated_output_tokens": total_output_tokens,
-            "input_cost": round(input_cost, 4),
-            "output_cost": round(output_cost, 4),
-            "total_estimated_cost": round(total_cost, 4),
-            "model": "gpt-5-nano-2025-08-07",
-            "pricing": {
-                "input_per_million": input_cost_per_million,
-                "output_per_million": output_cost_per_million
-            }
-        }
-        
-    except Exception as e:
-        print(f"Error estimating cost for job {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to estimate cost: {str(e)}")
 
 @app.get("/api/payment/status")
 async def get_payment_status(user: AuthenticatedUser = Depends(get_current_user)):
@@ -4236,7 +4219,7 @@ async def add_source_to_pack(
     source_type: Optional[str] = Form("chat_export"),
     payload: Optional[PackSourceCreate] = Body(None),  # Accept JSON for clients that can't send multipart
     user: AuthenticatedUser = Depends(get_current_user)
-):
+    ):
     """Add a new source (file/chat export OR URL) to an existing pack"""
     try:
         if not supabase:
@@ -4416,7 +4399,7 @@ async def add_source_to_pack(
 async def delete_pack(
     pack_id: str, 
     user: AuthenticatedUser = Depends(get_current_user)
-):
+    ):
     """Delete a pack and all its sources"""
     try:
         if not supabase:
