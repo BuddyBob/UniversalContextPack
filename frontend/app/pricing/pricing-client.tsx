@@ -26,7 +26,7 @@ export default function PricingPageClient() {
   const [loading, setLoading] = useState(true)
   const [processingPurchase, setProcessingPurchase] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const fixedCreditPack = 100
+  const fixedCreditPack = 250
   const fixedCreditPrice = 4.99
   const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(true) // Default to unlimited
   const [showAuthModal, setShowAuthModal] = useState(false)
