@@ -205,7 +205,11 @@ export default function PacksPage() {
         console.error('Failed to load packs from localStorage:', localError)
         setPacks([])
       }
+
+      console.log('[Packs] All API endpoints failed, showing empty state')
+      setPacks([]) // Ensure we show empty state even if everything fails
     } finally {
+      console.log('[Packs] Finished loading, setting loading=false')
       setLoading(false)
     }
   }
