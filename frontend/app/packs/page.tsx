@@ -29,6 +29,7 @@ export default function PacksPage() {
   const router = useRouter()
   const [packs, setPacks] = useState<UCPPack[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [deletingPackId, setDeletingPackId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const freeCreditsPrompt = useFreeCreditsPrompt()
@@ -58,6 +59,7 @@ export default function PacksPage() {
     } else {
       // If user is not authenticated, show sample packs
       setLoading(false)
+      setError(null)
       const samplePacks: UCPPack[] = [
         {
           ucpId: 'sample-1',
@@ -91,6 +93,7 @@ export default function PacksPage() {
   }, [user, session])
 
   const loadPacks = async () => {
+    console.log('[Packs] loadPacks called, user:', user ? 'authenticated' : 'not authenticated')
     if (!user) {
       setPacks([])
       setLoading(false)
@@ -98,17 +101,21 @@ export default function PacksPage() {
     }
 
     try {
+      console.log('[Packs] Starting to load packs...')
       setLoading(true)
+      setError(null) // Clear any previous errors
 
       // Add timeout to prevent hanging requests
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
       try {
+        console.log('[Packs] Fetching from /api/v2/packs...')
         const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
           signal: controller.signal
         })
         clearTimeout(timeoutId)
+        console.log('[Packs] Response received:', response.status)
 
         if (!response.ok) {
           throw new Error(`Failed to fetch packs: ${response.status} ${response.statusText}`)
@@ -151,7 +158,9 @@ export default function PacksPage() {
         throw fetchError
       }
     } catch (e) {
-      console.error('Failed to load packs from server:', e)
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred'
+      console.error('Failed to load packs from server:', errorMessage)
+      setError(errorMessage)
       // Fallback to /api/jobs endpoint
       try {
         const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/jobs`)
@@ -257,6 +266,36 @@ export default function PacksPage() {
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-700 border-t-gray-300 mx-auto mb-4"></div>
             <p className="text-gray-400">Loading packs...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state with retry
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-950">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          {/* Header */}
+          <div className="mb-12">
+            <h1 className="text-3xl font-bold text-white">Context Packs Dashboard</h1>
+            <p className="text-gray-400 mt-2">Create, manage, and download your UCP analysis results</p>
+          </div>
+
+          {/* Error State */}
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-red-900/40 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-8 h-8 text-red-400" />
+            </div>
+            <h3 className="text-lg font-medium text-white mb-2">Failed to Load Packs</h3>
+            <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">{error}</p>
+            <button
+              onClick={() => loadPacks()}
+              className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+            >
+              Try Again
+            </button>
           </div>
         </div>
       </div>
