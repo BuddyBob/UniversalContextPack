@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download, FileText, Brain, BarChart3, Plus, ExternalLink, Trash2 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
@@ -33,6 +33,7 @@ export default function PacksPage() {
   const [deletingPackId, setDeletingPackId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const freeCreditsPrompt = useFreeCreditsPrompt()
+  const hasLoadedRef = useRef(false) // Track if we've already loaded packs
 
   // Helper function to format token counts
   const formatTokenCount = (tokens: number): string => {
@@ -54,9 +55,13 @@ export default function PacksPage() {
   }
 
   useEffect(() => {
-    if (user && session) {
+    // Only load once when user becomes authenticated
+    if (user && session && !hasLoadedRef.current) {
+      hasLoadedRef.current = true
       loadPacks()
-    } else {
+    } else if (!user && !session) {
+      // Reset when user logs out
+      hasLoadedRef.current = false
       // If user is not authenticated, show sample packs
       setLoading(false)
       setError(null)
