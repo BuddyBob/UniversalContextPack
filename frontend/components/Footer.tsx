@@ -72,12 +72,12 @@ export default function Footer() {
             <h3 className="text-sm font-medium text-primary mb-4">Legal</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/privacy-policy" className="text-sm text-secondary hover:text-primary transition-colors">
+                <Link href="/privacy" className="text-sm text-secondary hover:text-primary transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="/terms-of-service" className="text-sm text-secondary hover:text-primary transition-colors">
+                <Link href="/terms" className="text-sm text-secondary hover:text-primary transition-colors">
                   Terms of Service
                 </Link>
               </li>
@@ -90,9 +90,13 @@ export default function Footer() {
             <div className="space-y-2 text-sm text-secondary">
               <p>Context Labs LLC</p>
               <p>
-                {/* <a href="mailto:thavasantonio@gmail.com" className="hover:text-primary transition-colors"></a> */}
-                <a className="hover:text-primary transition-colors">
+                <a href="mailto:support@context-pack.com" className="hover:text-primary transition-colors">
                   support@context-pack.com
+                </a>
+              </p>
+              <p>
+                <a href="mailto:legal@context-pack.com" className="hover:text-primary transition-colors">
+                  legal@context-pack.com
                 </a>
               </p>
               <p>San Francisco, CA</p>
@@ -112,10 +116,10 @@ export default function Footer() {
             </Link>
           </div>
           <div className="flex space-x-6 mt-4 sm:mt-0">
-            <Link href="/privacy-policy" className="text-sm text-muted hover:text-secondary transition-colors">
+            <Link href="/privacy" className="text-sm text-muted hover:text-secondary transition-colors">
               Privacy
             </Link>
-            <Link href="/terms-of-service" className="text-sm text-muted hover:text-secondary transition-colors">
+            <Link href="/terms" className="text-sm text-muted hover:text-secondary transition-colors">
               Terms
             </Link>
           </div>

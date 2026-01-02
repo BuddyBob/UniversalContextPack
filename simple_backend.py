@@ -43,6 +43,11 @@ from collections import defaultdict
 from datetime import timedelta
 from urllib.parse import urlparse
 
+# Import custom modules
+from prompts import get_analysis_prompt, get_tree_prompt
+from errors import ChunkProcessingError, ContentPolicyError, TokenLimitError, ExtractionError, TreeBuildError
+from utils import get_progress_message, log_chunk_analysis, log_source_processing, calculate_progress_percent
+
 # Load environment variables with override to refresh from file
 load_dotenv(override=True)
 
@@ -1935,6 +1940,7 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
             "total_chunks_param": len(chunks)
         }).execute()
         
+        log_source_processing(source_id, "extraction", "completed", len(chunks), len(chunks))
         print(f"✅ Extraction and chunking complete: {len(chunks)} chunks ready for analysis", flush=True)
         avg_chunk_size = total_length // len(chunks) if len(chunks) > 0 else 0
         print(f"Stats: {total_length:,} chars -> {len(chunks)} chunks (~{avg_chunk_size:,} chars/chunk avg)", flush=True)
@@ -1943,22 +1949,23 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         
     except Exception as e:
         print(f"❌ Error extracting/chunking source {source_id}: {e}")
+        log_source_processing(source_id, "extraction", "failed", error=str(e))
         supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
             "status_param": "failed",
             "progress_param": 0
         }).execute()
-        raise
+        raise ExtractionError(source_id, str(e))
 
 def apply_redaction_filters(text: str) -> str:
     """Lightweight redaction to mask obvious personal identifiers before analysis."""
     try:
         if not text:
             return text
-        redacted = re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}', '[REDACTED_EMAIL]', text)
-        redacted = re.sub(r'\\b\\d{3}[-.\\s]?\\d{3}[-.\\s]?\\d{4}\\b', '[REDACTED_PHONE]', redacted)
-        redacted = re.sub(r'\\b\\d{13,16}\\b', '[REDACTED_NUMBER]', redacted)
+        redacted = re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '[REDACTED_EMAIL]', text)
+        redacted = re.sub(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b', '[REDACTED_PHONE]', redacted)
+        redacted = re.sub(r'\b\d{13,16}\b', '[REDACTED_NUMBER]', redacted)
         return redacted
     except Exception as redaction_error:
         print(f"⚠️ Redaction filter failed: {redaction_error}")
@@ -1981,161 +1988,13 @@ async def _analyze_single_chunk(
     try:
         redacted_chunk = apply_redaction_filters(chunk)
         
-        # Build appropriate prompt based on file type and chunk count
-        if total_chunks <= 4:
-            prompt = f"""
-            You are an expert extraction system. Your job is to extract ALL unique, meaningful information from the document with maximum precision.
-
-            NON-NEGOTIABLE RULES
-            1) Do NOT summarize. Extract details as-is.
-        2) Do NOT omit meaningful details.
-        3) Do NOT duplicate. If two lines restate the same fact, keep the most explicit version once.
-        4) Do NOT include filler, greetings, conversational fluff, or irrelevant lines.
-        5) Preserve exact values and wording for:
-        names, dates, numbers, prices, IDs, URLs, file names, commands, labels, definitions, rules, constraints.
-        6) No speculation. If something is unclear, mark it as "ambiguous" and quote the source snippet.
-        7) Atomicity: ONE bullet = ONE fact/rule/instruction. Do not pack multiple facts into one bullet.
-
-        OUTPUT REQUIREMENTS
-        - Use the exact sections and formatting below.
-        - Use concise, literal phrasing.
-        - Prefer quoting short key phrases when precision matters (do not exceed ~20 words per quote).
-        - Return plain text (no JSON, no markdown code blocks).
-
-        SECTION 1 — DOCUMENT IDENTIFICATION (1–2 sentences only)
-        - Identify the document type (technical/design/business/personal/research/chat/etc.).
-        - State the apparent purpose in one sentence.
-
-        SECTION 2 — COMPLETE UNIQUE INFORMATION EXTRACT (exhaustive)
-        Extract all meaningful details as atomic bullets, grouped under these headings.
-        Include a heading even if empty (write "None").
-
-        A) Entities (people, orgs, products, systems)
-        - Bullet per entity with any explicit attributes (names, roles, identifiers).
-
-        B) Definitions & Terminology
-        - Bullet per defined term with its meaning.
-
-        C) Facts & Claims
-        - Bullet per factual statement, preserving values and specificity.
-
-        D) Instructions / Procedures / Workflows
-        - Bullet per instruction or step.
-
-        E) Requirements / Constraints / Rules
-        - Bullet per requirement, limit, prohibition, condition, or rule.
-
-        F) Data / Metrics / Numbers
-        - Bullet per quantitative item (include units and context).
-
-        G) Examples / Scenarios / Edge Cases
-        - Bullet per example, scenario, exception, or special case.
-
-        H) Open Questions / Ambiguities
-        - Bullet per unclear item; include a short quote showing why it is ambiguous.
-
-        SECTION 3 — RELATIONSHIPS & DEPENDENCIES (machine-usable)
-        List explicit relationships as edges, one per line, using this format:
-
-        [SUBJECT] -> [RELATION] -> [OBJECT] (evidence: "short quote")
-
-        Only include relationships that are explicitly supported by the document.
-        Examples of relations: "requires", "depends on", "part of", "owned by", "uses", "causes", "blocks", "prevents", "defines", "example of".
-
-        SECTION 4 — DEDUPLICATION NOTES (short)
-        If you removed duplicates or merged near-identical items, list what you merged in 1–5 bullets.
-        Otherwise write: None.
-
-        DOCUMENT CONTENT
-        <document>
-        {redacted_chunk}
-        </document>
-        """
-        
-        elif "conversations" in filename.lower():
-            # Conversations file - extract user information
-            prompt = f"""
-# Identity
-
-You are an intelligent conversation analyzer that extracts persistent information about THE USER (the conversation owner).
-You are reading a specific chunk of the complete users chat extractions
-
-# Instructions
-
-Rules:
-- THE USER is the "I/my/me" speaker. Do not profile people they mention.
-- Extract ONLY persistent info (roles, long-term projects, durable preferences, stable constraints, skills, long-term goals).
-- No speculation. If unclear, omit.
-- No duplicates inside this chunk.
-
-## Identify THE USER
-
-Clues to identify THE USER:
-* First-person statements: "I am...", "I work on...", "my background is..."
-* The person asking questions or having the conversation
-* If helping someone, the helper is the user (not the person being helped)
-* If discussing someone, that person is NOT the user
-
-## Extract Persistent Information
-
-Extract information that remains true about THE USER across time:
-* Who is THE USER? (roles, identity, profession)
-* THE USER's background (skills, interests, experience)
-* THE USER's projects (what they're working on)
-* THE USER's goals or aspirations
-* THE USER's constraints or preferences
-* Any other facts about THE USER
-
-Do NOT extract:
-* Details about other people (unless directly related to the user)
-
-Focus on extracting comprehensive, factual information about the user.
-
-Conversation content:
-{redacted_chunk}
-"""
-        elif 5 <= total_chunks <= 50:
-            # Medium document - condensed but comprehensive
-            prompt = f"""
-You are analyzing a medium-length document.
-Your goal is to extract condensed but comprehensive key facts from this chunk.
-
-First figure out what this document could be about. Why would a user be interested in storing this document?
-
-Based on that reasoning extract information that would be relevant to that:
-- Important claims, data points, definitions, and steps
-- Specific arguments or evidence presented
-- Entities, roles, timelines, processes, or instructions
-- Any meaningful detail that contributes to understanding
-
-Do NOT summarize.
-Do NOT generalize.
-Preserve nuance and specificity.
-
-Document content:
-{redacted_chunk}
-"""
-        else:
-            # Default - small document, high precision
-            prompt = f"""
-Analyze this document section with high precision.
-
-First figure out what this document could be about. Why would a user be interested in storing this document?
-
-Based on that reasoning extract information that would be relevant to that.
-Extract all key factual information:
-- Important claims, data points, definitions, and steps
-- Specific arguments or evidence presented
-- Entities, roles, timelines, processes, or instructions
-- Any meaningful detail that contributes to understanding
-
-Do NOT summarize.
-Do NOT generalize.
-Preserve nuance and specificity.
-
-Document content:
-{redacted_chunk}
-"""
+        # Get appropriate prompt from prompts module
+        prompt = get_analysis_prompt(
+            chunk=redacted_chunk,
+            total_chunks=total_chunks,
+            filename=filename,
+            chunk_idx=chunk_idx
+        )
         
         # Build messages
         messages = [
@@ -2157,7 +2016,7 @@ Document content:
         
         # Check for content policy refusal
         if analysis and ("cannot assist" in analysis.lower() or "i'm sorry" in analysis.lower()[:50]):
-            raise Exception("Content policy refusal")
+            raise ContentPolicyError(chunk_idx)
         
         # Calculate cost
         input_tokens = response.usage.prompt_tokens
@@ -2184,6 +2043,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         max_chunks: Optional limit on number of chunks to analyze (for partial analysis with limited credits)
     """
     try:
+        log_source_processing(source_id, "analysis", "started")
         print(f"Starting analysis for source {source_id}")
         
         # Update status to analyzing
@@ -2267,10 +2127,6 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             BATCH_SIZE = 10  # Large files: maximum speed
         
         all_analyses = []  # Store all analysis results with their indices
-        total_input_tokens = 0
-        total_output_tokens = 0
-        total_cost = 0.0
-        failed_chunks_count = 0  # Track chunks that failed due to content policy
         successfully_processed_chunks = 0  # Track chunks that were successfully analyzed
         
         print(f"\n🚀 [CONCURRENT ANALYSIS] Processing {len(chunks)} chunks in batches of {BATCH_SIZE}")
@@ -2318,10 +2174,11 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 for i, result in enumerate(batch_results):
                     chunk_idx = batch_start + i
                     
-                    if isinstance(result, Exception):
-                        print(f"   ⚠️ Chunk {chunk_idx + 1} failed: {result}")
+                    if isinstance(result, ContentPolicyError):
+                        # Content policy violation - don't retry, don't deduct credits
+                        print(f"   ⚠️ Chunk {chunk_idx + 1} failed: Content policy violation")
                         failed_chunks_count += 1
-                        # Add error placeholder
+                        log_chunk_analysis(chunk_idx, 0, 0, False, error="Content policy violation")
                         all_analyses.append({
                             "index": chunk_idx,
                             "analysis": f"[Chunk {chunk_idx+1} could not be analyzed due to content policy restrictions.]",
@@ -2329,13 +2186,32 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                             "output_tokens": 0,
                             "cost": 0.0
                         })
+                    elif isinstance(result, Exception):
+                        # Other errors
+                        print(f"   ⚠️ Chunk {chunk_idx + 1} failed: {result}")
+                        failed_chunks_count += 1
+                        log_chunk_analysis(chunk_idx, 0, 0, False, error=str(result))
+                        all_analyses.append({
+                            "index": chunk_idx,
+                            "analysis": f"[Chunk {chunk_idx+1} could not be analyzed: {str(result)}]",
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "cost": 0.0
+                        })
                     elif isinstance(result, dict):
                         # Successful analysis
                         all_analyses.append(result)
-                        successfully_processed_chunks += 1  # Only count successful chunks for credit deduction
+                        successfully_processed_chunks += 1
                         total_input_tokens += result["input_tokens"]
                         total_output_tokens += result["output_tokens"]
                         total_cost += result["cost"]
+                        log_chunk_analysis(
+                            chunk_idx,
+                            result["input_tokens"],
+                            result["output_tokens"],
+                            True,
+                            cost=result["cost"]
+                        )
                         print(f"   ✅ Chunk {chunk_idx + 1}/{len(chunks)}: {result['output_tokens']} tokens out, {result['input_tokens']} tokens in")
                 
                 # Update progress
@@ -2683,135 +2559,8 @@ async def _process_single_chunk_tree(
     idx = chunk_analysis["index"]
     text = chunk_analysis["text"]
     
-    # Build tree extraction prompt
-    if scope.startswith("knowledge:"):
-        tree_prompt = f"""
-You are turning a chunk of analysis into a structured "memory tree" representation.
-
-The input is a human-readable analysis of a document. Based on this analysis, extract:
-
-- sections: high-level topics or subtopics discussed
-- events: concrete events mentioned (with dates or periods if present)
-- entities: important people, organizations, or places
-- concepts: key ideas, themes, or issues (with definitions)
-
-Return STRICT JSON:
-
-{{
-  "sections": [
-    {{
-      "title": "string",
-      "period": null,
-      "summary": "string"
-    }}
-  ],
-  "events": [
-    {{
-      "name": "string",
-      "date_or_period": null,
-      "summary": "string"
-    }}
-  ],
-  "entities": [
-    {{
-      "name": "string",
-      "type": "person | organization | place | other",
-      "summary": "string"
-    }}
-  ],
-  "concepts": [
-    {{
-      "name": "string",
-      "definition": "brief explanation of this concept"
-    }}
-  ]
-}}
-
-Rules:
-- Extract as many useful sections/events/entities/concepts as the analysis supports.
-- For concepts, provide both name AND definition (not just the name)
-- Be specific and detailed.
-- Do NOT add commentary outside the JSON.
-- Do NOT wrap in backticks or code blocks.
-- Return ONLY valid JSON.
-
-Analysis text:
-{text}
-"""
-    else:  # user_profile scope
-        tree_prompt = f"""
-You are an information extraction system. You will read conversation history and extract ONLY persistent, user-owned information to build a memory profile about THE USER (the owner of the conversations).
-
-YOUR TASK: Figure out who THE USER is, then extract persistent information about them.
-
-STEP 1 - IDENTIFY THE USER:
-The USER is the person who OWNS these conversations (the conversation participant, not people they mention).
-
-Clues to identify THE USER:
-- First-person statements: "I am...", "I work on...", "my project...", "I'm interested in..."
-- Consistent patterns across conversation chunks
-- The person HAVING the conversations (not people being discussed)
-- Context: If they're helping someone, the helper is the user, not the person being helped
-
-STEP 2 - UNDERSTAND THE USER'S CONTEXT:
-What kind of person is the user? Examples:
-- Developer working on projects → Extract: projects, tech stack, goals
-- Writer creating content → Extract: writing projects, themes, creative work
-- Student learning → Extract: subjects, courses, learning goals
-- Professional → Extract: role, industry, work patterns
-- Researcher → Extract: research topics, methodologies, findings
-
-STEP 3 - EXTRACT INTELLIGENTLY:
-Based on who the user is and what matters to them, extract:
-
-- **identity**: User's name (if stated), roles, background that defines them
-- **preferences**: Lasting preferences, constraints, or patterns
-- **projects**: Ongoing work, creative projects, or efforts (adapt to user type)
-- **skills**: Technical skills, expertise, or capabilities
-- **goals**: Stated goals, aspirations, or objectives
-- **constraints**: Limitations, requirements, or boundaries
-- **facts**: Other persistent facts relevant to this user
-
-IMPORTANT PRINCIPLES:
-BE ADAPTIVE: A writer's "projects" are essays/books, a developer's are codebases
-USE CONTEXT: If user discusses their essay, include it. If they paste someone else's essay, don't.
-LOOK FOR PATTERNS: Information appearing across multiple chunks is likely about the user
-FIRST-PERSON FOCUS: Prioritize "I/my/me" statements over third-party content
-BE RELEVANT: Extract what matters to THIS specific user, not generic categories
-
-Return STRICT JSON:
-
-{{
-  "identity": {{
-    "name": null,
-    "roles": [],
-    "background": []
-  }},
-  "preferences": ["string"],
-  "projects": [
-    {{
-      "name": "string",
-      "description": null,
-      "status": null
-    }}
-  ],
-  "skills": ["string"],
-  "goals": ["string"],
-  "constraints": ["string"],
-  "facts": ["string"]
-}}
-
-Rules:
-- Figure out who the user is first, then extract accordingly
-- Be adaptive to the user's context (writer, developer, student, etc.)
-- Focus on first-person statements and consistent patterns
-- Do NOT add commentary
-- Do NOT wrap in backticks
-- Return ONLY valid JSON
-
-Analysis text:
-{text}
-"""
+    # Get tree extraction prompt from prompts module
+    tree_prompt = get_tree_prompt(scope=scope, text=text)
    
     # Call OpenAI for tree extraction
     try:
