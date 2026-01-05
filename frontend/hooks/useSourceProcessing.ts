@@ -56,7 +56,10 @@ export function useSourceProcessing() {
      * Fetches credit check and shows confirmation modal
      */
     const handleSourceReady = useCallback(async (sourceId: string) => {
-        if (handledReadySourcesRef.current.has(sourceId)) {
+        // Allow re-triggering if modal is currently hidden
+        // This enables manual button clicks even if auto-trigger already happened
+        if (handledReadySourcesRef.current.has(sourceId) && modalTypeRef.current !== 'hidden') {
+            console.log('[useSourceProcessing] Source already handled and modal is open, skipping');
             return;
         }
 
@@ -90,8 +93,8 @@ export function useSourceProcessing() {
      */
     const startAnalysis = useCallback(async (sourceId: string, maxChunks?: number) => {
         try {
-            // Show analyzing modal immediately
-            setModalState({ type: 'analyzing', sourceId });
+            // Keep modal open until backend confirms status change
+            // This prevents flash of "Ready" state
 
             const body = maxChunks ? { max_chunks: maxChunks } : {};
             const response = await makeAuthenticatedRequest(
@@ -139,7 +142,8 @@ export function useSourceProcessing() {
             console.log(`[useSourceProcessing] Updating modal for source ${source.source_id}, status: ${status}`);
 
             if (status === 'analyzing' || status === 'processing' || status === 'analyzing_chunks') {
-                setModalState(prev => prev.type !== 'analyzing' ? { type: 'analyzing', sourceId: source.source_id } : prev);
+                // Close modal when analyzing starts (was credit_check modal)
+                setModalState({ type: 'hidden' });
             } else if (status === 'building_tree' || normalized?.includes('build')) {
                 setModalState(prev => prev.type !== 'building_tree' ? { type: 'building_tree', sourceId: source.source_id } : prev);
             } else if (
@@ -148,7 +152,7 @@ export function useSourceProcessing() {
                 normalized?.includes('complete') ||
                 normalized?.includes('built') ||
                 normalized?.includes('done') ||
-                    (typeof source.progress === 'number' && source.progress >= 100)
+                (typeof source.progress === 'number' && source.progress >= 100)
             ) {
                 console.log(`[useSourceProcessing] Source ${source.source_id} ${status ?? 'done'}, closing modal`);
                 // Close modal

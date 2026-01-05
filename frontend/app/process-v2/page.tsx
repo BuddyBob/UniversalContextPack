@@ -56,6 +56,7 @@ export default function ProcessV2Page() {
     const [showChatUploadMenu, setShowChatUploadMenu] = useState(false);
     const [chatUploadError, setChatUploadError] = useState<string | null>(null);
     const [uploadNotification, setUploadNotification] = useState<string | null>(null);
+    const [isLoadingPack, setIsLoadingPack] = useState(false);
 
     // Track if we've already attempted to select pack from URL
     const hasAttemptedPackSelection = useRef(false);
@@ -92,6 +93,7 @@ export default function ProcessV2Page() {
         if (selectedPack?.pack_id === packId) return;
 
         isFetchingPackRef.current = true;
+        setIsLoadingPack(true);
         (async () => {
             try {
                 console.log('[ProcessV2] Fetching pack directly by id from URL');
@@ -118,6 +120,7 @@ export default function ProcessV2Page() {
                 console.error('[ProcessV2] Error fetching pack by id:', error);
             } finally {
                 isFetchingPackRef.current = false;
+                setIsLoadingPack(false);
             }
         })();
     }, [user, selectedPack, searchParams, makeAuthenticatedRequest, selectPack]);
@@ -186,11 +189,12 @@ export default function ProcessV2Page() {
                 sources.forEach((source: any) => {
                     updateFromSourceStatus(source);
 
-                    // Check if source is ready for analysis
-                    if (source.status === 'ready_for_analysis' && modalState.type === 'hidden') {
-                        console.log('[ProcessV2] Source ready for analysis, showing credit modal');
-                        handleSourceReady(source.source_id);
-                    }
+                    // Disabled auto-trigger - users now have explicit "Start Analysis" button in progress card
+                    // This prevents duplicate modals and gives users full control
+                    // if (source.status === 'ready_for_analysis' && modalState.type === 'hidden') {
+                    //     console.log('[ProcessV2] Source ready for analysis, showing credit modal');
+                    //     handleSourceReady(source.source_id);
+                    // }
                 });
 
                 const totalTime = Date.now() - startTime;
@@ -261,13 +265,21 @@ export default function ProcessV2Page() {
                 formData.append('file', file);
 
                 console.log('[ProcessV2] Sending POST to:', `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources`);
-                const response = await makeAuthenticatedRequest(
+
+                // Add timeout wrapper to prevent indefinite hangs
+                const uploadPromise = makeAuthenticatedRequest(
                     `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources`,
                     {
                         method: 'POST',
                         body: formData,
                     }
                 );
+
+                const timeoutPromise = new Promise<never>((_, reject) => {
+                    setTimeout(() => reject(new Error('Upload timeout - file may be too large or network is slow')), 60000);
+                });
+
+                const response = await Promise.race([uploadPromise, timeoutPromise]);
 
                 if (response.ok) {
                     console.log(`✅ Uploaded: ${file.name}`);
@@ -284,8 +296,11 @@ export default function ProcessV2Page() {
                 }
             } catch (error) {
                 console.error(`❌ Upload error:`, file.name, error);
-                setUploadNotification(`Upload error: ${file.name}`);
-                setTimeout(() => setUploadNotification(null), 4000);
+                const errorMessage = error instanceof Error && error.message.includes('timeout')
+                    ? `${file.name} is taking too long to upload. Try a smaller file or check your connection.`
+                    : `Upload error: ${file.name}. Please try again.`;
+                setUploadNotification(errorMessage);
+                setTimeout(() => setUploadNotification(null), 6000);
             } finally {
                 setUploadingFiles((prev) => {
                     const next = new Set(prev);
@@ -425,7 +440,7 @@ export default function ProcessV2Page() {
 
         try {
             const response = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/download`
+                `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/export/complete`
             );
 
             if (response.ok) {
@@ -442,6 +457,33 @@ export default function ProcessV2Page() {
         } catch (error) {
             console.error('Download error:', error);
         }
+    };
+
+    // Handle process cancellation
+    const handleCancelProcessing = async () => {
+        // Find the currently processing source
+        const processingSource = packSources.find(s =>
+            ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'building_tree'].includes(s.status)
+        );
+
+        if (processingSource) {
+            try {
+                console.log(`[ProcessV2] Cancelling source: ${processingSource.source_id}`);
+                const response = await makeAuthenticatedRequest(
+                    `${API_BASE_URL}/api/v2/sources/${processingSource.source_id}/cancel`,
+                    { method: 'POST' }
+                );
+
+                if (response.ok) {
+                    console.log('[ProcessV2] Cancellation requested successfully');
+                }
+            } catch (error) {
+                console.error('[ProcessV2] Error cancelling process:', error);
+            }
+        }
+
+        // Navigate away
+        router.push('/packs');
     };
 
     if (!user) {
@@ -557,7 +599,14 @@ export default function ProcessV2Page() {
 
                 {/* MAIN CONTENT - Upload Options */}
                 <div className="flex-1 overflow-y-auto p-8">
-                    {!selectedPack ? (
+                    {isLoadingPack ? (
+                        /* Loading Pack */
+                        <div className="max-w-4xl mx-auto text-center py-20">
+                            <Loader className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+                            <h2 className="text-2xl font-bold text-white mb-2">Loading pack...</h2>
+                            <p className="text-gray-400">Please wait while we fetch your pack details</p>
+                        </div>
+                    ) : !selectedPack ? (
                         /* Pack Creation */
                         <div className="max-w-4xl mx-auto space-y-6">
                             <div className="space-y-6 text-center">
@@ -649,46 +698,39 @@ export default function ProcessV2Page() {
 
                             {/* Progress Card - Shows at top when analyzing */}
                             {packSources.some(s => ['ready_for_analysis', 'extracting', 'analyzing', 'processing', 'analyzing_chunks', 'building_tree'].includes(s.status)) && (
-                                <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-4">
-                                            <div className="w-10 h-10 bg-purple-600/20 rounded-lg flex items-center justify-center">
-                                                {packSources.some(s => s.status === 'ready_for_analysis') ? (
-                                                    <span className="text-2xl">✓</span>
-                                                ) : packSources.some(s => s.status === 'building_tree' || s.status?.toLowerCase().includes('build')) ? (
-                                                    <Network className="h-5 w-5 text-emerald-400" />
-                                                ) : (
-                                                    <Loader className="h-5 w-5 text-purple-400 animate-spin" />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <h3 className="text-base font-medium text-white">
+                                <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-lg p-6 backdrop-blur-sm">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                                                <h3 className="text-lg font-semibold text-white tracking-tight">
                                                     {packSources.some(s => s.status === 'ready_for_analysis') ? 'Ready for Analysis' :
                                                         packSources.some(s => s.status === 'building_tree') ? 'Building Memory Tree' :
-                                                            packSources.some(s => s.status === 'extracting') ? 'Extracting Content' : 'Analyzing'}
+                                                            packSources.some(s => s.status === 'extracting') ? 'Extracting Content' :
+                                                                'Analyzing Content'}
                                                 </h3>
-                                                <p className="text-sm text-gray-400">
-                                                    {(() => {
-                                                        if (packSources.some(s => s.status === 'ready_for_analysis')) {
-                                                            return 'Waiting for you to start analysis...';
-                                                        }
-                                                        if (packSources.some(s => s.status === 'building_tree')) {
-                                                            return 'Organizing knowledge into structured memory...';
-                                                        }
-                                                        const activeSource = packSources.find(s =>
-                                                            ['extracting', 'analyzing', 'processing', 'analyzing_chunks'].includes(s.status)
-                                                        );
-                                                        if (activeSource?.status === 'extracting') {
-                                                            return 'Extracting content and creating semantic chunks...';
-                                                        }
-                                                        return "We're processing your content.";
-                                                    })()}
-                                                </p>
                                             </div>
+                                            <p className="text-sm text-gray-400 leading-relaxed">
+                                                {(() => {
+                                                    if (packSources.some(s => s.status === 'ready_for_analysis')) {
+                                                        return 'Content extraction complete. Begin analysis to process your data.';
+                                                    }
+                                                    if (packSources.some(s => s.status === 'building_tree')) {
+                                                        return 'Organizing knowledge into structured memory graph.';
+                                                    }
+                                                    const activeSource = packSources.find(s =>
+                                                        ['extracting', 'analyzing', 'processing', 'analyzing_chunks'].includes(s.status)
+                                                    );
+                                                    if (activeSource?.status === 'extracting') {
+                                                        return 'Extracting and chunking content for semantic analysis.';
+                                                    }
+                                                    return 'Processing and analyzing your content.';
+                                                })()}
+                                            </p>
                                         </div>
                                         <button
-                                            onClick={() => router.push('/packs')}
-                                            className="text-sm text-gray-300 hover:text-white px-3 py-1.5 border border-gray-600 rounded-lg hover:bg-gray-700 transition-colors"
+                                            onClick={handleCancelProcessing}
+                                            className="text-xs text-gray-400 hover:text-white px-3 py-1.5 border border-gray-600 rounded hover:bg-gray-700/50 transition-all duration-200"
                                         >
                                             Cancel
                                         </button>
@@ -702,42 +744,53 @@ export default function ProcessV2Page() {
                                         if (analyzingSource) {
                                             const total = analyzingSource.total_chunks || 0;
                                             const isBuildingTree = analyzingSource.status === 'building_tree';
-
-                                            // During tree building, show total chunks (analysis is complete)
-                                            // During analysis, use actual processed count
                                             const processed = isBuildingTree ? total : (analyzingSource.processed_chunks || 0);
-
                                             const backendPercent = typeof analyzingSource.progress === 'number' ? Math.round(analyzingSource.progress) : null;
-                                            // Always prefer backend progress percentage
                                             const percent = backendPercent ?? (total > 0 ? Math.round((processed / total) * 100) : 0);
-
                                             const processedDisplay = isBuildingTree && total > 0 ? total : processed;
-                                            const chunksLabel = total > 0
-                                                ? `${processedDisplay} of ${total} chunks`
-                                                : (isBuildingTree ? 'Building tree…' : 'Processing chunks');
-
+                                            const chunksLabel = total > 0 ? `${processedDisplay} / ${total} chunks` : (isBuildingTree ? 'Building tree' : 'Processing');
                                             const isLargeJob = total >= 10;
 
                                             return (
-                                                <div className="mt-4 space-y-2">
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-gray-400">{chunksLabel}</span>
-                                                        <span className="text-purple-400 font-medium">{percent}%</span>
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between text-sm">
+                                                        <span className="text-gray-500 font-medium">{chunksLabel}</span>
+                                                        <span className="text-gray-300 font-semibold tabular-nums">{percent}%</span>
                                                     </div>
-                                                    <div className="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
-                                                        <div
-                                                            className="bg-gradient-to-r from-purple-500 to-purple-400 h-full transition-all duration-500"
-                                                            style={{ width: `${percent}%` }}
-                                                        />
-                                                    </div>
+                                                    {!isBuildingTree && (
+                                                        <div className="w-full bg-gray-700/30 rounded-full h-1.5 overflow-hidden">
+                                                            <div
+                                                                className="bg-gradient-to-r from-blue-500 to-blue-400 h-full transition-all duration-700 ease-out"
+                                                                style={{ width: `${percent}%` }}
+                                                            />
+                                                        </div>
+                                                    )}
                                                     {isLargeJob && (
-                                                        <p className="text-xs text-gray-400">
-                                                            Large pack! Email will be sent when done. If progress bar stalls, <strong>refresh page</strong>.
-                                                        </p>
+                                                        <div className="bg-gray-800/50 border border-gray-700/50 rounded p-3">
+                                                            <p className="text-xs text-gray-400 leading-relaxed">
+                                                                <strong className="text-gray-300">Large dataset detected.</strong> Email notification will be sent upon completion (10-40 minutes depending on file size). If progress appears stalled, refresh the page to update status.
+                                                            </p>
+                                                        </div>
                                                     )}
                                                 </div>
                                             );
                                         }
+                                    })()}
+
+                                    {/* Start Analysis Button */}
+                                    {(() => {
+                                        const readySource = packSources.find(s => s.status === 'ready_for_analysis');
+                                        if (readySource) {
+                                            return (
+                                                <button
+                                                    onClick={() => handleSourceReady(readySource.source_id)}
+                                                    className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                                                >
+                                                    Begin Analysis
+                                                </button>
+                                            );
+                                        }
+                                        return null;
                                     })()}
                                 </div>
                             )}
@@ -1029,9 +1082,6 @@ export default function ProcessV2Page() {
                                                                     />
                                                                 </div>
                                                                 <div className="flex justify-between items-center">
-                                                                    <span className="text-xs text-gray-400">
-                                                                        {processedChunks} of {totalChunks} chunks
-                                                                    </span>
                                                                     <span className="text-xs font-medium text-emerald-400">
                                                                         {progressPercent}%
                                                                     </span>
@@ -1167,7 +1217,7 @@ export default function ProcessV2Page() {
                 {modalState.type === 'credit_check' && (
                     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
                         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full">
-                            <h3 className="text-xl font-bold mb-4">Confirm Analysis</h3>
+                            <h3 className="text-xl font-bold mb-4">Start Analysis</h3>
                             <div className="space-y-3 text-sm mb-6">
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">Chunks to analyze:</span>
@@ -1183,6 +1233,17 @@ export default function ProcessV2Page() {
                                         {modalState.hasUnlimited ? '∞ (Unlimited)' : modalState.userCredits}
                                     </span>
                                 </div>
+                            </div>
+
+                            {/* Time Estimate */}
+                            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
+                                <p className="text-sm text-gray-300">
+                                    {modalState.totalChunks <= 10 ? (
+                                        <><span className="font-semibold">⏱️ ~5 minutes</span> — You can come back and check progress.</>
+                                    ) : (
+                                        <><span className="font-semibold">We'll email you</span> when it's ready. Large packs take time to process.</>
+                                    )}
+                                </p>
                             </div>
 
                             {modalState.canProceed ? (
@@ -1211,7 +1272,7 @@ export default function ProcessV2Page() {
                                             onClick={() => router.push('/pricing')}
                                             className="flex-1 bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-medium transition-colors"
                                         >
-                                            Get More Credits
+                                            Buy Credits
                                         </button>
                                         <button
                                             onClick={closeModal}
