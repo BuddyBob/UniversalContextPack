@@ -732,7 +732,7 @@ export default function ProcessV2Page() {
                                                     </div>
                                                     {isLargeJob && (
                                                         <p className="text-xs text-gray-400">
-                                                            This is a large pack. You can close this page—we'll email you when it's done. If progress appears stuck, try refreshing the page.
+                                                            Large pack! Email will be sent when done. If progress bar stalls, <strong>refresh page</strong>.
                                                         </p>
                                                     )}
                                                 </div>
