@@ -177,7 +177,7 @@ def check_rate_limit(user_id: str, limit_type: str = "payment", max_attempts: in
     return True, len(user_attempts) + 1
 
 # Email notification service
-async def send_email_notification(user_email: str, job_id: str, chunks_processed: int, total_chunks: int, success: bool = True):
+async def send_email_notification(user_email: str, job_id: str, chunks_processed: int, total_chunks: int, pack_id: str = None, success: bool = True):
     """Send email notification when a large job completes"""
     try:
         # Get email configuration from environment
@@ -199,8 +199,8 @@ Job Details:
 - Chunks Processed: {chunks_processed}/{total_chunks}
 - Status: Successfully Completed
 
-Your Context Pack is ready for download. You can access it by visiting:
-{os.getenv('FRONTEND_URL', 'https://www.context-pack.com')}/packs
+Open your pack here:
+{os.getenv('FRONTEND_URL', 'https://www.context-pack.com')}/process-v2?pack={pack_id}
 
 Thank you for using Universal Context Pack!
 
@@ -2337,6 +2337,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                     job_id=source_id,
                     chunks_processed=len(chunks),
                     total_chunks=len(chunks),
+                    pack_id=pack_id,
                     success=True
                 )
                 print(f"📧 Email notification sent to {user.email}")
@@ -2365,6 +2366,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                     job_id=source_id,
                     chunks_processed=0,
                     total_chunks=len(chunks) if 'chunks' in locals() else 0,
+                    pack_id=pack_id if 'pack_id' in locals() else None,
                     success=False
                 )
                 print(f"📧 Failure email notification sent to {user.email}")
@@ -3836,6 +3838,36 @@ async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):
     except Exception as e:
         print(f"Error listing packs: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to list packs: {str(e)}")
+
+@app.get("/api/v2/packs/{pack_id}/tree.json")
+async def download_pack_tree_json(
+    pack_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Download the memory tree as a JSON file.
+    """
+    try:
+        # Reuse the tree nodes endpoint logic
+        # Assuming get_pack_tree_nodes is defined elsewhere and accessible
+        tree_data = await get_pack_tree_nodes(pack_id, user) 
+        
+        # Return as downloadable JSON file
+        json_content = json.dumps(tree_data, indent=2)
+        
+        return StreamingResponse(
+            iter([json_content.encode('utf-8')]),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename={pack_id}_tree.json"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error downloading tree JSON: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v2/packs/{pack_id}")
 async def get_pack_details_v2(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):

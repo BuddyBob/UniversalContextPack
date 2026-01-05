@@ -34,10 +34,11 @@ export default function ProcessV2Page() {
 
     const {
         modalState,
-        handleSourceReady,
+        creditInfo,
+        fetchCreditInfo,
         startAnalysis,
         updateFromSourceStatus,
-        closeModal,
+        closeModal
     } = useSourceProcessing();
 
     // Local state
@@ -136,7 +137,10 @@ export default function ProcessV2Page() {
         ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'building_tree', 'ready_for_analysis'].includes(s.status?.toLowerCase())
     );
     const modalIsOpen = modalState.type !== 'hidden';
-    const shouldPoll = !!selectedPack;
+    // Only poll if pack exists AND has sources that are not in a terminal state
+    const shouldPoll = !!selectedPack && packSources.some(s =>
+        !['completed', 'failed', 'cancelled', 'ready_for_analysis'].includes(s.status)
+    );
     const pollInterval = hasActiveProcessing || modalIsOpen ? 2000 : 12000;
 
     const pollPackDetails = useCallback(async () => {
@@ -209,7 +213,7 @@ export default function ProcessV2Page() {
             console.error(`[ProcessV2] ❌ [${pollId}] Error message:`, error.message);
             // Don't throw - let polling continue even if one request fails
         }
-    }, [selectedPack, makeAuthenticatedRequest, setPackSources, updateFromSourceStatus, modalState.type, handleSourceReady]);
+    }, [selectedPack, makeAuthenticatedRequest, setPackSources, updateFromSourceStatus]);
 
     usePolling({
         enabled: !!shouldPoll,
@@ -218,6 +222,15 @@ export default function ProcessV2Page() {
     });
 
     console.log('[ProcessV2] Polling status:', { shouldPoll, pollInterval, hasSelectedPack: !!selectedPack });
+
+    // Auto-fetch credit info when source becomes ready_for_analysis
+    useEffect(() => {
+        const readySource = packSources.find(s => s.status === 'ready_for_analysis');
+        if (readySource && !creditInfo) {
+            console.log('[ProcessV2] Auto-fetching credit info for source:', readySource.source_id);
+            fetchCreditInfo(readySource.source_id);
+        }
+    }, [packSources, creditInfo, fetchCreditInfo]);
 
     // Handle pack creation
     const handleCreatePack = async () => {
@@ -401,16 +414,6 @@ export default function ProcessV2Page() {
         }
     };
 
-    // Handle analysis confirmation
-    const handleConfirmAnalysis = async (sourceId: string, maxChunks?: number) => {
-        try {
-            await startAnalysis(sourceId, maxChunks);
-            console.log('Analysis started for:', sourceId);
-        } catch (error) {
-            console.error('Failed to start analysis:', error);
-        }
-    };
-
     // Handle custom prompt save
     const handleSaveCustomPrompt = async () => {
         if (!selectedPack) return;
@@ -439,23 +442,31 @@ export default function ProcessV2Page() {
         if (!selectedPack) return;
 
         try {
+            console.log('[Download] Requesting pack download:', selectedPack.pack_id);
             const response = await makeAuthenticatedRequest(
                 `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/export/complete`
             );
 
+            console.log('[Download] Response status:', response.status, response.ok);
+
             if (response.ok) {
                 const blob = await response.blob();
+                console.log('[Download] Blob size:', blob.size);
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${selectedPack.pack_name}_pack.zip`;
+                a.download = `${selectedPack.pack_name}_pack.txt`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(url);
+                console.log('[Download] Pack download initiated successfully');
+            } else {
+                const errorText = await response.text();
+                console.error('[Download] Pack download failed:', response.status, errorText);
             }
         } catch (error) {
-            console.error('Download error:', error);
+            console.error('[Download] Pack download error:', error);
         }
     };
 
@@ -724,7 +735,7 @@ export default function ProcessV2Page() {
                                                     if (activeSource?.status === 'extracting') {
                                                         return 'Extracting and chunking content for semantic analysis.';
                                                     }
-                                                    return 'Processing and analyzing your content.';
+                                                    return 'Processing and analyzing your content. Reload if stalled';
                                                 })()}
                                             </p>
                                         </div>
@@ -768,7 +779,7 @@ export default function ProcessV2Page() {
                                                     {isLargeJob && (
                                                         <div className="bg-gray-800/50 border border-gray-700/50 rounded p-3">
                                                             <p className="text-xs text-gray-400 leading-relaxed">
-                                                                <strong className="text-gray-300">Large dataset detected.</strong> Email notification will be sent upon completion (10-40 minutes depending on file size). If progress appears stalled, refresh the page to update status.
+                                                                <strong className="text-gray-300">If progress stalled, refresh the page to update status. Or check email!</strong>
                                                             </p>
                                                         </div>
                                                     )}
@@ -777,17 +788,76 @@ export default function ProcessV2Page() {
                                         }
                                     })()}
 
-                                    {/* Start Analysis Button */}
+                                    {/* Ready for Analysis - Show inline credit info + button */}
                                     {(() => {
                                         const readySource = packSources.find(s => s.status === 'ready_for_analysis');
                                         if (readySource) {
                                             return (
-                                                <button
-                                                    onClick={() => handleSourceReady(readySource.source_id)}
-                                                    className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm hover:shadow-md"
-                                                >
-                                                    Begin Analysis
-                                                </button>
+                                                <div className="mt-4 space-y-3">
+                                                    {/* Inline Credit Info - Clean & Minimal */}
+                                                    {creditInfo && (
+                                                        <div className="bg-gray-900/40 border border-gray-800 rounded-lg p-5 space-y-3">
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <div>
+                                                                    <div className="text-xs text-gray-500 mb-1">Chunks</div>
+                                                                    <div className="text-lg font-semibold text-white">{creditInfo.totalChunks}</div>
+                                                                </div>
+                                                                <div>
+                                                                    <div className="text-xs text-gray-500 mb-1">Credits</div>
+                                                                    <div className="text-lg font-semibold text-white">{creditInfo.creditsRequired}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center justify-between pt-3 border-t border-gray-800">
+                                                                <span className="text-sm text-gray-400">Your balance</span>
+                                                                <span className={`text-sm font-medium ${creditInfo.canProceed ? 'text-green-400' : 'text-red-400'}`}>
+                                                                    {creditInfo.hasUnlimited ? '∞' : creditInfo.userCredits}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-sm text-gray-400">Est. time</span>
+                                                                <span className="text-sm font-medium text-gray-300">
+                                                                    {creditInfo.totalChunks <= 5 ? '2-3 min' :
+                                                                        creditInfo.totalChunks <= 10 ? '5 min' :
+                                                                            creditInfo.totalChunks <= 20 ? '10-15 min' : '10-40 min'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Action Button */}
+                                                    {creditInfo?.canProceed ? (
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    await startAnalysis(readySource.source_id, creditInfo.totalChunks);
+                                                                    // Force immediate refresh to show analyzing state
+                                                                    await loadPackDetails(selectedPack.pack_id);
+                                                                } catch (error) {
+                                                                    console.error('Failed to start analysis:', error);
+                                                                }
+                                                            }}
+                                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                                                        >
+                                                            Start Analysis
+                                                        </button>
+                                                    ) : creditInfo && !creditInfo.canProceed ? (
+                                                        <div className="space-y-3">
+                                                            <p className="text-sm text-red-400 text-center">
+                                                                Insufficient credits. You need {creditInfo.creditsRequired - creditInfo.userCredits} more.
+                                                            </p>
+                                                            <button
+                                                                onClick={() => router.push('/pricing')}
+                                                                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                                                            >
+                                                                Buy Credits
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-full bg-gray-700 text-gray-400 px-4 py-3 rounded font-medium text-center">
+                                                            Loading credit info...
+                                                        </div>
+                                                    )}
+                                                </div>
                                             );
                                         }
                                         return null;
@@ -998,19 +1068,31 @@ export default function ProcessV2Page() {
 
                                     <button
                                         onClick={async () => {
-                                            const response = await makeAuthenticatedRequest(
-                                                `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/tree.json`
-                                            );
-                                            if (response.ok) {
-                                                const blob = await response.blob();
-                                                const url = window.URL.createObjectURL(blob);
-                                                const a = document.createElement('a');
-                                                a.href = url;
-                                                a.download = `${selectedPack.pack_name}_tree.json`;
-                                                document.body.appendChild(a);
-                                                a.click();
-                                                document.body.removeChild(a);
-                                                window.URL.revokeObjectURL(url);
+                                            if (!selectedPack) return;
+                                            try {
+                                                console.log('[Download] Requesting tree JSON:', selectedPack.pack_id);
+                                                const response = await makeAuthenticatedRequest(
+                                                    `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/tree.json`
+                                                );
+                                                console.log('[Download] Tree response:', response.status, response.ok);
+                                                if (response.ok) {
+                                                    const blob = await response.blob();
+                                                    console.log('[Download] Tree blob size:', blob.size);
+                                                    const url = window.URL.createObjectURL(blob);
+                                                    const a = document.createElement('a');
+                                                    a.href = url;
+                                                    a.download = `${selectedPack.pack_name}_tree.json`;
+                                                    document.body.appendChild(a);
+                                                    a.click();
+                                                    document.body.removeChild(a);
+                                                    window.URL.revokeObjectURL(url);
+                                                    console.log('[Download] Tree download initiated');
+                                                } else {
+                                                    const errorText = await response.text();
+                                                    console.error('[Download] Tree download failed:', response.status, errorText);
+                                                }
+                                            } catch (error) {
+                                                console.error('[Download] Tree download error:', error);
                                             }
                                         }}
                                         className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 mb-2"
@@ -1213,76 +1295,44 @@ export default function ProcessV2Page() {
                     </div>
                 )}
 
-                {/* Credit Check Modal */}
-                {modalState.type === 'credit_check' && (
-                    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-                        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-md w-full">
-                            <h3 className="text-xl font-bold mb-4">Start Analysis</h3>
-                            <div className="space-y-3 text-sm mb-6">
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">Chunks to analyze:</span>
-                                    <span className="font-medium">{modalState.totalChunks}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">Credits required:</span>
-                                    <span className="font-medium">{modalState.creditsRequired}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-400">Your credits:</span>
-                                    <span className={modalState.canProceed ? 'text-green-500' : 'text-red-500'}>
-                                        {modalState.hasUnlimited ? '∞ (Unlimited)' : modalState.userCredits}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Time Estimate */}
-                            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
-                                <p className="text-sm text-gray-300">
-                                    {modalState.totalChunks <= 10 ? (
-                                        <><span className="font-semibold">⏱️ ~5 minutes</span> — You can come back and check progress.</>
-                                    ) : (
-                                        <><span className="font-semibold">We'll email you</span> when it's ready. Large packs take time to process.</>
-                                    )}
-                                </p>
-                            </div>
-
-                            {modalState.canProceed ? (
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => handleConfirmAnalysis(modalState.sourceId)}
-                                        className="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium transition-colors"
-                                    >
-                                        Start Analysis
-                                    </button>
-                                    <button
-                                        onClick={closeModal}
-                                        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="text-center space-y-3">
-                                    <p className="text-red-500">Insufficient credits</p>
-                                    <p className="text-sm text-gray-400">
-                                        You need {modalState.creditsNeeded || Math.max(modalState.creditsRequired - modalState.userCredits, 1)} more credit{(modalState.creditsNeeded || Math.max(modalState.creditsRequired - modalState.userCredits, 1)) !== 1 ? 's' : ''} to analyze all chunks.
-                                    </p>
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={() => router.push('/pricing')}
-                                            className="flex-1 bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-medium transition-colors"
-                                        >
-                                            Buy Credits
-                                        </button>
-                                        <button
-                                            onClick={closeModal}
-                                            className="flex-1 bg-gray-800 hover:bg-gray-700 px-6 py-2 rounded-lg font-medium transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
+                {/* Analysis Started Modal - Minimal & Clean */}
+                {modalState.type === 'analysis_started' && (
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full">
+                            <div className="space-y-6">
+                                {/* Icon & Title */}
+                                <div className="text-center space-y-4">
+                                    <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-500/10 rounded-full">
+                                        <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-semibold text-white">Analysis Started</h3>
+                                        <p className="text-sm text-gray-400 mt-2">
+                                            Est. completion: {modalState.timeEstimate}
+                                        </p>
                                     </div>
                                 </div>
-                            )}
+
+                                {/* Simple Message */}
+                                <div className="bg-gray-800/30 rounded-lg p-4 space-y-2">
+                                    <p className="text-sm text-gray-300">
+                                        You can close this page. We'll email you when it's done.
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        Or refresh to check progress.
+                                    </p>
+                                </div>
+
+                                {/* Button */}
+                                <button
+                                    onClick={closeModal}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                                >
+                                    Got it
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
