@@ -3,12 +3,25 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  // Surface missing envs early to avoid silent auth hangs
+  console.error('❌ Supabase env missing', { supabaseUrl, hasAnonKey: !!supabaseAnonKey })
+}
+
+// Bypass navigator.locks contention and enable verbose auth logging
+const lockBypass = async <R>(key: string, _timeout: number, fn: () => Promise<R>): Promise<R> => {
+  console.info('ℹ️ Supabase auth lock bypass', { key })
+  return fn()
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
-  }
+    detectSessionInUrl: true,
+    debug: false,  // Disabled verbose auth logging
+    lock: lockBypass,
+  },
 })
 
 // Debug function to get token - REMOVE IN PRODUCTION
@@ -24,7 +37,7 @@ if (typeof window !== 'undefined') {
 // Helper function for authenticated API calls
 export async function authenticatedFetch(url: string, options: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession()
-  
+
   if (!session?.access_token) {
     throw new Error('No authentication token available')
   }

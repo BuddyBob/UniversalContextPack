@@ -30,15 +30,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const welcomeEmailSent = useRef<Set<string>>(new Set()) // Track which user IDs have received welcome emails
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Check if we have auth tokens in URL hash (from OAuth redirect)
+    const hashParams = new URLSearchParams(window.location.hash.substring(1))
+    const accessToken = hashParams.get('access_token')
+
+    if (accessToken) {
+      console.log('🔐 Detected OAuth tokens in URL, processing...')
+      // Clear the hash from URL for security
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+
+    // Get initial session with timeout protection
+    const sessionPromise = supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
+        console.log('✅ User authenticated:', session.user.email)
         fetchUserProfile(session.user.id)
+      } else {
+        console.log('ℹ️ No active session')
       }
       setLoading(false)
+    }).catch((error) => {
+      console.error('❌ Failed to get session:', error)
+      setLoading(false) // Stop loading even on error
     })
+
+    // Safety timeout: force loading to false after 3 seconds
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ Auth session fetch timeout - forcing loading state to false')
+      setLoading(false)
+    }, 3000)
+
+    // Clear timeout if session loads successfully
+    sessionPromise.finally(() => clearTimeout(timeoutId))
 
     // Listen for auth changes
     const {
@@ -373,11 +398,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Set up timeout if not already provided
-    if (!options.signal) {
+    // Skip timeout for pack polling - let browser natural timeout handle it
+    const isPackPolling = url.includes('/api/v2/packs/') && !url.includes('POST')
+
+    if (!options.signal && !isPackPolling) {
       const controller = new AbortController()
 
       // Use different timeouts based on the endpoint
-      let timeoutMs = 60000 // Default 60 seconds (increased from 30)
+      let timeoutMs = 60000 // Default 60 seconds
 
       if (url.includes('/api/analyze/')) {
         timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
@@ -385,8 +413,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
       } else if (url.includes('/sources') && url.includes('POST')) {
         timeoutMs = 10 * 60 * 1000 // 10 minutes for file upload
-      } else if (url.includes('/api/status/') || url.includes('/api/v2/packs/') || url.includes('/sources')) {
-        timeoutMs = 90000 // 90 seconds for status polling, pack queries, and source status
+      } else if (url.includes('/api/status/') || url.includes('/sources')) {
+        timeoutMs = 90000 // 90 seconds for status polling and source status
       } else if (url.includes('/api/profile/quick')) {
         timeoutMs = 10000 // 10 seconds for quick profile endpoint
       } else if (url.includes('/api/health')) {

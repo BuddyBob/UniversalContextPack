@@ -211,6 +211,7 @@ export default function ProcessPage() {
             !packSources.find((ps: any) => ps.source_id === s.source_id && ps.status === 'completed')
           );
           if (justCompleted) {
+            console.log('[COMPLETION] Source completed:', justCompleted.source_id);
             setShowPackUpdateNotification(true);
             setTimeout(() => setShowPackUpdateNotification(false), 3000);
             setAnalysisLimits((prev) => {
@@ -224,7 +225,14 @@ export default function ProcessPage() {
 
             // Clear the pending analysis modal if this source was pending
             if (sourcePendingAnalysis && sourcePendingAnalysis.sourceId === justCompleted.source_id) {
+              console.log('[COMPLETION] Clearing pending analysis modal');
               setSourcePendingAnalysis(null);
+            }
+
+            // CRITICAL FIX: Also clear isAnalysisStarting if this was the source being analyzed
+            if (isAnalysisStarting === justCompleted.source_id) {
+              console.log('[COMPLETION] Clearing isAnalysisStarting flag');
+              setIsAnalysisStarting(null);
             }
           }
         }
@@ -235,7 +243,7 @@ export default function ProcessPage() {
 
     // Check if any sources are actively processing
     const hasActiveProcessing = packSources.some((s: any) =>
-      ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'pending'].includes(s.status?.toLowerCase())
+      ['extracting', 'analyzing', 'processing', 'analyzing_chunks', 'pending', 'building_tree'].includes(s.status?.toLowerCase())
     );
 
     const shouldPoll = hasActiveProcessing || isAnalysisStarting;

@@ -32,6 +32,8 @@ export default function PacksPage() {
   const [error, setError] = useState<string | null>(null)
   const [deletingPackId, setDeletingPackId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [creatingPack, setCreatingPack] = useState(false)
+  const [newPackName, setNewPackName] = useState('')
   const freeCreditsPrompt = useFreeCreditsPrompt()
   const hasLoadedRef = useRef(false) // Track if we've already loaded packs
 
@@ -229,7 +231,7 @@ export default function PacksPage() {
       return
     }
 
-    router.push(`/process?pack_id=${packId}`)
+    router.push(`/process-v2?pack=${packId}`)
   }
 
   const handleCreatePack = () => {
@@ -238,7 +240,9 @@ export default function PacksPage() {
       freeCreditsPrompt.triggerPrompt("creating a context pack")
       return
     }
-    router.push('/process?create_new=true')
+
+    // Navigate to process-v2, which handles pack creation
+    router.push('/process-v2')
   }
 
   const handleDeletePack = async (packId: string) => {

@@ -2313,6 +2313,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                     "status_param": "completed",
                     "progress_param": 100
                 }).execute()
+                print(f"✅ Source {source_id} marked as completed (progress: 100%)")
                 
             except Exception as tree_error:
                 print(f"❌ [TREE] Tree building failed (non-fatal): {tree_error}")
@@ -2458,15 +2459,15 @@ async def build_tree_from_analysis(
     
     print(f"🚀 [CONCURRENT] Processing {total_chunks} chunks in batches of {BATCH_SIZE}")
     
-    # Set initial progress to 0 to clear any stale data from previous runs
+    # Start tree building at 95% progress (analysis was 0-90%)
+    # Don't reset processed_chunks - maintain the count from analysis phase
     try:
         initial_message = f"Building tree.."
         supabase.rpc("update_source_status", {
             "user_uuid": user_id,
             "target_source_id": source_id,
             "status_param": "building_tree",
-            "progress_param": 0,
-            "processed_chunks_param": 0,
+            "progress_param": 95,  # Start tree building at 95% (analysis complete)
             "total_chunks_param": total_chunks,
             "error_message_param": initial_message
         }).execute()
@@ -2513,9 +2514,11 @@ async def build_tree_from_analysis(
             print(f"   ✅ Batch complete: ~{batch_nodes} nodes extracted")
             
             # Update progress AFTER batch completes with correct chunk count
-            # Progress is relative to chunks processed (0-100% of tree building)
+            # Tree building uses 95-100% range (analysis was 0-90%)
             chunks_processed = batch_end  # Chunks completed so far
-            progress_percent = int((chunks_processed / total_chunks) * 100)
+            tree_progress_percent = int((chunks_processed / total_chunks) * 100)
+            # Map 0-100% of tree building to 95-100% overall progress
+            overall_progress = 95 + int(tree_progress_percent * 0.05)
             
             # Create detailed progress message
             progress_message = f"Building tree: Batch {batch_num}/{total_batches} ({chunks_processed}/{total_chunks} chunks)"
@@ -2525,12 +2528,11 @@ async def build_tree_from_analysis(
                     "user_uuid": user_id,
                     "target_source_id": source_id,
                     "status_param": "building_tree",
-                    "progress_param": progress_percent,
-                    "processed_chunks_param": chunks_processed,
+                    "progress_param": overall_progress,  # 95-100% range
                     "total_chunks_param": total_chunks,
                     "error_message_param": progress_message
                 }).execute()
-                print(f"Progress: {progress_message} ({progress_percent}%)")
+                print(f"Progress: {progress_message} ({overall_progress}%)")
             except:
                 pass
             
