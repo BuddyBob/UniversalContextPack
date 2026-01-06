@@ -398,7 +398,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Set up timeout if not already provided
-    if (!options.signal && !options.infiniteTimeout) {
+    if (!options.signal) {
       const controller = new AbortController()
 
       // Use different timeouts based on the endpoint
