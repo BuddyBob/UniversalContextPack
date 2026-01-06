@@ -766,7 +766,7 @@ export default function ProcessV2Page() {
                                                     if (activeSource?.status === 'extracting') {
                                                         return 'Extracting and chunking content for semantic analysis.';
                                                     }
-                                                    return 'Processing and analyzing your content. Reload if stalled';
+                                                    return 'Processing and analyzing your content. Check email for updates.';
                                                 })()}
                                             </p>
                                         </div>
@@ -774,8 +774,8 @@ export default function ProcessV2Page() {
                                             onClick={handleCancelProcessing}
                                             disabled={isCancelling}
                                             className={`text-xs px-3 py-1.5 border rounded transition-all duration-200 flex items-center gap-1.5 ${isCancelling
-                                                    ? 'text-gray-500 border-gray-700 cursor-not-allowed'
-                                                    : 'text-gray-400 hover:text-white border-gray-600 hover:bg-gray-700/50'
+                                                ? 'text-gray-500 border-gray-700 cursor-not-allowed'
+                                                : 'text-gray-400 hover:text-white border-gray-600 hover:bg-gray-700/50'
                                                 }`}
                                         >
                                             {isCancelling ? (
@@ -797,12 +797,34 @@ export default function ProcessV2Page() {
                                         if (analyzingSource) {
                                             const total = analyzingSource.total_chunks || 0;
                                             const isBuildingTree = analyzingSource.status === 'building_tree';
+                                            // Override total with partial limit if set (via localStorage)
+                                            // This ensures "3 / 5 chunks" instead of "3 / 12 chunks" during partial runs
+                                            const partialLimit = typeof window !== 'undefined'
+                                                ? parseInt(localStorage.getItem(`processing_limit_${analyzingSource.source_id}`) || '0', 10)
+                                                : 0;
+
+                                            // Use partial limit if it exists and is less than actual total
+                                            const displayTotal = (partialLimit > 0 && partialLimit < total) ? partialLimit : total;
+
                                             const processed = isBuildingTree ? total : (analyzingSource.processed_chunks || 0);
                                             const backendPercent = typeof analyzingSource.progress === 'number' ? Math.round(analyzingSource.progress) : null;
-                                            const percent = backendPercent ?? (total > 0 ? Math.round((processed / total) * 100) : 0);
+
+                                            // Recalculate percent if we are using a partial limit and backend percent is missing or weird
+                                            // But usually backend percent is correct (0-100 based on partial)
+                                            const percent = backendPercent ?? (displayTotal > 0 ? Math.round((processed / displayTotal) * 100) : 0);
+
                                             const processedDisplay = isBuildingTree && total > 0 ? total : processed;
-                                            const chunksLabel = total > 0 ? `${processedDisplay} / ${total} chunks` : (isBuildingTree ? 'Building tree' : 'Processing');
-                                            const isLargeJob = total >= 10;
+                                            const chunksLabel = displayTotal > 0
+                                                ? `${processedDisplay} / ${displayTotal} chunks${partialLimit > 0 ? ' (partial)' : ''}`
+                                                : (isBuildingTree ? 'Building tree' : 'Processing');
+                                            const isLargeJob = displayTotal >= 10;
+
+                                            // Cleanup localStorage if done
+                                            if (analyzingSource.status === 'completed' || analyzingSource.status === 'failed') {
+                                                if (typeof window !== 'undefined') {
+                                                    localStorage.removeItem(`processing_limit_${analyzingSource.source_id}`);
+                                                }
+                                            }
 
                                             return (
                                                 <div className="space-y-3">
@@ -887,8 +909,8 @@ export default function ProcessV2Page() {
                                                             }}
                                                             disabled={isStartingAnalysis}
                                                             className={`w-full px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm flex items-center justify-center gap-2 ${isStartingAnalysis
-                                                                    ? 'bg-blue-500 cursor-not-allowed'
-                                                                    : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md'
+                                                                ? 'bg-blue-500 cursor-not-allowed'
+                                                                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md'
                                                                 } text-white`}
                                                         >
                                                             {isStartingAnalysis ? (
@@ -917,6 +939,12 @@ export default function ProcessV2Page() {
                                                                             setIsStartingAnalysis(true);
                                                                             try {
                                                                                 console.log('[ProcessV2] 🚀 Starting partial analysis:', readySource.source_id, creditInfo.userCredits);
+
+                                                                                // Store partial limit for UI display
+                                                                                if (typeof window !== 'undefined') {
+                                                                                    localStorage.setItem(`processing_limit_${readySource.source_id}`, creditInfo.userCredits.toString());
+                                                                                }
+
                                                                                 // Partial analysis - pass maxChunks = userCredits
                                                                                 await startAnalysis(readySource.source_id, creditInfo.totalChunks, creditInfo.userCredits);
                                                                                 console.log('[ProcessV2] ✅ Partial analysis started successfully');
