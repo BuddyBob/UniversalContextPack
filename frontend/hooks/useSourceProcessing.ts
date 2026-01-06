@@ -76,14 +76,14 @@ export function useSourceProcessing() {
     /**
      * Start analysis and show confirmation modal
      */
-    const startAnalysis = useCallback(async (sourceId: string, totalChunks: number) => {
+    const startAnalysis = useCallback(async (sourceId: string, totalChunks: number, maxChunks?: number) => {
         try {
             const response = await makeAuthenticatedRequest(
                 `${API_BASE_URL}/api/v2/sources/${sourceId}/start-analysis`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
+                    body: JSON.stringify({ max_chunks: maxChunks }),
                 }
             );
 

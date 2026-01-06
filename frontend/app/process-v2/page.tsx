@@ -523,7 +523,7 @@ export default function ProcessV2Page() {
 
         // Close any open modals
         closeModal();
-        
+
         // Navigate away after ensuring cancel was processed
         router.push('/packs');
     };
@@ -773,11 +773,10 @@ export default function ProcessV2Page() {
                                         <button
                                             onClick={handleCancelProcessing}
                                             disabled={isCancelling}
-                                            className={`text-xs px-3 py-1.5 border rounded transition-all duration-200 flex items-center gap-1.5 ${
-                                                isCancelling 
-                                                    ? 'text-gray-500 border-gray-700 cursor-not-allowed' 
+                                            className={`text-xs px-3 py-1.5 border rounded transition-all duration-200 flex items-center gap-1.5 ${isCancelling
+                                                    ? 'text-gray-500 border-gray-700 cursor-not-allowed'
                                                     : 'text-gray-400 hover:text-white border-gray-600 hover:bg-gray-700/50'
-                                            }`}
+                                                }`}
                                         >
                                             {isCancelling ? (
                                                 <>
@@ -875,9 +874,9 @@ export default function ProcessV2Page() {
                                                                 setIsStartingAnalysis(true);
                                                                 try {
                                                                     console.log('[ProcessV2] 🚀 Starting analysis for source:', readySource.source_id);
+                                                                    // Full analysis
                                                                     await startAnalysis(readySource.source_id, creditInfo.totalChunks);
                                                                     console.log('[ProcessV2] ✅ Analysis started successfully, polling...');
-                                                                    // Force immediate refresh to show analyzing state
                                                                     await pollPackDetails();
                                                                 } catch (error) {
                                                                     console.error('[ProcessV2] ❌ Failed to start analysis:', error);
@@ -887,11 +886,10 @@ export default function ProcessV2Page() {
                                                                 }
                                                             }}
                                                             disabled={isStartingAnalysis}
-                                                            className={`w-full px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm flex items-center justify-center gap-2 ${
-                                                                isStartingAnalysis 
-                                                                    ? 'bg-blue-500 cursor-not-allowed' 
+                                                            className={`w-full px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm flex items-center justify-center gap-2 ${isStartingAnalysis
+                                                                    ? 'bg-blue-500 cursor-not-allowed'
                                                                     : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md'
-                                                            } text-white`}
+                                                                } text-white`}
                                                         >
                                                             {isStartingAnalysis ? (
                                                                 <>
@@ -903,16 +901,53 @@ export default function ProcessV2Page() {
                                                             )}
                                                         </button>
                                                     ) : creditInfo && !creditInfo.canProceed ? (
-                                                        <div className="space-y-3">
-                                                            <p className="text-sm text-red-400 text-center">
-                                                                Insufficient credits. You need {creditInfo.creditsRequired - creditInfo.userCredits} more.
-                                                            </p>
-                                                            <button
-                                                                onClick={() => router.push('/pricing')}
-                                                                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm hover:shadow-md"
-                                                            >
-                                                                Buy Credits
-                                                            </button>
+                                                        <div className="space-y-4">
+                                                            <div className="p-3 bg-red-900/20 border border-red-500/20 rounded-lg">
+                                                                <p className="text-sm text-red-400 text-center">
+                                                                    Insufficient credits for full analysis. You need {creditInfo.creditsRequired - creditInfo.userCredits} more.
+                                                                </p>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 gap-3">
+                                                                {/* Option 1: Partial Processing (if they have ANY credits) */}
+                                                                {creditInfo.userCredits > 0 && (
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (isStartingAnalysis) return;
+                                                                            setIsStartingAnalysis(true);
+                                                                            try {
+                                                                                console.log('[ProcessV2] 🚀 Starting partial analysis:', readySource.source_id, creditInfo.userCredits);
+                                                                                // Partial analysis - pass maxChunks = userCredits
+                                                                                await startAnalysis(readySource.source_id, creditInfo.totalChunks, creditInfo.userCredits);
+                                                                                console.log('[ProcessV2] ✅ Partial analysis started successfully');
+                                                                                await pollPackDetails();
+                                                                            } catch (error) {
+                                                                                console.error('[ProcessV2] ❌ Failed to start partial analysis:', error);
+                                                                                alert('Failed to start analysis. Please try again.');
+                                                                            } finally {
+                                                                                setIsStartingAnalysis(false);
+                                                                            }
+                                                                        }}
+                                                                        disabled={isStartingAnalysis}
+                                                                        className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white px-4 py-3 rounded font-medium transition-all duration-200 flex items-center justify-center gap-2"
+                                                                    >
+                                                                        {isStartingAnalysis ? (
+                                                                            <Loader className="w-4 h-4 animate-spin" />
+                                                                        ) : (
+                                                                            <FileText className="w-4 h-4 text-gray-400" />
+                                                                        )}
+                                                                        Process {creditInfo.userCredits} chunks (use balance)
+                                                                    </button>
+                                                                )}
+
+                                                                {/* Option 2: Buy More */}
+                                                                <button
+                                                                    onClick={() => router.push('/pricing')}
+                                                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+                                                                >
+                                                                    Buy Credits
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     ) : (
                                                         <div className="w-full bg-gray-700 text-gray-400 px-4 py-3 rounded font-medium text-center">
