@@ -571,6 +571,38 @@ async def get_user_payment_status(user_id: str) -> dict:
         return {"plan": "free", "chunks_used": 0, "chunks_allowed": get_new_user_credits(), "can_process": True}
 
 
+async def ensure_user_profile_exists(user_id: str, email: str) -> str:
+    """
+    Ensure user profile exists in database (non-blocking).
+    Returns r2_directory path.
+    This is called asynchronously after auth to avoid blocking critical paths.
+    """
+    if not supabase:
+        return f"user_{user_id}"
+    
+    try:
+        # Quick check if profile exists
+        result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": user_id}).execute()
+        
+        if result.data:
+            return result.data.get("r2_user_directory", f"user_{user_id}")
+        
+        # Profile doesn't exist, create it
+        r2_directory = f"user_{user_id}"
+        result = supabase.rpc("create_user_profile_for_backend", {
+            "user_uuid": user_id,
+            "user_email": email,
+            "r2_dir": r2_directory
+        }).execute()
+        
+        if result.data:
+            return result.data.get("r2_user_directory", r2_directory)
+        
+        return r2_directory
+    except Exception as e:
+        print(f"[ensure_user_profile_exists] Error: {e}")
+        return f"user_{user_id}"
+
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
     """Validate JWT token and return authenticated user"""
@@ -611,30 +643,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         if not email:
             email = f"user_{user_id}@example.com"
         
-        # Get or create user profile in Supabase
-        if supabase:
-            try:
-                # Try to get user profile using backend function
-                result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": user_id}).execute()
-                if result.data:
-                    user_profile = result.data
-                    r2_directory = user_profile["r2_user_directory"]
-                else:
-                    # Profile doesn't exist, create it
-                    r2_directory = f"user_{user_id}"
-                    result = supabase.rpc("create_user_profile_for_backend", {
-                        "user_uuid": user_id,
-                        "user_email": email,
-                        "r2_dir": r2_directory
-                    }).execute()
-                    user_profile = result.data
-            except Exception as e:
-                print(f"Error creating user profile: {e}")
-                r2_directory = f"user_{user_id}"
-        else:
-            # Legacy mode: use user_id as directory
-            r2_directory = f"user_{user_id}"
+        # OPTIMIZED: Use default r2_directory without blocking database call
+        # Profile will be created asynchronously on first use if needed
+        r2_directory = f"user_{user_id}"
         
+        # Return immediately without blocking on profile creation
         return AuthenticatedUser(user_id, email, r2_directory)
         
     except jwt.ExpiredSignatureError as e:
@@ -2479,6 +2492,26 @@ async def build_tree_from_analysis(
     
     # Process chunks in batches
     for batch_start in range(0, total_chunks, BATCH_SIZE):
+        # CHECK FOR CANCELLATION before processing each batch
+        if source_id in cancelled_jobs:
+            print(f"\n🚫 [TREE] Cancellation detected - stopping tree building for source {source_id}")
+            try:
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user_id,
+                    "target_source_id": source_id,
+                    "status_param": "cancelled",
+                    "progress_param": 0,
+                    "total_chunks_param": total_chunks,
+                    "error_message_param": "Tree building cancelled by user"
+                }).execute()
+                print(f"✅ Source {source_id} marked as cancelled")
+            except Exception as e:
+                print(f"❌ Error updating cancelled status: {e}")
+            
+            # Remove from cancelled jobs set
+            cancelled_jobs.discard(source_id)
+            return  # Exit tree building immediately
+        
         batch_end = min(batch_start + BATCH_SIZE, total_chunks)
         batch = chunk_analyses[batch_start:batch_end]
         batch_num = (batch_start // BATCH_SIZE) + 1
@@ -3756,6 +3789,10 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
     try:
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Ensure user profile exists (non-blocking for subsequent requests)
+        # This runs in background while we prepare pack creation
+        asyncio.create_task(ensure_user_profile_exists(user.user_id, user.email))
         
         pack_id = str(uuid.uuid4())
         custom_prompt = request.custom_system_prompt.strip() if request.custom_system_prompt else None

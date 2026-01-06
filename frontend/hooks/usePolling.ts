@@ -27,9 +27,9 @@ export function usePolling({ enabled, interval = 2000, onPoll }: UsePollingOptio
             const timeSinceLastPoll = now - lastPollStartRef.current;
 
             if (isPollingRef.current) {
-                // If previous poll has been running for more than 10 seconds, force-kill it
-                if (timeSinceLastPoll > 10000) {
-                    console.warn(`[usePolling] ⚠️ Poll has been running for ${timeSinceLastPoll}ms, force-killing and restarting`);
+                // If previous poll has been running for more than 20 seconds, force-reset
+                if (timeSinceLastPoll > 20000) {
+                    console.warn(`[usePolling] ⚠️ Poll stuck for ${timeSinceLastPoll}ms, force-resetting`);
                     isPollingRef.current = false;
                 } else {
                     console.log('[usePolling] Skipping poll - previous poll still running');
@@ -40,11 +40,11 @@ export function usePolling({ enabled, interval = 2000, onPoll }: UsePollingOptio
             isPollingRef.current = true;
             lastPollStartRef.current = now;
 
-            // Safety timer: Force reset after 60 seconds even if request hangs forever
+            // Safety timer: Force reset after 30 seconds
             const safetyTimer = setTimeout(() => {
-                console.error('[usePolling] 🚨 Safety timeout - forcibly resetting poll lock after 60s');
+                console.error('[usePolling] 🚨 Safety timeout - force-resetting poll lock after 30s');
                 isPollingRef.current = false;
-            }, 60000);
+            }, 30000);
 
             try {
                 await onPoll();

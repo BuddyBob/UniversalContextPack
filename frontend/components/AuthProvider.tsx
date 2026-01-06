@@ -398,10 +398,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Set up timeout if not already provided
-    // Skip timeout for pack polling - let browser natural timeout handle it
-    const isPackPolling = url.includes('/api/v2/packs/') && !url.includes('POST')
-
-    if (!options.signal && !isPackPolling) {
+    if (!options.signal && !options.infiniteTimeout) {
       const controller = new AbortController()
 
       // Use different timeouts based on the endpoint
@@ -419,9 +416,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         timeoutMs = 10000 // 10 seconds for quick profile endpoint
       } else if (url.includes('/api/health')) {
         timeoutMs = 20000 // 20 seconds for health checks
+      } else if (url.includes('/api/v2/packs/') && !url.includes('POST')) {
+        timeoutMs = 90000 // 90 seconds for pack detail endpoints - allow time for tree building
+        console.log(`[Auth] \u23f1\ufe0f Setting 90s timeout for pack detail request`);
+      } else if (url.includes('/api/v2/packs') && !url.includes('POST') && !url.includes('/')) {
+        timeoutMs = 15000 // 15 seconds for pack list endpoint
+        console.log(`[Auth] \u23f1\ufe0f Setting 15s timeout for pack list request`);
       }
 
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+      const timeoutId = setTimeout(() => {
+        console.warn(`[Auth] \u23f0 Request timeout (${timeoutMs}ms) - aborting:`, url);
+        controller.abort();
+      }, timeoutMs)
       options.signal = controller.signal
 
       // Store timeout ID for cleanup
@@ -499,7 +505,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 : '30 seconds'
 
         console.warn(`${timeoutType} timed out after ${timeoutDuration}`)
-        throw new Error(`${timeoutType} timeout (${timeoutDuration})`)
+        // Re-throw the AbortError to preserve error type for proper handling
+        throw error
       }
       console.error('Request failed:', error)
       throw error

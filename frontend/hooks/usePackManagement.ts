@@ -79,7 +79,7 @@ export function usePackManagement() {
      */
     const createPack = useCallback(async (packName: string, description?: string) => {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000); // Reduced from 15s to 5s
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 seconds - enough for auth + DB roundtrip
 
         try {
             console.log('[usePackManagement] Creating pack:', packName);

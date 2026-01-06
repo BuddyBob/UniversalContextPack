@@ -58,6 +58,8 @@ export default function ProcessV2Page() {
     const [chatUploadError, setChatUploadError] = useState<string | null>(null);
     const [uploadNotification, setUploadNotification] = useState<string | null>(null);
     const [isLoadingPack, setIsLoadingPack] = useState(false);
+    const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
 
     // Track if we've already attempted to select pack from URL
     const hasAttemptedPackSelection = useRef(false);
@@ -138,8 +140,9 @@ export default function ProcessV2Page() {
     );
     const modalIsOpen = modalState.type !== 'hidden';
     // Only poll if pack exists AND has sources that are not in a terminal state
+    // FIXED: Keep polling active when ready_for_analysis so status changes are tracked after "Start Analysis"
     const shouldPoll = !!selectedPack && packSources.some(s =>
-        !['completed', 'failed', 'cancelled', 'ready_for_analysis'].includes(s.status)
+        !['completed', 'failed', 'cancelled'].includes(s.status)
     );
     const pollInterval = hasActiveProcessing || modalIsOpen ? 2000 : 12000;
 
@@ -204,13 +207,19 @@ export default function ProcessV2Page() {
                 const totalTime = Date.now() - startTime;
                 console.log(`[ProcessV2] ✅ [${pollId}] Poll completed in ${totalTime}ms`);
             } else {
-                console.error(`[ProcessV2] ❌ [${pollId}] Poll failed with status:`, response.status);
+                const errorText = await response.text().catch(() => 'Unable to read response');
+                console.error(`[ProcessV2] ❌ [${pollId}] Poll failed with status:`, response.status, errorText);
             }
         } catch (error: any) {
             const errorTime = Date.now() - startTime;
-            console.error(`[ProcessV2] ❌ [${pollId}] Polling error after ${errorTime}ms:`, error);
-            console.error(`[ProcessV2] ❌ [${pollId}] Error name:`, error.name);
-            console.error(`[ProcessV2] ❌ [${pollId}] Error message:`, error.message);
+            // Handle AbortError specially (timeout)
+            if (error.name === 'AbortError') {
+                console.warn(`[ProcessV2] ⏱️ [${pollId}] Poll timed out after ${errorTime}ms`);
+            } else {
+                console.error(`[ProcessV2] ❌ [${pollId}] Polling error after ${errorTime}ms:`, error);
+                console.error(`[ProcessV2] ❌ [${pollId}] Error name:`, error.name);
+                console.error(`[ProcessV2] ❌ [${pollId}] Error message:`, error.message);
+            }
             // Don't throw - let polling continue even if one request fails
         }
     }, [selectedPack, makeAuthenticatedRequest, setPackSources, updateFromSourceStatus]);
@@ -247,7 +256,17 @@ export default function ProcessV2Page() {
             }
         } catch (error) {
             console.error('Create pack failed:', error);
-            alert('Sign in is required before creating a pack. Please log in and try again.');
+            if (error instanceof Error) {
+                if (error.message.includes('timeout')) {
+                    alert('Pack creation is taking longer than expected. Please check your internet connection and try again.');
+                } else if (error.message.includes('Authentication')) {
+                    alert('Sign in is required before creating a pack. Please log in and try again.');
+                } else {
+                    alert(`Failed to create pack: ${error.message}`);
+                }
+            } else {
+                alert('Failed to create pack. Please try again.');
+            }
         } finally {
             setIsCreatingPack(false);
         }
@@ -478,22 +497,34 @@ export default function ProcessV2Page() {
         );
 
         if (processingSource) {
+            setIsCancelling(true);
             try {
-                console.log(`[ProcessV2] Cancelling source: ${processingSource.source_id}`);
+                console.log(`[ProcessV2] 🛑 Cancelling source: ${processingSource.source_id}`);
                 const response = await makeAuthenticatedRequest(
                     `${API_BASE_URL}/api/v2/sources/${processingSource.source_id}/cancel`,
                     { method: 'POST' }
                 );
 
                 if (response.ok) {
-                    console.log('[ProcessV2] Cancellation requested successfully');
+                    console.log('[ProcessV2] ✅ Cancellation requested - waiting for backend to stop...');
+                    // Wait for the backend to finish current chunk and update status
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Force a final poll to get updated status
+                    await pollPackDetails();
+                } else {
+                    console.error('[ProcessV2] ❌ Cancel request failed:', response.status);
                 }
             } catch (error) {
-                console.error('[ProcessV2] Error cancelling process:', error);
+                console.error('[ProcessV2] ❌ Error cancelling process:', error);
+            } finally {
+                setIsCancelling(false);
             }
         }
 
-        // Navigate away
+        // Close any open modals
+        closeModal();
+        
+        // Navigate away after ensuring cancel was processed
         router.push('/packs');
     };
 
@@ -741,9 +772,21 @@ export default function ProcessV2Page() {
                                         </div>
                                         <button
                                             onClick={handleCancelProcessing}
-                                            className="text-xs text-gray-400 hover:text-white px-3 py-1.5 border border-gray-600 rounded hover:bg-gray-700/50 transition-all duration-200"
+                                            disabled={isCancelling}
+                                            className={`text-xs px-3 py-1.5 border rounded transition-all duration-200 flex items-center gap-1.5 ${
+                                                isCancelling 
+                                                    ? 'text-gray-500 border-gray-700 cursor-not-allowed' 
+                                                    : 'text-gray-400 hover:text-white border-gray-600 hover:bg-gray-700/50'
+                                            }`}
                                         >
-                                            Cancel
+                                            {isCancelling ? (
+                                                <>
+                                                    <Loader className="w-3 h-3 animate-spin" />
+                                                    Cancelling...
+                                                </>
+                                            ) : (
+                                                'Cancel'
+                                            )}
                                         </button>
                                     </div>
 
@@ -817,8 +860,8 @@ export default function ProcessV2Page() {
                                                                 <span className="text-sm text-gray-400">Est. time</span>
                                                                 <span className="text-sm font-medium text-gray-300">
                                                                     {creditInfo.totalChunks <= 5 ? '2-3 min' :
-                                                                        creditInfo.totalChunks <= 10 ? '5 min' :
-                                                                            creditInfo.totalChunks <= 20 ? '10-15 min' : '10-40 min'}
+                                                                        creditInfo.totalChunks <= 10 ? '3-5 min' :
+                                                                            creditInfo.totalChunks <= 20 ? '5-15 min' : '15-40 min'}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -828,17 +871,36 @@ export default function ProcessV2Page() {
                                                     {creditInfo?.canProceed ? (
                                                         <button
                                                             onClick={async () => {
+                                                                if (isStartingAnalysis) return;
+                                                                setIsStartingAnalysis(true);
                                                                 try {
+                                                                    console.log('[ProcessV2] 🚀 Starting analysis for source:', readySource.source_id);
                                                                     await startAnalysis(readySource.source_id, creditInfo.totalChunks);
+                                                                    console.log('[ProcessV2] ✅ Analysis started successfully, polling...');
                                                                     // Force immediate refresh to show analyzing state
-                                                                    await loadPackDetails(selectedPack.pack_id);
+                                                                    await pollPackDetails();
                                                                 } catch (error) {
-                                                                    console.error('Failed to start analysis:', error);
+                                                                    console.error('[ProcessV2] ❌ Failed to start analysis:', error);
+                                                                    alert('Failed to start analysis. Please try again.');
+                                                                } finally {
+                                                                    setIsStartingAnalysis(false);
                                                                 }
                                                             }}
-                                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm hover:shadow-md"
+                                                            disabled={isStartingAnalysis}
+                                                            className={`w-full px-4 py-3 rounded font-medium transition-all duration-200 shadow-sm flex items-center justify-center gap-2 ${
+                                                                isStartingAnalysis 
+                                                                    ? 'bg-blue-500 cursor-not-allowed' 
+                                                                    : 'bg-blue-600 hover:bg-blue-700 hover:shadow-md'
+                                                            } text-white`}
                                                         >
-                                                            Start Analysis
+                                                            {isStartingAnalysis ? (
+                                                                <>
+                                                                    <Loader className="w-4 h-4 animate-spin" />
+                                                                    Starting...
+                                                                </>
+                                                            ) : (
+                                                                'Start Analysis'
+                                                            )}
                                                         </button>
                                                     ) : creditInfo && !creditInfo.canProceed ? (
                                                         <div className="space-y-3">
