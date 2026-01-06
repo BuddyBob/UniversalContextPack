@@ -60,6 +60,8 @@ export default function ProcessV2Page() {
     const [isLoadingPack, setIsLoadingPack] = useState(false);
     const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
+    const [isDownloadingPack, setIsDownloadingPack] = useState(false);
+    const [isDownloadingTree, setIsDownloadingTree] = useState(false);
 
     // Track if we've already attempted to select pack from URL
     const hasAttemptedPackSelection = useRef(false);
@@ -457,9 +459,11 @@ export default function ProcessV2Page() {
     };
 
     // Handle pack download
+    // Handle pack download
     const handleDownloadPack = async () => {
-        if (!selectedPack) return;
+        if (!selectedPack || isDownloadingPack) return;
 
+        setIsDownloadingPack(true);
         try {
             console.log('[Download] Requesting pack download:', selectedPack.pack_id);
             const response = await makeAuthenticatedRequest(
@@ -486,6 +490,8 @@ export default function ProcessV2Page() {
             }
         } catch (error) {
             console.error('[Download] Pack download error:', error);
+        } finally {
+            setIsDownloadingPack(false);
         }
     };
 
@@ -766,7 +772,7 @@ export default function ProcessV2Page() {
                                                     if (activeSource?.status === 'extracting') {
                                                         return 'Extracting and chunking content for semantic analysis.';
                                                     }
-                                                    return 'Processing and analyzing your content. Check email for updates.';
+                                                    return 'Processing and analyzing your content. Reload if stalled.';
                                                 })()}
                                             </p>
                                         </div>
@@ -1172,10 +1178,20 @@ export default function ProcessV2Page() {
 
                                     <button
                                         onClick={handleDownloadPack}
-                                        className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                                        disabled={isDownloadingPack}
+                                        className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:bg-gray-800 disabled:cursor-not-allowed"
                                     >
-                                        <Download className="h-4 w-4" />
-                                        <span className="text-sm">Download Pack</span>
+                                        {isDownloadingPack ? (
+                                            <>
+                                                <Loader className="h-4 w-4 animate-spin text-blue-400" />
+                                                <span className="text-gray-300">Preparing Pack...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download className="h-4 w-4" />
+                                                <span className="text-sm">Download Pack</span>
+                                            </>
+                                        )}
                                     </button>
                                 </div>
 
@@ -1193,7 +1209,8 @@ export default function ProcessV2Page() {
 
                                     <button
                                         onClick={async () => {
-                                            if (!selectedPack) return;
+                                            if (!selectedPack || isDownloadingTree) return;
+                                            setIsDownloadingTree(true);
                                             try {
                                                 console.log('[Download] Requesting tree JSON:', selectedPack.pack_id);
                                                 const response = await makeAuthenticatedRequest(
@@ -1215,15 +1232,31 @@ export default function ProcessV2Page() {
                                                 } else {
                                                     const errorText = await response.text();
                                                     console.error('[Download] Tree download failed:', response.status, errorText);
+                                                    // Only alert on 404/500, not on auth errors (handled by hook)
+                                                    if (response.status === 404) {
+                                                        alert('No memory tree found for this pack yet.');
+                                                    }
                                                 }
                                             } catch (error) {
                                                 console.error('[Download] Tree download error:', error);
+                                            } finally {
+                                                setIsDownloadingTree(false);
                                             }
                                         }}
-                                        className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 mb-2"
+                                        disabled={isDownloadingTree}
+                                        className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 mb-2 disabled:bg-gray-800 disabled:cursor-not-allowed"
                                     >
-                                        <Download className="h-4 w-4" />
-                                        <span className="text-sm">Download Tree JSON</span>
+                                        {isDownloadingTree ? (
+                                            <>
+                                                <Loader className="h-4 w-4 animate-spin text-emerald-400" />
+                                                <span className="text-gray-300">Fetching Tree...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download className="h-4 w-4" />
+                                                <span className="text-sm">Download Tree JSON</span>
+                                            </>
+                                        )}
                                     </button>
 
                                     {/* View Memory Tree Button - Shows progress when building */}
