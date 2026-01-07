@@ -3200,58 +3200,6 @@ async def download_complete_ucp(job_id: str, user: AuthenticatedUser = Depends(g
     except Exception as e:
         raise HTTPException(status_code=404, detail="File not found")
 
-@app.get("/api/download/{job_id}/ultra-compact")
-async def download_ultra_compact_ucp(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download ultra-compact UCP file (~50k tokens). Works with both legacy jobs and v2 packs."""
-    try:
-        print(f"Attempting to download ultra-compact UCP for job/pack: {job_id}")
-        
-        # Try direct path first (legacy jobs)
-        content = download_from_r2_with_fallback(
-            f"{user.r2_directory}/{job_id}/ultra_compact_ucp.txt",
-            job_id,
-            "ultra_compact_ucp.txt",
-            silent_404=True
-        )
-        
-        # If not found, check if this is a v2 pack with sources
-        if not content and supabase:
-            try:
-                result = supabase.rpc("get_pack_details_v2", {
-                    "user_uuid": user.user_id,
-                    "target_pack_id": job_id
-                }).execute()
-                
-                if result.data:
-                    sources = result.data.get("sources", [])
-                    for source in sources:
-                        source_id = source.get("source_id")
-                        if source_id:
-                            content = download_from_r2_with_fallback(
-                                f"{user.r2_directory}/{source_id}/ultra_compact_ucp.txt",
-                                source_id,
-                                "ultra_compact_ucp.txt",
-                                silent_404=True
-                            )
-                            if content:
-                                print(f"✅ Found ultra_compact_ucp.txt in source {source_id}")
-                                break
-            except Exception as e:
-                print(f"Error checking pack sources: {e}")
-        
-        if content is None:
-            raise HTTPException(status_code=404, detail="Ultra-compact UCP not found")
-        
-        return StreamingResponse(
-            io.BytesIO(content.encode('utf-8')),
-            media_type='text/plain',
-            headers={"Content-Disposition": f"attachment; filename=ultra_compact_ucp_{job_id}.txt"}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Ultra-compact UCP not found: {str(e)}")
-
 @app.get("/api/download/{job_id}/standard")
 async def download_standard_ucp(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
     """Download standard UCP file (~100k tokens). Works with both legacy jobs and v2 packs.""" 
@@ -3303,82 +3251,6 @@ async def download_standard_ucp(job_id: str, user: AuthenticatedUser = Depends(g
         raise
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Standard UCP not found: {str(e)}")
-
-@app.get("/api/download/{job_id}/chunked")
-async def download_chunked_ucp_index(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download chunked UCP index with instructions."""
-    try:
-        content = download_from_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_index.txt")
-        if content is None:
-            raise HTTPException(status_code=404, detail="Chunked UCP index not found")
-        
-        return StreamingResponse(
-            io.BytesIO(content.encode('utf-8')),
-            media_type='text/plain',
-            headers={"Content-Disposition": f"attachment; filename=chunked_ucp_index_{job_id}.txt"}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=404, detail="Chunked UCP index not found")
-
-@app.get("/api/download/{job_id}/chunked/{part_number}")
-async def download_chunked_ucp_part(job_id: str, part_number: int, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download specific part of chunked UCP."""
-    try:
-        content = download_from_r2(f"{user.r2_directory}/{job_id}/chunked_ucp_part_{part_number}.txt")
-        if content is None:
-            raise HTTPException(status_code=404, detail=f"Chunked UCP part {part_number} not found")
-        
-        return StreamingResponse(
-            io.BytesIO(content.encode('utf-8')),
-            media_type='text/plain',
-            headers={"Content-Disposition": f"attachment; filename=chunked_ucp_part_{part_number}_{job_id}.txt"}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Chunked UCP part {part_number} not found")
-
-@app.get("/api/download/{job_id}/extracted")
-async def download_extracted_text(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download extracted text file from R2."""
-    try:
-        content = download_from_r2(f"{user.r2_directory}/{job_id}/extracted.txt")
-        if content is None:
-            raise HTTPException(status_code=404, detail="File not found")
-        
-        return StreamingResponse(
-            io.BytesIO(content.encode('utf-8')),
-            media_type='text/plain',
-            headers={"Content-Disposition": f"attachment; filename=extracted_{job_id}.txt"}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=404, detail="File not found")
-
-@app.get("/api/download/{job_id}/chunk/{chunk_index}")
-async def download_chunk_file(job_id: str, chunk_index: int, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download individual chunk file from R2."""
-    try:
-        # Chunks are stored as chunk_001.txt, chunk_002.txt, etc. (1-indexed)
-        # chunk_index parameter is already 1-based from frontend
-        chunk_filename = f"chunk_{chunk_index:03d}.txt"
-        chunk_key = f"{user.r2_directory}/{job_id}/{chunk_filename}"
-        
-        print(f"Attempting to download chunk: {chunk_key}")
-        
-        content = download_from_r2(chunk_key)
-        if content is None:
-            print(f"Chunk download failed - content is None for: {chunk_key}")
-            raise HTTPException(status_code=404, detail=f"Chunk file not found: {chunk_filename}")
-        
-        print(f"Successfully downloaded chunk {chunk_filename} ({len(content)} chars)")
-        
-        return StreamingResponse(
-            io.BytesIO(content.encode('utf-8')),
-            media_type='text/plain',
-            headers={"Content-Disposition": f"attachment; filename={chunk_filename}"}
-        )
-    except Exception as e:
-        print(f"Error downloading chunk {chunk_index} for job {job_id}: {e}")
-        print(f"Attempted key: {user.r2_directory}/{job_id}/chunk_{chunk_index:03d}.txt")
-        raise HTTPException(status_code=404, detail=f"Chunk file not found: {str(e)}")
 
 @app.get("/api/download/{job_id}/pack")
 async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -3495,93 +3367,6 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
     except Exception as e:
         print(f"Error creating pack for job {job_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create pack: {str(e)}")
-
-@app.get("/api/download/{job_id}/chunks")
-async def download_chunks_only(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Download chunks as ZIP file containing only the chunked text files."""
-    try:
-        import zipfile
-        import tempfile
-        
-        print(f"Download chunks request for job {job_id} by user {user.user_id} (directory: {user.r2_directory})")
-        
-        # Create a temporary file for the ZIP
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
-            with zipfile.ZipFile(temp_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                
-                # Add chunk metadata
-                metadata_path = f"{user.r2_directory}/{job_id}/chunks_metadata.json"
-                print(f"Looking for chunk metadata at: {metadata_path}")
-                chunk_metadata_content = download_from_r2_with_fallback(metadata_path, job_id, "chunks_metadata.json")
-                
-                # Get processed chunks count from summary (like pack download does)
-                summary_content = download_from_r2_with_fallback(f"{user.r2_directory}/{job_id}/summary.json", job_id, "summary.json")
-                processed_chunks = 0
-                if summary_content:
-                    try:
-                        summary = json.loads(summary_content)
-                        processed_chunks = summary.get("processed_chunks", 0)
-                        print(f"Found summary with {processed_chunks} processed chunks")
-                    except (json.JSONDecodeError, KeyError):
-                        print("Failed to parse summary.json, falling back to all chunks")
-                
-                if chunk_metadata_content:
-                    zipf.writestr("chunks_metadata.json", chunk_metadata_content)
-                    chunk_metadata = json.loads(chunk_metadata_content)
-                    total_chunks = chunk_metadata.get("total_chunks", 0)
-                    
-                    # Use processed_chunks if available, otherwise fall back to total_chunks
-                    chunks_to_download = processed_chunks if processed_chunks > 0 else total_chunks
-                    print(f"Found {total_chunks} total chunks, will download {chunks_to_download} processed chunks")
-                    
-                    # Add only the processed chunk files
-                    chunks_added = 0
-                    for i in range(1, chunks_to_download + 1):
-                        chunk_filename = f"chunk_{i:03d}.txt"
-                        chunk_path = f"{user.r2_directory}/{job_id}/{chunk_filename}"
-                        print(f"Looking for chunk {i} at: {chunk_path}")
-                        chunk_content = download_from_r2_with_fallback(chunk_path, job_id, chunk_filename)
-                        if chunk_content:
-                            zipf.writestr(chunk_filename, chunk_content)
-                            chunks_added += 1
-                            print(f"✅ Added {chunk_filename} to ZIP")
-                        else:
-                            print(f"❌ Chunk {i} not found")
-                    
-                    print(f"Successfully added {chunks_added}/{chunks_to_download} processed chunks to ZIP")
-                    
-                    if chunks_added == 0:
-                        raise HTTPException(
-                            status_code=404, 
-                            detail=f"No chunk files found for job {job_id}. Expected path: {user.r2_directory}/{job_id}/chunk_XXX.txt"
-                        )
-                else:
-                    print(f"❌ Chunk metadata not found at: {metadata_path}")
-                    # Let's also check what the user path is vs the screenshot path
-                    screenshot_path = f"user_08192f18-0b1c-4d00-9b90-208c64dd972e/{job_id}/chunks_metadata.json"
-                    print(f"Screenshot shows path like: {screenshot_path}")
-                    print(f"User directory is: {user.r2_directory}")
-                    raise HTTPException(
-                        status_code=404, 
-                        detail=f"Chunks metadata not found for job {job_id}. Expected at: {metadata_path}"
-                    )
-        
-        # Read the ZIP file and return it
-        with open(temp_zip.name, 'rb') as f:
-            zip_data = f.read()
-        
-        # Clean up temp file
-        os.unlink(temp_zip.name)
-        
-        return StreamingResponse(
-            io.BytesIO(zip_data),
-            media_type='application/zip',
-            headers={"Content-Disposition": f"attachment; filename=ucp_chunks_{job_id}.zip"}
-        )
-        
-    except Exception as e:
-        print(f"Error creating chunks pack for job {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create chunks pack: {str(e)}")
 
 @app.get("/api/download/{job_id}/{filename}")
 async def download_result_file(job_id: str, filename: str, user: AuthenticatedUser = Depends(get_current_user)):
@@ -3908,12 +3693,50 @@ async def download_pack_tree_json(
 
 @app.get("/api/v2/packs/{pack_id}")
 async def get_pack_details_v2(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):
-    """Get pack details with all sources"""
+    """Get pack details with all sources (non-blocking + progress injection)"""
+    import asyncio
     try:
         if not supabase:
             raise HTTPException(status_code=404, detail="Database not configured")
         
+        # 1. Run main RPC in thread to avoid blocking loop
         # Use RPC function to get pack details (bypasses RLS)
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("get_pack_details_v2", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id
+            }).execute()
+        )
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        pack_data = result.data
+        if isinstance(pack_data, list) and len(pack_data) > 0:
+            pack_data = pack_data[0]
+            
+        # 2. The RPC already returns all source data including processed_chunks
+        # No need to fetch separately - the data is already there
+        
+        return pack_data
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting pack details: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get pack: {str(e)}")
+
+@app.get("/api/v2/packs/{pack_id}/download")
+async def download_pack_complete(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Download complete analyzed content for a v2 pack"""
+    # Reuse the existing download logic
+    return await download_complete_ucp(pack_id, user)
+
+@app.get("/api/v2/packs/{pack_id}/export-json")
+async def export_pack_json(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Export pack details and sources as JSON"""
+    try:
+        # Get pack details
         result = supabase.rpc("get_pack_details_v2", {
             "user_uuid": user.user_id,
             "target_pack_id": pack_id
@@ -3922,13 +3745,22 @@ async def get_pack_details_v2(pack_id: str, user: AuthenticatedUser = Depends(ge
         if not result.data:
             raise HTTPException(status_code=404, detail="Pack not found")
         
-        return result.data
-            
+        pack_data = result.data
+        if isinstance(pack_data, list) and len(pack_data) > 0:
+            pack_data = pack_data[0]
+        
+        # Return as JSON download
+        return StreamingResponse(
+            io.BytesIO(json.dumps(pack_data, indent=2).encode('utf-8')),
+            media_type='application/json',
+            headers={"Content-Disposition": f"attachment; filename=pack_{pack_id}.json"}
+        )
+        
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error getting pack details: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get pack: {str(e)}")
+        print(f"Error exporting pack JSON: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to export pack: {str(e)}")
 
 @app.patch("/api/v2/packs/{pack_id}")
 async def update_pack_v2(pack_id: str, request: Request, user: AuthenticatedUser = Depends(get_current_user)):

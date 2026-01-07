@@ -34,6 +34,7 @@ export default function PacksPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [creatingPack, setCreatingPack] = useState(false)
   const [newPackName, setNewPackName] = useState('')
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const freeCreditsPrompt = useFreeCreditsPrompt()
   const hasLoadedRef = useRef(false) // Track if we've already loaded packs
 
@@ -47,14 +48,6 @@ export default function PacksPage() {
     return `${tokens} tokens`
   }
 
-  // Check if download options should be enabled
-  const canDownloadCompact = (outputTokens: number | undefined): boolean => {
-    return !outputTokens || outputTokens >= 50000
-  }
-
-  const canDownloadStandard = (outputTokens: number | undefined): boolean => {
-    return !outputTokens || outputTokens >= 100000
-  }
 
   useEffect(() => {
     // Only load once when user becomes authenticated
@@ -114,7 +107,7 @@ export default function PacksPage() {
 
       // Add timeout to prevent hanging requests
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
 
       try {
         console.log('[Packs] Fetching from /api/v2/packs...')
@@ -153,13 +146,12 @@ export default function PacksPage() {
 
         // Sort by completedAt date, most recent first
         transformedPacks.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
-
         setPacks(transformedPacks)
         return // Success, exit early
+
       } catch (fetchError) {
         clearTimeout(timeoutId)
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          console.error('Request timed out after 30 seconds')
           throw new Error('Request timed out. Please try again.')
         }
         throw fetchError
@@ -168,55 +160,10 @@ export default function PacksPage() {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred'
       console.error('Failed to load packs from server:', errorMessage)
       setError(errorMessage)
-      // Fallback to /api/jobs endpoint
-      try {
-        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/jobs`)
-
-        if (response.ok) {
-          const jobs = await response.json()
-
-          if (Array.isArray(jobs)) {
-            const transformedPacks: UCPPack[] = jobs.map((job: any) => ({
-              ucpId: job.job_id,
-              id: job.job_id,
-              status: job.status,
-              total_chunks: job.stats?.total_chunks || 0,
-              total_input_tokens: job.stats?.total_input_tokens || 0,
-              total_output_tokens: job.stats?.total_output_tokens || 0,
-              total_cost: job.stats?.total_cost || 0,
-              completedAt: job.created_at,
-              savedAt: job.created_at
-            }))
-
-            // Sort by completedAt date, most recent first
-            transformedPacks.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
-
-            setPacks(transformedPacks)
-            return
-          }
-        }
-      } catch (jobsError) {
-        console.error('Failed to load from jobs endpoint:', jobsError)
-      }
-
-      // Final fallback to localStorage for backwards compatibility
-      try {
-        const storedPacks = localStorage.getItem('ucp_packs')
-        if (storedPacks) {
-          const parsedPacks = JSON.parse(storedPacks)
-          setPacks(parsedPacks)
-        } else {
-          setPacks([])
-        }
-      } catch (localError) {
-        console.error('Failed to load packs from localStorage:', localError)
-        setPacks([])
-      }
-
-      console.log('[Packs] All API endpoints failed, showing empty state')
       setPacks([]) // Ensure we show empty state even if everything fails
+
+
     } finally {
-      console.log('[Packs] Finished loading, setting loading=false')
       setLoading(false)
     }
   }
@@ -231,7 +178,7 @@ export default function PacksPage() {
       return
     }
 
-    router.push(`/process-v2?pack=${packId}`)
+    router.push(`/process-v3?pack=${packId}`)
   }
 
   const handleCreatePack = () => {
@@ -241,8 +188,36 @@ export default function PacksPage() {
       return
     }
 
-    // Navigate to process-v2, which handles pack creation
-    router.push('/process-v2')
+    // Show modal for pack name
+    setShowCreateModal(true)
+  }
+
+  const handleSubmitCreatePack = async () => {
+    if (!newPackName.trim()) return
+
+    setCreatingPack(true)
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pack_name: newPackName.trim() })
+      })
+
+      if (response.ok) {
+        const pack = await response.json()
+        setShowCreateModal(false)
+        setNewPackName('')
+        // Navigate to process-v3 with the new pack ID
+        router.push(`/process-v3?pack=${pack.pack_id}`)
+      } else {
+        alert('Failed to create pack. Please try again.')
+      }
+    } catch (error) {
+      console.error('[Packs] Error creating pack:', error)
+      alert('Failed to create pack. Please try again.')
+    } finally {
+      setCreatingPack(false)
+    }
   }
 
   const handleDeletePack = async (packId: string) => {
@@ -462,6 +437,64 @@ export default function PacksPage() {
           )}
         </div>
       </div>
+
+      {/* Create Pack Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-2">Create New Pack</h2>
+            <p className="text-gray-400 text-sm mb-6">Enter a name for your context pack</p>
+
+            <input
+              type="text"
+              value={newPackName}
+              onChange={(e) => setNewPackName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newPackName.trim()) {
+                  handleSubmitCreatePack();
+                }
+                if (e.key === 'Escape') {
+                  setShowCreateModal(false);
+                  setNewPackName('');
+                }
+              }}
+              placeholder="e.g., Product Research, Meeting Notes"
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition mb-6"
+              autoFocus
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleSubmitCreatePack}
+                disabled={creatingPack || !newPackName.trim()}
+                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+              >
+                {creatingPack ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Creating...
+                  </>
+                ) : (
+                  'Create Pack'
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setNewPackName('');
+                }}
+                disabled={creatingPack}
+                className="px-6 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 rounded-lg font-medium transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Free Credits Prompt */}
       <FreeCreditsPrompt
