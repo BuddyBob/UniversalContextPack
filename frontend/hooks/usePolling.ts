@@ -1,59 +1,50 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useInterval } from './useInterval';
+import { useVisibilityChange } from './useVisibilityChange';
 
 interface UsePollingOptions {
-    enabled: boolean;
+    enabled?: boolean;
     interval?: number;
-    onPoll: () => Promise<void>;
+    onPoll: () => Promise<void> | void;
 }
 
 /**
- * Efficient polling hook with 2-second default interval
- * Matches test suite's proven approach
- * No race condition checks - let polls queue naturally
+ * Robust polling hook that automatically follows best practices:
+ * 1. Stops when tab is hidden (using useVisibilityChange)
+ * 2. Uses clean interval management (via useInterval)
+ * 3. Prevents unnecessary re-renders
+ * 4. Performs initial poll when starting for immediate feedback
  */
-export function usePolling({ enabled, interval = 2000, onPoll }: UsePollingOptions) {
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
-    const savedCallback = useRef<() => Promise<void>>();
+export function usePolling({ enabled = true, interval = 2000, onPoll }: UsePollingOptions) {
+    const isPageVisible = useVisibilityChange();
+    const [effectiveInterval, setEffectiveInterval] = useState<number | null>(null);
+    const onPollRef = useRef(onPoll);
 
-    // Save latest callback
+    // Always keep the latest callback
     useEffect(() => {
-        savedCallback.current = onPoll;
+        onPollRef.current = onPoll;
     }, [onPoll]);
 
-    const stopPolling = useCallback(() => {
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-    }, []);
-
+    // Calculate effective interval based on visibility and enabled state
     useEffect(() => {
-        if (!enabled) {
-            stopPolling();
-            return;
+        const shouldPoll = enabled && isPageVisible;
+
+        if (shouldPoll) {
+            setEffectiveInterval(interval);
+
+            // Perform initial poll immediately when starting
+            onPollRef.current();
+        } else {
+            setEffectiveInterval(null);
         }
+    }, [enabled, isPageVisible, interval]); // onPoll NOT in deps - use ref instead
 
-        // Polling function that uses latest callback
-        const poll = async () => {
-            try {
-                if (savedCallback.current) {
-                    await savedCallback.current();
-                }
-            } catch (error) {
-                console.error('[usePolling] Poll error:', error);
-                // Continue polling - backend handles failures
-            }
-        };
+    // Use the robust interval hook
+    useInterval(() => {
+        onPollRef.current();
+    }, effectiveInterval);
 
-        // Initial poll
-        poll();
-
-        // Set up interval
-        intervalRef.current = setInterval(poll, interval);
-
-        // Cleanup
-        return () => stopPolling();
-    }, [enabled, interval, stopPolling]);
-
-    return { stopPolling };
+    return {
+        isPolling: effectiveInterval !== null
+    };
 }

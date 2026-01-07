@@ -67,6 +67,23 @@ export function ProcessProgress({
                             Content extraction complete. Begin analysis to process your data.
                         </p>
                     </div>
+                    <button
+                        onClick={onCancel}
+                        disabled={isCancelling}
+                        className={`text-xs px-3 py-1.5 border rounded transition-all duration-200 flex items-center gap-1.5 ${isCancelling
+                            ? 'text-gray-500 border-gray-700 cursor-not-allowed'
+                            : 'text-gray-400 hover:text-white border-gray-600 hover:bg-gray-700/50'
+                            }`}
+                    >
+                        {isCancelling ? (
+                            <>
+                                <Loader className="w-3 h-3 animate-spin" />
+                                Cancelling...
+                            </>
+                        ) : (
+                            'Cancel'
+                        )}
+                    </button>
                 </div>
 
                 {/* Stats Grid */}
@@ -144,6 +161,7 @@ export function ProcessProgress({
                             </button>
                         </>
                     )}
+
                 </div>
             </div>
         );
@@ -204,7 +222,7 @@ export function ProcessProgress({
                     {isLargeJob && (
                         <div className="bg-gray-800/50 border border-gray-700/50 rounded p-3">
                             <p className="text-xs text-gray-400 leading-relaxed">
-                                <strong className="text-gray-300">If progress stalled, refresh the page to update status. Or check email!</strong>
+                                <strong className="text-gray-300">Reload to see progress. Or check email when done.</strong>
                             </p>
                         </div>
                     )}
