@@ -200,7 +200,7 @@ Job Details:
 - Status: Successfully Completed
 
 Open your pack here:
-{os.getenv('FRONTEND_URL', 'https://www.context-pack.com')}/process-v2?pack={pack_id}
+{os.getenv('FRONTEND_URL', 'https://www.context-pack.com')}/process-v3?pack={pack_id}
 
 Thank you for using Universal Context Pack!
 

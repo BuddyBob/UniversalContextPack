@@ -387,7 +387,7 @@ export default function PacksPage() {
                       e.stopPropagation()
                       const packId = pack.ucpId || pack.id
                       if (packId) {
-                        router.push(`/process?pack_id=${packId}`)
+                        router.push(`/process-v3?pack_id=${packId}`)
 
                       }
                     }}
