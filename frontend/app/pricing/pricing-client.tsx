@@ -234,7 +234,7 @@ export default function PricingPageClient() {
               {/* CTA Buttons */}
               <div className="space-y-3">
                 <button
-                  onClick={() => router.push('/process')}
+                  onClick={() => router.push('/packs')}
                   className="w-full bg-white hover:bg-gray-100 text-black py-3 px-6 rounded-xl font-semibold transition-all duration-200 shadow-lg flex items-center justify-center"
                 >
                   Start Processing

@@ -709,10 +709,10 @@ export default function TreeViewerPage() {
                 <div className="text-center">
                     <p className="text-red-400 mb-4">{error || 'Failed to load tree data'}</p>
                     <button
-                        onClick={() => router.push(`/process?packId=${packId}`)}
+                        onClick={() => router.push('/packs')}
                         className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
                     >
-                        Back to Pack
+                        Back to Packs
                     </button>
                 </div>
             </div>

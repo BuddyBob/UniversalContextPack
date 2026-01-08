@@ -23,7 +23,7 @@ export default function Footer() {
             <h3 className="text-sm font-medium text-primary mb-4">Product</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/process" className="text-sm text-secondary hover:text-primary transition-colors">
+                <Link href="/packs" className="text-sm text-secondary hover:text-primary transition-colors">
                   Process Files
                 </Link>
               </li>

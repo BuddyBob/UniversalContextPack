@@ -196,10 +196,10 @@ export default function ResultsPage({ params }: { params: { ucpId: string } }) {
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
           <button 
-            onClick={() => router.push('/process')}
+            onClick={() => router.push('/packs')}
             className="bg-gray-900 text-white px-4 py-2 rounded hover:bg-gray-800"
           >
-            Back to Process
+            Back to Packs
           </button>
         </div>
       </div>

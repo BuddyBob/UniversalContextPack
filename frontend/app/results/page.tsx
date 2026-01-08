@@ -125,7 +125,7 @@ export default function ResultsPage() {
                   </div>
                   <div className="text-gray-400 text-sm mb-4">No jobs found</div>
                   <a 
-                    href="/process" 
+                    href="/packs" 
                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors inline-block"
                   >
                     Process a file
