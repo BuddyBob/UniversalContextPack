@@ -9,8 +9,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader, X, FolderOpen, FileText, Download, MessageSquare, Link as LinkIcon, FileText as FileTextIcon, AlignLeft, HelpCircle } from 'lucide-react';
 
-
-
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 import { usePackManagement } from '@/hooks/usePackManagement';
 import { useSourceProcessing } from '@/hooks/useSourceProcessing';
@@ -18,6 +17,26 @@ import { usePolling } from '@/hooks/usePolling';
 import { API_BASE_URL } from '@/lib/api';
 import { ProcessProgress } from '@/components/ProcessProgress';
 import { ProcessStatus, mapBackendStatus } from '@/types/ProcessState';
+
+// File upload progress tracking
+interface FileUploadProgress {
+    fileName: string;
+    fileSize: number;
+    uploadedBytes: number;
+    uploadPercent: number;
+    phase: 'uploading' | 'extracting' | 'complete' | 'error';
+    extractionProgress?: number; // Progress percentage during extraction (0-100)
+    errorMessage?: string;
+}
+
+// Helper to format file size
+const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+};
 
 export default function ProcessV3Page() {
     const router = useRouter();
@@ -41,6 +60,7 @@ export default function ProcessV3Page() {
     const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
     const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
+    const [fileUploadProgress, setFileUploadProgress] = useState<Map<string, FileUploadProgress>>(new Map());
     const [isDownloadingPack, setIsDownloadingPack] = useState(false);
     const [isDownloadingTree, setIsDownloadingTree] = useState(false);
 
@@ -121,7 +141,7 @@ export default function ProcessV3Page() {
         handleFileUpload(files);
     };
 
-    // File upload handler - kept original robust one
+    // File upload handler with progress tracking
     const handleFileUpload = async (files: FileList | null) => {
         if (!files || !selectedPack) return;
 
@@ -132,58 +152,165 @@ export default function ProcessV3Page() {
             console.log('[ProcessV3] Uploading file:', file.name, 'size:', file.size, 'type:', file.type);
             setUploadingFiles(prev => new Set(prev).add(file.name));
 
+            // Initialize progress tracking
+            setFileUploadProgress(prev => {
+                const next = new Map(prev);
+                next.set(file.name, {
+                    fileName: file.name,
+                    fileSize: file.size,
+                    uploadedBytes: 0,
+                    uploadPercent: 0,
+                    phase: 'uploading'
+                });
+                return next;
+            });
+
             try {
+                // Get auth token
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session) {
+                    throw new Error('No active session');
+                }
+
                 const formData = new FormData();
                 formData.append('file', file);
 
                 const uploadUrl = `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources`;
                 console.log('[ProcessV3] Upload URL:', uploadUrl);
 
-                const response = await makeAuthenticatedRequest(uploadUrl, {
-                    method: 'POST',
-                    body: formData
+                // Use XMLHttpRequest for progress tracking
+                await new Promise<void>((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+
+                    // Track upload progress
+                    xhr.upload.addEventListener('progress', (e) => {
+                        if (e.lengthComputable) {
+                            const percentComplete = Math.round((e.loaded / e.total) * 100);
+                            setFileUploadProgress(prev => {
+                                const next = new Map(prev);
+                                const current = next.get(file.name);
+                                if (current) {
+                                    next.set(file.name, {
+                                        ...current,
+                                        uploadedBytes: e.loaded,
+                                        uploadPercent: percentComplete,
+                                        phase: 'uploading'
+                                    });
+                                }
+                                return next;
+                            });
+                        }
+                    });
+
+                    xhr.addEventListener('load', () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            console.log(`✅ Uploaded: ${file.name}`);
+
+                            // Update to extraction phase
+                            setFileUploadProgress(prev => {
+                                const next = new Map(prev);
+                                const current = next.get(file.name);
+                                if (current) {
+                                    next.set(file.name, {
+                                        ...current,
+                                        uploadPercent: 100,
+                                        phase: 'extracting'
+                                    });
+                                }
+                                return next;
+                            });
+
+                            resolve();
+                        } else {
+                            reject(new Error(`Upload failed with status ${xhr.status}`));
+                        }
+                    });
+
+                    xhr.addEventListener('error', () => {
+                        setFileUploadProgress(prev => {
+                            const next = new Map(prev);
+                            const current = next.get(file.name);
+                            if (current) {
+                                next.set(file.name, {
+                                    ...current,
+                                    phase: 'error',
+                                    errorMessage: 'Upload failed'
+                                });
+                            }
+                            return next;
+                        });
+                        reject(new Error('Upload failed'));
+                    });
+
+                    xhr.addEventListener('abort', () => {
+                        reject(new Error('Upload cancelled'));
+                    });
+
+                    xhr.open('POST', uploadUrl);
+                    xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
+                    xhr.send(formData);
                 });
 
-                console.log('[ProcessV3] Response status:', response.status, response.ok);
+                // Wait a moment for backend to save
+                await new Promise(resolve => setTimeout(resolve, 500));
 
-                if (response.ok) {
-                    console.log(`✅ Uploaded: ${file.name}`);
+                // Immediately refetch pack to get the new source
+                const packResponse = await makeAuthenticatedRequest(
+                    `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}?t=${Date.now()}`
+                );
+                if (packResponse.ok) {
+                    const packData = await packResponse.json();
+                    const sources = packData.sources || [];
+                    setPackSources(sources);
+                    console.log('[ProcessV3] ✅ Loaded', sources.length, 'sources after upload');
 
-                    // Wait a moment for backend to save
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // Update process states for new sources
+                    sources.forEach((source: any) => {
+                        updateFromSourceStatus(source);
+                    });
+                }
 
-                    // Immediately refetch pack to get the new source
-                    const packResponse = await makeAuthenticatedRequest(
-                        `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}?t=${Date.now()}`
-                    );
-                    if (packResponse.ok) {
-                        const packData = await packResponse.json();
-                        const sources = packData.sources || [];
-                        setPackSources(sources);
-                        console.log('[ProcessV3] ✅ Loaded', sources.length, 'sources after upload');
+                // Extraction progress will be tracked by polling
 
-                        // Update process states for new sources
-                        sources.forEach((source: any) => {
-                            updateFromSourceStatus(source);
+            } catch (error) {
+                console.error('[ProcessV3] Upload error:', error);
+
+                setFileUploadProgress(prev => {
+                    const next = new Map(prev);
+                    const current = next.get(file.name);
+                    if (current) {
+                        next.set(file.name, {
+                            ...current,
+                            phase: 'error',
+                            errorMessage: error instanceof Error ? error.message : String(error)
                         });
                     }
-                } else {
-                    alert(`Upload failed: ${file.name}\nStatus: ${response.status}`);
-                }
-            } catch (error) {
-
+                    return next;
+                });
 
                 alert(`Upload error: ${file.name}\n${error instanceof Error ? error.message : String(error)}`);
-
             } finally {
                 setUploadingFiles(prev => {
                     const next = new Set(prev);
                     next.delete(file.name);
                     return next;
                 });
+
+                // Clean up progress after a delay if error
+                setTimeout(() => {
+                    setFileUploadProgress(prev => {
+                        const next = new Map(prev);
+                        const current = next.get(file.name);
+                        if (current?.phase === 'error' || current?.phase === 'complete') {
+                            next.delete(file.name);
+                        }
+                        return next;
+                    });
+                }, 3000);
             }
         }
     };
+
 
 
     // Fetch pack directly by ID from URL
@@ -256,6 +383,43 @@ export default function ProcessV3Page() {
                 setPackSources(sources);
                 sources.forEach((source: any) => {
                     updateFromSourceStatus(source);
+                });
+
+                // Poll for extraction progress updates
+                setFileUploadProgress(prev => {
+                    const next = new Map(prev);
+                    sources.forEach((source: any) => {
+                        const fileName = source.file_name || source.source_name;
+                        const existingProgress = next.get(fileName);
+
+                        if (existingProgress && existingProgress.phase === 'extracting') {
+                            if (source.status === 'ready_for_analysis' || source.status === 'completed') {
+                                // Extraction complete
+                                next.delete(fileName);
+                            } else if (source.status === 'failed') {
+                                // Show error
+                                next.set(fileName, {
+                                    ...existingProgress,
+                                    phase: 'error',
+                                    errorMessage: source.error_message || 'Extraction failed'
+                                });
+                            } else if (source.status === 'processing' || source.status === 'extracting') {
+                                // Update progress
+                                const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
+                                console.log('[ProcessV3] 🔍 Extraction progress update:', {
+                                    fileName,
+                                    status: source.status,
+                                    rawProgress: source.progress,
+                                    roundedProgress: extractionProgress
+                                });
+                                next.set(fileName, {
+                                    ...existingProgress,
+                                    extractionProgress
+                                });
+                            }
+                        }
+                    });
+                    return next;
                 });
             }
         } catch (error) {
@@ -638,11 +802,80 @@ export default function ProcessV3Page() {
 
                     </div>
 
-                    {uploadingFiles.size > 0 && (
-                        <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-                            <p className="text-sm text-blue-300">
-                                Uploading {uploadingFiles.size} file(s)...
-                            </p>
+                    {/* Upload Progress Display */}
+                    {fileUploadProgress.size > 0 && (
+                        <div className="space-y-3">
+                            {Array.from(fileUploadProgress.values()).map((progress) => (
+                                <div
+                                    key={progress.fileName}
+                                    className={`border rounded-lg p-4 ${progress.phase === 'error'
+                                        ? 'bg-red-900/20 border-red-500/30'
+                                        : progress.phase === 'extracting'
+                                            ? 'bg-emerald-900/20 border-emerald-500/30'
+                                            : 'bg-blue-900/20 border-blue-500/30'
+                                        }`}
+                                >
+                                    <div className="flex items-start justify-between mb-2">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-medium text-white truncate">
+                                                {progress.fileName}
+                                            </div>
+                                            <div className="text-xs text-gray-400 mt-0.5">
+                                                {formatFileSize(progress.fileSize)}
+                                            </div>
+                                        </div>
+                                        <div className="ml-4">
+                                            {progress.phase === 'uploading' && progress.uploadPercent < 100 && (
+                                                <span className="text-sm font-semibold text-blue-300">
+                                                    {progress.uploadPercent}%
+                                                </span>
+                                            )}
+                                            {(progress.phase === 'extracting' || (progress.phase === 'uploading' && progress.uploadPercent === 100)) && (
+                                                <span className="text-sm font-semibold text-emerald-300">
+                                                    {progress.extractionProgress !== undefined
+                                                        ? `Extracting... ${progress.extractionProgress}%`
+                                                        : 'Extracting...'}
+                                                </span>
+                                            )}
+                                            {progress.phase === 'error' && (
+                                                <span className="text-sm font-semibold text-red-300">
+                                                    Error
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Progress Bar */}
+                                    {progress.phase === 'uploading' && progress.uploadPercent < 100 && (
+                                        <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+                                            <div
+                                                className="bg-blue-500 h-full transition-all duration-300 ease-out"
+                                                style={{ width: `${progress.uploadPercent}%` }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {(progress.phase === 'extracting' || (progress.phase === 'uploading' && progress.uploadPercent === 100)) && (
+                                        <>
+                                            <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+                                                <div
+                                                    className={`bg-emerald-500 h-full ${progress.extractionProgress === undefined ? 'animate-pulse' : 'transition-all duration-300'}`}
+                                                    style={{ width: progress.extractionProgress !== undefined ? `${progress.extractionProgress}%` : '100%' }}
+                                                />
+                                            </div>
+                                            <p className="text-xs text-emerald-300/70 mt-2">
+                                                Processing and chunking content... This may take up to 2-3 minutes for large files.
+                                            </p>
+                                        </>
+                                    )}
+
+                                    {progress.phase === 'error' && progress.errorMessage && (
+                                        <p className="text-xs text-red-300 mt-2">
+                                            {progress.errorMessage}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

@@ -4121,6 +4121,94 @@ async def get_source_status(
         print(f"Error getting source status: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get source status: {str(e)}")
 
+@app.get("/api/v2/sources/{source_id}/progress-stream")
+async def stream_source_progress(
+    source_id: str,
+    token: str
+):
+    """Stream real-time extraction progress via Server-Sent Events"""
+    # Decode token to get user (EventSource doesn't support headers)
+    try:
+        from jose import jwt
+        # Use get_unverified_claims to avoid needing the secret key
+        payload = jwt.get_unverified_claims(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = AuthenticatedUser(
+            user_id=user_id,
+            email=payload.get("email", ""),
+            r2_directory=f"user_{user_id}"
+        )
+    except Exception as e:
+        print(f"Error decoding SSE token: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    
+    """Stream real-time extraction progress via Server-Sent Events"""
+    from fastapi.responses import StreamingResponse
+    import json
+    
+    async def event_generator():
+        try:
+            last_progress = None
+            last_status = None
+            
+            while True:
+                # Get current source status
+                result = supabase.rpc("get_source_status_v2", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id
+                }).execute()
+                
+                if not result.data:
+                    # Source not found or deleted
+                    yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                    break
+                
+                source = result.data
+                current_status = source.get("status")
+                current_progress = source.get("progress", 0)
+                
+                # Only send update if something changed
+                if current_progress != last_progress or current_status != last_status:
+                    progress_data = {
+                        "source_id": source_id,
+                        "status": current_status,
+                        "progress": current_progress,
+                        "processed_chunks": source.get("processed_chunks", 0),
+                        "total_chunks": source.get("total_chunks", 0),
+                        "error_message": source.get("error_message")
+                    }
+                    
+                    yield f"data: {json.dumps(progress_data)}\n\n"
+                    
+                    last_progress = current_progress
+                    last_status = current_status
+                
+                # Stop streaming if processing is complete
+                if current_status in ['ready_for_analysis', 'completed', 'failed', 'cancelled']:
+                    break
+                
+                # Wait before next check (500ms for responsive updates)
+                await asyncio.sleep(0.5)
+                
+        except Exception as e:
+            print(f"Error in SSE stream: {e}")
+            yield f"data: {json.dumps({'status': 'error', 'error': str(e)})}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
+
+
 @app.delete("/api/v2/packs/{pack_id}/sources/{source_id}")
 async def delete_source_from_pack(
     pack_id: str, 
