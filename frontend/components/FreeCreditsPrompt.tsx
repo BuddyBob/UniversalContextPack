@@ -28,6 +28,8 @@ export default function FreeCreditsPrompt({
       setIsLoading(true)
       setError(null)
       await signInWithGoogle()
+      // Auto-close modal after successful sign-in
+      onClose()
     } catch (error: any) {
       setError(error.message || 'Failed to sign in with Google')
       setIsLoading(false)
@@ -39,6 +41,8 @@ export default function FreeCreditsPrompt({
       setIsLoading(true)
       setError(null)
       await signInWithGitHub()
+      // Auto-close modal after successful sign-in
+      onClose()
     } catch (error: any) {
       setError(error.message || 'Failed to sign in with GitHub')
       setIsLoading(false)
@@ -68,6 +72,8 @@ export default function FreeCreditsPrompt({
         setIsLoading(false)
       } else {
         await signInWithEmail(email, password)
+        // Auto-close modal after successful sign-in
+        onClose()
       }
     } catch (error: any) {
       setError(error.message || `Failed to ${isSignUp ? 'sign up' : 'sign in'}`)
