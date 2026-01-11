@@ -17,6 +17,7 @@ import { usePolling } from '@/hooks/usePolling';
 import { API_BASE_URL } from '@/lib/api';
 import { ProcessProgress } from '@/components/ProcessProgress';
 import { ProcessStatus, mapBackendStatus } from '@/types/ProcessState';
+import { ReviewModal } from '@/components/ReviewModal';
 
 // File upload progress tracking
 interface FileUploadProgress {
@@ -68,6 +69,10 @@ export default function ProcessV3Page() {
     const [showTextModal, setShowTextModal] = useState(false);
     const [urlInput, setUrlInput] = useState('');
     const [textInput, setTextInput] = useState('');
+
+    // Review modal state
+    const [showReviewModal, setShowReviewModal] = useState(false);
+    const hasCheckedReview = useRef(false);
 
     // Handle URL upload
     const handleUrlUpload = async () => {
@@ -421,11 +426,59 @@ export default function ProcessV3Page() {
                     });
                     return next;
                 });
+
+                // Check if pack is completed and trigger review modal
+                const hasCompletedSource = sources.some((s: any) => s.status === 'completed');
+                if (hasCompletedSource && selectedPack && !hasCheckedReview.current) {
+                    hasCheckedReview.current = true;
+                    checkAndShowReviewModal(selectedPack.pack_id);
+                }
             }
         } catch (error) {
             console.error('[ProcessV3] Polling error:', error);
         }
     }, [selectedPack, makeAuthenticatedRequest, setPackSources, updateFromSourceStatus]);
+
+    // Check if user should see review modal
+    const checkAndShowReviewModal = async (packId: string) => {
+        try {
+            // Check localStorage first (client-side quick check)
+            const reviewedPacks = localStorage.getItem('reviewed_packs');
+            if (reviewedPacks) {
+                const reviewed = JSON.parse(reviewedPacks);
+                if (reviewed.includes(packId)) {
+                    console.log('[ReviewModal] Pack already reviewed (localStorage)');
+                    return;
+                }
+            }
+
+            // Check with backend
+            const response = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/api/v2/packs/${packId}/has-review`
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                if (!data.has_reviewed) {
+                    setShowReviewModal(true);
+                }
+            }
+        } catch (error) {
+            console.error('[ReviewModal] Error checking review status:', error);
+        }
+    };
+
+    const handleReviewSubmitSuccess = () => {
+        if (!selectedPack) return;
+
+        // Update localStorage to prevent showing again
+        const reviewedPacks = localStorage.getItem('reviewed_packs');
+        const reviewed = reviewedPacks ? JSON.parse(reviewedPacks) : [];
+        if (!reviewed.includes(selectedPack.pack_id)) {
+            reviewed.push(selectedPack.pack_id);
+            localStorage.setItem('reviewed_packs', JSON.stringify(reviewed));
+        }
+    };
 
     usePolling({
         enabled: shouldPoll,
@@ -553,7 +606,9 @@ export default function ProcessV3Page() {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${selectedPack.pack_name}_pack.txt`;
+                // Ensure .txt extension is properly added
+                const packName = selectedPack.pack_name.replace(/[^a-zA-Z0-9_-]/g, '_');
+                a.download = `${packName}_pack.txt`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -1034,6 +1089,15 @@ export default function ProcessV3Page() {
                     </button>
                 </div>
             </div>
+
+            {/* Review Modal */}
+            {showReviewModal && selectedPack && (
+                <ReviewModal
+                    packId={selectedPack.pack_id}
+                    onClose={() => setShowReviewModal(false)}
+                    onSubmitSuccess={handleReviewSubmitSuccess}
+                />
+            )}
         </div>
     );
 }

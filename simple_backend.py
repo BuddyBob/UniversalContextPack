@@ -433,6 +433,11 @@ class AddMemoryRequest(BaseModel):
     text: str
     source: str = "MCP Tool"
 
+class PackReviewRequest(BaseModel):
+    rating: int  # 1-5
+    feedback_text: Optional[str] = None
+
+
 # User model for authentication
 class AuthenticatedUser:
     def __init__(self, user_id: str, email: str, r2_directory: str):
@@ -4080,6 +4085,105 @@ async def delete_pack(
     except Exception as e:
         print(f"Error deleting pack: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete pack: {str(e)}")
+
+# ============================================================================
+# PACK REVIEWS ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v2/packs/{pack_id}/review")
+async def submit_pack_review(
+    pack_id: str,
+    review: PackReviewRequest,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Submit a review for a completed pack"""
+    try:
+        # Validate rating
+        if review.rating < 1 or review.rating > 5:
+            raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+        
+        # Check if pack exists and belongs to user
+        pack_result = supabase.rpc("get_pack_details_v2", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id
+        }).execute()
+        
+        if not pack_result.data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        # Insert or update review (upsert on conflict)
+        result = supabase.table('pack_reviews').upsert({
+            'user_id': user.user_id,
+            'pack_id': pack_id,
+            'user_email': user.email,
+            'rating': review.rating,
+            'feedback_text': review.feedback_text
+        }, on_conflict='user_id,pack_id').execute()
+        
+        print(f"✅ Review submitted for pack {pack_id} by {user.email}: {review.rating} stars")
+        
+        return {
+            "success": True,
+            "message": "Review submitted successfully",
+            "review_id": result.data[0]['id'] if result.data else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error submitting review: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to submit review: {str(e)}")
+
+@app.get("/api/v2/reviews")
+async def get_reviews(
+    limit: int = 10,
+    min_rating: int = 4
+):
+    """Get recent reviews for homepage display"""
+    try:
+        # Validate parameters
+        if limit < 1 or limit > 50:
+            limit = 10
+        if min_rating < 1 or min_rating > 5:
+            min_rating = 4
+        
+        # Call database function to get recent reviews
+        result = supabase.rpc("get_recent_reviews", {
+            "limit_count": limit,
+            "min_rating": min_rating
+        }).execute()
+        
+        reviews = result.data if result.data else []
+        
+        return {
+            "reviews": reviews,
+            "count": len(reviews)
+        }
+        
+    except Exception as e:
+        print(f"❌ Error fetching reviews: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch reviews: {str(e)}")
+
+@app.get("/api/v2/packs/{pack_id}/has-review")
+async def check_pack_review(
+    pack_id: str,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Check if user has reviewed this pack"""
+    try:
+        result = supabase.rpc("has_reviewed_pack", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id
+        }).execute()
+        
+        return {
+            "has_reviewed": result.data if result.data is not None else False
+        }
+        
+    except Exception as e:
+        print(f"❌ Error checking review status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to check review status: {str(e)}")
+
 
 @app.get("/api/v2/sources/{source_id}/status")
 async def get_source_status(
