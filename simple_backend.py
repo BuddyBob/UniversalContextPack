@@ -2137,8 +2137,10 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         # ============================================================================
         
         # Adaptive batch size based on total chunks for better progress feedback
-        if len(chunks) <= 15:
-            BATCH_SIZE = 3  # Small files: more frequent updates
+        if len(chunks) <= 7:
+            BATCH_SIZE = 3  # Very small files: more frequent updates
+        elif len(chunks) <= 15:
+            BATCH_SIZE = 2  # Small-medium files (including 10 chunks): optimal feedback
         elif len(chunks) <= 50:
             BATCH_SIZE = 5  # Medium files: balance speed and feedback
         else:
@@ -2467,8 +2469,10 @@ async def build_tree_from_analysis(
     
     # Adaptive batch size based on total chunks for better progress feedback
     total_chunks = len(chunk_analyses)
-    if total_chunks <= 15:
-        BATCH_SIZE = 3  # Small files: more frequent updates
+    if total_chunks <= 7:
+        BATCH_SIZE = 3  # Very small files: more frequent updates
+    elif total_chunks <= 15:
+        BATCH_SIZE = 2  # Small-medium files (including 10 chunks): optimal feedback
     elif total_chunks <= 50:
         BATCH_SIZE = 5  # Medium files: balance speed and feedback
     else:

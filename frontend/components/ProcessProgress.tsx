@@ -185,7 +185,7 @@ export function ProcessProgress({
                             </h3>
                         </div>
                         <p className="text-sm text-gray-400 leading-relaxed">
-                            Processing and analyzing your content. Reload if stalled.
+                            <strong>Reload if stalled.</strong   >
                         </p>
                     </div>
                     <button
