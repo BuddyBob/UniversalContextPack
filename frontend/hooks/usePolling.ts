@@ -31,7 +31,6 @@ export function usePolling({ enabled = true, interval = 2000, onPoll }: UsePolli
 
         if (shouldPoll) {
             setEffectiveInterval(interval);
-
             // Perform initial poll immediately when starting
             onPollRef.current();
         } else {

@@ -357,9 +357,11 @@ export default function ProcessV3Page() {
     }, [searchParams, selectedPack, user, makeAuthenticatedRequest, selectPack, setPackSources]);
 
     // Polling logic - uses robust usePolling hook
-    const shouldPoll = !!selectedPack && packSources.some(s =>
-        !['completed', 'failed', 'cancelled'].includes(s.status)
-    );
+    // Keep polling if any source is in a non-terminal state
+    const shouldPoll = !!selectedPack && packSources.some(s => {
+        const terminalStates = ['completed', 'failed', 'cancelled'];
+        return !terminalStates.includes(s.status);
+    });
 
     const pollPackDetails = useCallback(async () => {
         if (!selectedPack) return;
@@ -370,22 +372,18 @@ export default function ProcessV3Page() {
                 `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}?t=${Date.now()}`
             );
 
-            if (response.ok) {
-                const data = await response.json();
-                const sources = data.sources || [];
+            if (!response.ok) {
+                console.error('[ProcessV3] Poll failed:', response.status);
+                return;
+            }
 
-                console.log('[ProcessV3] 📊 Poll update:', {
-                    packId: data.pack_id,
-                    sourcesCount: sources.length,
-                    statuses: sources.map((s: any) => ({
-                        id: s.source_id?.substring(0, 8),
-                        status: s.status,
-                        progress: s.progress,
-                        chunks: `${s.processed_chunks || 0}/${s.total_chunks || 0}`
-                    }))
-                });
+            const data = await response.json();
+            const sources = data.sources || [];
 
+                // Update sources state
                 setPackSources(sources);
+                
+                // Update process states for each source
                 sources.forEach((source: any) => {
                     updateFromSourceStatus(source);
                 });
@@ -411,12 +409,6 @@ export default function ProcessV3Page() {
                             } else if (source.status === 'processing' || source.status === 'extracting') {
                                 // Update progress
                                 const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
-                                console.log('[ProcessV3] 🔍 Extraction progress update:', {
-                                    fileName,
-                                    status: source.status,
-                                    rawProgress: source.progress,
-                                    roundedProgress: extractionProgress
-                                });
                                 next.set(fileName, {
                                     ...existingProgress,
                                     extractionProgress
@@ -427,15 +419,15 @@ export default function ProcessV3Page() {
                     return next;
                 });
 
-                // Check if pack is completed and trigger review modal
-                const hasCompletedSource = sources.some((s: any) => s.status === 'completed');
-                if (hasCompletedSource && selectedPack && !hasCheckedReview.current) {
-                    hasCheckedReview.current = true;
-                    checkAndShowReviewModal(selectedPack.pack_id);
-                }
+            // Check if pack is completed and trigger review modal
+            const hasCompletedSource = sources.some((s: any) => s.status === 'completed');
+            if (hasCompletedSource && selectedPack && !hasCheckedReview.current) {
+                hasCheckedReview.current = true;
+                checkAndShowReviewModal(selectedPack.pack_id);
             }
         } catch (error) {
             console.error('[ProcessV3] Polling error:', error);
+            // Don't throw - let polling continue on next interval
         }
     }, [selectedPack, makeAuthenticatedRequest, setPackSources, updateFromSourceStatus]);
 
@@ -682,7 +674,7 @@ export default function ProcessV3Page() {
             <div className="min-h-screen bg-gray-950 text-white p-8">
                 <div className="max-w-4xl mx-auto text-center flex flex-col items-center justify-center" style={{ minHeight: '60vh' }}>
                     <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mb-4"></div>
-                    <p className="text-gray-400">Loading pack...</p>
+                    <p className="text-gray-400">Pack is processing, check email for updates...</p>
                 </div>
             </div>
         );
