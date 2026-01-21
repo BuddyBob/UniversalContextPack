@@ -5860,12 +5860,16 @@ async def stripe_webhook(request: Request):
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 def calculate_credit_price(credits: int) -> float:
-    """Calculate price for credits - fixed 100-credit pack at $4.99"""
+    """Calculate price for credits - fixed pricing tiers"""
     # Special case: unlimited plan
     if credits == -1:
         return 4.99
     
-    # Standard credit pack: 100 credits for $4.99
+    # New pricing: 250 credits for $4.99 (Flexible Plan)
+    if credits == 250:
+        return 4.99
+    
+    # Legacy pricing: 100 credits for $4.99
     if credits == 100:
         return 4.99
     
