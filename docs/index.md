@@ -1,3 +1,11 @@
+---
+title: "Universal Context Pack - Documentation Hub"
+description: "Complete guide to managing AI context. Export ChatGPT memory, migrate between LLM providers, and manage your AI memory portability."
+keywords: "AI memory, ChatGPT export, context management, LLM migration, Claude Projects, Gemini 1M tokens, memory portability"
+author: "Universal Context Pack"
+date: "2026-01-27"
+---
+
 # Universal Context Pack - Documentation Hub
 
 Welcome to the central hub for managing AI context. Export memory, structure datasets, and migrate seamlessly between LLM providers.

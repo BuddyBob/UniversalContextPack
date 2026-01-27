@@ -5869,7 +5869,7 @@ def calculate_credit_price(credits: int) -> float:
     """Calculate price for credits - fixed pricing tiers"""
     # Special case: unlimited plan
     if credits == -1:
-        return 4.99
+        return 5.99
     
     # New pricing: 250 credits for $4.99 (Flexible Plan)
     if credits == 250:
@@ -6183,7 +6183,7 @@ async def debug_grant_unlimited(request: dict, user: AuthenticatedUser = Depends
         print(f"🔍 Found user: {target_user}")
         
         # Grant unlimited access
-        await grant_unlimited_access(target_user["id"], 4.99, "manual_debug_grant")
+        await grant_unlimited_access(target_user["id"], 5.99, "manual_debug_grant")
         
         # Check the result
         updated_user = supabase.table("user_profiles").select("id, email, credits_balance, payment_plan, subscription_status").eq("id", target_user["id"]).execute()
@@ -6249,7 +6249,7 @@ async def debug_grant_unlimited_by_email(email: str):
         print(f"🔍 Found user: {target_user}")
         
         # Grant unlimited access using the existing function
-        await grant_unlimited_access(target_user["id"], 4.99, "manual_debug_grant_" + target_user["id"][:8])
+        await grant_unlimited_access(target_user["id"], 5.99, "manual_debug_grant_" + target_user["id"][:8])
         
         # Check the result
         updated_user = supabase.table("user_profiles").select("id, email, credits_balance, payment_plan, subscription_status").eq("id", target_user["id"]).execute()
@@ -6336,7 +6336,7 @@ async def test_unlimited_webhook(request: dict, user: AuthenticatedUser = Depend
     """Test endpoint to simulate unlimited purchase webhook for debugging"""
     try:
         user_id = request.get("user_id") or user.user_id
-        amount = request.get("amount", 4.99)
+        amount = request.get("amount", 5.99)
         session_id = request.get("session_id", f"test_session_{user_id}_{int(time.time())}")
         
         print(f"🧪 Testing unlimited access grant for user {user_id}")
@@ -6382,7 +6382,7 @@ async def simulate_checkout_webhook(request: dict, user: AuthenticatedUser = Dep
             'id': f'cs_test_simulation_{user_id}_{int(time.time())}',
             'payment_status': 'paid',
             'status': 'complete',
-            'amount_total': 399 if unlimited else credits * 100,  # $4.99 for unlimited, $1 per credit
+            'amount_total': 599 if unlimited else credits * 100,  # $5.99 for unlimited, $1 per credit
             'mode': 'payment',
             'customer_email': f'{user_id}@test.com',
             'metadata': {

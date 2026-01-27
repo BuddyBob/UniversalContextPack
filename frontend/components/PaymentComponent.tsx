@@ -21,10 +21,10 @@ interface PaymentComponentProps {
   className?: string
 }
 
-export default function PaymentComponent({ 
-  onUpgrade, 
-  showUpgradeButton = true, 
-  className = "" 
+export default function PaymentComponent({
+  onUpgrade,
+  showUpgradeButton = true,
+  className = ""
 }: PaymentComponentProps) {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -38,21 +38,21 @@ export default function PaymentComponent({
       setLoading(true)
       setError(null)
 
-      
+
       if (!user) {
         // If no user, don't show error - just don't fetch payment status
         setLoading(false)
         return
       }
 
-      
+
       if (!session?.access_token) {
         // If no session, don't show error - just don't fetch payment status
         setLoading(false)
         return
       }
 
-      
+
       // Fetch payment status from backend
       const response = await fetch(API_ENDPOINTS.paymentStatus, {
         headers: {
@@ -79,7 +79,7 @@ export default function PaymentComponent({
   const handleUpgrade = async () => {
     // Navigate to the professional pricing page
     router.push('/pricing')
-    
+
     // Call optional upgrade callback
     if (onUpgrade) {
       onUpgrade()
@@ -102,16 +102,16 @@ export default function PaymentComponent({
 
   if (loading) {
     return (
-      <div className={`rounded-business p-4 shadow-md ${className}`} 
-           style={{ 
-             backgroundColor: 'var(--bg-card)', 
-             border: '1px solid var(--border-primary)' 
-           }}>
+      <div className={`rounded-business p-4 shadow-md ${className}`}
+        style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-primary)'
+        }}>
         <div className="animate-pulse">
-          <div className="h-4 rounded w-1/4 mb-2" 
-               style={{ backgroundColor: 'var(--border-secondary)' }}></div>
-          <div className="h-3 rounded w-1/2" 
-               style={{ backgroundColor: 'var(--border-secondary)' }}></div>
+          <div className="h-4 rounded w-1/4 mb-2"
+            style={{ backgroundColor: 'var(--border-secondary)' }}></div>
+          <div className="h-3 rounded w-1/2"
+            style={{ backgroundColor: 'var(--border-secondary)' }}></div>
         </div>
       </div>
     )
@@ -119,13 +119,13 @@ export default function PaymentComponent({
 
   if (error) {
     return (
-      <div className={`rounded-business p-4 shadow-md ${className}`} 
-           style={{ 
-             backgroundColor: 'var(--bg-card)', 
-             border: '1px solid var(--status-error)' 
-           }}>
+      <div className={`rounded-business p-4 shadow-md ${className}`}
+        style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--status-error)'
+        }}>
         <p className="text-sm" style={{ color: 'var(--status-error)' }}>Error: {error}</p>
-        <button 
+        <button
           onClick={fetchPaymentStatus}
           className="mt-2 text-sm underline hover:no-underline transition-all"
           style={{ color: 'var(--status-error)' }}
@@ -139,11 +139,11 @@ export default function PaymentComponent({
   if (!paymentStatus) {
     // User not authenticated or no payment status - show login prompt
     return (
-      <div className={`rounded-business p-4 shadow-md ${className}`} 
-           style={{ 
-             backgroundColor: 'var(--bg-card)', 
-             border: '1px solid var(--accent-primary)' 
-           }}>
+      <div className={`rounded-business p-4 shadow-md ${className}`}
+        style={{
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--accent-primary)'
+        }}>
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
           Sign in to view your payment plan and usage.
         </p>
@@ -156,11 +156,11 @@ export default function PaymentComponent({
   const remainingChunks = isFreePlan ? Math.max(0, paymentStatus.chunks_allowed - paymentStatus.chunks_used) : Infinity
 
   return (
-    <div className={`rounded-business p-5 shadow-md hover:shadow-lg transition-all duration-200 ${className}`} 
-         style={{ 
-           backgroundColor: 'var(--bg-card)', 
-           border: '1px solid var(--border-primary)' 
-         }}>
+    <div className={`rounded-business p-5 shadow-md hover:shadow-lg transition-all duration-200 ${className}`}
+      style={{
+        backgroundColor: 'var(--bg-card)',
+        border: '1px solid var(--border-primary)'
+      }}>
       {/* Plan Status Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -175,18 +175,18 @@ export default function PaymentComponent({
         </div>
         <div className="flex items-center">
           {isFreePlan && (
-            <span className="text-xs px-2.5 py-1 rounded-full font-medium" 
-                  style={{ 
-                    backgroundColor: 'var(--bg-muted)', 
-                    color: 'var(--text-muted)',
-                    border: '1px solid var(--border-secondary)' 
-                  }}>
+            <span className="text-xs px-2.5 py-1 rounded-full font-medium"
+              style={{
+                backgroundColor: 'var(--bg-muted)',
+                color: 'var(--text-muted)',
+                border: '1px solid var(--border-secondary)'
+              }}>
               Free
             </span>
           )}
           {paymentStatus.plan === 'pro' && (
-            <span className="text-xs px-2.5 py-1 rounded-full font-medium text-white" 
-                  style={{ backgroundColor: 'var(--accent-primary)' }}>
+            <span className="text-xs px-2.5 py-1 rounded-full font-medium text-white"
+              style={{ backgroundColor: 'var(--accent-primary)' }}>
               Pro
             </span>
           )}
@@ -205,19 +205,19 @@ export default function PaymentComponent({
                 {paymentStatus.chunks_used} / {paymentStatus.chunks_allowed}
               </span>
             </div>
-            
+
             {/* Progress Bar */}
-            <div className="w-full rounded-full h-2.5 mb-3" 
-                 style={{ backgroundColor: 'var(--bg-muted)' }}>
-              <div 
+            <div className="w-full rounded-full h-2.5 mb-3"
+              style={{ backgroundColor: 'var(--bg-muted)' }}>
+              <div
                 className="h-2.5 rounded-full transition-all duration-500 ease-out"
-                style={{ 
+                style={{
                   width: `${(paymentStatus.chunks_used / paymentStatus.chunks_allowed) * 100}%`,
                   backgroundColor: isAtLimit ? 'var(--status-error)' : 'var(--accent-primary)'
                 }}
               ></div>
             </div>
-            
+
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
               {isAtLimit ? (
                 <span className="font-medium" style={{ color: 'var(--status-error)' }}>
@@ -245,7 +245,7 @@ export default function PaymentComponent({
         <button
           onClick={handleUpgrade}
           className="w-full py-2.5 px-4 rounded-business font-medium transition-all duration-200 hover:shadow-md text-white text-sm"
-          style={{ 
+          style={{
             backgroundColor: isAtLimit ? 'var(--status-error)' : 'var(--accent-primary)',
             border: 'none'
           }}
@@ -256,7 +256,7 @@ export default function PaymentComponent({
             e.currentTarget.style.backgroundColor = isAtLimit ? 'var(--status-error)' : 'var(--accent-primary)'
           }}
         >
-          {isAtLimit ? 'Upgrade Required - $4.99' : 'Upgrade to Pro - $4.99'}
+          {isAtLimit ? 'Upgrade Required - $5.99' : 'Upgrade to Pro - $5.99'}
         </button>
       )}
 

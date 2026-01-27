@@ -27,7 +27,7 @@ export default function PricingPageClient() {
   const [processingPurchase, setProcessingPurchase] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fixedCreditPack = 250
-  const fixedCreditPrice = 4.99
+  const fixedCreditPrice = 5.99
   const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(true) // Default to unlimited
   const [showAuthModal, setShowAuthModal] = useState(false)
   const router = useRouter()
@@ -40,7 +40,7 @@ export default function PricingPageClient() {
   // Calculate pricing
   const calculatePrice = (unlimited: boolean = false) => {
     if (unlimited) return 5.99 // Pro subscription for $5.99/month
-    return fixedCreditPrice // Fixed 50-credit pack at $4.99
+    return fixedCreditPrice // Fixed 50-credit pack at $5.99
   }
 
   // Removed getDiscountPercent and getPricePerCredit - no longer needed

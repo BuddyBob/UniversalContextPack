@@ -1,3 +1,12 @@
+---
+title: "AI Memory Backup Guide - Save Context Locally"
+description: "Learn how to backup your AI context pack as JSON, understand export formats, implement version control, and restore from backups."
+keywords: "AI memory backup, context backup, JSON export, memory tree export, backup AI data, version control"
+author: "Universal Context Pack"
+date: "2026-01-27"
+readTime: "4 min"
+---
+
 # Local Backup Guide
 
 ⏱️ **4 MIN READ**

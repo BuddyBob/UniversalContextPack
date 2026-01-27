@@ -1,3 +1,12 @@
+---
+title: "AI Memory Architecture - Memory Pointers vs History Logs"
+description: "Deep dive into memory tree architecture, understanding structured knowledge graphs, evidence tracking, and the extraction pipeline for AI memory systems."
+keywords: "memory pointers, history logs, memory tree, AI architecture, knowledge graph, evidence tracking, extraction pipeline"
+author: "Universal Context Pack"
+date: "2026-01-27"
+readTime: "8 min"
+---
+
 # Architecture Guide: Memory Pointers vs. History Logs
 
 ⏱️ **8 MIN READ**
@@ -61,6 +70,8 @@ Node 2: Preference (React)
 - ✅ **Maintainable**: Easy to edit/delete specific facts
 
 ---
+
+![Memory Pointers vs History Logs - Efficient AI Memory](images/memory-pointers-vs-history-logs.png)
 
 ## Memory Pointers vs. History Logs
 
@@ -338,6 +349,8 @@ Evidence (2 sources):
 ```
 
 ---
+
+![UCP Extraction Pipeline - 5 Stage Process](images/extraction-pipeline.png)
 
 ## The Extraction Pipeline
 

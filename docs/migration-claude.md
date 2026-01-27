@@ -1,3 +1,12 @@
+---
+title: "Migrate AI Memory to Claude - Complete Transfer Guide"
+description: "Transfer your ChatGPT context to Claude AI. Learn format optimization, Claude Projects setup, and best practices for Anthropic's 200K token window."
+keywords: "Claude migration, Claude Projects, transfer to Claude, ChatGPT to Claude, Anthropic AI, Claude context window"
+author: "Universal Context Pack"
+date: "2026-01-27"
+readTime: "3 min"
+---
+
 # Migration Guide: Transfer to Claude
 
 ⏱️ **3 MIN READ**

@@ -1,3 +1,12 @@
+---
+title: "How to Export ChatGPT Memory - Complete Guide"
+description: "Learn how to extract ChatGPT conversation history, understand JSON structures, use the sanitization pipeline, and handle API limitations for AI memory portability."
+keywords: "ChatGPT export, conversations.json, ChatGPT memory, export ChatGPT data, ChatGPT history, AI conversation backup"
+author: "Universal Context Pack"
+date: "2026-01-27"
+readTime: "5 min"
+---
+
 # Move ChatGPT Memory - Complete Guide
 
 ⏱️ **5 MIN READ**
@@ -17,6 +26,8 @@ Learn how to extract your ChatGPT conversation history and transform it into por
 7. [Best Practices](#best-practices)
 
 ---
+
+![How to Export ChatGPT Memory - Step by Step Guide](images/chatgpt-export-steps.png)
 
 ## Overview
 

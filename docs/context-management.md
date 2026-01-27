@@ -1,3 +1,12 @@
+---
+title: "AI Context Management - Edit and Delete Memory Nodes"
+description: "Learn how to manage AI memory nodes, edit context data, delete outdated information, and maintain accurate AI context across all platforms."
+keywords: "AI context management, memory nodes, edit AI memory, memory tree, context editing, AI knowledge graph"
+author: "Universal Context Pack"
+date: "2026-01-27"
+readTime: "4 min"
+---
+
 # Context Management Guide
 
 ⏱️ **4 MIN READ**
@@ -17,6 +26,8 @@ Learn how to edit, delete, and organize your memory nodes to maintain accurate A
 7. [Best Practices](#best-practices)
 
 ---
+
+![Memory Tree Structure - Organize AI Context](images/memory-tree-structure.png)
 
 ## What Are Memory Nodes?
 

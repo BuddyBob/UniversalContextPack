@@ -1,3 +1,12 @@
+---
+title: "Migrate to Google Gemini - 1M Token Context Window Guide"
+description: "Optimize your AI memory for Google Gemini's massive 1M+ token context window. Learn extended context strategies and multimodal integration."
+keywords: "Gemini migration, Google Gemini, 1M token window, transfer to Gemini, Gemini AI, extended context"
+author: "Universal Context Pack"
+date: "2026-01-27"
+readTime: "3 min"
+---
+
 # Migration Guide: Transfer to Gemini
 
 ⏱️ **3 MIN READ**
@@ -46,6 +55,8 @@ Google's Gemini offers one of the largest context windows available, making it p
 - **Entire books**: 3-4 novels or technical books
 - **Full conversation history**: Years of ChatGPT conversations
 - **Multiple sources**: Combine many packs without limits
+
+![Context Window Comparison - ChatGPT vs Claude vs Gemini](images/context-window-comparison.png)
 
 ### Comparison
 
