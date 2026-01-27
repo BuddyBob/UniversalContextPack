@@ -380,44 +380,44 @@ export default function ProcessV3Page() {
             const data = await response.json();
             const sources = data.sources || [];
 
-                // Update sources state
-                setPackSources(sources);
-                
-                // Update process states for each source
+            // Update sources state
+            setPackSources(sources);
+
+            // Update process states for each source
+            sources.forEach((source: any) => {
+                updateFromSourceStatus(source);
+            });
+
+            // Poll for extraction progress updates
+            setFileUploadProgress(prev => {
+                const next = new Map(prev);
                 sources.forEach((source: any) => {
-                    updateFromSourceStatus(source);
-                });
+                    const fileName = source.file_name || source.source_name;
+                    const existingProgress = next.get(fileName);
 
-                // Poll for extraction progress updates
-                setFileUploadProgress(prev => {
-                    const next = new Map(prev);
-                    sources.forEach((source: any) => {
-                        const fileName = source.file_name || source.source_name;
-                        const existingProgress = next.get(fileName);
-
-                        if (existingProgress && existingProgress.phase === 'extracting') {
-                            if (source.status === 'ready_for_analysis' || source.status === 'completed') {
-                                // Extraction complete
-                                next.delete(fileName);
-                            } else if (source.status === 'failed') {
-                                // Show error
-                                next.set(fileName, {
-                                    ...existingProgress,
-                                    phase: 'error',
-                                    errorMessage: source.error_message || 'Extraction failed'
-                                });
-                            } else if (source.status === 'processing' || source.status === 'extracting') {
-                                // Update progress
-                                const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
-                                next.set(fileName, {
-                                    ...existingProgress,
-                                    extractionProgress
-                                });
-                            }
+                    if (existingProgress && existingProgress.phase === 'extracting') {
+                        if (source.status === 'ready_for_analysis' || source.status === 'completed') {
+                            // Extraction complete
+                            next.delete(fileName);
+                        } else if (source.status === 'failed') {
+                            // Show error
+                            next.set(fileName, {
+                                ...existingProgress,
+                                phase: 'error',
+                                errorMessage: source.error_message || 'Extraction failed'
+                            });
+                        } else if (source.status === 'processing' || source.status === 'extracting') {
+                            // Update progress
+                            const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
+                            next.set(fileName, {
+                                ...existingProgress,
+                                extractionProgress
+                            });
                         }
-                    });
-                    return next;
+                    }
                 });
+                return next;
+            });
 
             // Check if pack is completed and trigger review modal
             const hasCompletedSource = sources.some((s: any) => s.status === 'completed');
@@ -800,7 +800,7 @@ export default function ProcessV3Page() {
                                 onClick={(e) => e.stopPropagation()}
                                 style={{ pointerEvents: 'auto' }} // Allow clicking help even if disabled
                             >
-                                <HelpCircle className="w-5 h-5" />
+                                Where do I get this?
                             </a>
                         </div>
 
