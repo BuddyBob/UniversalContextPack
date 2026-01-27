@@ -19,6 +19,7 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 # Resend Template IDs (from Resend dashboard)
 TEMPLATE_ACCOUNT_CREATION = "3828e17b-1a7a-4ebc-a299-c73f5fba56c8"
 TEMPLATE_INCOMPLETE_ACTIVATION = "77197fba-bc10-4b0a-9ae2-01b32ac4df53"
+TEMPLATE_PROCESSING_COMPLETE = "processing_complete"  # TODO: Create this template in Resend
 # TEMPLATE_FIRST_ACTION = "TBD"  # Not implemented yet
 
 # Email sender
@@ -128,6 +129,77 @@ def send_incomplete_activation_email(
         template_id=TEMPLATE_INCOMPLETE_ACTIVATION,
         variables=variables
     )
+
+
+def send_processing_complete_email(
+    user_email: str,
+    pack_name: str,
+    file_name: str,
+    pack_id: str,
+    total_chunks: int,
+    first_name: Optional[str] = None
+) -> Optional[str]:
+    """
+    Send processing complete email for large files (5+ chunks).
+    Notifies user that their pack is ready.
+    
+    Args:
+        user_email: User's email address
+        pack_name: Name of the pack
+        file_name: Name of the processed file
+        pack_id: Pack ID for view link
+        total_chunks: Number of chunks processed
+        first_name: User's first name (optional, defaults to "there")
+        
+    Returns:
+        Resend email ID if successful, None if failed
+    """
+    # For now, send a simple email with basic info
+    # TODO: Create proper template in Resend dashboard
+    try:
+        print(f"📧 Sending processing complete email to {user_email}")
+        
+        # Construct view link
+        view_link = f"https://www.context-pack.com/process-v3?pack={pack_id}"
+        
+        # Send simple HTML email until template is created
+        response = resend.Emails.send({
+            "from": EMAIL_FROM,
+            "to": [user_email],
+            "subject": f"✅ Your pack '{pack_name}' is ready!",
+            "html": f"""
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #333;">Processing Complete! 🎉</h2>
+                <p style="color: #666; font-size: 16px;">Hi {first_name or 'there'},</p>
+                <p style="color: #666; font-size: 16px;">
+                    Your file <strong>{file_name}</strong> has been processed successfully!
+                </p>
+                <p style="color: #666; font-size: 14px;">
+                    <strong>Pack:</strong> {pack_name}<br>
+                    <strong>Chunks processed:</strong> {total_chunks}
+                </p>
+                <div style="margin: 30px 0;">
+                    <a href="{view_link}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                        View Your Pack
+                    </a>
+                </div>
+                <p style="color: #999; font-size: 12px;">
+                    If you didn't request this, you can safely ignore this email.
+                </p>
+            </div>
+            """
+        })
+        
+        email_id = response.get('id')
+        print(f"✅ Processing complete email sent: {email_id}")
+        return email_id
+        
+    except Exception as e:
+        print(f"❌ Failed to send processing complete email: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 
 
 def log_email_event(

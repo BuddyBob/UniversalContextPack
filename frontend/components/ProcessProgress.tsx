@@ -3,11 +3,13 @@
 import { Loader, FileText, AlertCircle, Check, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ProcessStatus } from '@/types/ProcessState';
+import { WaitingScreen } from './WaitingScreen';
 
 interface ProcessProgressProps {
     status: ProcessStatus;
     onStartAnalysis?: () => void;
     onCancel?: () => void;
+    onDismiss?: () => void;
     isStartingAnalysis?: boolean;
     isCancelling?: boolean;
 }
@@ -16,6 +18,7 @@ export function ProcessProgress({
     status,
     onStartAnalysis,
     onCancel,
+    onDismiss,
     isStartingAnalysis = false,
     isCancelling = false
 }: ProcessProgressProps) {
@@ -172,8 +175,13 @@ export function ProcessProgress({
         const current = status.currentChunk || 0;
         const total = status.totalChunks || 0;
         const percent = status.progress || (total > 0 ? Math.round((current / total) * 100) : 0);
-        const isLargeJob = total >= 10;
 
+        // Show waiting screen for large jobs (5+ chunks)
+        if (total >= 5) {
+            return <WaitingScreen totalChunks={total} fileName={status.fileName} />;
+        }
+
+        // Show progress tracking for small jobs (< 5 chunks)
         return (
             <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-lg p-6 backdrop-blur-sm">
                 <div className="flex items-start justify-between mb-4">
@@ -185,7 +193,7 @@ export function ProcessProgress({
                             </h3>
                         </div>
                         <p className="text-sm text-gray-400 leading-relaxed">
-                            <strong>Reload if stalled.</strong   >
+                            Processing your content...
                         </p>
                     </div>
                     <button
@@ -219,13 +227,6 @@ export function ProcessProgress({
                             style={{ width: `${percent}%` }}
                         />
                     </div>
-                    {isLargeJob && (
-                        <div className="bg-gray-800/50 border border-gray-700/50 rounded p-3">
-                            <p className="text-xs text-gray-400 leading-relaxed">
-                                <strong className="text-gray-300">Reload to see progress. Or check email when done.</strong>
-                            </p>
-                        </div>
-                    )}
                 </div>
             </div>
         );
@@ -255,16 +256,20 @@ export function ProcessProgress({
     // Completed state
     if (status.state === 'completed') {
         return (
-            <div className="bg-gradient-to-br from-emerald-900/20 to-emerald-800/20 border border-emerald-500/30 rounded-lg p-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center">
-                        <Check className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-white">Analysis Complete</h3>
-                        <p className="text-sm text-gray-400">{status.fileName} processed successfully</p>
-                    </div>
+                    <Check className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm text-gray-300">Analysis complete</span>
                 </div>
+                {onDismiss && (
+                    <button
+                        onClick={onDismiss}
+                        className="text-gray-500 hover:text-gray-300 transition-colors"
+                        aria-label="Dismiss"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                )}
             </div>
         );
     }

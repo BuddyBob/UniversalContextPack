@@ -56,6 +56,7 @@ try:
     from email_service import (
         send_account_creation_email,
         send_incomplete_activation_email,
+        send_processing_complete_email,
         log_email_event,
         update_user_email_flag,
         has_email_been_sent
@@ -2090,8 +2091,8 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             print(f"📦 Loaded {len(chunks)} chunks from storage")
         
         
-        # Check if this is a large job that needs email notification
-        is_large_job = len(chunks) >= 10
+        # Check if this is a large job that needs email notification (5+ chunks)
+        is_large_job = len(chunks) >= 5
         
         if is_large_job:
             print(f"📧 Large job detected ({len(chunks)} chunks). Will send email notification on completion.")
@@ -2349,20 +2350,35 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         else:
             print(f"⚠️ [TREE] Skipping second-pass tree extraction (feature disabled or unavailable)")
         
-        # Send email notification if it was a large job
-        if is_large_job:
+        # Send email notification if it was a large job (5+ chunks)
+        if is_large_job and EMAIL_SERVICE_AVAILABLE:
             try:
-                await send_email_notification(
+                # Get pack name from database (use default if query fails)
+                pack_name = "Your Pack"
+                try:
+                    pack_result = supabase.table("packs_v2").select("pack_name").eq("pack_id", pack_id).execute()
+                    if pack_result.data:
+                        pack_name = pack_result.data[0]["pack_name"]
+                except Exception as db_error:
+                    print(f"⚠️ Could not fetch pack name: {db_error}, using default")
+                
+                # Get user's first name
+                first_name = None
+                if hasattr(user, 'full_name') and user.full_name:
+                    first_name = user.full_name.split()[0]
+                
+                # Send completion email
+                send_processing_complete_email(
                     user_email=user.email,
-                    job_id=source_id,
-                    chunks_processed=len(chunks),
-                    total_chunks=len(chunks),
+                    pack_name=pack_name,
+                    file_name=filename,
                     pack_id=pack_id,
-                    success=True
+                    total_chunks=len(chunks),
+                    first_name=first_name
                 )
-                print(f"📧 Email notification sent to {user.email}")
+                print(f"📧 Processing complete email sent to {user.email}")
             except Exception as email_error:
-                print(f"⚠️ Failed to send email notification: {email_error}")
+                print(f"⚠️ Failed to send completion email: {email_error}")
         
         # Credits are automatically deducted by database trigger based on processed_chunks_param
         # (only successfully processed chunks trigger deduction, not failed ones)
@@ -2378,20 +2394,10 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             "error_message_param": str(e)
         }).execute()
         
-        # Send failure email notification if it was a large job
-        if 'is_large_job' in locals() and is_large_job:
-            try:
-                await send_email_notification(
-                    user_email=user.email,
-                    job_id=source_id,
-                    chunks_processed=0,
-                    total_chunks=len(chunks) if 'chunks' in locals() else 0,
-                    pack_id=pack_id if 'pack_id' in locals() else None,
-                    success=False
-                )
-                print(f"📧 Failure email notification sent to {user.email}")
-            except Exception as email_error:
-                print(f"⚠️ Failed to send failure email notification: {email_error}")
+        
+        # Note: Failure email notification not implemented yet
+        # Users will see error in UI when they check back
+
 
 # Second-pass tree building from analysis text
 
