@@ -39,7 +39,7 @@ export default function PricingPageClient() {
 
   // Calculate pricing
   const calculatePrice = (unlimited: boolean = false) => {
-    if (unlimited) return 3.99 // Pro subscription for $3.99/month
+    if (unlimited) return 5.99 // Pro subscription for $5.99/month
     return fixedCreditPrice // Fixed 50-credit pack at $4.99
   }
 
@@ -364,7 +364,7 @@ export default function PricingPageClient() {
                 <div className="text-center mb-8">
                   <h3 className="text-xl font-semibold text-white mb-3">Pro</h3>
                   <div className="mb-2">
-                    <span className="text-5xl font-bold text-white">$3.99</span>
+                    <span className="text-5xl font-bold text-white">$5.99</span>
                   </div>
                   <p className="text-sm text-[#6b7280]">per month</p>
                 </div>
