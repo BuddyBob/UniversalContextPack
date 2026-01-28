@@ -60,7 +60,6 @@ export default function ProcessV3Page() {
 
     const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
-    const [dismissedSourceId, setDismissedSourceId] = useState<string | null>(null);
     const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
     const [fileUploadProgress, setFileUploadProgress] = useState<Map<string, FileUploadProgress>>(new Map());
     const [isDownloadingPack, setIsDownloadingPack] = useState(false);
@@ -359,18 +358,9 @@ export default function ProcessV3Page() {
 
     // Polling logic - uses robust usePolling hook
     // Keep polling if any source is in a non-terminal state
-    // EXCEPT for large jobs (5+ chunks) that are analyzing (they wait for email)
     const shouldPoll = !!selectedPack && packSources.some(s => {
         const terminalStates = ['completed', 'failed', 'cancelled'];
-        if (terminalStates.includes(s.status)) return false;
-
-        // Skip polling for large jobs that are analyzing
-        const totalChunks = s.total_chunks || 0;
-        if (totalChunks >= 5 && (s.status === 'analyzing' || s.status === 'processing' || s.status === 'analyzing_chunks')) {
-            return false;
-        }
-
-        return true;
+        return !terminalStates.includes(s.status);
     });
 
     const pollPackDetails = useCallback(async () => {
@@ -390,44 +380,44 @@ export default function ProcessV3Page() {
             const data = await response.json();
             const sources = data.sources || [];
 
-            // Update sources state
-            setPackSources(sources);
-
-            // Update process states for each source
-            sources.forEach((source: any) => {
-                updateFromSourceStatus(source);
-            });
-
-            // Poll for extraction progress updates
-            setFileUploadProgress(prev => {
-                const next = new Map(prev);
+                // Update sources state
+                setPackSources(sources);
+                
+                // Update process states for each source
                 sources.forEach((source: any) => {
-                    const fileName = source.file_name || source.source_name;
-                    const existingProgress = next.get(fileName);
-
-                    if (existingProgress && existingProgress.phase === 'extracting') {
-                        if (source.status === 'ready_for_analysis' || source.status === 'completed') {
-                            // Extraction complete
-                            next.delete(fileName);
-                        } else if (source.status === 'failed') {
-                            // Show error
-                            next.set(fileName, {
-                                ...existingProgress,
-                                phase: 'error',
-                                errorMessage: source.error_message || 'Extraction failed'
-                            });
-                        } else if (source.status === 'processing' || source.status === 'extracting') {
-                            // Update progress
-                            const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
-                            next.set(fileName, {
-                                ...existingProgress,
-                                extractionProgress
-                            });
-                        }
-                    }
+                    updateFromSourceStatus(source);
                 });
-                return next;
-            });
+
+                // Poll for extraction progress updates
+                setFileUploadProgress(prev => {
+                    const next = new Map(prev);
+                    sources.forEach((source: any) => {
+                        const fileName = source.file_name || source.source_name;
+                        const existingProgress = next.get(fileName);
+
+                        if (existingProgress && existingProgress.phase === 'extracting') {
+                            if (source.status === 'ready_for_analysis' || source.status === 'completed') {
+                                // Extraction complete
+                                next.delete(fileName);
+                            } else if (source.status === 'failed') {
+                                // Show error
+                                next.set(fileName, {
+                                    ...existingProgress,
+                                    phase: 'error',
+                                    errorMessage: source.error_message || 'Extraction failed'
+                                });
+                            } else if (source.status === 'processing' || source.status === 'extracting') {
+                                // Update progress
+                                const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
+                                next.set(fileName, {
+                                    ...existingProgress,
+                                    extractionProgress
+                                });
+                            }
+                        }
+                    });
+                    return next;
+                });
 
             // Check if pack is completed and trigger review modal
             const hasCompletedSource = sources.some((s: any) => s.status === 'completed');
@@ -498,13 +488,9 @@ export default function ProcessV3Page() {
 
     // NEW: Helper to convert packSources to ProcessStatus
     const getCurrentProcessStatus = useCallback((): ProcessStatus | null => {
-        const activeSource = packSources.find(s => {
-            // Skip dismissed completed sources
-            if (s.status === 'completed' && s.source_id === dismissedSourceId) {
-                return false;
-            }
-            return ['extracting', 'ready_for_analysis', 'analyzing', 'processing', 'analyzing_chunks', 'building_tree', 'completed', 'failed', 'cancelled'].includes(s.status);
-        });
+        const activeSource = packSources.find(s =>
+            ['extracting', 'ready_for_analysis', 'analyzing', 'processing', 'analyzing_chunks', 'building_tree', 'completed', 'failed', 'cancelled'].includes(s.status)
+        );
 
         if (!activeSource) return null;
 
@@ -535,7 +521,7 @@ export default function ProcessV3Page() {
         }
 
         return status;
-    }, [packSources, creditInfo, dismissedSourceId]);
+    }, [packSources, creditInfo]);
 
     // Handle cancel and delete (Stop & Reset)
     const handleCancelProcessing = async () => {
@@ -779,11 +765,6 @@ export default function ProcessV3Page() {
                                 }
                             }}
                             onCancel={handleCancelProcessing}
-                            onDismiss={() => {
-                                if (processStatus?.sourceId) {
-                                    setDismissedSourceId(processStatus.sourceId);
-                                }
-                            }}
                             isStartingAnalysis={isStartingAnalysis}
                             isCancelling={isCancelling}
                         />
@@ -814,12 +795,12 @@ export default function ProcessV3Page() {
                                 href="https://chatgpt.com/#settings/DataControls"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="absolute top-3 right-3 z-20 p-2 rounded-full bg-gray-800/50 hover:bg-gray-700 border border-gray-700/50 hover:border-gray-600 transition-all group"
+                                className="absolute top-4 right-4 z-20 text-gray-600 hover:text-blue-400 transition-colors"
                                 title="Where do I get this?"
                                 onClick={(e) => e.stopPropagation()}
                                 style={{ pointerEvents: 'auto' }} // Allow clicking help even if disabled
                             >
-                                <HelpCircle className="w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-colors" />
+                                <HelpCircle className="w-5 h-5" />
                             </a>
                         </div>
 
