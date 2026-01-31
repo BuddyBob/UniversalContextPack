@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Chrome, Github, Loader2, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Chrome, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from './AuthProvider'
 
 interface AuthModalProps {
@@ -10,16 +10,14 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const { signInWithGoogle, signInWithGitHub, signInWithEmail, signUpWithEmail, user } = useAuth()
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [step, setStep] = useState<'signin' | 'apikey'>('signin')
   const [isSignUp, setIsSignUp] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [apiKey, setApiKey] = useState('')
-  const [showApiKey, setShowApiKey] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
 
   if (!isOpen) return null
 
@@ -31,18 +29,6 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       onClose()
     } catch (error: any) {
       setError(error.message || 'Failed to sign in with Google')
-      setLoading(false)
-    }
-  }
-
-  const handleGitHubSignIn = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      await signInWithGitHub()
-      onClose()
-    } catch (error: any) {
-      setError(error.message || 'Failed to sign in with GitHub')
       setLoading(false)
     }
   }
@@ -78,196 +64,209 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   }
 
-  const handleApiKeySubmit = () => {
-    if (!apiKey.trim()) {
-      setError('Please enter your OpenAI API key')
-      return
-    }
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      {/* Left side - Matrix-style background */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-black">
+        <MatrixRain />
+      </div>
 
-    if (!apiKey.startsWith('sk-')) {
-      setError('Please enter a valid OpenAI API key (starts with sk-)')
-      return
-    }
+      {/* Right side - Login form */}
+      <div className="w-full lg:w-1/2 bg-[#0F0F0F] flex items-center justify-center p-8 relative">
+        <button
+          onClick={onClose}
+          className="absolute top-8 right-8 text-gray-400 hover:text-white transition-colors z-10"
+          disabled={loading}
+        >
+          <X className="h-6 w-6" />
+        </button>
 
-    localStorage.setItem('openai_api_key', apiKey.trim())
-    setError(null)
-    onClose()
-  }
-
-  const handleSkipApiKey = () => {
-    onClose()
-  }
-
-  if (step === 'apikey') {
-    return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-gray-900/95 border border-white/10 rounded-2xl max-w-md w-full p-8 relative shadow-2xl backdrop-blur-xl">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-white mb-2">Add Your OpenAI API Key</h2>
-            <p className="text-gray-300">
-              To process and analyze your chat exports, we need your OpenAI API key
-            </p>
-          </div>
+        <div className="w-full max-w-md">
+          <h1 className="text-3xl font-medium text-white mb-8">
+            {isSignUp ? 'Create Account' : 'Log in to Your Pack'}
+          </h1>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg mb-6">
+            <div className={`border px-4 py-3 rounded-lg mb-6 text-sm ${
+              error.includes('Check your email')
+                ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                : 'bg-red-500/10 border-red-500/30 text-red-400'
+            }`}>
               {error}
             </div>
           )}
 
-          <div className="mb-6">
-            <label htmlFor="apikey" className="block text-sm font-medium text-gray-300 mb-2">
-              OpenAI API Key
+          {/* Email Input */}
+          <div className="mb-4">
+            <label htmlFor="email" className="block text-sm text-gray-400 mb-2">
+              Email
             </label>
-            <div className="relative">
-              <input
-                id="apikey"
-                type={showApiKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 text-white placeholder-gray-400 pr-12"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiKey(!showApiKey)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
-              >
-                {showApiKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              </button>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Your API key is stored locally and never sent to our servers
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <button
-              onClick={handleApiKeySubmit}
-              className="w-full bg-white hover:bg-gray-100 text-black px-4 py-3 rounded-lg font-semibold transition-colors"
-            >
-              Save and Continue
-            </button>
-            <button
-              onClick={handleSkipApiKey}
-              className="w-full bg-white/10 hover:bg-white/20 text-white px-4 py-3 rounded-lg font-medium transition-colors"
-            >
-              Skip for Now
-            </button>
-          </div>
-
-          <div className="mt-6 text-center text-sm text-gray-400">
-            <p>Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-white underline">OpenAI Platform</a></p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900/95 border border-white/10 rounded-2xl max-w-md w-full p-8 relative shadow-2xl backdrop-blur-xl">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
-          disabled={loading}
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-white mb-2">Sign in to Continue</h2>
-          <p className="text-gray-300">
-            You'll get <strong className="text-white">10 processing credits</strong> to get started immediately.
-          </p>
-        </div>
-
-        {error && (
-          <div className={`border px-4 py-3 rounded-lg mb-6 text-sm ${error.includes('Check your email')
-            ? 'bg-green-500/10 border-green-500/20 text-green-400'
-            : 'bg-red-500/10 border-red-500/20 text-red-400'
-            }`}>
-            {error}
-          </div>
-        )}
-
-        {/* OAuth Buttons */}
-        <div className="space-y-3 mb-6">
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3.5 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg"
-          >
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Chrome className="h-5 w-5" />}
-            <span>Sign in with Google</span>
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/10"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-gray-900 text-gray-400">Or</span>
-          </div>
-        </div>
-
-        {/* Email Form */}
-        <form onSubmit={handleEmailAuth} className="space-y-4">
-          <div>
             <input
+              id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 text-white placeholder-gray-400"
+              placeholder="your@email.com"
+              className="w-full px-4 py-3.5 bg-[#2C2C2E] border border-[#3A3A3C] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#3A3A3C] transition-colors"
               disabled={loading}
+              autoComplete="email"
             />
           </div>
 
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg focus:ring-2 focus:ring-white/30 focus:border-white/30 text-white placeholder-gray-400 pr-10"
-              disabled={loading}
-            />
+          {/* Password Input */}
+          <div className="mb-4">
+            <label htmlFor="password" className="block text-sm text-gray-400 mb-2">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••"
+                className="w-full px-4 py-3.5 bg-[#2C2C2E] border border-[#3A3A3C] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#3A3A3C] transition-colors pr-12"
+                disabled={loading}
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Remember me checkbox - only on sign in */}
+          {!isSignUp && (
+            <div className="mb-6 flex items-center">
+              <input
+                id="remember"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-[#3A3A3C] bg-[#2C2C2E] text-white focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
+              <label htmlFor="remember" className="ml-2.5 text-sm text-gray-400 cursor-pointer select-none">
+                Keep me logged in for up to 30 days
+              </label>
+            </div>
+          )}
+
+          {/* Sign in/up button */}
+          <button
+            onClick={handleEmailAuth}
+            disabled={loading}
+            className="w-full bg-white hover:bg-gray-100 text-black font-medium py-3.5 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mb-6"
+          >
+            {loading ? 'Processing...' : isSignUp ? 'Sign Up' : 'Log In'}
+          </button>
+
+          {/* Divider */}
+          <div className="relative my-8">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[#3A3A3C]"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-[#1C1C1E] text-gray-500">or</span>
+            </div>
+          </div>
+
+          {/* Google Sign in */}
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={loading}
+            className="w-full bg-white hover:bg-gray-100 text-black font-medium py-3.5 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 mb-8"
+          >
+            <Chrome className="h-5 w-5" />
+            <span>Log in with Google</span>
+          </button>
+
+          {/* Sign up link */}
+          <div className="text-center text-sm">
+            <span className="text-gray-500">
+              {isSignUp ? 'Already have an account? ' : "Not on Your Pack? "}
+            </span>
             <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+              onClick={() => {
+                setIsSignUp(!isSignUp)
+                setError(null)
+              }}
+              className="text-white underline hover:text-gray-300 transition-colors font-medium"
             >
-              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              {isSignUp ? 'Sign in' : 'Create an account'}
             </button>
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3.5 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-          >
-            {loading ? 'Processing...' : isSignUp ? 'Sign Up' : 'Sign In'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="w-full text-sm text-gray-400 hover:text-white"
-          >
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   )
+}
+
+// Matrix rain effect component
+function MatrixRain() {
+  useEffect(() => {
+    const canvas = document.getElementById('matrix-canvas') as HTMLCanvasElement
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    canvas.width = window.innerWidth / 2
+    canvas.height = window.innerHeight
+
+    const barWidth = 2
+    const barSpacing = 14
+    const columns = Math.floor(canvas.width / barSpacing)
+    let phase = 0
+    
+    function draw() {
+      if (!ctx || !canvas) return
+      
+      // Clear with black background
+      ctx.fillStyle = 'rgba(0, 0, 0, 1)'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      ctx.fillStyle = '#ffffff'
+
+      for (let i = 0; i < columns; i++) {
+        const x = i * barSpacing
+        
+        // Create wave effect using sine wave
+        // Each column is offset in the wave based on its position
+        const waveOffset = Math.sin(phase + i * 0.3) * 40
+        
+        // Calculate bar height based on wave
+        const barHeight = 50 + waveOffset
+        
+        // Center the bar vertically with wave motion
+        const y = canvas.height / 2 - barHeight / 2 + Math.sin(phase + i * 0.2) * 30
+        
+        // Draw the vertical bar
+        ctx.fillRect(x, y, barWidth, barHeight)
+      }
+      
+      // Increment phase for animation
+      phase += 0.05
+    }
+
+    const interval = setInterval(draw, 33) // ~30fps
+
+    const handleResize = () => {
+      canvas.width = window.innerWidth / 2
+      canvas.height = window.innerHeight
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  return <canvas id="matrix-canvas" className="absolute inset-0" />
 }

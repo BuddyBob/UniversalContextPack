@@ -305,12 +305,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      // Check if there's an active session first
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        const { error } = await supabase.auth.signOut()
+        if (error) throw error
+      }
+      
+      // Clear local state regardless of session status
+      setUser(null)
+      setSession(null)
       setUserProfile(null)
+      
+      // Clear any local storage items
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('supabase.auth.token')
+      }
     } catch (error) {
       console.error('Error signing out:', error)
-      throw error
+      // Still clear local state even if sign out fails
+      setUser(null)
+      setSession(null)
+      setUserProfile(null)
     }
   }
 
