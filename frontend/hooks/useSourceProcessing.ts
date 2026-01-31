@@ -44,12 +44,14 @@ export function useSourceProcessing() {
      */
     const fetchCreditInfo = useCallback(async (sourceId: string) => {
         try {
+            console.log('[useSourceProcessing] Fetching credit info for:', sourceId);
             const creditResponse = await makeAuthenticatedRequest(
                 `${API_BASE_URL}/api/v2/sources/${sourceId}/credit-check`
             );
 
             if (creditResponse.ok) {
                 const creditData = await creditResponse.json();
+                console.log('[useSourceProcessing] Credit info received:', creditData);
                 setCreditInfo({
                     totalChunks: creditData.totalChunks,
                     creditsRequired: creditData.creditsRequired,
@@ -57,6 +59,8 @@ export function useSourceProcessing() {
                     hasUnlimited: creditData.hasUnlimited || false,
                     canProceed: creditData.canProceed
                 });
+            } else {
+                console.error('[useSourceProcessing] Credit check failed with status:', creditResponse.status);
             }
         } catch (error) {
             console.error('[useSourceProcessing] Error fetching credit info:', error);
@@ -88,7 +92,14 @@ export function useSourceProcessing() {
             );
 
             if (!response.ok) {
-                throw new Error('Failed to start analysis');
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.message || errorData.error || 'Failed to start analysis';
+                
+                if (response.status === 402) {
+                    throw new Error('Insufficient credits. Please purchase more credits to continue.');
+                }
+                
+                throw new Error(errorMessage);
             }
 
             const result = await response.json();

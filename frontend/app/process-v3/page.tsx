@@ -17,7 +17,6 @@ import { usePolling } from '@/hooks/usePolling';
 import { API_BASE_URL } from '@/lib/api';
 import { ProcessProgress } from '@/components/ProcessProgress';
 import { ProcessStatus, mapBackendStatus } from '@/types/ProcessState';
-import { ReviewModal } from '@/components/ReviewModal';
 
 // File upload progress tracking
 interface FileUploadProgress {
@@ -42,7 +41,7 @@ const formatFileSize = (bytes: number): string => {
 export default function ProcessV3Page() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, makeAuthenticatedRequest } = useAuth();
+    const { user, makeAuthenticatedRequest, refreshUserProfile } = useAuth();
 
     const {
         selectedPack,
@@ -69,10 +68,6 @@ export default function ProcessV3Page() {
     const [showTextModal, setShowTextModal] = useState(false);
     const [urlInput, setUrlInput] = useState('');
     const [textInput, setTextInput] = useState('');
-
-    // Review modal state
-    const [showReviewModal, setShowReviewModal] = useState(false);
-    const hasCheckedReview = useRef(false);
 
     // Handle URL upload
     const handleUrlUpload = async () => {
@@ -418,59 +413,11 @@ export default function ProcessV3Page() {
                     });
                     return next;
                 });
-
-            // Check if pack is completed and trigger review modal
-            const hasCompletedSource = sources.some((s: any) => s.status === 'completed');
-            if (hasCompletedSource && selectedPack && !hasCheckedReview.current) {
-                hasCheckedReview.current = true;
-                checkAndShowReviewModal(selectedPack.pack_id);
-            }
         } catch (error) {
             console.error('[ProcessV3] Polling error:', error);
             // Don't throw - let polling continue on next interval
         }
     }, [selectedPack, makeAuthenticatedRequest, setPackSources, updateFromSourceStatus]);
-
-    // Check if user should see review modal
-    const checkAndShowReviewModal = async (packId: string) => {
-        try {
-            // Check localStorage first (client-side quick check)
-            const reviewedPacks = localStorage.getItem('reviewed_packs');
-            if (reviewedPacks) {
-                const reviewed = JSON.parse(reviewedPacks);
-                if (reviewed.includes(packId)) {
-                    console.log('[ReviewModal] Pack already reviewed (localStorage)');
-                    return;
-                }
-            }
-
-            // Check with backend
-            const response = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/api/v2/packs/${packId}/has-review`
-            );
-
-            if (response.ok) {
-                const data = await response.json();
-                if (!data.has_reviewed) {
-                    setShowReviewModal(true);
-                }
-            }
-        } catch (error) {
-            console.error('[ReviewModal] Error checking review status:', error);
-        }
-    };
-
-    const handleReviewSubmitSuccess = () => {
-        if (!selectedPack) return;
-
-        // Update localStorage to prevent showing again
-        const reviewedPacks = localStorage.getItem('reviewed_packs');
-        const reviewed = reviewedPacks ? JSON.parse(reviewedPacks) : [];
-        if (!reviewed.includes(selectedPack.pack_id)) {
-            reviewed.push(selectedPack.pack_id);
-            localStorage.setItem('reviewed_packs', JSON.stringify(reviewed));
-        }
-    };
 
     usePolling({
         enabled: shouldPoll,
@@ -745,7 +692,11 @@ export default function ProcessV3Page() {
                                 setIsStartingAnalysis(true);
                                 try {
                                     const readySource = packSources.find(s => s.status === 'ready_for_analysis');
-                                    if (!readySource || !creditInfo) return;
+                                    if (!readySource || !creditInfo) {
+                                        console.error('[ProcessV3] Missing readySource or creditInfo');
+                                        setIsStartingAnalysis(false);
+                                        return;
+                                    }
 
                                     const isPartial = !creditInfo.canProceed && creditInfo.userCredits > 0;
                                     const maxChunks = isPartial ? creditInfo.userCredits : creditInfo.totalChunks;
@@ -756,10 +707,15 @@ export default function ProcessV3Page() {
 
                                     console.log(`[ProcessV3] Starting ${isPartial ? 'partial' : 'full'} analysis:`, maxChunks);
                                     await startAnalysis(readySource.source_id, creditInfo.totalChunks, isPartial ? maxChunks : undefined);
+                                    
+                                    // Refresh user profile to update credits balance
+                                    await refreshUserProfile();
+                                    
                                     await pollPackDetails();
                                 } catch (error) {
                                     console.error('[ProcessV3] Failed to start analysis:', error);
-                                    alert('Failed to start analysis. Please try again.');
+                                    const errorMessage = error instanceof Error ? error.message : 'Failed to start analysis. Please try again.';
+                                    alert(errorMessage);
                                 } finally {
                                     setIsStartingAnalysis(false);
                                 }
@@ -1081,15 +1037,6 @@ export default function ProcessV3Page() {
                     </button>
                 </div>
             </div>
-
-            {/* Review Modal */}
-            {showReviewModal && selectedPack && (
-                <ReviewModal
-                    packId={selectedPack.pack_id}
-                    onClose={() => setShowReviewModal(false)}
-                    onSubmitSuccess={handleReviewSubmitSuccess}
-                />
-            )}
         </div>
     );
 }

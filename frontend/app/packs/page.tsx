@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, FileText, Brain, BarChart3, Plus, ExternalLink, Trash2 } from 'lucide-react'
+import { Download, FileText, Brain, BarChart3, Plus, ExternalLink, Trash2, Loader2, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import FreeCreditsPrompt from '@/components/FreeCreditsPrompt'
 import { useFreeCreditsPrompt } from '@/hooks/useFreeCreditsPrompt'
@@ -35,8 +35,8 @@ export default function PacksPage() {
   const [creatingPack, setCreatingPack] = useState(false)
   const [newPackName, setNewPackName] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [hasActiveProcessing, setHasActiveProcessing] = useState(false)
   const freeCreditsPrompt = useFreeCreditsPrompt()
-  const hasLoadedRef = useRef(false) // Track if we've already loaded packs
 
   // Helper function to format token counts
   const formatTokenCount = (tokens: number): string => {
@@ -50,13 +50,14 @@ export default function PacksPage() {
 
 
   useEffect(() => {
-    // Only load once when user becomes authenticated
-    if (user && session && !hasLoadedRef.current) {
-      hasLoadedRef.current = true
+    console.log('[Packs] useEffect triggered - user:', !!user, 'session:', !!session);
+
+    // Load packs whenever component mounts and user is authenticated
+    if (user && session) {
+      console.log('[Packs] User authenticated, loading packs...');
       loadPacks()
     } else if (!user && !session) {
-      // Reset when user logs out
-      hasLoadedRef.current = false
+      console.log('[Packs] No authentication, showing sample packs');
       // If user is not authenticated, show sample packs
       setLoading(false)
       setError(null)
@@ -89,6 +90,10 @@ export default function PacksPage() {
         }
       ]
       setPacks(samplePacks)
+    } else {
+      // One is defined but not the other - still loading auth
+      console.log('[Packs] Waiting for authentication to complete...');
+      // Keep loading state active while auth is in progress
     }
   }, [user, session])
 
@@ -106,8 +111,9 @@ export default function PacksPage() {
       setError(null) // Clear any previous errors
 
       // Add timeout to prevent hanging requests
+      // Shorter timeout since if DB is busy with tree building, we want to fail fast
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
 
       try {
         console.log('[Packs] Fetching from /api/v2/packs...')
@@ -147,12 +153,26 @@ export default function PacksPage() {
         // Sort by completedAt date, most recent first
         transformedPacks.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
         setPacks(transformedPacks)
+
+        // Check if user has active processing
+        try {
+          const processingResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/user/has-active-processing`)
+          if (processingResponse.ok) {
+            const processingData = await processingResponse.json()
+            setHasActiveProcessing(processingData.has_active_processing || false)
+          }
+        } catch (processingError) {
+          console.warn('[Packs] Failed to check active processing status:', processingError)
+          // Don't block - just assume no active processing
+          setHasActiveProcessing(false)
+        }
+
         return // Success, exit early
 
       } catch (fetchError) {
         clearTimeout(timeoutId)
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          throw new Error('Request timed out. Please try again.')
+          throw new Error('Server is busy processing (tree building may be in progress). Please wait and try again in a moment.')
         }
         throw fetchError
       }
@@ -185,6 +205,12 @@ export default function PacksPage() {
     // If not authenticated, trigger auth prompt
     if (!user) {
       freeCreditsPrompt.triggerPrompt("creating a context pack")
+      return
+    }
+
+    // Prevent pack creation if user has active processing
+    if (hasActiveProcessing) {
+      alert('You have sources currently processing. Please wait for them to complete before creating a new pack.')
       return
     }
 
@@ -249,42 +275,28 @@ export default function PacksPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-700 border-t-gray-300 mx-auto mb-4"></div>
-            <p className="text-gray-400">Loading packs...</p>
-          </div>
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-purple-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading packs...</p>
         </div>
       </div>
     )
   }
 
-  // Show error state with retry
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          {/* Header */}
-          <div className="mb-12">
-            <h1 className="text-3xl font-bold text-white">Context Packs Dashboard</h1>
-            <p className="text-gray-400 mt-2">Create, manage, and download your UCP analysis results</p>
-          </div>
-
-          {/* Error State */}
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-red-900/40 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-red-400" />
-            </div>
-            <h3 className="text-lg font-medium text-white mb-2">Failed to Load Packs</h3>
-            <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">{error}</p>
-            <button
-              onClick={() => loadPacks()}
-              className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-            >
-              Try Again
-            </button>
-          </div>
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center max-w-md px-4">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Packs</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => loadPacks()}
+            className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     )
@@ -304,14 +316,22 @@ export default function PacksPage() {
           {/* Create New Pack Card - Always First */}
           <div
             onClick={handleCreatePack}
-            className="bg-gray-800 border-2 border-gray-700 border-dashed rounded-2xl p-8 cursor-pointer transition-all hover:bg-gray-750 hover:border-gray-600 flex flex-col items-center justify-center min-h-[280px] group"
+            className={`bg-gray-800 border-2 border-gray-700 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center justify-center min-h-[280px] group ${hasActiveProcessing
+              ? 'opacity-50 cursor-not-allowed'
+              : 'cursor-pointer hover:bg-gray-750 hover:border-gray-600'
+              }`}
+            title={hasActiveProcessing ? "Processing in progress - please wait to create a new pack" : ""}
           >
-            <div className="w-16 h-16 bg-gray-700 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-gray-600 transition-all">
+            <div className={`w-16 h-16 bg-gray-700 rounded-2xl flex items-center justify-center mb-4 transition-all ${hasActiveProcessing ? '' : 'group-hover:bg-gray-600'
+              }`}>
               <Plus className="w-8 h-8 text-gray-300" />
             </div>
             <h3 className="text-xl font-bold text-gray-200 mb-2">Create New Pack</h3>
             <p className="text-gray-400 text-sm text-center">
-              Start processing a new context pack
+              {hasActiveProcessing
+                ? "Processing in progress..."
+                : "Start processing a new context pack"
+              }
             </p>
           </div>
 

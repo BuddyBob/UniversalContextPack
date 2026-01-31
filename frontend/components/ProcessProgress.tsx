@@ -170,8 +170,8 @@ export function ProcessProgress({
         );
     }
 
-    // Analyzing state
-    if (status.state === 'analyzing') {
+    // Analyzing state or building tree state - show the same UI
+    if (status.state === 'analyzing' || status.state === 'building_tree') {
         const current = status.currentChunk || 0;
         const total = status.totalChunks || 0;
         const percent = status.progress || (total > 0 ? Math.round((current / total) * 100) : 0);
@@ -226,27 +226,6 @@ export function ProcessProgress({
                             className="bg-gradient-to-r from-blue-500 to-blue-400 h-full transition-all duration-700 ease-out"
                             style={{ width: `${percent}%` }}
                         />
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // Building tree state
-    if (status.state === 'building_tree') {
-        return (
-            <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-lg p-6 backdrop-blur-sm">
-                <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                            <h3 className="text-lg font-semibold text-white tracking-tight">
-                                Building Memory Tree
-                            </h3>
-                        </div>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            Organizing knowledge into structured memory graph.
-                        </p>
                     </div>
                 </div>
             </div>

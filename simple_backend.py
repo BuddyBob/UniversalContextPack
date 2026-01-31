@@ -1077,6 +1077,21 @@ def download_from_r2_with_fallback(primary_key: str, job_id: str, filename: str,
         print(f"❌ File not found at any path for job {job_id}, filename {filename}")
     return None
 
+# ============================================================================
+# ASYNC WRAPPERS FOR R2 I/O (NON-BLOCKING)
+# ============================================================================
+# These async wrappers run the blocking R2 operations in a thread pool,
+# allowing the event loop to handle other requests concurrently during processing
+
+async def download_from_r2_async(key: str, silent_404: bool = False) -> str:
+    """Async wrapper for download_from_r2 - runs in thread pool to avoid blocking."""
+    return await asyncio.to_thread(download_from_r2, key, silent_404)
+
+async def upload_to_r2_async(key: str, content: str) -> bool:
+    """Async wrapper for upload_to_r2 - runs in thread pool to avoid blocking."""
+    return await asyncio.to_thread(upload_to_r2, key, content)
+
+
 def list_r2_objects(prefix: str = "") -> List[str]:
     """List objects in R2 bucket with optional prefix using boto3."""
     try:
@@ -2073,9 +2088,9 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             "progress_param": 10
         }).execute()
         
-        # Load chunks from R2
+        # Load chunks from R2 (async to avoid blocking other requests)
         chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
-        chunks_data = download_from_r2(chunked_path, silent_404=False)
+        chunks_data = await download_from_r2_async(chunked_path, silent_404=False)
         if not chunks_data:
             print(f"❌ Failed to download chunks from: {chunked_path}")
             raise Exception("Chunks not found - extraction may have failed")
@@ -2107,8 +2122,8 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         pack_analyzed_path = f"{user.r2_directory}/{pack_id}/complete_analyzed.txt"
         analyzed_path = f"{user.r2_directory}/{pack_id}/{source_id}/analyzed.txt"
         
-        # Get existing pack content (if any)
-        existing_pack_content = download_from_r2(pack_analyzed_path, silent_404=True) or ""
+        # Get existing pack content (if any) - async to avoid blocking
+        existing_pack_content = await download_from_r2_async(pack_analyzed_path, silent_404=True) or ""
         
         # Add source separator
         if existing_pack_content:
@@ -2254,21 +2269,21 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         # Sort analyses by index to maintain correct order
         all_analyses.sort(key=lambda x: x["index"])
         
-        # Write all analyses to files in correct order
+        # Write all analyses to files in correct order (async to avoid blocking)
         print(f"\n📝 Writing {len(all_analyses)} analyses to files...")
         for i, analysis_result in enumerate(all_analyses):
             chunk_sep = f"\n\n--- Chunk {analysis_result['index']+1}/{len(chunks)} ---\n\n" if len(chunks) > 1 else "\n\n"
             
-            # Append to pack file
+            # Append to pack file (async)
             if i == 0:
-                upload_to_r2(pack_analyzed_path, existing_pack_content + source_header + analysis_result["analysis"])
+                await upload_to_r2_async(pack_analyzed_path, existing_pack_content + source_header + analysis_result["analysis"])
             else:
-                current = download_from_r2(pack_analyzed_path) or ""
-                upload_to_r2(pack_analyzed_path, current + chunk_sep + analysis_result["analysis"])
+                current = await download_from_r2_async(pack_analyzed_path) or ""
+                await upload_to_r2_async(pack_analyzed_path, current + chunk_sep + analysis_result["analysis"])
             
-            # Append to individual source file
-            current_source = download_from_r2(analyzed_path, silent_404=True) or ""
-            upload_to_r2(analyzed_path, current_source + chunk_sep + analysis_result["analysis"])
+            # Append to individual source file (async)
+            current_source = await download_from_r2_async(analyzed_path, silent_404=True) or ""
+            await upload_to_r2_async(analyzed_path, current_source + chunk_sep + analysis_result["analysis"])
         
         print(f"✅ All analyses written to R2")
         
@@ -3590,6 +3605,27 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
         
+        # Check if user has any sources currently processing
+        # This prevents system overload and ensures better UX
+        # Use RPC function to bypass permission issues
+        try:
+            result = supabase.rpc("check_user_has_active_processing", {
+                "user_uuid": user.user_id
+            }).execute()
+            
+            if result.data and result.data.get('has_active_processing', False):
+                raise HTTPException(
+                    status_code=429,
+                    detail="You have sources currently processing. Please wait for them to complete before creating a new pack."
+                )
+        except HTTPException:
+            # Re-raise HTTPException (429 error)
+            raise
+        except Exception as check_error:
+            # Log RPC errors but don't block pack creation
+            # The backend will still validate during actual processing
+            print(f"Warning: Could not check active processing status: {check_error}")
+        
         # Ensure user profile exists (non-blocking for subsequent requests)
         # This runs in background while we prepare pack creation
         asyncio.create_task(ensure_user_profile_exists(user.user_id, user.email))
@@ -3634,6 +3670,47 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
     except Exception as e:
         print(f"Error creating pack: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create pack: {str(e)}")
+
+@app.get("/api/v2/user/has-active-processing")
+async def check_active_processing(user: AuthenticatedUser = Depends(get_current_user)):
+    """Check if user has any sources currently processing"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Check for any active processing using RPC to bypass permission issues
+        try:
+            result = supabase.rpc("check_user_has_active_processing", {
+                "user_uuid": user.user_id
+            }).execute()
+            
+            if result.data:
+                return result.data
+            else:
+                # No data returned, return safe defaults
+                return {
+                    "has_active_processing": False,
+                    "active_count": 0,
+                    "can_create_pack": True
+                }
+        except Exception as db_error:
+            # If RPC fails, return safe defaults to not block UI
+            print(f"Warning: Could not check active processing status via RPC: {db_error}")
+            return {
+                "has_active_processing": False,
+                "active_count": 0,
+                "can_create_pack": True
+            }
+        
+    except Exception as e:
+        print(f"Error in has-active-processing endpoint: {e}")
+        # Return safe defaults instead of 500 error
+        return {
+            "has_active_processing": False,
+            "active_count": 0,
+            "can_create_pack": True
+        }
+
 
 @app.get("/api/v2/packs")
 async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):

@@ -17,6 +17,7 @@ interface AuthContextType {
   signOut: () => Promise<void>
   loading: boolean
   makeAuthenticatedRequest: (url: string, options?: RequestInit) => Promise<Response>
+  refreshUserProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -513,6 +514,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const refreshUserProfile = async () => {
+    if (user?.id) {
+      await fetchUserProfile(user.id)
+    }
+  }
+
   const value = {
     user,
     session,
@@ -525,6 +532,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     loading,
     makeAuthenticatedRequest,
+    refreshUserProfile,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
