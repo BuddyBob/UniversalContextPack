@@ -31,14 +31,15 @@ Document:
 CONVERSATION_PROMPT = """
 # Identity
 
-You are an intelligent conversation analyzer that extracts persistent information about THE USER (the conversation owner).
+You are an intelligent conversation analyzer that extracts comprehensive, persistent information about THE USER (the conversation owner).
 You are reading chunk {chunk_idx}/{total_chunks} of the complete user's chat extractions.
 
 # Instructions
 
 Rules:
 - THE USER is the "I/my/me" speaker. Do not profile people they mention.
-- Extract ONLY persistent info (roles, long-term projects, durable preferences, stable constraints, skills, long-term goals).
+- Extract ALL persistent information about the user with comprehensive detail
+- Include context, examples, and specific details mentioned
 - No speculation. If unclear, omit.
 - No duplicates inside this chunk.
 
@@ -50,20 +51,83 @@ Clues to identify THE USER:
 * If helping someone, the helper is the user (not the person being helped)
 * If discussing someone, that person is NOT the user
 
-## Extract Persistent Information
+## Extract Comprehensive Information
 
-Extract information that remains true about THE USER across time:
-* Who is THE USER? (roles, identity, profession)
-* THE USER's background (skills, interests, experience)
-* THE USER's projects (what they're working on)
-* THE USER's goals or aspirations
-* THE USER's constraints or preferences
-* Any other facts about THE USER
+Extract ALL information that remains true about THE USER across time:
 
-Do NOT extract:
-* Details about other people (unless directly related to the user)
+### 1. Identity & Roles
+* Who is THE USER? (roles, identity, profession, job titles)
+* Current position, company, or organization
+* Professional identity and how they describe themselves
 
-Focus on extracting comprehensive, factual information about the user.
+### 2. Background & Experience
+* Educational background (degrees, schools, courses)
+* Work history and career progression
+* Years of experience in various domains
+* Past projects or accomplishments mentioned
+* Skills and technical expertise (be specific about proficiency levels)
+* Languages spoken, certifications, or qualifications
+
+### 3. Active Projects & Work
+* Current projects (with names, descriptions, tech stacks, goals)
+* Ongoing responsibilities or recurring work
+* Side projects, open source contributions, or personal initiatives
+* Collaborations or team dynamics
+* Project timelines, milestones, or deadlines mentioned
+
+### 4. Technical Knowledge & Tools
+* Programming languages and frameworks (with proficiency context)
+* Tools, platforms, and technologies they use regularly
+* Development practices or methodologies they follow
+* Infrastructure, databases, or systems they work with
+* Specific libraries, APIs, or services they're familiar with
+
+### 5. Goals & Aspirations
+* Career goals (short-term and long-term)
+* Learning objectives or skills they want to develop
+* Projects they want to build or problems they want to solve
+* Professional development plans
+
+### 6. Preferences & Working Style
+* Coding preferences or style choices
+* Technology preferences (why they prefer certain tools/languages)
+* Work environment preferences
+* Communication style or collaboration preferences
+* Design principles or architectural preferences
+
+### 7. Constraints & Context
+* Time constraints or availability
+* Technical limitations or requirements
+* Budget or resource constraints
+* Dependencies on other systems or teams
+* Compliance requirements or regulations they work with
+
+### 8. Interests & Domain Knowledge
+* Industry focus or domain expertise
+* Topics they're passionate about
+* Side interests related to their work
+* Communities they're part of
+* Content they create (blogs, videos, talks)
+
+### 9. Problems & Challenges
+* Current challenges or blockers they're facing
+* Past problems they've solved
+* Common issues they encounter
+* Questions they frequently have
+
+### 10. Other Persistent Facts
+* Location or timezone (if relevant to work)
+* Availability patterns or schedule
+* Contact information or handles mentioned
+* Notable quotes or philosophy they've shared
+* Specific methodologies or approaches they advocate for
+
+IMPORTANT:
+- Include specific examples, code snippets, or tool names when mentioned
+- Preserve technical details, version numbers, or specific configurations
+- Note any context that makes the information more useful
+- Extract verbatim key phrases when precision matters
+- For each item, include enough detail to be actionable
 
 Conversation content:
 {chunk}
@@ -168,44 +232,74 @@ Analysis text:
 """
 
 USER_PROFILE_TREE_PROMPT = """
-You are an information extraction system. You will read conversation history and extract ONLY persistent, user-owned information to build a memory profile about THE USER (the owner of the conversations).
+You are an information extraction system. You will read conversation analysis and extract ALL persistent, user-owned information to build a comprehensive memory profile about THE USER.
 
-YOUR TASK: Figure out who THE USER is, then extract persistent information about them.
+YOUR TASK: Extract maximum information about THE USER from the analysis provided.
 
-STEP 1 - IDENTIFY THE USER:
-The USER is the person who OWNS these conversations (the conversation participant, not people they mention).
+EXTRACTION CATEGORIES:
 
-Clues to identify THE USER:
-- First-person statements: "I am...", "I work on...", "my project...", "I'm interested in..."
-- Consistent patterns across conversation chunks
-- The person HAVING the conversations (not people being discussed)
-- Context: If they're helping someone, the helper is the user, not the person being helped
+1. **identity**: Core identity information
+   - name: User's actual name (if stated)
+   - roles: Job titles, professional roles, positions (be specific)
+   - background: Educational background, work history, experience levels
 
-STEP 2 - UNDERSTAND THE USER'S CONTEXT:
-What kind of person is the user? Examples:
-- Developer working on projects → Extract: projects, tech stack, goals
-- Writer creating content → Extract: writing projects, themes, creative work
-- Student learning → Extract: subjects, courses, learning goals
-- Professional → Extract: role, industry, work patterns
-- Researcher → Extract: research topics, methodologies, findings
+2. **preferences**: Lasting preferences and working style
+   - Technology preferences (languages, frameworks, tools) with reasoning
+   - Design principles and architectural preferences
+   - Working style and collaboration preferences
+   - Communication preferences
+   - Any stated likes/dislikes that persist
 
-STEP 3 - EXTRACT INTELLIGENTLY:
-Based on who the user is and what matters to them, extract:
+3. **projects**: ALL projects mentioned (ongoing, past, planned)
+   - name: Project name or identifier
+   - description: Detailed description (tech stack, purpose, features, status)
+   - status: Current status (active, completed, planned, paused)
+   - Include: code projects, writing projects, research, learning projects, side projects
 
-- **identity**: User's name (if stated), roles, background that defines them
-- **preferences**: Lasting preferences, constraints, or patterns
-- **projects**: Ongoing work, creative projects, or efforts (adapt to user type)
-- **skills**: Technical skills, expertise, or capabilities
-- **goals**: Stated goals, aspirations, or objectives
-- **constraints**: Limitations, requirements, or boundaries
-- **facts**: Other persistent facts relevant to this user
+4. **skills**: Technical and professional capabilities
+   - Programming languages (with proficiency context if mentioned)
+   - Frameworks and libraries
+   - Tools and platforms
+   - Methodologies and practices
+   - Domain expertise
+   - Soft skills
 
-IMPORTANT PRINCIPLES:
-BE ADAPTIVE: A writer's "projects" are essays/books, a developer's are codebases
-USE CONTEXT: If user discusses their essay, include it. If they paste someone else's essay, don't.
-LOOK FOR PATTERNS: Information appearing across multiple chunks is likely about the user
-FIRST-PERSON FOCUS: Prioritize "I/my/me" statements over third-party content
-BE RELEVANT: Extract what matters to THIS specific user, not generic categories
+5. **goals**: Aspirations and objectives
+   - Career goals (short and long term)
+   - Learning objectives
+   - Project goals
+   - Skill development targets
+   - Any stated aspirations
+
+6. **constraints**: Limitations and requirements
+   - Time constraints
+   - Technical limitations
+   - Resource constraints
+   - Dependencies
+   - Compliance or regulatory requirements
+   - Personal boundaries
+
+7. **facts**: ALL other persistent information
+   - Work context (company, team, industry)
+   - Location or timezone (if relevant)
+   - Availability or schedule patterns
+   - Communities or groups they're part of
+   - Content they create (blogs, talks, videos)
+   - Notable accomplishments
+   - Challenges they frequently face
+   - Tools and technologies they use daily
+   - Specific methodologies they follow
+   - Philosophies or principles they advocate
+   - Any other durable information
+
+EXTRACTION PRINCIPLES:
+- MAXIMIZE DETAIL: Extract everything relevant with full context
+- BE SPECIFIC: Include version numbers, tool names, specific technologies
+- PRESERVE NUANCE: Keep important qualifications and context
+- NO DUPLICATION: Within each category, avoid repeating the same info
+- ADAPT TO USER: Tailor extraction to what matters for this user
+- INCLUDE EXAMPLES: When the analysis includes examples, preserve them
+- CONTEXT MATTERS: Extract information that makes other information more useful
 
 Return STRICT JSON:
 
@@ -215,25 +309,25 @@ Return STRICT JSON:
     "roles": [],
     "background": []
   }},
-  "preferences": ["string"],
+  "preferences": ["string - be specific and detailed"],
   "projects": [
     {{
       "name": "string",
-      "description": null,
-      "status": null
+      "description": "detailed description with tech stack, purpose, key features",
+      "status": "active | completed | planned | paused"
     }}
   ],
-  "skills": ["string"],
-  "goals": ["string"],
-  "constraints": ["string"],
-  "facts": ["string"]
+  "skills": ["string - be specific about proficiency and context"],
+  "goals": ["string - include timeframes and context"],
+  "constraints": ["string - be specific about what and why"],
+  "facts": ["string - any other persistent information with context"]
 }}
 
 Rules:
-- Figure out who the user is first, then extract accordingly
-- Be adaptive to the user's context (writer, developer, student, etc.)
-- Focus on first-person statements and consistent patterns
-- Do NOT add commentary
+- Extract EVERYTHING relevant from the analysis
+- Include full context and details for each item
+- Be as comprehensive as possible
+- Do NOT add commentary outside JSON
 - Do NOT wrap in backticks
 - Return ONLY valid JSON
 

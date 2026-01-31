@@ -205,6 +205,8 @@ export default function ProcessV3Page() {
                     xhr.addEventListener('load', () => {
                         if (xhr.status >= 200 && xhr.status < 300) {
                             console.log(`✅ Uploaded: ${file.name}`);
+                            // Force reload
+                            window.location.reload();
 
                             // Update to extraction phase
                             setFileUploadProgress(prev => {
@@ -255,20 +257,8 @@ export default function ProcessV3Page() {
                 await new Promise(resolve => setTimeout(resolve, 500));
 
                 // Immediately refetch pack to get the new source
-                const packResponse = await makeAuthenticatedRequest(
-                    `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}?t=${Date.now()}`
-                );
-                if (packResponse.ok) {
-                    const packData = await packResponse.json();
-                    const sources = packData.sources || [];
-                    setPackSources(sources);
-                    console.log('[ProcessV3] ✅ Loaded', sources.length, 'sources after upload');
-
-                    // Update process states for new sources
-                    sources.forEach((source: any) => {
-                        updateFromSourceStatus(source);
-                    });
-                }
+                await pollPackDetails();
+                console.log('[ProcessV3] ✅ Pack details refreshed after upload');
 
                 // Extraction progress will be tracked by polling
 
@@ -688,13 +678,19 @@ export default function ProcessV3Page() {
                         <ProcessProgress
                             status={processStatus}
                             onStartAnalysis={async () => {
-                                if (isStartingAnalysis) return;
+                                if (isStartingAnalysis) {
+                                    console.log('[ProcessV3] Already starting analysis, ignoring duplicate click');
+                                    return;
+                                }
+                                
                                 setIsStartingAnalysis(true);
+                                console.log('[ProcessV3] Start analysis clicked');
+                                
                                 try {
                                     const readySource = packSources.find(s => s.status === 'ready_for_analysis');
                                     if (!readySource || !creditInfo) {
-                                        console.error('[ProcessV3] Missing readySource or creditInfo');
-                                        setIsStartingAnalysis(false);
+                                        console.error('[ProcessV3] Missing readySource or creditInfo', { readySource, creditInfo });
+                                        alert('Unable to start analysis. Missing required information.');
                                         return;
                                     }
 
@@ -705,18 +701,25 @@ export default function ProcessV3Page() {
                                         localStorage.setItem(`processing_limit_${readySource.source_id}`, creditInfo.userCredits.toString());
                                     }
 
-                                    console.log(`[ProcessV3] Starting ${isPartial ? 'partial' : 'full'} analysis:`, maxChunks);
-                                    await startAnalysis(readySource.source_id, creditInfo.totalChunks, isPartial ? maxChunks : undefined);
+                                    console.log(`[ProcessV3] Calling startAnalysis for source ${readySource.source_id.substring(0, 8)} with max_chunks:`, maxChunks);
                                     
-                                    // Refresh user profile to update credits balance
-                                    await refreshUserProfile();
+                                    // Add timeout protection
+                                    const analysisPromise = startAnalysis(readySource.source_id, creditInfo.totalChunks, isPartial ? maxChunks : undefined);
+                                    const timeoutPromise = new Promise((_, reject) => 
+                                        setTimeout(() => reject(new Error('Start analysis request timed out after 30 seconds')), 30000)
+                                    );
                                     
+                                    await Promise.race([analysisPromise, timeoutPromise]);
+                                    console.log('[ProcessV3] ✅ Analysis started successfully');
+                                    
+                                    // Poll once to get updated state
                                     await pollPackDetails();
                                 } catch (error) {
                                     console.error('[ProcessV3] Failed to start analysis:', error);
                                     const errorMessage = error instanceof Error ? error.message : 'Failed to start analysis. Please try again.';
                                     alert(errorMessage);
                                 } finally {
+                                    console.log('[ProcessV3] Resetting isStartingAnalysis');
                                     setIsStartingAnalysis(false);
                                 }
                             }}

@@ -81,9 +81,14 @@ export function useSourceProcessing() {
      * Start analysis and show confirmation modal
      */
     const startAnalysis = useCallback(async (sourceId: string, totalChunks: number, maxChunks?: number) => {
+        console.log('[useSourceProcessing] Starting analysis:', { sourceId: sourceId.substring(0, 8), totalChunks, maxChunks });
+        
         try {
+            const url = `${API_BASE_URL}/api/v2/sources/${sourceId}/start-analysis`;
+            console.log('[useSourceProcessing] POST request to:', url);
+            
             const response = await makeAuthenticatedRequest(
-                `${API_BASE_URL}/api/v2/sources/${sourceId}/start-analysis`,
+                url,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -91,9 +96,13 @@ export function useSourceProcessing() {
                 }
             );
 
+            console.log('[useSourceProcessing] Response received:', response.status, response.ok);
+
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 const errorMessage = errorData.message || errorData.error || 'Failed to start analysis';
+                
+                console.error('[useSourceProcessing] Error response:', errorMessage);
                 
                 if (response.status === 402) {
                     throw new Error('Insufficient credits. Please purchase more credits to continue.');
@@ -103,6 +112,7 @@ export function useSourceProcessing() {
             }
 
             const result = await response.json();
+            console.log('[useSourceProcessing] Success response:', result);
 
             // Show "Analysis Started" modal
             setModalState({
@@ -114,7 +124,7 @@ export function useSourceProcessing() {
 
             return result;
         } catch (error) {
-            console.error('[useSourceProcessing] Error starting analysis:', error);
+            console.error('[useSourceProcessing] Exception caught:', error);
             throw error;
         }
     }, [makeAuthenticatedRequest, getTimeEstimate]);
