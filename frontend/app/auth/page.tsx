@@ -2,22 +2,40 @@
 
 import { useState, useEffect } from 'react'
 import { Chrome, Eye, EyeOff } from 'lucide-react'
-import { useAuth } from './AuthProvider'
+import { useAuth } from '@/components/AuthProvider'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function AuthPage() {
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth()
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, user } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isSignUp, setIsSignUp] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [isSignUp, setIsSignUp] = useState(searchParams.get('mode') === 'signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
 
+  // Redirect to /packs if user is already logged in
+  useEffect(() => {
+    if (user) {
+      router.push('/packs')
+    }
+  }, [user, router])
+
+  // Sync isSignUp state with URL params
+  useEffect(() => {
+    const mode = searchParams.get('mode')
+    setIsSignUp(mode === 'signup')
+  }, [searchParams])
+
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true)
       setError(null)
+      setSuccess(null)
       await signInWithGoogle()
     } catch (error: any) {
       setError(error.message || 'Failed to sign in with Google')
@@ -41,16 +59,26 @@ export default function AuthPage() {
     try {
       setLoading(true)
       setError(null)
+      setSuccess(null)
 
       if (isSignUp) {
         await signUpWithEmail(email, password)
-        setError('Check your email to verify your account!')
+        // Only show success message if no error was thrown
+        setSuccess('Check your email to verify your account!')
         setLoading(false)
       } else {
         await signInWithEmail(email, password)
+        // Redirect to /packs after successful sign in
+        router.push('/packs')
       }
     } catch (error: any) {
-      setError(error.message || `Failed to ${isSignUp ? 'sign up' : 'sign in'}`)
+      // Handle specific error for existing user
+      const errorMessage = error.message || `Failed to ${isSignUp ? 'sign up' : 'sign in'}`
+      if (errorMessage.includes('already registered') || errorMessage.includes('already exists') || errorMessage.includes('User already registered')) {
+        setError('An account with this email already exists. Please sign in instead.')
+      } else {
+        setError(errorMessage)
+      }
       setLoading(false)
     }
   }
@@ -69,12 +97,14 @@ export default function AuthPage() {
             {isSignUp ? 'Create Account' : 'Log in to Your Pack'}
           </h1>
 
+          {success && (
+            <div className="border px-4 py-3 rounded-lg mb-6 text-sm bg-green-500/10 border-green-500/30 text-green-400">
+              {success}
+            </div>
+          )}
+
           {error && (
-            <div className={`border px-4 py-3 rounded-lg mb-6 text-sm ${
-              error.includes('Check your email')
-                ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                : 'bg-red-500/10 border-red-500/30 text-red-400'
-            }`}>
+            <div className="border px-4 py-3 rounded-lg mb-6 text-sm bg-red-500/10 border-red-500/30 text-red-400">
               {error}
             </div>
           )}
@@ -154,7 +184,7 @@ export default function AuthPage() {
               <div className="w-full border-t border-[#3A3A3C]"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-[#1C1C1E] text-gray-500">or</span>
+              <span className="px-4 bg-[#0F0F0F] text-gray-500">or</span>
             </div>
           </div>
 
@@ -175,8 +205,9 @@ export default function AuthPage() {
             </span>
             <button
               onClick={() => {
-                setIsSignUp(!isSignUp)
+                router.push(`/auth?mode=${isSignUp ? 'login' : 'signup'}`)
                 setError(null)
+                setSuccess(null)
               }}
               className="text-white underline hover:text-gray-300 transition-colors font-medium"
             >

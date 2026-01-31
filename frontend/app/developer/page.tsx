@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import { useAuth } from '../../components/AuthProvider'
 import { Terminal, Copy, Check } from 'lucide-react'
-import AuthModal from '../../components/AuthModal'
+import { useRouter } from 'next/navigation'
 
 export default function DeveloperPage() {
     const { session, user, loading } = useAuth()
     const [copied, setCopied] = useState(false)
-    const [showAuthModal, setShowAuthModal] = useState(false)
+    const router = useRouter()
 
     if (loading) {
         return (
@@ -30,15 +30,11 @@ export default function DeveloperPage() {
                     <h1 className="text-2xl font-bold text-white mb-4">Developer Access Required</h1>
                     <p className="text-gray-400 mb-6">Please sign in to access developer settings and API keys.</p>
                     <button
-                        onClick={() => setShowAuthModal(true)}
+                        onClick={() => router.push('/auth')}
                         className="btn-primary"
                     >
                         Sign In
                     </button>
-                    <AuthModal
-                        isOpen={showAuthModal}
-                        onClose={() => setShowAuthModal(false)}
-                    />
                 </div>
             </div>
         )

@@ -198,9 +198,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // Store current page to return to after auth
       const currentPath = window.location.pathname
-      // If user is on /process or demo pack (sample-*), redirect to /packs after auth
+      // If user is on /process, /auth, or demo pack (sample-*), redirect to /packs after auth
       const isDemoPage = currentPath.includes('/results/sample-')
-      const redirectPath = (currentPath === '/process' || isDemoPage) ? '/packs' : currentPath
+      const isAuthPage = currentPath === '/auth'
+      const redirectPath = (currentPath === '/process' || isDemoPage || isAuthPage) ? '/packs' : currentPath
       const redirectTo = `${window.location.origin}${redirectPath}`
 
       const { error } = await supabase.auth.signInWithOAuth({
@@ -262,10 +263,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const currentPath = window.location.pathname
       const isDemoPage = currentPath.includes('/results/sample-')
-      const redirectPath = (currentPath === '/process' || isDemoPage) ? '/packs' : currentPath
+      const isAuthPage = currentPath === '/auth'
+      const redirectPath = (currentPath === '/process' || isDemoPage || isAuthPage) ? '/packs' : currentPath
       const redirectTo = `${window.location.origin}${redirectPath}`
 
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -276,7 +278,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         },
       })
+      
       if (error) throw error
+      
+      // Check if user already exists (Supabase returns user but with identities empty array)
+      // When email confirmation is enabled, Supabase doesn't throw error for existing users
+      // but we can detect it by checking the response
+      if (data?.user && data.user.identities && data.user.identities.length === 0) {
+        throw new Error('User already registered. Please sign in instead or check your email for verification.')
+      }
     } catch (error) {
       console.error('Error signing up with email:', error)
       throw error

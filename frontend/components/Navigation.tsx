@@ -2,15 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from './AuthProvider'
-import AuthModal from './AuthModal'
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Settings, User, LogOut, Sun, Moon, Menu, X, Dot, CreditCard } from 'lucide-react'
 
 export default function Navigation() {
   const { user, userProfile, signOut, loading, session, makeAuthenticatedRequest } = useAuth()
-  const [showAuthModal, setShowAuthModal] = useState(false)
   const [showUserDropdown, setShowUserDropdown] = useState(false)
   const [showResourcesDropdown, setShowResourcesDropdown] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
@@ -18,6 +16,7 @@ export default function Navigation() {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const resourcesDropdownRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
+  const router = useRouter()
 
 
 
@@ -56,14 +55,14 @@ export default function Navigation() {
   // Listen for auth modal open events from demo packs
   useEffect(() => {
     const handleOpenAuthModal = () => {
-      setShowAuthModal(true)
+      router.push('/auth')
     }
 
     window.addEventListener('openAuthModal', handleOpenAuthModal)
     return () => {
       window.removeEventListener('openAuthModal', handleOpenAuthModal)
     }
-  }, [])
+  }, [router])
 
   if (loading) {
     return (
@@ -223,12 +222,20 @@ export default function Navigation() {
                   </div>
                 </>
               ) : (
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="px-4 py-1.5 bg-white text-black text-sm font-medium rounded-md hover:bg-gray-100 transition-colors"
-                >
-                  Sign In
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => router.push('/auth?mode=login')}
+                    className="px-4 py-1.5 text-white text-sm font-medium rounded-md hover:bg-gray-800 transition-colors"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => router.push('/auth?mode=signup')}
+                    className="px-4 py-1.5 bg-white text-black text-sm font-medium rounded-md hover:bg-gray-100 transition-colors"
+                  >
+                    Signup
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -365,15 +372,26 @@ export default function Navigation() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        setShowAuthModal(true)
-                        setShowMobileMenu(false)
-                      }}
-                      className="w-full px-6 py-3 bg-white text-black font-semibold hover:bg-gray-100 rounded-xl transition-all shadow-lg"
-                    >
-                      Sign In
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          router.push('/auth?mode=login')
+                          setShowMobileMenu(false)
+                        }}
+                        className="flex-1 px-6 py-3 border border-white text-white font-semibold hover:bg-white/10 rounded-xl transition-all"
+                      >
+                        Login
+                      </button>
+                      <button
+                        onClick={() => {
+                          router.push('/auth?mode=signup')
+                          setShowMobileMenu(false)
+                        }}
+                        className="flex-1 px-6 py-3 bg-white text-black font-semibold hover:bg-gray-100 rounded-xl transition-all shadow-lg"
+                      >
+                        Signup
+                      </button>
+                    </div>
                   )}
                 </div>
               </nav>
@@ -381,12 +399,6 @@ export default function Navigation() {
           )}
         </div>
       </header>
-
-
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-      />
     </>
   )
 }

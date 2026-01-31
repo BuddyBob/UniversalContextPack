@@ -1,8 +1,8 @@
 'use client'
 
 import { useAuth } from '@/components/AuthProvider'
-import { useEffect, useState } from 'react'
-import AuthModal from '@/components/AuthModal'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 interface AuthWrapperProps {
   children: React.ReactNode
@@ -11,13 +11,13 @@ interface AuthWrapperProps {
 
 export default function AuthWrapper({ children, requireAuth = true }: AuthWrapperProps) {
   const { user, loading } = useAuth()
-  const [showAuthModal, setShowAuthModal] = useState(false)
+  const router = useRouter()
 
   useEffect(() => {
     if (!loading && requireAuth && !user) {
-      setShowAuthModal(true)
+      router.push('/auth')
     }
-  }, [user, loading, requireAuth])
+  }, [user, loading, requireAuth, router])
 
   // Show loading spinner while checking auth
   if (loading) {
@@ -31,7 +31,7 @@ export default function AuthWrapper({ children, requireAuth = true }: AuthWrappe
     )
   }
 
-  // If auth is required but user is not logged in, show auth modal
+  // If auth is required but user is not logged in, redirect to auth page
   if (requireAuth && !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -44,17 +44,12 @@ export default function AuthWrapper({ children, requireAuth = true }: AuthWrappe
             Please sign in to access your Universal Context Pack workspace and start processing your chat exports.
           </p>
           <button
-            onClick={() => setShowAuthModal(true)}
+            onClick={() => router.push('/auth')}
             className="bg-gray-900 text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition-colors"
           >
             Sign In to Continue
           </button>
         </div>
-        
-        <AuthModal 
-          isOpen={showAuthModal} 
-          onClose={() => setShowAuthModal(false)} 
-        />
       </div>
     )
   }

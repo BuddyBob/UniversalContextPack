@@ -8,7 +8,6 @@ import { CreditCard, ArrowLeft, Calculator, Zap, Shield, CheckCircle, Infinity }
 import { API_ENDPOINTS } from '@/lib/api'
 import { getNewUserCredits } from '@/lib/credit-config'
 import Image from 'next/image'
-import AuthModal from '@/components/AuthModal'
 
 interface PaymentStatus {
   plan: string
@@ -29,7 +28,6 @@ export default function PricingPageClient() {
   const fixedCreditPack = 250
   const fixedCreditPrice = 4.99
   const [isUnlimitedSelected, setIsUnlimitedSelected] = useState(true) // Default to unlimited
-  const [showAuthModal, setShowAuthModal] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
@@ -76,8 +74,8 @@ export default function PricingPageClient() {
 
   const handlePurchase = async (forceUnlimited?: boolean) => {
     if (!user) {
-      // Open auth modal if not authenticated
-      setShowAuthModal(true)
+      // Redirect to auth page if not authenticated
+      router.push('/auth')
       return
     }
 
@@ -301,7 +299,7 @@ export default function PricingPageClient() {
                   </div>
 
                   <button
-                    onClick={() => setShowAuthModal(true)}
+                    onClick={() => router.push('/auth')}
                     className="w-full border border-[#323232] hover:border-[#3a3a3a] text-white py-3 px-6 rounded-lg font-medium transition-all duration-200"
                   >
                     Sign Up Free
@@ -445,11 +443,6 @@ export default function PricingPageClient() {
         )}
 
       </div>
-
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-      />
     </div>
   )
 }
