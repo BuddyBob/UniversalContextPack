@@ -365,44 +365,44 @@ export default function ProcessV3Page() {
             const data = await response.json();
             const sources = data.sources || [];
 
-                // Update sources state
-                setPackSources(sources);
-                
-                // Update process states for each source
+            // Update sources state
+            setPackSources(sources);
+
+            // Update process states for each source
+            sources.forEach((source: any) => {
+                updateFromSourceStatus(source);
+            });
+
+            // Poll for extraction progress updates
+            setFileUploadProgress(prev => {
+                const next = new Map(prev);
                 sources.forEach((source: any) => {
-                    updateFromSourceStatus(source);
-                });
+                    const fileName = source.file_name || source.source_name;
+                    const existingProgress = next.get(fileName);
 
-                // Poll for extraction progress updates
-                setFileUploadProgress(prev => {
-                    const next = new Map(prev);
-                    sources.forEach((source: any) => {
-                        const fileName = source.file_name || source.source_name;
-                        const existingProgress = next.get(fileName);
-
-                        if (existingProgress && existingProgress.phase === 'extracting') {
-                            if (source.status === 'ready_for_analysis' || source.status === 'completed') {
-                                // Extraction complete
-                                next.delete(fileName);
-                            } else if (source.status === 'failed') {
-                                // Show error
-                                next.set(fileName, {
-                                    ...existingProgress,
-                                    phase: 'error',
-                                    errorMessage: source.error_message || 'Extraction failed'
-                                });
-                            } else if (source.status === 'processing' || source.status === 'extracting') {
-                                // Update progress
-                                const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
-                                next.set(fileName, {
-                                    ...existingProgress,
-                                    extractionProgress
-                                });
-                            }
+                    if (existingProgress && existingProgress.phase === 'extracting') {
+                        if (source.status === 'ready_for_analysis' || source.status === 'completed') {
+                            // Extraction complete
+                            next.delete(fileName);
+                        } else if (source.status === 'failed') {
+                            // Show error
+                            next.set(fileName, {
+                                ...existingProgress,
+                                phase: 'error',
+                                errorMessage: source.error_message || 'Extraction failed'
+                            });
+                        } else if (source.status === 'processing' || source.status === 'extracting') {
+                            // Update progress
+                            const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
+                            next.set(fileName, {
+                                ...existingProgress,
+                                extractionProgress
+                            });
                         }
-                    });
-                    return next;
+                    }
                 });
+                return next;
+            });
         } catch (error) {
             console.error('[ProcessV3] Polling error:', error);
             // Don't throw - let polling continue on next interval
@@ -682,10 +682,10 @@ export default function ProcessV3Page() {
                                     console.log('[ProcessV3] Already starting analysis, ignoring duplicate click');
                                     return;
                                 }
-                                
+
                                 setIsStartingAnalysis(true);
                                 console.log('[ProcessV3] Start analysis clicked');
-                                
+
                                 try {
                                     const readySource = packSources.find(s => s.status === 'ready_for_analysis');
                                     if (!readySource || !creditInfo) {
@@ -702,16 +702,16 @@ export default function ProcessV3Page() {
                                     }
 
                                     console.log(`[ProcessV3] Calling startAnalysis for source ${readySource.source_id.substring(0, 8)} with max_chunks:`, maxChunks);
-                                    
+
                                     // Add timeout protection
                                     const analysisPromise = startAnalysis(readySource.source_id, creditInfo.totalChunks, isPartial ? maxChunks : undefined);
-                                    const timeoutPromise = new Promise((_, reject) => 
+                                    const timeoutPromise = new Promise((_, reject) =>
                                         setTimeout(() => reject(new Error('Start analysis request timed out after 30 seconds')), 30000)
                                     );
-                                    
+
                                     await Promise.race([analysisPromise, timeoutPromise]);
                                     console.log('[ProcessV3] ✅ Analysis started successfully');
-                                    
+
                                     // Poll once to get updated state
                                     await pollPackDetails();
                                 } catch (error) {
@@ -1024,7 +1024,7 @@ export default function ProcessV3Page() {
                         ) : (
                             <>
                                 <Download className="h-4 w-4" />
-                                <span>Download Tree JSON</span>
+                                <span>Download Memory Tree</span>
                             </>
                         )}
                     </button>

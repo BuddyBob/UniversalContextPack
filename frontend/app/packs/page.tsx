@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Download, FileText, Brain, BarChart3, Plus, ExternalLink, Trash2, Loader2, AlertCircle } from 'lucide-react'
+import { Download, Plus, Loader2, AlertCircle, Eye, FileJson, Trash2 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import FreeCreditsPrompt from '@/components/FreeCreditsPrompt'
 import { useFreeCreditsPrompt } from '@/hooks/useFreeCreditsPrompt'
 import { API_BASE_URL } from '@/lib/api'
-import { getNewUserCredits } from '@/lib/credit-config'
 
 interface UCPPack {
   ucpId?: string
@@ -15,6 +14,7 @@ interface UCPPack {
   pack_name?: string
   description?: string
   status: string
+  total_sources?: number
   total_chunks: number
   total_input_tokens?: number
   total_output_tokens?: number
@@ -36,6 +36,7 @@ export default function PacksPage() {
   const [newPackName, setNewPackName] = useState('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [hasActiveProcessing, setHasActiveProcessing] = useState(false)
+  const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null)
   const freeCreditsPrompt = useFreeCreditsPrompt()
 
   // Helper function to format token counts
@@ -142,6 +143,7 @@ export default function PacksPage() {
           pack_name: pack.pack_name,
           description: pack.description,
           status: 'completed',
+          total_sources: pack.total_sources || 0,
           total_chunks: pack.total_chunks || pack.processed_chunks || 0,
           total_input_tokens: pack.total_input_tokens || 0,
           total_output_tokens: pack.total_output_tokens || 0,
@@ -192,9 +194,9 @@ export default function PacksPage() {
   const handleViewPack = (pack: UCPPack) => {
     const packId = pack.ucpId || pack.id
 
-    // If not authenticated, trigger auth prompt for all packs (including demos)
+    // If not authenticated, redirect to auth signup
     if (!user) {
-      freeCreditsPrompt.triggerPrompt("accessing context packs")
+      router.push('/auth?mode=signup')
       return
     }
 
@@ -202,9 +204,9 @@ export default function PacksPage() {
   }
 
   const handleCreatePack = () => {
-    // If not authenticated, trigger auth prompt
+    // If not authenticated, redirect to auth signup
     if (!user) {
-      freeCreditsPrompt.triggerPrompt("creating a context pack")
+      router.push('/auth?mode=signup')
       return
     }
 
@@ -303,167 +305,30 @@ export default function PacksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#080a09]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen bg-[#0a0a0a]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-3xl font-bold text-white">Context Packs Dashboard</h1>
-          <p className="text-gray-400 mt-2">Create, manage, and download your UCP analysis results</p>
-        </div>
-
-        {/* Dashboard Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {/* Create New Pack Card - Always First */}
-          <div
-            onClick={handleCreatePack}
-            className={`bg-gray-800 border-2 border-gray-700 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center justify-center min-h-[280px] group ${hasActiveProcessing
-              ? 'opacity-50 cursor-not-allowed'
-              : 'cursor-pointer hover:bg-gray-750 hover:border-gray-600'
-              }`}
-            title={hasActiveProcessing ? "Processing in progress - please wait to create a new pack" : ""}
-          >
-            <div className={`w-16 h-16 bg-gray-700 rounded-2xl flex items-center justify-center mb-4 transition-all ${hasActiveProcessing ? '' : 'group-hover:bg-gray-600'
-              }`}>
-              <Plus className="w-8 h-8 text-gray-300" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-200 mb-2">Create New Pack</h3>
-            <p className="text-gray-400 text-sm text-center">
-              {hasActiveProcessing
-                ? "Processing in progress..."
-                : "Start processing a new context pack"
-              }
-            </p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold text-white">Context Packs</h1>
+            <p className="text-sm text-gray-400 mt-1">Manage your analysis results</p>
           </div>
-
-          {/* Pack Cards */}
-          {packs.length === 0 ? (
-            <div className="col-span-full flex items-center justify-center min-h-[280px]">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-8 h-8 text-gray-500" />
-                </div>
-                <h3 className="text-lg font-medium text-white mb-2">No packs yet</h3>
-                <p className="text-gray-400 text-sm">Create your first context pack to get started</p>
-              </div>
-            </div>
-          ) : (
-            packs.map(pack => (
-              <div
-                key={pack.ucpId || pack.id}
-                onClick={() => handleViewPack(pack)}
-                className="bg-gray-900 rounded-2xl border-2 border-gray-800 p-6 cursor-pointer transition-all hover:border-gray-600 hover:shadow-lg hover:shadow-gray-900/50 flex flex-col min-h-[280px] group"
-              >
-                {/* Header */}
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-white mb-2 truncate">
-                      {pack.pack_name || 'Untitled Pack'}
-                    </h3>
-                    {pack.description && (
-                      <p className="text-sm text-gray-400 mb-2 line-clamp-2">{pack.description}</p>
-                    )}
-                    <div className="px-2 py-1 bg-green-900/40 text-green-400 text-xs font-semibold rounded-lg inline-block">
-                      {pack.total_chunks > 0 ? 'Completed' : 'Empty'}
-                    </div>
-                  </div>
-                  <FileText className="w-6 h-6 text-gray-600 group-hover:text-gray-400 transition-colors" />
-                </div>
-
-                {/* Stats */}
-                <div className="flex-1 space-y-3 mb-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-400">Chunks</span>
-                    <span className="text-lg font-bold text-white">{pack.total_chunks || 0}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-400">Input Tokens</span>
-                    <span className="text-sm font-semibold text-gray-200">
-                      {pack.total_input_tokens ? formatTokenCount(pack.total_input_tokens) : '0'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-400">Output Tokens</span>
-                    <span className="text-sm font-semibold text-gray-200">
-                      {pack.total_output_tokens ? formatTokenCount(pack.total_output_tokens) : '0'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="pt-4 border-t border-gray-800">
-                  <div className="text-xs text-gray-500">
-                    {new Date(pack.completedAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
-                  </div>
-                </div>
-
-                {/* Quick Actions - Show on Hover */}
-                <div className="mt-3 opacity-0 group-hover:opacity-100 transition-opacity space-y-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      const packId = pack.ucpId || pack.id
-                      if (packId) {
-                        router.push(`/process-v3?pack=${packId}`)
-
-                      }
-                    }}
-                    className="w-full flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-100 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Sources
-                  </button>
-                  {/* Delete Button with Confirmation */}
-                  {confirmDeleteId === (pack.ucpId || pack.id) ? (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeletePack(pack.ucpId || pack.id || '')
-                        }}
-                        disabled={deletingPackId === (pack.ucpId || pack.id)}
-                        className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deletingPackId === (pack.ucpId || pack.id) ? 'Deleting...' : 'Confirm'}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setConfirmDeleteId(null)
-                        }}
-                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setConfirmDeleteId(pack.ucpId || pack.id || null)
-                      }}
-                      className="w-full flex items-center justify-center gap-2 bg-red-900/40 hover:bg-red-900/60 text-red-400 hover:text-red-300 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete Pack
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
+          <button
+            onClick={handleCreatePack}
+            disabled={hasActiveProcessing}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white text-black text-sm font-medium rounded-md hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title={hasActiveProcessing ? "Processing in progress" : ""}
+          >
+            <Plus className="w-4 h-4" />
+            New Pack
+          </button>
         </div>
-      </div>
 
-      {/* Create Pack Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-2">Create New Pack</h2>
-            <p className="text-gray-400 text-sm mb-6">Enter a name for your context pack</p>
+        {/* Create Pack Inline Form */}
+        {showCreateModal && (
+          <div className="mb-8 bg-[#1a1a1a] border border-gray-700 rounded-lg p-6 max-w-2xl">
+            <h2 className="text-lg font-semibold text-white mb-1">Create New Pack</h2>
+            <p className="text-sm text-gray-400 mb-4">Enter a name for your context pack</p>
 
             <input
               type="text"
@@ -479,19 +344,29 @@ export default function PacksPage() {
                 }
               }}
               placeholder="e.g., Product Research, Meeting Notes"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition mb-6"
+              className="w-full bg-[#0a0a0a] border border-gray-700 rounded-md px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 focus:outline-none transition mb-4"
               autoFocus
             />
 
-            <div className="flex gap-3">
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setNewPackName('');
+                }}
+                disabled={creatingPack}
+                className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white disabled:opacity-50"
+              >
+                Cancel
+              </button>
               <button
                 onClick={handleSubmitCreatePack}
                 disabled={creatingPack || !newPackName.trim()}
-                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition"
+                className="px-4 py-2 bg-white hover:bg-gray-200 disabled:bg-gray-700 disabled:cursor-not-allowed text-black text-sm font-medium rounded-md flex items-center gap-2 transition"
               >
                 {creatingPack ? (
                   <>
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
@@ -501,20 +376,149 @@ export default function PacksPage() {
                   'Create Pack'
                 )}
               </button>
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setNewPackName('');
-                }}
-                disabled={creatingPack}
-                className="px-6 py-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 rounded-lg font-medium transition disabled:opacity-50"
-              >
-                Cancel
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Card Grid */}
+        {packs.length === 0 ? (
+          <div className="text-center py-20 bg-[#1a1a1a] rounded-lg border border-gray-800">
+            <p className="text-base font-medium text-white mb-1">No packs yet</p>
+            <p className="text-sm text-gray-400">Create your first context pack to get started</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {packs.map((pack) => (
+              <div
+                key={pack.ucpId || pack.id}
+                className="bg-[#1a1a1a] border border-gray-800 rounded-lg overflow-hidden transition-all hover:border-gray-700 hover:shadow-lg hover:shadow-gray-900/50 group flex flex-col"
+              >
+                {/* Header - Clickable */}
+                <div
+                  onClick={() => handleViewPack(pack)}
+                  className="p-5 cursor-pointer hover:bg-[#1f1f1f] transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base font-semibold text-white mb-1 truncate">
+                        {pack.pack_name || 'Untitled Pack'}
+                      </h3>
+                      {pack.description && (
+                        <p className="text-xs text-gray-500 line-clamp-2">
+                          {pack.description}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`ml-3 flex-shrink-0 inline-flex items-center px-2 py-1 rounded text-xs font-medium ${pack.total_chunks > 0
+                      ? 'bg-green-500/10 text-green-400'
+                      : 'bg-gray-500/10 text-gray-400'
+                      }`}>
+                      {pack.total_chunks > 0 ? 'Active' : 'Empty'}
+                    </span>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Sources</div>
+                      <div className="text-lg font-semibold text-white">{pack.total_sources || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Chunks</div>
+                      <div className="text-lg font-semibold text-white">{pack.total_chunks || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Tokens</div>
+                      <div className="text-sm font-semibold text-white">
+                        {pack.total_input_tokens ? formatTokenCount(pack.total_input_tokens) : '0'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Date */}
+                  <div className="text-xs text-gray-600 mt-4">
+                    {new Date(pack.completedAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </div>
+                </div>
+
+                {/* Actions Footer */}
+                <div className="border-t border-gray-800 bg-[#141414] px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const packId = pack.ucpId || pack.id
+                        if (packId) {
+                          router.push(`/tree/${packId}`)
+                        }
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                      <span>View Tree</span>
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const packId = pack.ucpId || pack.id
+                        if (packId) {
+                          router.push(`/process-v3?pack=${packId}`)
+                        }
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Sources</span>
+                    </button>
+
+                    {/* Delete Button */}
+                    {confirmDeleteId === (pack.ucpId || pack.id) ? (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeletePack(pack.ucpId || pack.id || '')
+                          }}
+                          disabled={deletingPackId === (pack.ucpId || pack.id)}
+                          className="px-3 py-2 text-xs bg-red-600 hover:bg-red-700 text-white rounded disabled:opacity-50"
+                        >
+                          {deletingPackId === (pack.ucpId || pack.id) ? 'Deleting...' : 'Confirm'}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setConfirmDeleteId(null)
+                          }}
+                          className="px-2 py-2 text-xs text-gray-400 hover:text-white rounded"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setConfirmDeleteId(pack.ucpId || pack.id || null)
+                        }}
+                        className="px-3 py-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                        title="Delete pack"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
 
       {/* Free Credits Prompt */}
       <FreeCreditsPrompt

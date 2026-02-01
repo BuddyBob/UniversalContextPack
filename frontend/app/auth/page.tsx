@@ -188,14 +188,16 @@ export default function AuthPage() {
             </div>
           </div>
 
-          {/* Google Sign in */}
+            {/* If signing in, show Google sign-in button */}
+
+
           <button
             onClick={handleGoogleSignIn}
             disabled={loading}
             className="w-full bg-white hover:bg-gray-100 text-black font-medium py-3.5 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 mb-8"
           >
             <Chrome className="h-5 w-5" />
-            <span>Log in with Google</span>
+            <span>{isSignUp ? 'Sign up with Google' : 'Log in with Google'}</span>
           </button>
 
           {/* Sign up link */}
@@ -211,7 +213,7 @@ export default function AuthPage() {
               }}
               className="text-white underline hover:text-gray-300 transition-colors font-medium"
             >
-              {isSignUp ? 'Sign in' : 'Create an account'}
+              {isSignUp ? 'Lo in' : 'Create an account'}
             </button>
           </div>
         </div>
