@@ -340,11 +340,17 @@ export default function ProcessV3Page() {
     }, [searchParams, selectedPack, user, makeAuthenticatedRequest, selectPack, setPackSources]);
 
     // Polling logic - uses robust usePolling hook
-    // Keep polling if any source is in a non-terminal state
-    const shouldPoll = !!selectedPack && packSources.some(s => {
-        const terminalStates = ['completed', 'failed', 'cancelled'];
-        return !terminalStates.includes(s.status);
-    });
+    // Keep polling if any source is in a non-terminal state OR if files are extracting
+    const hasExtractingFiles = Array.from(fileUploadProgress.values()).some(
+        progress => progress.phase === 'extracting'
+    );
+    const shouldPoll = !!selectedPack && (
+        hasExtractingFiles ||
+        packSources.some(s => {
+            const terminalStates = ['completed', 'failed', 'cancelled'];
+            return !terminalStates.includes(s.status);
+        })
+    );
 
     const pollPackDetails = useCallback(async () => {
         if (!selectedPack) return;
@@ -381,7 +387,6 @@ export default function ProcessV3Page() {
                     if (existingProgress && existingProgress.phase === 'extracting') {
                         if (source.status === 'ready_for_analysis' || source.status === 'completed') {
                             // Extraction complete - reload to refresh UI
-                            console.log(`✅ Extraction complete for: ${fileName}`);
                             window.location.reload();
                         } else if (source.status === 'failed') {
                             // Show error

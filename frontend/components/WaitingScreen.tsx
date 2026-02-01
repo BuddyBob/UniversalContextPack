@@ -11,7 +11,7 @@ interface WaitingScreenProps {
  * Get estimated processing time based on chunk count
  */
 function getEstimatedTime(chunks: number): string {
-    if (chunks <= 10) return '2-5 minutes';
+    if (chunks < 10) return '2-5 minutes';
     if (chunks <= 30) return '5-15 minutes';
     if (chunks <= 100) return '15-20 minutes';
     return 'up to 30 minutes';
