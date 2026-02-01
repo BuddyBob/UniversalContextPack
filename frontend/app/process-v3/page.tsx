@@ -206,7 +206,6 @@ export default function ProcessV3Page() {
                         if (xhr.status >= 200 && xhr.status < 300) {
                             console.log(`✅ Uploaded: ${file.name}`);
 
-
                             // Update to extraction phase
                             setFileUploadProgress(prev => {
                                 const next = new Map(prev);
@@ -220,8 +219,6 @@ export default function ProcessV3Page() {
                                 }
                                 return next;
                             });
-                                                        // Force reload
-                            window.location.reload();
 
                             resolve();
                         } else {
@@ -383,8 +380,9 @@ export default function ProcessV3Page() {
 
                     if (existingProgress && existingProgress.phase === 'extracting') {
                         if (source.status === 'ready_for_analysis' || source.status === 'completed') {
-                            // Extraction complete
-                            next.delete(fileName);
+                            // Extraction complete - reload to refresh UI
+                            console.log(`✅ Extraction complete for: ${fileName}`);
+                            window.location.reload();
                         } else if (source.status === 'failed') {
                             // Show error
                             next.set(fileName, {
