@@ -205,8 +205,7 @@ export default function ProcessV3Page() {
                     xhr.addEventListener('load', () => {
                         if (xhr.status >= 200 && xhr.status < 300) {
                             console.log(`✅ Uploaded: ${file.name}`);
-                            // Force reload
-                            window.location.reload();
+
 
                             // Update to extraction phase
                             setFileUploadProgress(prev => {
@@ -221,6 +220,8 @@ export default function ProcessV3Page() {
                                 }
                                 return next;
                             });
+                                                        // Force reload
+                            window.location.reload();
 
                             resolve();
                         } else {
@@ -1024,7 +1025,7 @@ export default function ProcessV3Page() {
                         ) : (
                             <>
                                 <Download className="h-4 w-4" />
-                                <span>Download Memory Tree</span>
+                                <span>Download Memory Tree </span>
                             </>
                         )}
                     </button>
