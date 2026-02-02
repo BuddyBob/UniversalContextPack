@@ -875,65 +875,106 @@ def sign_aws_request(method, url, headers, payload, access_key, secret_key, regi
     
     return headers
 
-def upload_to_r2_direct(key: str, content: str):
-    """Upload directly to R2 using requests with proper SSL verification and S3 auth"""
-    try:
-        
-        # Construct the URL
-        url = f"{R2_ENDPOINT}/{R2_BUCKET}/{key}"
-        
-        # Prepare headers
-        headers = {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Host': urlparse(R2_ENDPOINT).netloc
-        }
-        
-        # Sign the request
-        headers = sign_aws_request('PUT', url, headers, content, R2_ACCESS_KEY, R2_SECRET_KEY)
-        
-        # Make the request with proper SSL verification and better Unicode handling
+def calculate_upload_timeout(content_size_bytes: int) -> int:
+    """Calculate dynamic timeout based on content size"""
+    base_timeout = 60  # Base 60 seconds for small files
+    mb_size = content_size_bytes / (1024 * 1024)
+    dynamic_timeout = int(base_timeout + (mb_size * 10))  # +10 seconds per MB
+    max_timeout = 300  # Cap at 5 minutes
+    return min(dynamic_timeout, max_timeout)
+
+def upload_to_r2_direct(key: str, content: str, max_retries: int = 3):
+    """Upload directly to R2 using requests with proper SSL verification, dynamic timeouts, and retry logic"""
+    import time
+    
+    # Calculate content size and dynamic timeout
+    content_bytes = content.encode('utf-8', errors='ignore')
+    content_size = len(content_bytes)
+    timeout = calculate_upload_timeout(content_size)
+    
+    print(f"📤 Uploading {key}: {content_size / (1024 * 1024):.2f} MB, timeout: {timeout}s")
+    
+    # Retry loop with exponential backoff
+    for attempt in range(max_retries):
         try:
-            # Clean the content of any surrogate characters before encoding
-            import codecs
-            # First, encode to bytes handling surrogates
-            content_bytes = content.encode('utf-8', errors='ignore')
-            # Then decode back to clean string
-            clean_content = content_bytes.decode('utf-8')
-            response = r2_session.put(url, data=clean_content.encode('utf-8'), headers=headers, timeout=30)
-        except requests.exceptions.SSLError as ssl_error:
-            print(f"❌ SSL verification failed for R2 upload: {ssl_error}")
-            print(f"❌ Cannot upload to R2 due to SSL issues")
-            return False
-        except UnicodeEncodeError as ue:
-            print(f"Unicode encoding error: {ue}")
-            # More aggressive cleaning for surrogate pairs
-            import unicodedata
-            clean_content = ''.join(char for char in content if unicodedata.category(char) != 'Cs')
+            # Construct the URL
+            url = f"{R2_ENDPOINT}/{R2_BUCKET}/{key}"
+            
+            # Prepare headers
+            headers = {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Host': urlparse(R2_ENDPOINT).netloc
+            }
+            
+            # Sign the request
+            headers = sign_aws_request('PUT', url, headers, content, R2_ACCESS_KEY, R2_SECRET_KEY)
+            
+            # Make the request with proper SSL verification and better Unicode handling
             try:
-                response = r2_session.put(url, data=clean_content.encode('utf-8'), headers=headers, timeout=30)
+                # Clean the content of any surrogate characters before encoding
+                clean_content = content_bytes.decode('utf-8')
+                response = r2_session.put(url, data=content_bytes, headers=headers, timeout=timeout)
             except requests.exceptions.SSLError as ssl_error:
-                print(f"❌ SSL verification failed on retry: {ssl_error}")
+                print(f"❌ SSL verification failed for R2 upload: {ssl_error}")
                 print(f"❌ Cannot upload to R2 due to SSL issues")
                 return False
-            # More aggressive cleaning for surrogate pairs
-            import unicodedata
-            clean_content = ''.join(char for char in content if unicodedata.category(char) != 'Cs')
-            response = r2_session.put(url, data=clean_content.encode('utf-8'), headers=headers, timeout=30)
-        
-        if response.status_code in [200, 201]:
-            print(f"✅ R2 upload successful with SSL verification: {key}")
-            return True
-        else:
-            print(f"❌ R2 upload failed: {response.status_code} - {response.text}")
-            print(f"❌ Failed to upload {key} to R2 bucket {R2_BUCKET}")
-            print(f"❌ Please verify your R2 bucket exists and credentials are correct")
+            except UnicodeEncodeError as ue:
+                print(f"Unicode encoding error: {ue}")
+                # More aggressive cleaning for surrogate pairs
+                import unicodedata
+                clean_content = ''.join(char for char in content if unicodedata.category(char) != 'Cs')
+                content_bytes = clean_content.encode('utf-8')
+                try:
+                    response = r2_session.put(url, data=content_bytes, headers=headers, timeout=timeout)
+                except requests.exceptions.SSLError as ssl_error:
+                    print(f"❌ SSL verification failed on retry: {ssl_error}")
+                    print(f"❌ Cannot upload to R2 due to SSL issues")
+                    return False
+            
+            # Success - upload completed
+            if response.status_code in [200, 201]:
+                print(f"✅ R2 upload successful: {key} (attempt {attempt + 1}/{max_retries})")
+                return True
+            else:
+                print(f"❌ R2 upload failed: {response.status_code} - {response.text}")
+                print(f"❌ Failed to upload {key} to R2 bucket {R2_BUCKET}")
+                print(f"❌ Please verify your R2 bucket exists and credentials are correct")
+                return False
+            
+        except (requests.exceptions.Timeout, TimeoutError) as timeout_error:
+            # Timeout error - retry with exponential backoff
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) * 2  # 2s, 4s, 8s
+                print(f"⏱️ Upload timeout on attempt {attempt + 1}/{max_retries}: {timeout_error}")
+                print(f"🔄 Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+                continue
+            else:
+                print(f"❌ Upload timed out after {max_retries} attempts: {timeout_error}")
+                print(f"❌ Failed to upload {key} to R2 - file size: {content_size / (1024 * 1024):.2f} MB")
+                return False
+                
+        except requests.exceptions.ConnectionError as conn_error:
+            # Connection error - retry with exponential backoff
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) * 2  # 2s, 4s, 8s
+                print(f"🔌 Connection error on attempt {attempt + 1}/{max_retries}: {conn_error}")
+                print(f"🔄 Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+                continue
+            else:
+                print(f"❌ Connection failed after {max_retries} attempts: {conn_error}")
+                print(f"❌ Failed to upload {key} to R2")
+                return False
+                
+        except Exception as e:
+            print(f"❌ R2 upload exception: {e}")
+            print(f"❌ Failed to upload {key} to R2")
+            print(f"❌ Please verify your R2 bucket '{R2_BUCKET}' exists and credentials are correct")
             return False
-        
-    except Exception as e:
-        print(f"❌ R2 upload exception: {e}")
-        print(f"❌ Failed to upload {key} to R2")
-        print(f"❌ Please verify your R2 bucket '{R2_BUCKET}' exists and credentials are correct")
-        return False
+    
+    # Should not reach here, but return False as safety
+    return False
 
 # Disable boto3 for now and use direct upload
 r2_client = None
