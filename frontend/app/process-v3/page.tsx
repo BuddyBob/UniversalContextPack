@@ -178,14 +178,40 @@ export default function ProcessV3Page() {
                 const uploadUrl = `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources`;
                 console.log('[ProcessV3] Upload URL:', uploadUrl);
 
-                // Use XMLHttpRequest for progress tracking
+                //progress tracking
                 await new Promise<void>((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
+                    
+
+                    // overall timeout
+                    xhr.timeout = 700000;
+
+                    let lastProgressTime = Date.now();
+                    let lastLoaded = 0;
+                    
+                    const stallCheckInterval = setInterval(() => {
+                        const now = Date.now();
+                        const timeSinceProgress = now - lastProgressTime;
+                        
+                        // If no progress for 10 seconds, abort
+                        if (timeSinceProgress > 10000) {
+                            console.error(`[ProcessV3] Upload stalled for ${file.name}`);
+                            clearInterval(stallCheckInterval);
+                            xhr.abort();
+                        }
+                    }, 5000);
 
                     // Track upload progress
                     xhr.upload.addEventListener('progress', (e) => {
                         if (e.lengthComputable) {
                             const percentComplete = Math.round((e.loaded / e.total) * 100);
+                            
+                            // Update progress time if bytes increased
+                            if (e.loaded > lastLoaded) {
+                                lastProgressTime = Date.now();
+                                lastLoaded = e.loaded;
+                            }
+                            
                             setFileUploadProgress(prev => {
                                 const next = new Map(prev);
                                 const current = next.get(file.name);
@@ -203,6 +229,7 @@ export default function ProcessV3Page() {
                     });
 
                     xhr.addEventListener('load', () => {
+                        clearInterval(stallCheckInterval);
                         if (xhr.status >= 200 && xhr.status < 300) {
                             console.log(`✅ Uploaded: ${file.name}`);
 
@@ -227,6 +254,7 @@ export default function ProcessV3Page() {
                     });
 
                     xhr.addEventListener('error', () => {
+                        clearInterval(stallCheckInterval);
                         setFileUploadProgress(prev => {
                             const next = new Map(prev);
                             const current = next.get(file.name);
@@ -234,16 +262,46 @@ export default function ProcessV3Page() {
                                 next.set(file.name, {
                                     ...current,
                                     phase: 'error',
-                                    errorMessage: 'Upload failed'
+                                    errorMessage: 'Network error - upload failed'
                                 });
                             }
                             return next;
                         });
-                        reject(new Error('Upload failed'));
+                        reject(new Error('Network error - upload failed'));
+                    });
+
+                    xhr.addEventListener('timeout', () => {
+                        clearInterval(stallCheckInterval);
+                        setFileUploadProgress(prev => {
+                            const next = new Map(prev);
+                            const current = next.get(file.name);
+                            if (current) {
+                                next.set(file.name, {
+                                    ...current,
+                                    phase: 'error',
+                                    errorMessage: 'Upload timeout - file too large or connection too slow'
+                                });
+                            }
+                            return next;
+                        });
+                        reject(new Error('Upload timeout'));
                     });
 
                     xhr.addEventListener('abort', () => {
-                        reject(new Error('Upload cancelled'));
+                        clearInterval(stallCheckInterval);
+                        setFileUploadProgress(prev => {
+                            const next = new Map(prev);
+                            const current = next.get(file.name);
+                            if (current) {
+                                next.set(file.name, {
+                                    ...current,
+                                    phase: 'error',
+                                    errorMessage: 'Upload stalled - no progress detected'
+                                });
+                            }
+                            return next;
+                        });
+                        reject(new Error('Upload stalled'));
                     });
 
                     xhr.open('POST', uploadUrl);
@@ -266,13 +324,7 @@ export default function ProcessV3Page() {
                 setFileUploadProgress(prev => {
                     const next = new Map(prev);
                     const current = next.get(file.name);
-                    if (current) {
-                        next.set(file.name, {
-                            ...current,
-                            phase: 'error',
-                            errorMessage: error instanceof Error ? error.message : String(error)
-                        });
-                    }
+                    if (current) {next.set(file.name, {...current,phase: 'error',errorMessage: error instanceof Error ? error.message : String(error)});}
                     return next;
                 });
 
@@ -384,25 +436,39 @@ export default function ProcessV3Page() {
                     const fileName = source.file_name || source.source_name;
                     const existingProgress = next.get(fileName);
 
-                    if (existingProgress && existingProgress.phase === 'extracting') {
-                        if (source.status === 'ready_for_analysis' || source.status === 'completed') {
-                            // Extraction complete - reload to refresh UI
-                            window.location.reload();
-                        } else if (source.status === 'failed') {
-                            // Show error
-                            next.set(fileName, {
-                                ...existingProgress,
-                                phase: 'error',
-                                errorMessage: source.error_message || 'Extraction failed'
-                            });
-                        } else if (source.status === 'processing' || source.status === 'extracting') {
-                            // Update progress
+                    // Handle sources that are actively extracting
+                    if (source.status === 'processing' || source.status === 'extracting') {
+                        if (existingProgress && existingProgress.phase === 'extracting') {
+                            // Update progress for existing extraction
                             const extractionProgress = source.progress ? Math.round(source.progress) : undefined;
                             next.set(fileName, {
                                 ...existingProgress,
                                 extractionProgress
                             });
+                        } else if (!existingProgress) {
+                            // Create progress entry if source is extracting but not in map (e.g., after page refresh)
+                            next.set(fileName, {
+                                fileName: fileName,
+                                fileSize: 0, // Unknown size from backend
+                                uploadedBytes: 0,
+                                uploadPercent: 100,
+                                phase: 'extracting',
+                                extractionProgress: source.progress ? Math.round(source.progress) : undefined
+                            });
                         }
+                    }
+                    // Handle completion - remove from progress
+                    else if (existingProgress && (source.status === 'ready_for_analysis' || source.status === 'completed')) {
+                        // Extraction complete - remove from progress to show analyze button
+                        next.delete(fileName);
+                    }
+                    // Handle failures
+                    else if (existingProgress && source.status === 'failed') {
+                        next.set(fileName, {
+                            ...existingProgress,
+                            phase: 'error',
+                            errorMessage: source.error_message || 'Extraction failed'
+                        });
                     }
                 });
                 return next;
@@ -418,6 +484,18 @@ export default function ProcessV3Page() {
         interval: 2000,
         onPoll: pollPackDetails,
     });
+
+    // Force immediate poll when a file enters extracting phase (dark green)
+    useEffect(() => {
+        const extractingFiles = Array.from(fileUploadProgress.values()).filter(
+            progress => progress.phase === 'extracting'
+        );
+        
+        if (extractingFiles.length > 0) {
+            console.log('[ProcessV3] File entered extraction phase, forcing immediate poll');
+            pollPackDetails();
+        }
+    }, [fileUploadProgress, pollPackDetails]);
 
     // Auto-fetch credit info
     useEffect(() => {
