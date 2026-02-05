@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader, X, FolderOpen, FileText, Download, MessageSquare, Link as LinkIcon, FileText as FileTextIcon, AlignLeft, HelpCircle } from 'lucide-react';
+import { Loader, X, FolderOpen, FileText, Download, MessageSquare, Link as LinkIcon, AlignLeft, HelpCircle } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
@@ -24,7 +24,7 @@ interface FileUploadProgress {
     fileSize: number;
     uploadedBytes: number;
     uploadPercent: number;
-    phase: 'uploading' | 'extracting' | 'complete' | 'error';
+    phase: 'uploading' | 'extracting' | 'error';
     extractionProgress?: number; // Progress percentage during extraction (0-100)
     errorMessage?: string;
 }
@@ -41,7 +41,7 @@ const formatFileSize = (bytes: number): string => {
 export default function ProcessV3Page() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, makeAuthenticatedRequest, refreshUserProfile } = useAuth();
+    const { user, makeAuthenticatedRequest } = useAuth();
 
     const {
         selectedPack,
@@ -59,7 +59,6 @@ export default function ProcessV3Page() {
 
     const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
-    const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
     const [fileUploadProgress, setFileUploadProgress] = useState<Map<string, FileUploadProgress>>(new Map());
     const [isDownloadingPack, setIsDownloadingPack] = useState(false);
     const [isDownloadingTree, setIsDownloadingTree] = useState(false);
@@ -68,6 +67,9 @@ export default function ProcessV3Page() {
     const [showTextModal, setShowTextModal] = useState(false);
     const [urlInput, setUrlInput] = useState('');
     const [textInput, setTextInput] = useState('');
+    
+    // Track files we've already polled for to avoid infinite loops
+    const polledExtractingFiles = useRef<Set<string>>(new Set());
 
     // Handle URL upload
     const handleUrlUpload = async () => {
@@ -150,7 +152,6 @@ export default function ProcessV3Page() {
 
         for (const file of fileArray) {
             console.log('[ProcessV3] Uploading file:', file.name, 'size:', file.size, 'type:', file.type);
-            setUploadingFiles(prev => new Set(prev).add(file.name));
 
             // Initialize progress tracking
             setFileUploadProgress(prev => {
@@ -188,14 +189,15 @@ export default function ProcessV3Page() {
 
                     let lastProgressTime = Date.now();
                     let lastLoaded = 0;
+                    let uploadStarted = false;
                     
                     const stallCheckInterval = setInterval(() => {
                         const now = Date.now();
                         const timeSinceProgress = now - lastProgressTime;
                         
-                        // If no progress for 10 seconds, abort
-                        if (timeSinceProgress > 10000) {
-                            console.error(`[ProcessV3] Upload stalled for ${file.name}`);
+                        // Only abort if stuck at 0% for 15 seconds (upload never started)
+                        if (!uploadStarted && timeSinceProgress > 15000) {
+                            console.error(`[ProcessV3] Upload stalled at 0% for ${file.name}`);
                             clearInterval(stallCheckInterval);
                             xhr.abort();
                         }
@@ -206,8 +208,9 @@ export default function ProcessV3Page() {
                         if (e.lengthComputable) {
                             const percentComplete = Math.round((e.loaded / e.total) * 100);
                             
-                            // Update progress time if bytes increased
+                            // Mark as started and update progress time if bytes increased
                             if (e.loaded > lastLoaded) {
+                                uploadStarted = true;
                                 lastProgressTime = Date.now();
                                 lastLoaded = e.loaded;
                             }
@@ -309,14 +312,7 @@ export default function ProcessV3Page() {
                     xhr.send(formData);
                 });
 
-                // Wait a moment for backend to save
-                await new Promise(resolve => setTimeout(resolve, 500));
-
-                // Immediately refetch pack to get the new source
-                await pollPackDetails();
-                console.log('[ProcessV3] ✅ Pack details refreshed after upload');
-
-                // Extraction progress will be tracked by polling
+                // Extraction progress will be tracked by regular polling
 
             } catch (error) {
                 console.error('[ProcessV3] Upload error:', error);
@@ -329,24 +325,6 @@ export default function ProcessV3Page() {
                 });
 
                 alert(`Upload error: ${file.name}\n${error instanceof Error ? error.message : String(error)}`);
-            } finally {
-                setUploadingFiles(prev => {
-                    const next = new Set(prev);
-                    next.delete(file.name);
-                    return next;
-                });
-
-                // Clean up progress after a delay if error
-                setTimeout(() => {
-                    setFileUploadProgress(prev => {
-                        const next = new Map(prev);
-                        const current = next.get(file.name);
-                        if (current?.phase === 'error' || current?.phase === 'complete') {
-                            next.delete(file.name);
-                        }
-                        return next;
-                    });
-                }, 3000);
             }
         }
     };
@@ -404,6 +382,7 @@ export default function ProcessV3Page() {
         })
     );
 
+    // Poll pack details and update states
     const pollPackDetails = useCallback(async () => {
         if (!selectedPack) return;
 
@@ -485,16 +464,28 @@ export default function ProcessV3Page() {
         onPoll: pollPackDetails,
     });
 
-    // Force immediate poll when a file enters extracting phase (dark green)
+    // Immediate poll when file enters extracting phase (one-time only per file)
     useEffect(() => {
         const extractingFiles = Array.from(fileUploadProgress.values()).filter(
             progress => progress.phase === 'extracting'
         );
         
-        if (extractingFiles.length > 0) {
-            console.log('[ProcessV3] File entered extraction phase, forcing immediate poll');
-            pollPackDetails();
-        }
+        extractingFiles.forEach(file => {
+            // Only poll if we haven't already polled for this file
+            if (!polledExtractingFiles.current.has(file.fileName)) {
+                console.log('[ProcessV3] File entered extraction, immediate poll:', file.fileName);
+                polledExtractingFiles.current.add(file.fileName);
+                pollPackDetails();
+            }
+        });
+        
+        // Clean up ref when files are removed from progress
+        const currentFileNames = new Set(Array.from(fileUploadProgress.keys()));
+        polledExtractingFiles.current.forEach(fileName => {
+            if (!currentFileNames.has(fileName)) {
+                polledExtractingFiles.current.delete(fileName);
+            }
+        });
     }, [fileUploadProgress, pollPackDetails]);
 
     // Auto-fetch credit info
@@ -567,11 +558,6 @@ export default function ProcessV3Page() {
 
                 // 2. Optimistically remove from UI for immediate feedback
                 setPackSources(prev => prev.filter(s => s.source_id !== processingSource.source_id));
-                setUploadingFiles(prev => {
-                    const next = new Set(prev);
-                    next.delete(processingSource.file_name || '');
-                    return next;
-                });
 
                 // 3. Delete the source from backend
                 console.log('[ProcessV3] Deleting source:', processingSource.source_id);
