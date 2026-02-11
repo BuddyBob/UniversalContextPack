@@ -67,7 +67,7 @@ export default function ProcessV3Page() {
     const [showTextModal, setShowTextModal] = useState(false);
     const [urlInput, setUrlInput] = useState('');
     const [textInput, setTextInput] = useState('');
-    
+
     // Track files we've already polled for to avoid infinite loops
     const polledExtractingFiles = useRef<Set<string>>(new Set());
 
@@ -182,7 +182,7 @@ export default function ProcessV3Page() {
                 //progress tracking
                 await new Promise<void>((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
-                    
+
 
                     // overall timeout
                     xhr.timeout = 700000;
@@ -190,11 +190,11 @@ export default function ProcessV3Page() {
                     let lastProgressTime = Date.now();
                     let lastLoaded = 0;
                     let uploadStarted = false;
-                    
+
                     const stallCheckInterval = setInterval(() => {
                         const now = Date.now();
                         const timeSinceProgress = now - lastProgressTime;
-                        
+
                         // Only abort if stuck at 0% for 15 seconds (upload never started)
                         if (!uploadStarted && timeSinceProgress > 15000) {
                             console.error(`[ProcessV3] Upload stalled at 0% for ${file.name}`);
@@ -207,14 +207,14 @@ export default function ProcessV3Page() {
                     xhr.upload.addEventListener('progress', (e) => {
                         if (e.lengthComputable) {
                             const percentComplete = Math.round((e.loaded / e.total) * 100);
-                            
+
                             // Mark as started and update progress time if bytes increased
                             if (e.loaded > lastLoaded) {
                                 uploadStarted = true;
                                 lastProgressTime = Date.now();
                                 lastLoaded = e.loaded;
                             }
-                            
+
                             setFileUploadProgress(prev => {
                                 const next = new Map(prev);
                                 const current = next.get(file.name);
@@ -320,7 +320,7 @@ export default function ProcessV3Page() {
                 setFileUploadProgress(prev => {
                     const next = new Map(prev);
                     const current = next.get(file.name);
-                    if (current) {next.set(file.name, {...current,phase: 'error',errorMessage: error instanceof Error ? error.message : String(error)});}
+                    if (current) { next.set(file.name, { ...current, phase: 'error', errorMessage: error instanceof Error ? error.message : String(error) }); }
                     return next;
                 });
 
@@ -469,7 +469,7 @@ export default function ProcessV3Page() {
         const extractingFiles = Array.from(fileUploadProgress.values()).filter(
             progress => progress.phase === 'extracting'
         );
-        
+
         extractingFiles.forEach(file => {
             // Only poll if we haven't already polled for this file
             if (!polledExtractingFiles.current.has(file.fileName)) {
@@ -478,7 +478,7 @@ export default function ProcessV3Page() {
                 pollPackDetails();
             }
         });
-        
+
         // Clean up ref when files are removed from progress
         const currentFileNames = new Set(Array.from(fileUploadProgress.keys()));
         polledExtractingFiles.current.forEach(fileName => {
@@ -710,21 +710,64 @@ export default function ProcessV3Page() {
                         <p className="text-xs text-gray-500">No sources yet</p>
                     ) : (
                         <div className="space-y-2">
-                            {packSources.map((source: any) => (
-                                <div key={source.source_id} className="bg-gray-800 rounded-lg p-3">
-                                    <div className="flex items-start gap-2">
-                                        <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-xs font-medium text-white truncate">
-                                                {source.file_name || source.source_name}
+                            {packSources.map((source: any) => {
+                                const canCancel = ['extracting', 'ready_for_analysis', 'analyzing', 'processing', 'analyzing_chunks', 'building_tree'].includes(source.status);
+
+                                return (
+                                    <div
+                                        key={source.source_id}
+                                        className="bg-gray-800 rounded-lg p-3 group relative hover:bg-gray-750 transition-colors"
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-xs font-medium text-white truncate">
+                                                    {source.file_name || source.source_name}
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 capitalize mt-0.5">
+                                                    {source.status?.replace('_', ' ')}
+                                                </div>
                                             </div>
-                                            <div className="text-[10px] text-gray-400 capitalize mt-0.5">
-                                                {source.status?.replace('_', ' ')}
-                                            </div>
+
+                                            {canCancel && (
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!confirm(`Cancel and delete "${source.file_name || source.source_name}"?`)) return;
+
+                                                        try {
+                                                            // Cancel if processing
+                                                            if (['analyzing', 'processing', 'analyzing_chunks', 'building_tree'].includes(source.status)) {
+                                                                await makeAuthenticatedRequest(
+                                                                    `${API_BASE_URL}/api/v2/sources/${source.source_id}/cancel`,
+                                                                    { method: 'POST' }
+                                                                );
+                                                                await new Promise(resolve => setTimeout(resolve, 1000));
+                                                            }
+
+                                                            // Delete source
+                                                            await makeAuthenticatedRequest(
+                                                                `${API_BASE_URL}/api/v2/packs/${selectedPack.pack_id}/sources/${source.source_id}`,
+                                                                { method: 'DELETE' }
+                                                            );
+
+                                                            // Remove from UI
+                                                            setPackSources(prev => prev.filter(s => s.source_id !== source.source_id));
+                                                            await pollPackDetails();
+                                                        } catch (error) {
+                                                            console.error('Error cancelling source:', error);
+                                                            alert('Failed to cancel source');
+                                                        }
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-400 p-1"
+                                                    title="Cancel and delete"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

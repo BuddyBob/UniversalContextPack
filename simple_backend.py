@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header, Request, Form, Body
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Header, Request, Form, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -437,6 +437,15 @@ class AddMemoryRequest(BaseModel):
 class PackReviewRequest(BaseModel):
     rating: int  # 1-5
     feedback_text: Optional[str] = None
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class ChatGPTConversationRequest(BaseModel):
+    pack_id: str
+    conversation: Dict[str, Any]  # Contains title and messages array
+
 
 
 # User model for authentication
@@ -2020,6 +2029,10 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         avg_chunk_size = total_length // len(chunks) if len(chunks) > 0 else 0
         print(f"Stats: {total_length:,} chars -> {len(chunks)} chunks (~{avg_chunk_size:,} chars/chunk avg)", flush=True)
         
+        # Automatically trigger analysis after extraction completes
+        print(f"🚀 Starting automatic analysis for source {source_id}...", flush=True)
+        asyncio.create_task(analyze_source_chunks(pack_id, source_id, filename, user))
+        
         return len(chunks)
         
     except Exception as e:
@@ -3522,6 +3535,11 @@ async def list_packs(user: AuthenticatedUser = Depends(get_current_user)):
     # Simply redirect to the V2 endpoint which uses the unified view
     return await list_packs_v2(user)
 
+@app.post("/api/packs")
+async def create_pack(request: CreatePackRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    """Create a new pack - redirects to V2 endpoint."""
+    return await create_pack_v2(request, user)
+
 # ============================================================================
 # PACK V2 HELPER FUNCTIONS
 # ============================================================================
@@ -3794,6 +3812,163 @@ async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):
         print(f"Error listing packs: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to list packs: {str(e)}")
 
+# ============================================================================
+# CHROME EXTENSION API ENDPOINTS
+# ============================================================================
+
+@app.post("/auth/login")
+async def login(request: LoginRequest):
+    """Authenticate user with email and password (for Chrome extension)"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Authentication service not configured")
+        
+        # Authenticate with Supabase
+        auth_response = supabase.auth.sign_in_with_password({
+            "email": request.email,
+            "password": request.password
+        })
+        
+        if not auth_response.user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Return token and user info
+        return {
+            "token": auth_response.session.access_token,
+            "user": {
+                "id": auth_response.user.id,
+                "email": auth_response.user.email
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "invalid" in error_msg or "credentials" in error_msg:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        print(f"❌ Login error: {e}")
+        raise HTTPException(status_code=500, detail="Authentication failed")
+
+@app.post("/api/upload-chatgpt-conversation")
+async def upload_chatgpt_conversation(
+    request: ChatGPTConversationRequest,
+    background_tasks: BackgroundTasks,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """Upload ChatGPT conversation to a pack (for Chrome extension)"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        pack_id = request.pack_id
+        conversation = request.conversation
+        
+        # Verify pack exists and belongs to user using RPC
+        packs_result = supabase.rpc("get_user_packs_v2", {
+            "user_uuid": user.user_id
+        }).execute()
+        
+        if not packs_result.data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        # Find the specific pack
+        pack_data = next((p for p in packs_result.data if p.get("pack_id") == pack_id), None)
+        if not pack_data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        # Create a source for this conversation using add_pack_source RPC
+        source_name = conversation.get("title", "ChatGPT Conversation")
+        source_id = str(uuid.uuid4())
+        source_result = supabase.rpc("add_pack_source", {
+            "user_uuid": user.user_id,
+            "target_pack_id": pack_id,
+            "target_source_id": source_id,
+            "source_name_param": source_name,
+            "source_type_param": "chat_export"
+        }).execute()
+        
+        if not source_result.data or len(source_result.data) == 0:
+            raise HTTPException(status_code=500, detail="Failed to create source")
+        
+        # Convert conversation messages to text format
+        messages = conversation.get("messages", [])
+        formatted_messages = []
+        for msg in messages:
+            role = msg.get("role", "unknown").upper()
+            content = msg.get("content", "")
+            formatted_messages.append(f"[{role}]: {content}")
+        
+        conversation_text = "\n\n".join(formatted_messages)
+        
+        # Start background processing (function already defined in this file at line ~1912)
+        background_tasks.add_task(
+            extract_and_chunk_source,
+            pack_id=pack_id,
+            source_id=source_id,
+            file_content=conversation_text,
+            filename=f"{source_name}.txt",
+            user=user
+        )
+        
+        return {
+            "source_id": source_id,
+            "status": "processing",
+            "message": "Conversation upload started"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error uploading conversation: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/packs/{pack_id}/memory-tree")
+async def get_pack_memory_tree(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+    """Get memory tree for a pack (for Chrome extension)"""
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+        
+        # Verify pack exists and belongs to user using RPC
+        packs_result = supabase.rpc("get_user_packs_v2", {
+            "user_uuid": user.user_id
+        }).execute()
+        
+        if not packs_result.data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        # Find the specific pack
+        pack_data = next((p for p in packs_result.data if p.get("pack_id") == pack_id), None)
+        if not pack_data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+        
+        # Get pack name
+        pack_name = pack_data.get("pack_name", "Unknown Pack")
+        
+        # Get tree nodes (reuse existing logic)
+        tree_result = await get_pack_tree_nodes(pack_id, user)
+        
+        # Return formatted response
+        return {
+            "pack_id": pack_id,
+            "pack_name": pack_name,
+            "memory_tree": tree_result,
+            "generated_at": datetime.utcnow().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error getting memory tree: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# USER PROFILE ENDPOINTS
+# ============================================================================
+
 @app.get("/api/v2/packs/{pack_id}/tree.json")
 async def download_pack_tree_json(
     pack_id: str,
@@ -4032,6 +4207,7 @@ async def add_source_to_pack(
         source_id = str(uuid.uuid4())
         
         print(f"Adding source {source_id} to pack {pack_id} for user {user.email}")
+        print(f"DEBUG: file={file.filename if file else None}, url={url}, text_content_len={len(text_content) if text_content else 0}, source_name={source_name}, source_type={source_type}")
         
         # Handle URL-based sources (ChatGPT shared conversations)
         if url:
@@ -4176,8 +4352,13 @@ async def add_source_to_pack(
         else:
             raise HTTPException(status_code=400, detail="Must provide file, url, or text_content")
         
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
         print(f"Error adding source to pack: {e}")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Full traceback:")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to add source: {str(e)}")
 
 @app.delete("/api/v2/packs/{pack_id}")
