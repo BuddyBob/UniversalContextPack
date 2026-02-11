@@ -2028,10 +2028,7 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         print(f"✅ Extraction and chunking complete: {len(chunks)} chunks ready for analysis", flush=True)
         avg_chunk_size = total_length // len(chunks) if len(chunks) > 0 else 0
         print(f"Stats: {total_length:,} chars -> {len(chunks)} chunks (~{avg_chunk_size:,} chars/chunk avg)", flush=True)
-        
-        # Automatically trigger analysis after extraction completes
-        print(f"🚀 Starting automatic analysis for source {source_id}...", flush=True)
-        asyncio.create_task(analyze_source_chunks(pack_id, source_id, filename, user))
+        print(f"⏸️  Source {source_id} ready - waiting for user to click 'Analyze'", flush=True)
         
         return len(chunks)
         
