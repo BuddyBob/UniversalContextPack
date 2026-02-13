@@ -1482,6 +1482,43 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
         print(f"❌ Error extracting PDF: {e}")
         raise ValueError(f"Failed to extract PDF content: {str(e)}")
 
+def extract_text_from_docx(docx_bytes: bytes) -> str:
+    """Extract text from DOCX files using python-docx"""
+    try:
+        from docx import Document
+        
+        docx_file = io.BytesIO(docx_bytes)
+        doc = Document(docx_file)
+        
+        extracted_text = []
+        
+        # Extract text from paragraphs
+        for paragraph in doc.paragraphs:
+            text = paragraph.text.strip()
+            if text:
+                extracted_text.append(text)
+        
+        # Extract text from tables
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = []
+                for cell in row.cells:
+                    cell_text = cell.text.strip()
+                    if cell_text:
+                        row_text.append(cell_text)
+                if row_text:
+                    extracted_text.append(' | '.join(row_text))
+        
+        combined_text = "\n\n".join(extracted_text)
+        
+        if not combined_text.strip():
+            raise ValueError("No text content found in DOCX file")
+        
+        return combined_text
+    except Exception as e:
+        print(f"❌ Error extracting DOCX: {e}")
+        raise ValueError(f"Failed to extract DOCX content: {str(e)}")
+
 def extract_from_text_content(file_content: str) -> List[str]:
     """OPTIMIZED: Extract meaningful text from plain text content with better context preservation"""
     extracted_texts = []
@@ -4309,9 +4346,21 @@ async def add_source_to_pack(
                     file_content_str = extract_text_from_pdf(content)
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e))
+                    
+            elif filename_lower.endswith(('.docx', '.doc')):
+                # Extract text from DOCX
+                try:
+                    print("DOCX file extraction")
+                    file_content_str = extract_text_from_docx(content)
+                except ValueError as e:
+                    raise HTTPException(status_code=400, detail=str(e))
             else:
-                # Plain text or other format
-                file_content_str = content.decode('utf-8') if source_type == 'chat_export' else content.decode('utf-8', errors='ignore')
+                # Plain text or other format - use UTF-8 decoding with error handling
+                try:
+                    file_content_str = content.decode('utf-8')
+                except UnicodeDecodeError:
+                    # Fall back to ignoring errors for binary/non-UTF8 files
+                    file_content_str = content.decode('utf-8', errors='ignore')
             
             # Create source record in database
             result = supabase.rpc("add_pack_source", {
