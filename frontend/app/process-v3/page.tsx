@@ -27,6 +27,7 @@ interface FileUploadProgress {
     phase: 'uploading' | 'extracting' | 'error';
     extractionProgress?: number; // Progress percentage during extraction (0-100)
     errorMessage?: string;
+    cancel?: () => void; // Abort the in-flight XHR
 }
 
 // Helper to format file size
@@ -183,21 +184,35 @@ export default function ProcessV3Page() {
                 await new Promise<void>((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
 
-
-                    // overall timeout
-                    xhr.timeout = 700000;
+                    // 5 minute hard timeout for the full upload
+                    xhr.timeout = 5 * 60 * 1000;
 
                     let lastProgressTime = Date.now();
                     let lastLoaded = 0;
                     let uploadStarted = false;
 
+                    // Attach a cancel function so the UI Cancel button can abort this XHR
+                    setFileUploadProgress(prev => {
+                        const next = new Map(prev);
+                        const current = next.get(file.name);
+                        if (current) {
+                            next.set(file.name, { ...current, cancel: () => xhr.abort() });
+                        }
+                        return next;
+                    });
+
                     const stallCheckInterval = setInterval(() => {
                         const now = Date.now();
                         const timeSinceProgress = now - lastProgressTime;
 
-                        // Only abort if stuck at 0% for 15 seconds (upload never started)
-                        if (!uploadStarted && timeSinceProgress > 15000) {
-                            console.error(`[ProcessV3] Upload stalled at 0% for ${file.name}`);
+                        // Abort if no byte progress for 30 seconds — catches both:
+                        //   • stuck at 0% (connection never established)
+                        //   • frozen mid-upload (server/network stalled)
+                        if (timeSinceProgress > 30000) {
+                            const pct = uploadStarted
+                                ? `${Math.round((lastLoaded / file.size) * 100)}%`
+                                : '0%';
+                            console.error(`[ProcessV3] Upload stalled at ${pct} for ${file.name}`);
                             clearInterval(stallCheckInterval);
                             xhr.abort();
                         }
@@ -299,7 +314,9 @@ export default function ProcessV3Page() {
                                 next.set(file.name, {
                                     ...current,
                                     phase: 'error',
-                                    errorMessage: 'Upload stalled - no progress detected'
+                                    errorMessage: uploadStarted
+                                        ? `Upload froze at ${Math.round((lastLoaded / file.size) * 100)}% — please retry`
+                                        : 'Upload stalled at 0% — check your connection and retry'
                                 });
                             }
                             return next;
@@ -941,11 +958,21 @@ export default function ProcessV3Page() {
                                                 {formatFileSize(progress.fileSize)}
                                             </div>
                                         </div>
-                                        <div className="ml-4">
+                                        <div className="ml-4 flex items-center gap-3">
                                             {progress.phase === 'uploading' && progress.uploadPercent < 100 && (
-                                                <span className="text-sm font-semibold text-blue-300">
-                                                    {progress.uploadPercent}%
-                                                </span>
+                                                <>
+                                                    <span className="text-sm font-semibold text-blue-300">
+                                                        {progress.uploadPercent}%
+                                                    </span>
+                                                    {progress.cancel && (
+                                                        <button
+                                                            onClick={() => progress.cancel?.()}
+                                                            className="text-xs text-gray-400 hover:text-red-400 transition-colors border border-gray-700 hover:border-red-500/50 rounded px-2 py-0.5"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
                                             {(progress.phase === 'extracting' || (progress.phase === 'uploading' && progress.uploadPercent === 100)) && (
                                                 <span className="text-sm font-semibold text-emerald-300">

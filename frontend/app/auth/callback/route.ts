@@ -13,5 +13,6 @@ export async function GET(request: NextRequest) {
   }
 
   // URL to redirect to after sign in process completes
-  return NextResponse.redirect(requestUrl.origin)
+  // Send new users to /packs?new_user=1 so the packs page auto-creates their first pack
+  return NextResponse.redirect(`${requestUrl.origin}/packs?new_user=1`)
 }

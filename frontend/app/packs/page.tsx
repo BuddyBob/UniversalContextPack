@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Download, Plus, Loader2, AlertCircle, Eye, FileJson, Trash2 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
 import FreeCreditsPrompt from '@/components/FreeCreditsPrompt'
@@ -27,6 +27,7 @@ interface UCPPack {
 export default function PacksPage() {
   const { user, session, makeAuthenticatedRequest } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [packs, setPacks] = useState<UCPPack[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -38,6 +39,38 @@ export default function PacksPage() {
   const [hasActiveProcessing, setHasActiveProcessing] = useState(false)
   const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null)
   const freeCreditsPrompt = useFreeCreditsPrompt()
+
+  // Auto-onboarding: handle ?new_user=1 passed from the email verification callback
+  // Creates "My First Pack" and redirects straight to the upload page.
+  useEffect(() => {
+    const isNewUser = searchParams.get('new_user') === '1'
+    if (!isNewUser || !user || !session) return
+
+    // Remove the flag from URL immediately so refresh doesn't trigger again
+    router.replace('/packs')
+
+      ; (async () => {
+        try {
+          console.log('[Packs] New user detected via email verification — auto-creating first pack')
+          const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pack_name: 'My First Pack' }),
+          })
+
+          if (response.ok) {
+            const pack = await response.json()
+            console.log('[Packs] ✅ First pack created:', pack.pack_id)
+            router.push(`/process-v3?pack=${pack.pack_id}`)
+          } else {
+            console.warn('[Packs] ⚠️ Auto-pack creation failed, staying on /packs')
+          }
+        } catch (err) {
+          console.warn('[Packs] ⚠️ Auto-pack creation error:', err)
+          // Stay on /packs — user can create manually
+        }
+      })()
+  }, [searchParams, user, session, makeAuthenticatedRequest, router])
 
   // Helper function to format token counts
   const formatTokenCount = (tokens: number): string => {

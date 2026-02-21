@@ -90,26 +90,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Mark as sent immediately to prevent duplicate sends
             welcomeEmailSent.current.add(session.user.id)
 
+            // Fire-and-forget welcome email (non-blocking)
+            fetch(`${API_BASE_URL}/api/email/send-account-creation`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json'
+              }
+            }).then(async (r) => {
+              if (r.ok) {
+                const data = await r.json()
+                console.log('✅ Welcome email sent:', data.status)
+              } else {
+                const error = await r.json()
+                console.log('⚠️ Welcome email skipped:', error.message)
+              }
+            }).catch((emailError) => {
+              console.log('⚠️ Welcome email failed (non-blocking):', emailError)
+            })
+
+            // Auto-create "My First Pack" and redirect new users straight to the upload page
+            // This removes the empty /packs screen friction for brand-new signups
             try {
-              const response = await fetch(`${API_BASE_URL}/api/email/send-account-creation`, {
+              console.log('🎉 New user detected — auto-creating first pack...')
+              const packResponse = await fetch(`${API_BASE_URL}/api/v2/packs`, {
                 method: 'POST',
                 headers: {
                   'Authorization': `Bearer ${session.access_token}`,
                   'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({ pack_name: 'My First Pack' })
               })
 
-              if (response.ok) {
-                const data = await response.json()
-                console.log('✅ Welcome email sent:', data.status)
+              if (packResponse.ok) {
+                const packData = await packResponse.json()
+                const packId = packData.pack_id
+                console.log('✅ First pack created:', packId)
+                // Redirect to the upload page with the new pack pre-selected
+                window.location.replace(`/process-v3?pack=${packId}`)
               } else {
-                const error = await response.json()
-                // Log but don't block - email is non-critical
-                console.log('⚠️ Welcome email skipped:', error.message)
+                console.warn('⚠️ Could not auto-create first pack, falling back to /packs')
+                // Fall through — user sees /packs as usual
               }
-            } catch (emailError) {
-              // Non-blocking - don't stop user flow if email fails
-              console.log('⚠️ Welcome email failed (non-blocking):', emailError)
+            } catch (packError) {
+              console.warn('⚠️ Auto-pack creation failed (non-blocking):', packError)
+              // Fall through — user sees /packs as usual
             }
           }
         } else {
@@ -261,11 +286,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUpWithEmail = async (email: string, password: string) => {
     try {
-      const currentPath = window.location.pathname
-      const isDemoPage = currentPath.includes('/results/sample-')
-      const isAuthPage = currentPath === '/auth'
-      const redirectPath = (currentPath === '/process' || isDemoPage || isAuthPage) ? '/packs' : currentPath
-      const redirectTo = `${window.location.origin}${redirectPath}`
+      // Always redirect new email signups to /packs?new_user=1 so they get auto-onboarded
+      const redirectTo = `${window.location.origin}/packs?new_user=1`
 
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -278,9 +300,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         },
       })
-      
+
       if (error) throw error
-      
+
       // Check if user already exists (Supabase returns user but with identities empty array)
       // When email confirmation is enabled, Supabase doesn't throw error for existing users
       // but we can detect it by checking the response
@@ -317,17 +339,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       // Check if there's an active session first
       const { data: { session } } = await supabase.auth.getSession()
-      
+
       if (session) {
         const { error } = await supabase.auth.signOut()
         if (error) throw error
       }
-      
+
       // Clear local state regardless of session status
       setUser(null)
       setSession(null)
       setUserProfile(null)
-      
+
       // Clear any local storage items
       if (typeof window !== 'undefined') {
         localStorage.removeItem('supabase.auth.token')
