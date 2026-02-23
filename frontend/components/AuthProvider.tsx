@@ -354,12 +354,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('supabase.auth.token')
       }
+
+      // Redirect to home after signing out
+      window.location.href = '/'
     } catch (error) {
       console.error('Error signing out:', error)
       // Still clear local state even if sign out fails
       setUser(null)
       setSession(null)
       setUserProfile(null)
+      window.location.href = '/'
     }
   }
 
