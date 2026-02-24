@@ -148,7 +148,12 @@ export function ProcessProgress({
                                     className="w-full bg-gray-900 hover:bg-gray-850 border border-gray-800 hover:border-gray-700 text-white px-5 py-3 rounded-lg text-sm font-normal transition-all flex items-center justify-center gap-2"
                                 >
                                     {isStartingAnalysis ? (
-                                        <Loader className="w-4 h-4 animate-spin" />
+                                        <div className="flex items-center gap-2">
+                                            <Loader className="w-4 h-4 animate-spin" />
+                                            <span className="text-xs text-gray-400">
+                                                Reload if too long
+                                            </span>
+                                        </div>
                                     ) : (
                                         <FileText className="w-4 h-4" />
                                     )}
