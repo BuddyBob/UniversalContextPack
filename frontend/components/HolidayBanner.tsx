@@ -46,7 +46,7 @@ export default function HolidayBanner() {
                 Unlimited Plan —
               </span>
               <span className="text-base font-semibold text-white">
-                $5.99
+                $3.99
               </span>
               <span className="text-xs text-emerald-300/60">
                 (25% off)
