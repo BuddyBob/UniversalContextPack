@@ -961,8 +961,8 @@ export default function ProcessV3Page() {
                                         <div className="ml-4 flex items-center gap-3">
                                             {progress.phase === 'uploading' && progress.uploadPercent < 100 && (
                                                 <>
-                                                    <span className="text-sm font-semibold text-blue-300">
-                                                        {progress.uploadPercent}%
+                                                    <span className={`text-sm font-semibold ${progress.uploadPercent === 0 ? 'text-yellow-400' : 'text-blue-300'}`}>
+                                                        {progress.uploadPercent === 0 ? 'Upload Stalled - reload' : `${progress.uploadPercent}%`}
                                                     </span>
                                                     {progress.cancel && (
                                                         <button
