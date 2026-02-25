@@ -109,7 +109,10 @@ export default function ProcessV3Page() {
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: textInput }),
+                    body: JSON.stringify({
+                        text_content: textInput,
+                        source_name: `Pasted Text (${new Date().toLocaleTimeString()})`,
+                    }),
                 }
             );
 
@@ -205,10 +208,11 @@ export default function ProcessV3Page() {
                         const now = Date.now();
                         const timeSinceProgress = now - lastProgressTime;
 
-                        // Abort if no byte progress for 30 seconds — catches both:
+                        // Abort if no byte progress for 90 seconds — catches both:
                         //   • stuck at 0% (connection never established)
                         //   • frozen mid-upload (server/network stalled)
-                        if (timeSinceProgress > 30000) {
+                        // 90s timeout is generous enough for slow mobile connections
+                        if (timeSinceProgress > 90000) {
                             const pct = uploadStarted
                                 ? `${Math.round((lastLoaded / file.size) * 100)}%`
                                 : '0%';
