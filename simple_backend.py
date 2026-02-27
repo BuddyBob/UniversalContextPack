@@ -3487,7 +3487,7 @@ async def download_complete_pack(job_id: str, user: AuthenticatedUser = Depends(
         raise HTTPException(status_code=500, detail=f"Failed to create pack: {str(e)}")
 
 @app.get("/api/download/{job_id}/{filename}")
-async def download_result_file(job_id: str, filename: str, user: AuthenticatedUser = Depends(get_current_user)):
+def download_result_file(job_id: str, filename: str, user: AuthenticatedUser = Depends(get_current_user)):
     """Download individual result files (result_001.json, result_002.json, etc.) from R2."""
     try:
         # Validate filename to prevent directory traversal
@@ -3517,7 +3517,7 @@ async def download_result_file(job_id: str, filename: str, user: AuthenticatedUs
 
 
 @app.get("/api/jobs/{job_id}/exists")
-async def check_job_exists(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
+def check_job_exists(job_id: str, user: AuthenticatedUser = Depends(get_current_user)):
     """Quick check if a job exists and has any files."""
     try:
         # Check for the most basic file that should exist after extraction
@@ -3702,9 +3702,12 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
         # This prevents system overload and ensures better UX
         # Use RPC function to bypass permission issues
         try:
-            result = supabase.rpc("check_user_has_active_processing", {
-                "user_uuid": user.user_id
-            }).execute()
+            import asyncio
+            result = await asyncio.to_thread(
+                lambda: supabase.rpc("check_user_has_active_processing", {
+                    "user_uuid": user.user_id
+                }).execute()
+            )
             
             if result.data and result.data.get('has_active_processing', False):
                 raise HTTPException(
@@ -3734,14 +3737,17 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
         print(f"Creating new pack {pack_id} for user {user.email}")
         
         # Create pack in database
-        result = supabase.rpc("create_pack_v2", {
-            "user_uuid": user.user_id,
-            "target_pack_id": pack_id,
-            "pack_name_param": request.pack_name,
-            "pack_description": request.description,
-            "custom_system_prompt_param": custom_prompt,
-            "r2_pack_directory_param": pack_directory
-        }).execute()
+        import asyncio
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("create_pack_v2", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id,
+                "pack_name_param": request.pack_name,
+                "pack_description": request.description,
+                "custom_system_prompt_param": custom_prompt,
+                "r2_pack_directory_param": pack_directory
+            }).execute()
+        )
         
         if result.data and len(result.data) > 0:
             pack_data = result.data[0]
@@ -3773,9 +3779,12 @@ async def check_active_processing(user: AuthenticatedUser = Depends(get_current_
         
         # Check for any active processing using RPC to bypass permission issues
         try:
-            result = supabase.rpc("check_user_has_active_processing", {
-                "user_uuid": user.user_id
-            }).execute()
+            import asyncio
+            result = await asyncio.to_thread(
+                lambda: supabase.rpc("check_user_has_active_processing", {
+                    "user_uuid": user.user_id
+                }).execute()
+            )
             
             if result.data:
                 return result.data
@@ -3813,9 +3822,12 @@ async def list_packs_v2(user: AuthenticatedUser = Depends(get_current_user)):
             raise HTTPException(status_code=500, detail="Database not configured")
         
         # Use RPC function with aggregated stats (bypasses RLS with SECURITY DEFINER)
-        result = supabase.rpc("get_user_packs_v2_with_stats", {
-            "user_uuid": user.user_id
-        }).execute()
+        import asyncio
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("get_user_packs_v2_with_stats", {
+                "user_uuid": user.user_id
+            }).execute()
+        )
         
         if not result.data:
             return []
@@ -4130,13 +4142,16 @@ async def update_pack_v2(pack_id: str, request: Request, user: AuthenticatedUser
             raise HTTPException(status_code=400, detail="No fields to update")
         
         # Update pack using RPC function (respects RLS policies)
-        result = supabase.rpc("update_pack_v2", {
-            "user_uuid": user.user_id,
-            "target_pack_id": pack_id,
-            "pack_name_param": pack_name,
-            "pack_description": description,
-            "custom_system_prompt_param": custom_system_prompt
-        }).execute()
+        import asyncio
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("update_pack_v2", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id,
+                "pack_name_param": pack_name,
+                "pack_description": description,
+                "custom_system_prompt_param": custom_system_prompt
+            }).execute()
+        )
         
         if result.data and len(result.data) > 0:
             print(f"✅ Pack updated successfully: {pack_id}")
@@ -4167,7 +4182,7 @@ class PackSourceCreate(BaseModel):
     text_content: Optional[str] = None
 
 @app.post("/api/memory/add")
-async def add_memory(request: AddMemoryRequest, user: AuthenticatedUser = Depends(get_current_user)):
+def add_memory(request: AddMemoryRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """Add a memory to the user's pack."""
     try:
         memory_text = request.text.strip()
