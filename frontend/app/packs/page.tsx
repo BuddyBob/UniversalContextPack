@@ -146,15 +146,10 @@ export default function PacksPage() {
 
       // Add timeout to prevent hanging requests
       // Shorter timeout since if DB is busy with tree building, we want to fail fast
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
-
       try {
         console.log('[Packs] Fetching from /api/v2/packs...')
-        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
-          signal: controller.signal
-        })
-        clearTimeout(timeoutId)
+        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`)
+
         console.log('[Packs] Response received:', response.status)
 
         if (!response.ok) {
@@ -205,7 +200,6 @@ export default function PacksPage() {
         return // Success, exit early
 
       } catch (fetchError) {
-        clearTimeout(timeoutId)
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
           throw new Error('Server is busy processing (tree building may be in progress). Please wait and try again in a moment.')
         }

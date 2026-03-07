@@ -474,8 +474,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         timeoutMs = 90000 // 90 seconds for pack detail endpoints - allow time for tree building
         console.log(`[Auth] \u23f1\ufe0f Setting 90s timeout for pack detail request`);
       } else if (url.includes('/api/v2/packs') && !url.includes('POST') && !url.includes('/')) {
-        timeoutMs = 15000 // 15 seconds for pack list endpoint
-        console.log(`[Auth] \u23f1\ufe0f Setting 15s timeout for pack list request`);
+        timeoutMs = 60000 // 60 seconds for pack list endpoint
+        console.log(`[Auth] \u23f1\ufe0f Setting 60s timeout for pack list request`);
       }
 
       const timeoutId = setTimeout(() => {
