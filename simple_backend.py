@@ -15,7 +15,7 @@ import traceback
 import time
 import threading
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from pathlib import Path
 import tiktoken
 import zipfile
@@ -1966,7 +1966,7 @@ class ConversationURLRequest(BaseModel):
     url: str
 
 
-def _chunk_text(combined_text: str, source_id: str) -> list:
+def _chunk_text(combined_text: str, source_id: str, progress_callback: Optional[Callable[[int, int], None]] = None) -> list:
     """CPU-bound chunking logic — runs in a thread pool to avoid blocking the event loop."""
     max_tokens_per_chunk = 100000
     initial_chunk_size = 400000
@@ -2004,12 +2004,19 @@ def _chunk_text(combined_text: str, source_id: str) -> list:
             if chunk_count % 10 == 0:
                 progress_pct = int((position / total_length) * 100)
                 print(f"Chunking progress: {chunk_count} chunks, {progress_pct}% complete")
+                if progress_callback:
+                    progress_callback(chunk_count, progress_pct)
 
+        if progress_callback and len(chunks) > 0:
+            final_progress = min(99, calculate_progress_percent(position, total_length, min_percent=20, max_percent=99))
+            progress_callback(len(chunks), final_progress)
         print(f"✅ Created {len(chunks)} chunks for source {source_id}")
     else:
         chunks.append(combined_text)
         chunk_tokens = count_tokens(combined_text)
         total_length_val = len(combined_text)
+        if progress_callback:
+            progress_callback(1, 99)
         print(f"Created 1 chunk for source {source_id} ({total_length_val:,} chars, {chunk_tokens:,} tokens)")
 
     return chunks
@@ -2038,13 +2045,13 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         extracted_path = f"{user.r2_directory}/{pack_id}/{source_id}/extracted.txt"
         await asyncio.to_thread(upload_to_r2, extracted_path, "\n\n".join(extracted_texts))
         
-        # Update progress
+        # Text extraction is done; chunking begins next.
         await asyncio.to_thread(
             lambda: supabase.rpc("update_source_status", {
                 "user_uuid": user.user_id,
                 "target_source_id": source_id,
                 "status_param": "processing",
-                "progress_param": 50
+                "progress_param": 20
             }).execute()
         )
         
@@ -2053,7 +2060,19 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         combined_text = "\n\n".join(extracted_texts)
         total_length = len(combined_text)
 
-        chunks = await asyncio.to_thread(_chunk_text, combined_text, source_id)
+        def report_chunking_progress(chunk_count: int, progress_pct: int):
+            try:
+                supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "processing",
+                    "progress_param": max(20, min(99, progress_pct)),
+                    "total_chunks_param": chunk_count
+                }).execute()
+            except Exception as progress_error:
+                print(f"⚠️ Failed to persist chunking progress for {source_id}: {progress_error}", flush=True)
+
+        chunks = await asyncio.to_thread(_chunk_text, combined_text, source_id, report_chunking_progress)
 
         chunk_tokens = count_tokens(chunks[0]) if chunks else 0
         

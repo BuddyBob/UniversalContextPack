@@ -13,7 +13,10 @@ type WorkflowStage = 'idle' | 'creating_pack' | 'uploading' | 'extracting' | 'an
 interface SourceStatus {
     source_id: string;
     status: string;
+    progress?: number;
     total_chunks?: number;
+    processed_chunks?: number;
+    extracted_count?: number;
     error_message?: string;
 }
 
@@ -34,7 +37,7 @@ const ACCEPTED_FORMATS = ['PDF', 'TXT', 'DOCX', 'CSV', 'ZIP', 'conversations.jso
 export default function ProcessV4Page() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, makeAuthenticatedRequest } = useAuth();
+    const { user, session, makeAuthenticatedRequest } = useAuth();
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [workflowStage, setWorkflowStage] = useState<WorkflowStage>('idle');
@@ -44,11 +47,13 @@ export default function ProcessV4Page() {
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const [uploadSize, setUploadSize] = useState(0);
+    const [uploadPercent, setUploadPercent] = useState(0);
     const [backendStatus, setBackendStatus] = useState<SourceStatus | null>(null);
     const [creditInfo, setCreditInfo] = useState<CreditInfo | null>(null);
     const [analysisTargetChunks, setAnalysisTargetChunks] = useState<number | null>(null);
     const [showEmailSentToast, setShowEmailSentToast] = useState(false);
-    const abortControllerRef = useRef<AbortController | null>(null);
+    const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
+    const abortControllerRef = useRef<{ abort: () => void } | null>(null);
     const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const pollingActiveRef = useRef(false);
@@ -94,7 +99,9 @@ export default function ProcessV4Page() {
         setCreditInfo(null);
         setAnalysisTargetChunks(null);
         setShowEmailSentToast(false);
+        setIsStartingAnalysis(false);
         setUploadSize(0);
+        setUploadPercent(0);
     };
 
     const clearPollingTimers = () => {
@@ -109,6 +116,23 @@ export default function ProcessV4Page() {
         if (chunks <= 20) return '~10-20 min';
         if (chunks <= 50) return '~20-40 min';
         return '~40-90+ min';
+    };
+
+    const getExtractionEstimate = (chunks: number, sizeMb: number) => {
+        if (chunks > 0) {
+            if (chunks <= 10) return '~1-2 min';
+            if (chunks <= 25) return '~2-3 min';
+            if (chunks <= 50) return '~3-4 min';
+            if (chunks <= 100) return '~4-5 min';
+            if (chunks <= 150) return '~5-7 min';
+            return '~7-10 min';
+        }
+
+        if (sizeMb <= 0) return null;
+        if (sizeMb < 10) return '~1-2 min';
+        if (sizeMb < 50) return '~2-4 min';
+        if (sizeMb < 150) return '~4-6 min';
+        return '~6-10 min';
     };
 
     const getEmailEtaMessage = () => {
@@ -244,6 +268,8 @@ export default function ProcessV4Page() {
         setCreditInfo(null);
         setAnalysisTargetChunks(null);
         setShowEmailSentToast(false);
+        setIsStartingAnalysis(false);
+        setUploadPercent(0);
 
         try {
             setWorkflowStage('creating_pack');
@@ -287,34 +313,18 @@ export default function ProcessV4Page() {
         }
     };
 
-    const uploadFile = async (packId: string, file: File): Promise<void> => {
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetchWithSession(
-            `${API_BASE_URL}/api/v2/packs/${packId}/sources`,
-            {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal,
-            },
-            10 * 60 * 1000
-        );
-
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Server rejected upload: ${response.status} - ${errText}`);
+    const getAccessToken = async () => {
+        if (session?.access_token) {
+            return session.access_token;
         }
 
-        setWorkflowStage('extracting');
+        const { data: { session: fallbackSession } } = await supabase.auth.getSession();
+        if (!fallbackSession) throw new Error('Authentication expired.');
+        return fallbackSession.access_token;
     };
 
     const fetchWithSession = async (url: string, options: RequestInit = {}, timeoutMs = 30000) => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('Authentication expired.');
+        const accessToken = await getAccessToken();
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -334,7 +344,7 @@ export default function ProcessV4Page() {
                 ...options,
                 headers: {
                     ...options.headers,
-                    Authorization: `Bearer ${session.access_token}`,
+                    Authorization: `Bearer ${accessToken}`,
                 },
                 cache: 'no-store',
                 signal: controller.signal,
@@ -352,6 +362,54 @@ export default function ProcessV4Page() {
             }
             throw error;
         }
+    };
+
+    const uploadFile = async (packId: string, file: File): Promise<void> => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Authentication expired.');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${API_BASE_URL}/api/v2/packs/${packId}/sources`);
+            xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
+            xhr.timeout = 10 * 60 * 1000;
+
+            abortControllerRef.current = { abort: () => xhr.abort() };
+
+            xhr.upload.addEventListener('progress', (event) => {
+                if (!event.lengthComputable) return;
+                setUploadPercent(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+            });
+
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    setUploadPercent(100);
+                    resolve();
+                    return;
+                }
+
+                reject(new Error(`Server rejected upload: ${xhr.status} - ${xhr.responseText}`));
+            });
+
+            xhr.addEventListener('error', () => {
+                reject(new Error('Upload failed before the file reached the server.'));
+            });
+
+            xhr.addEventListener('timeout', () => {
+                reject(new Error('Upload timed out before the file finished sending.'));
+            });
+
+            xhr.addEventListener('abort', () => {
+                reject(new Error('Upload was cancelled.'));
+            });
+
+            xhr.send(formData);
+        });
+
+        setWorkflowStage('extracting');
     };
 
     const fetchPackDetails = async (packId: string, timeoutMs = 30000) => {
@@ -479,7 +537,7 @@ export default function ProcessV4Page() {
 
     const triggerAutoAnalysis = async (sourceId: string, totalChunks: number, opId: number) => {
         try {
-            const creditRes = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/sources/${sourceId}/credit-check`);
+            const creditRes = await fetchWithSession(`${API_BASE_URL}/api/v2/sources/${sourceId}/credit-check`, {}, 30000);
             if (operationIdRef.current !== opId) return;
 
             if (!creditRes.ok) {
@@ -503,7 +561,7 @@ export default function ProcessV4Page() {
             setAnalysisTargetChunks(totalChunks > 0 ? totalChunks : info.totalChunks || null);
             setWorkflowStage('analyzing');
 
-            const startRes = await makeAuthenticatedRequest(
+            const startRes = await fetchWithSession(
                 `${API_BASE_URL}/api/v2/sources/${sourceId}/start-analysis`,
                 {
                     method: 'POST',
@@ -530,7 +588,8 @@ export default function ProcessV4Page() {
         if (!currentSourceId) return;
         
         try {
-            const creditRes = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/sources/${currentSourceId}/credit-check`);
+            setIsStartingAnalysis(true);
+            const creditRes = await fetchWithSession(`${API_BASE_URL}/api/v2/sources/${currentSourceId}/credit-check`, {}, 30000);
             if (!creditRes.ok) throw new Error("Could not check credits");
             
             const info = await creditRes.json();
@@ -554,7 +613,7 @@ export default function ProcessV4Page() {
             setAnalysisTargetChunks(chunksToAnalyze);
             setWorkflowStage('analyzing');
 
-            const startRes = await makeAuthenticatedRequest(
+            const startRes = await fetchWithSession(
                 `${API_BASE_URL}/api/v2/sources/${currentSourceId}/start-analysis`,
                 {
                     method: 'POST',
@@ -572,6 +631,8 @@ export default function ProcessV4Page() {
             }
         } catch (e) {
             handleError(getErrorMessage(e));
+        } finally {
+            setIsStartingAnalysis(false);
         }
     };
 
@@ -606,6 +667,9 @@ export default function ProcessV4Page() {
     const chunkCount = backendStatus?.total_chunks ?? 0;
     const chunkLabel = chunkCount > 0 ? `${chunkCount} chunk${chunkCount === 1 ? '' : 's'}` : 'Chunk count pending';
     const uploadMb = uploadSize / 1024 / 1024;
+    const extractionProgress = typeof backendStatus?.progress === 'number'
+        ? Math.max(0, Math.min(100, Math.round(backendStatus.progress)))
+        : null;
     const estimatedProcessableChunks = (() => {
         if (analysisTargetChunks && analysisTargetChunks > 0) return analysisTargetChunks;
         if (needsCreditPurchase && creditsHave > 0) return Math.min(chunkCount || creditsHave, creditsHave);
@@ -615,12 +679,10 @@ export default function ProcessV4Page() {
         if ((workflowStage === 'analyzing' || workflowStage === 'completed' || isReadyForAnalysis || needsCreditPurchase) && estimatedProcessableChunks > 0) {
             return getEstimateForChunks(estimatedProcessableChunks);
         }
-        if (uploadMb <= 0) return null;
-        if (uploadMb < 2) return '~15-30 sec';
-        if (uploadMb < 10) return '~1-2 min';
-        if (uploadMb < 50) return '~3-8 min';
-        if (uploadMb < 150) return '~8-20 min';
-        return '~20+ min';
+        if (workflowStage === 'uploading' || workflowStage === 'extracting' || workflowStage === 'creating_pack') {
+            return getExtractionEstimate(chunkCount, uploadMb);
+        }
+        return null;
     })();
     const workflowSummary = (() => {
         if (isReadyForAnalysis) {
@@ -670,6 +732,33 @@ export default function ProcessV4Page() {
             title: 'Drop a source and process it.',
             description: 'Upload a document or export and we will extract, chunk, and prepare it for analysis.',
         };
+    })();
+    const visibleProgress = workflowStage === 'uploading'
+        ? uploadPercent
+        : workflowStage === 'extracting'
+            ? extractionProgress
+            : null;
+    const progressMeta = (() => {
+        if (workflowStage === 'uploading') {
+            return uploadPercent > 0 ? `${uploadPercent}% uploaded` : 'Starting upload…';
+        }
+
+        if (workflowStage === 'extracting') {
+            if (extractionProgress !== null) {
+                const suffix = chunkCount > 0 ? ` · ${chunkLabel}` : '';
+                return `${extractionProgress}% complete${suffix}`;
+            }
+
+            if (chunkCount > 0) {
+                return `${chunkLabel} created`;
+            }
+
+            if (typeof backendStatus?.extracted_count === 'number' && backendStatus.extracted_count > 0) {
+                return `${backendStatus.extracted_count.toLocaleString()} items extracted`;
+            }
+        }
+
+        return null;
     })();
     const downloadFile = async (endpoint: string, filename: string, notFoundMessage?: string) => {
         const response = await makeAuthenticatedRequest(endpoint);
@@ -816,9 +905,10 @@ export default function ProcessV4Page() {
                                             {creditsHave > 0 && (
                                                 <button
                                                     onClick={triggerManualAnalysis}
+                                                    disabled={isStartingAnalysis}
                                                     className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#ebefed]"
                                                 >
-                                                    Analyze with {creditsHave} credits
+                                                    {isStartingAnalysis ? 'Starting…' : `Analyze with ${creditsHave} credits`}
                                                 </button>
                                             )}
                                             <a
@@ -875,9 +965,10 @@ export default function ProcessV4Page() {
                                         <div className="mt-8 flex flex-wrap gap-3">
                                             <button
                                                 onClick={triggerManualAnalysis}
+                                                disabled={isStartingAnalysis}
                                                 className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#ebefed]"
                                             >
-                                                Analyze
+                                                {isStartingAnalysis ? 'Starting…' : 'Analyze'}
                                             </button>
                                             <button
                                                 onClick={cancelWorkflow}
@@ -1003,22 +1094,30 @@ export default function ProcessV4Page() {
                                 <div className="mt-8">
                                     <div className="h-2 overflow-hidden rounded-full bg-white/8">
                                         <div
-                                            className="relative h-full w-[34%] rounded-full"
+                                            className="relative h-full rounded-full transition-[width] duration-500 ease-out"
                                             style={{
+                                                width: visibleProgress !== null ? `${visibleProgress}%` : '34%',
                                                 background: 'linear-gradient(90deg, rgba(111,193,157,0.18), rgba(173,243,215,0.95))',
-                                                animation: 'indeterminate-sweep 1.7s ease-in-out infinite alternate',
+                                                animation: visibleProgress === null ? 'indeterminate-sweep 1.7s ease-in-out infinite alternate' : 'none',
                                                 boxShadow: '0 0 24px rgba(152, 233, 204, 0.28)'
                                             }}
                                         />
                                     </div>
                                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-[#b5c0bb]">
-                                        <span>
-                                            {workflowStage === 'uploading'
-                                                ? 'Upload in progress'
-                                                : workflowStage === 'analyzing'
-                                                    ? 'Analysis running in the background'
-                                                    : 'Preparation in progress'}
-                                        </span>
+                                        <div className="flex flex-col gap-1">
+                                            <span>
+                                                {workflowStage === 'uploading'
+                                                    ? 'Upload in progress'
+                                                    : workflowStage === 'analyzing'
+                                                        ? 'Analysis running in the background'
+                                                        : 'Extraction and chunking in progress'}
+                                            </span>
+                                            {progressMeta && (
+                                                <span className="text-xs text-[#91a39b]">
+                                                    {progressMeta}
+                                                </span>
+                                            )}
+                                        </div>
                                         {stageEstimate && <span>{stageEstimate}</span>}
                                     </div>
                                 </div>

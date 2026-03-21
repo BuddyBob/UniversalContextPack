@@ -368,6 +368,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}): Promise<Response> => {
+    const requestMethod = (options.method || 'GET').toUpperCase()
     // Server health check and warming for critical operations
     const isCriticalOperation = url.includes('/api/analyze/') || url.includes('/api/extract') || url.includes('/api/chunk/')
 
@@ -462,8 +463,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
       } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
         timeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
-      } else if (url.includes('/sources') && url.includes('POST')) {
-        timeoutMs = 10 * 60 * 1000 // 10 minutes for file upload
+      } else if (url.includes('/api/v2/sources/') && url.includes('/start-analysis') && requestMethod === 'POST') {
+        timeoutMs = 60000 // 60 seconds to start analysis jobs
+      } else if (url.includes('/api/v2/sources/') && requestMethod === 'POST') {
+        timeoutMs = 10 * 60 * 1000 // 10 minutes for source POST actions like upload
       } else if (url.includes('/api/status/') || url.includes('/sources')) {
         timeoutMs = 15000 // 15 seconds for status polling/credit checks
       } else if (url.includes('/api/profile/quick')) {
@@ -524,10 +527,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             retryTimeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
           } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
             retryTimeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
-                              } else if (url.includes('/api/status/') || url.includes('/sources')) {
-                                retryTimeoutMs = 20000 // 20 seconds for status polling/credit check retry
-                  } else if (url.includes('/api/v2/packs/')) {
-                retryTimeoutMs = 60000 // 60 seconds for pack detail retry
+          } else if (url.includes('/api/v2/sources/') && url.includes('/start-analysis') && requestMethod === 'POST') {
+            retryTimeoutMs = 60000 // 60 seconds for analysis start retry
+          } else if (url.includes('/api/status/') || url.includes('/sources')) {
+            retryTimeoutMs = 20000 // 20 seconds for status polling/credit check retry
+          } else if (url.includes('/api/v2/packs/')) {
+            retryTimeoutMs = 60000 // 60 seconds for pack detail retry
           } else if (url.includes('/api/profile/quick')) {
             retryTimeoutMs = 10000 // 10 seconds for quick profile endpoint
           } else if (url.includes('/api/health')) {
