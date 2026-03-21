@@ -128,7 +128,22 @@ else:
     print("Warning: Supabase credentials not found. Running in legacy mode.")
     supabase = None
 
-app = FastAPI(title="Simple UCP Backend", version="1.0.0")
+from contextlib import asynccontextmanager
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Increase the default thread pool size to prevent starvation 
+    # during concurrent OpenAI calls and heavy chunking
+    loop = asyncio.get_running_loop()
+    executor = ThreadPoolExecutor(max_workers=50)
+    loop.set_default_executor(executor)
+    print("🚀 Configured asyncio default executor with 50 workers")
+    yield
+    executor.shutdown(wait=False)
+
+app = FastAPI(title="Simple UCP Backend", version="1.0.0", lifespan=lifespan)
 
 # CORS middleware - Configure allowed origins from environment
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "https://www.context-pack.com").split(",")
@@ -597,18 +612,23 @@ async def ensure_user_profile_exists(user_id: str, email: str) -> str:
     
     try:
         # Quick check if profile exists
-        result = supabase.rpc("get_user_profile_for_backend", {"user_uuid": user_id}).execute()
+        import asyncio
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("get_user_profile_for_backend", {"user_uuid": user_id}).execute()
+        )
         
         if result.data:
             return result.data.get("r2_user_directory", f"user_{user_id}")
         
         # Profile doesn't exist, create it
         r2_directory = f"user_{user_id}"
-        result = supabase.rpc("create_user_profile_for_backend", {
-            "user_uuid": user_id,
-            "user_email": email,
-            "r2_dir": r2_directory
-        }).execute()
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("create_user_profile_for_backend", {
+                "user_uuid": user_id,
+                "user_email": email,
+                "r2_dir": r2_directory
+            }).execute()
+        )
         
         if result.data:
             return result.data.get("r2_user_directory", r2_directory)
@@ -1946,120 +1966,114 @@ class ConversationURLRequest(BaseModel):
     url: str
 
 
+def _chunk_text(combined_text: str, source_id: str) -> list:
+    """CPU-bound chunking logic — runs in a thread pool to avoid blocking the event loop."""
+    max_tokens_per_chunk = 100000
+    initial_chunk_size = 400000
+    overlap = 20000
+    total_length = len(combined_text)
+    chunks = []
+
+    if total_length > initial_chunk_size:
+        print(f"📦 Starting dynamic chunking: {total_length:,} chars, target {max_tokens_per_chunk:,} tokens/chunk")
+        chunk_count = 0
+        position = 0
+        while position < total_length:
+            chunk_end = min(position + initial_chunk_size, total_length)
+            chunk = combined_text[position:chunk_end]
+            chunk_tokens = count_tokens(chunk)
+            actual_chunk_size = len(chunk)
+
+            if chunk_tokens > max_tokens_per_chunk:
+                chars_per_token = len(chunk) / chunk_tokens
+                safe_size = int(max_tokens_per_chunk * chars_per_token * 0.90)
+                safe_size = max(safe_size, 30000)
+                chunk = combined_text[position:position + safe_size]
+                chunk_tokens = count_tokens(chunk)
+                actual_chunk_size = len(chunk)
+            else:
+                if chunk_count % 20 == 0:
+                    print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
+
+            chunks.append(chunk)
+            chunk_count += 1
+
+            advance_by = max(actual_chunk_size - overlap, initial_chunk_size // 4)
+            position += advance_by
+
+            if chunk_count % 10 == 0:
+                progress_pct = int((position / total_length) * 100)
+                print(f"Chunking progress: {chunk_count} chunks, {progress_pct}% complete")
+
+        print(f"✅ Created {len(chunks)} chunks for source {source_id}")
+    else:
+        chunks.append(combined_text)
+        chunk_tokens = count_tokens(combined_text)
+        total_length_val = len(combined_text)
+        print(f"Created 1 chunk for source {source_id} ({total_length_val:,} chars, {chunk_tokens:,} tokens)")
+
+    return chunks
+
+
 async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: str, filename: str, user: AuthenticatedUser):
     """Step 1: Extract and chunk the source (NO OpenAI calls, NO credit deduction)"""
     try:
         print(f"🔄 Extracting and chunking source {source_id} for pack {pack_id}")
         
         # Update status to processing (extracting and chunking)
-        supabase.rpc("update_source_status", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id,
-            "status_param": "processing",
-            "progress_param": 10
-        }).execute()
+        import asyncio
+        await asyncio.to_thread(
+            lambda: supabase.rpc("update_source_status", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id,
+                "status_param": "processing",
+                "progress_param": 10
+            }).execute()
+        )
         
         # Step 1: Extract text
-        extracted_texts = extract_from_text_content(file_content)
+        extracted_texts = await asyncio.to_thread(extract_from_text_content, file_content)
         
         # Store extracted text in R2
         extracted_path = f"{user.r2_directory}/{pack_id}/{source_id}/extracted.txt"
-        upload_to_r2(extracted_path, "\n\n".join(extracted_texts))
+        await asyncio.to_thread(upload_to_r2, extracted_path, "\n\n".join(extracted_texts))
         
         # Update progress
-        supabase.rpc("update_source_status", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id,
-            "status_param": "processing",
-            "progress_param": 50
-        }).execute()
+        await asyncio.to_thread(
+            lambda: supabase.rpc("update_source_status", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id,
+                "status_param": "processing",
+                "progress_param": 50
+            }).execute()
+        )
         
-        # Step 2: Dynamic chunking based on actual token counts
+        # Step 2: Dynamic chunking (CPU-bound — runs off the event loop in a thread pool)
         print(f"✂️ Chunking text for source {source_id}")
-        chunks = []
-        # Target: 100k tokens per chunk - maximize efficiency, minimize API calls
-        # 128k context window - 2k prompt - 3k output = 123k available
-        # Using 100k = plenty of headroom, half the API calls = half the cost
-        max_tokens_per_chunk = 100000
-        initial_chunk_size = 400000  # Start with ~100k tokens (4 chars/token average)
-        overlap = 20000  # Overlap for context continuity
-        
-        # Combine all extracted text into one piece
         combined_text = "\n\n".join(extracted_texts)
         total_length = len(combined_text)
-        
-        # Only chunk if text exceeds chunk size
-        if total_length > initial_chunk_size:
-            print(f"📦 Starting dynamic chunking: {total_length:,} chars, target {max_tokens_per_chunk:,} tokens/chunk")
-            chunk_count = 0
-            position = 0
-            
-            while position < total_length:
-                # Extract initial chunk
-                chunk_end = min(position + initial_chunk_size, total_length)
-                chunk = combined_text[position:chunk_end]
-                
-                # Count actual tokens in this chunk
-                chunk_tokens = count_tokens(chunk)
-                
-                # If chunk exceeds limit, shrink it
-                actual_chunk_size = len(chunk)
-                if chunk_tokens > max_tokens_per_chunk:
-                    # Calculate safe size based on actual token density
-                    chars_per_token = len(chunk) / chunk_tokens
-                    safe_size = int(max_tokens_per_chunk * chars_per_token * 0.90)  # 10% safety margin
-                    # For very dense content (like PDFs), allow smaller chunks
-                    safe_size = max(safe_size, 30000)  # Absolute minimum 30k chars (~20k tokens worst case)
-                    chunk = combined_text[position:position + safe_size]
-                    chunk_tokens = count_tokens(chunk)
-                    actual_chunk_size = len(chunk)
 
-                else:
-                    # Log every 20 chunks for normal content
-                    if chunk_count % 20 == 0:
-                        print(f"Chunk {chunk_count + 1}: {actual_chunk_size:,} chars, {chunk_tokens:,} tokens")
+        chunks = await asyncio.to_thread(_chunk_text, combined_text, source_id)
 
-                chunks.append(chunk)
-                chunk_count += 1
-                
-                # Move position forward (use actual chunk size, ensure we always move forward)
-                advance_by = max(actual_chunk_size - overlap, initial_chunk_size // 4)  # Always advance at least 25% of initial
-                position = position + advance_by
-                
-                # Show progress every 10 chunks and update database
-                if chunk_count % 10 == 0:
-                    progress_pct = int((position / total_length) * 100)
-                    print(f"Chunking progress: {chunk_count} chunks, {progress_pct}% complete")
-                    # Update frontend with chunking progress
-                    supabase.rpc("update_source_status", {
-                        "user_uuid": user.user_id,
-                        "target_source_id": source_id,
-                        "status_param": "processing",
-                        "progress_param": min(95, progress_pct)  # Cap at 95% until done
-                    }).execute()
-            
-            print(f"✅ Created {len(chunks)} chunks for source {source_id}")
-        else:
-            # Small enough to process as single chunk
-            chunks.append(combined_text)
-            chunk_tokens = count_tokens(combined_text)
-            print(f"Created 1 chunk for source {source_id} ({total_length:,} chars, {chunk_tokens:,} tokens)", flush=True)
+        chunk_tokens = count_tokens(chunks[0]) if chunks else 0
         
         # Store chunks in R2
         chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
         chunks_json = json.dumps(chunks)
-        upload_to_r2(chunked_path, chunks_json)
+        await asyncio.to_thread(upload_to_r2, chunked_path, chunks_json)
         print(f"✅ Chunks uploaded successfully to R2", flush=True)
         
         # Update status to ready_for_analysis (extraction done, awaiting credit confirmation)
         print(f"📝 Updating source {source_id} status to ready_for_analysis...", flush=True)
-        supabase.rpc("update_source_status", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id,
-            "status_param": "ready_for_analysis",
-            "progress_param": 100,
-            "total_chunks_param": len(chunks)
-        }).execute()
+        await asyncio.to_thread(
+            lambda: supabase.rpc("update_source_status", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id,
+                "status_param": "ready_for_analysis",
+                "progress_param": 100,
+                "total_chunks_param": len(chunks)
+            }).execute()
+        )
         
         log_source_processing(source_id, "extraction", "completed", len(chunks), len(chunks))
         print(f"✅ Extraction and chunking complete: {len(chunks)} chunks ready for analysis", flush=True)
@@ -2071,13 +2085,15 @@ async def extract_and_chunk_source(pack_id: str, source_id: str, file_content: s
         
     except Exception as e:
         print(f"❌ Error extracting/chunking source {source_id}: {e}")
-        log_source_processing(source_id, "extraction", "failed", error=str(e))
-        supabase.rpc("update_source_status", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id,
-            "status_param": "failed",
-            "progress_param": 0
-        }).execute()
+        await asyncio.to_thread(log_source_processing, source_id, "extraction", "failed", error=str(e))
+        await asyncio.to_thread(
+            lambda: supabase.rpc("update_source_status", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id,
+                "status_param": "failed",
+                "progress_param": 0
+            }).execute()
+        )
         raise ExtractionError(source_id, str(e))
 
 def apply_redaction_filters(text: str) -> str:
@@ -2109,10 +2125,23 @@ async def _analyze_single_chunk(
     """
     try:
         redacted_chunk = apply_redaction_filters(chunk)
-        
+
+        # Sanitize: remove null bytes and non-JSON-safe control characters.
+        # Null bytes (\x00) and most C0 control chars cause OpenAI's server to reject
+        # the request with "could not parse the JSON body" (HTTP 400).
+        # We preserve legitimate whitespace: \t (9), \n (10), \r (13).
+        sanitized_chunk = "".join(
+            ch for ch in redacted_chunk
+            if ch == "\t" or ch == "\n" or ch == "\r" or ord(ch) >= 32
+        )
+
+        if not sanitized_chunk.strip():
+            # Nothing left after sanitization — skip silently.
+            raise ValueError(f"Chunk {chunk_idx + 1} is empty after sanitization, skipping.")
+
         # Get appropriate prompt from prompts module
         prompt = get_analysis_prompt(
-            chunk=redacted_chunk,
+            chunk=sanitized_chunk,
             total_chunks=total_chunks,
             filename=filename,
             chunk_idx=chunk_idx
@@ -2169,12 +2198,12 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         print(f"Starting analysis for source {source_id}")
         
         # Update status to analyzing
-        supabase.rpc("update_source_status", {
+        await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
             "status_param": "analyzing",
             "progress_param": 10
-        }).execute()
+        }).execute())
         
         # Load chunks from R2 (async to avoid blocking other requests)
         chunked_path = f"{user.r2_directory}/{pack_id}/{source_id}/chunked.json"
@@ -2260,13 +2289,13 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             # Check for cancellation before processing batch
             if source_id in cancelled_jobs:
                 print(f"🛑 Cancellation detected for source {source_id}. Stopping at chunk {batch_start+1}/{len(chunks)}")
-                supabase.rpc("update_source_status", {
+                await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
                     "target_source_id": source_id,
-                    "status_param": "cancelled",
+                    "status_param": "failed",
                     "progress_param": 0,
                     "processed_chunks_param": batch_start
-                }).execute()
+                }).execute())
                 return
             
             batch_end = min(batch_start + BATCH_SIZE, len(chunks))
@@ -2340,13 +2369,13 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 
                 # Update progress
                 progress = 50 + int((batch_end / len(chunks)) * 40)
-                supabase.rpc("update_source_status", {
+                await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
                     "target_source_id": source_id,
-                    "status_param": "processing",
+                    "status_param": "analyzing",
                     "progress_param": progress,
                     "processed_chunks_param": batch_end
-                }).execute()
+                }).execute())
                 
                 print(f"   📊 Progress: {progress}% ({batch_end}/{len(chunks)} chunks complete)")
                 
@@ -2382,7 +2411,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         if failed_chunks_count > 0:
             warning_message = f"⚠️ WARNING: {failed_chunks_count} chunk(s) failed due to content policy restrictions. No credits were deducted for failed chunks. This may occur with documents containing sensitive personal information like receipts, invoices, or official records."
         
-        supabase.rpc("update_source_status", {
+        await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
             "status_param": "completed",
@@ -2393,7 +2422,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
             "total_output_tokens_param": total_output_tokens,
             "total_cost_param": total_cost,
             "error_message_param": warning_message  # Use error_message field for warning
-        }).execute()
+        }).execute())
         
         # Note: chunks_analyzed counter removed (legacy only)
         # V2 packs track processed_chunks at pack_sources level
@@ -2411,12 +2440,12 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         if MEMORY_TREE_ENABLED and MEMORY_TREE_AVAILABLE:
             try:
                 # Update status to show tree is building
-                supabase.rpc("update_source_status", {
+                await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
                     "target_source_id": source_id,
                     "status_param": "building_tree",
                     "progress_param": 95
-                }).execute()
+                }).execute())
                 
                 print(f"\n[MEMORY TREE] Starting second-pass tree extraction...")
                 print(f"   Pack ID: {pack_id}")
@@ -2431,12 +2460,12 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 )
                 
                 # Mark as fully completed after tree building
-                supabase.rpc("update_source_status", {
+                await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
                     "target_source_id": source_id,
                     "status_param": "completed",
                     "progress_param": 100
-                }).execute()
+                }).execute())
                 print(f"✅ Source {source_id} marked as completed (progress: 100%)")
                 
             except Exception as tree_error:
@@ -2444,12 +2473,12 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 import traceback
                 print(f"   Traceback: {traceback.format_exc()}")
                 # Still mark as completed even if tree building fails
-                supabase.rpc("update_source_status", {
+                await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
                     "user_uuid": user.user_id,
                     "target_source_id": source_id,
                     "status_param": "completed",
                     "progress_param": 100
-                }).execute()
+                }).execute())
         else:
             print(f"⚠️ [TREE] Skipping second-pass tree extraction (feature disabled or unavailable)")
         
@@ -2459,7 +2488,7 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
                 # Get pack name from database (use default if query fails)
                 pack_name = "Your Pack"
                 try:
-                    pack_result = supabase.table("packs_v2").select("pack_name").eq("pack_id", pack_id).execute()
+                    pack_result = await asyncio.to_thread(lambda: supabase.table("packs_v2").select("pack_name").eq("pack_id", pack_id).execute())
                     if pack_result.data:
                         pack_name = pack_result.data[0]["pack_name"]
                 except Exception as db_error:
@@ -2490,12 +2519,12 @@ async def analyze_source_chunks(pack_id: str, source_id: str, filename: str, use
         print(f"❌ Error analyzing source {source_id}: {e}")
         
         # Update source status to failed
-        supabase.rpc("update_source_status", {
+        await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
             "user_uuid": user.user_id,
             "target_source_id": source_id,
             "status_param": "failed",
             "error_message_param": str(e)
-        }).execute()
+        }).execute())
         
         
         # Note: Failure email notification not implemented yet
@@ -2596,14 +2625,14 @@ async def build_tree_from_analysis(
     # Don't reset processed_chunks - maintain the count from analysis phase
     try:
         initial_message = f"Building tree.."
-        supabase.rpc("update_source_status", {
+        await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
             "user_uuid": user_id,
             "target_source_id": source_id,
             "status_param": "building_tree",
             "progress_param": 95,  # Start tree building at 95% (analysis complete)
             "total_chunks_param": total_chunks,
             "error_message_param": initial_message
-        }).execute()
+        }).execute())
         print(f" Initial status: {initial_message}")
     except:
         pass
@@ -2614,15 +2643,15 @@ async def build_tree_from_analysis(
         if source_id in cancelled_jobs:
             print(f"\n🚫 [TREE] Cancellation detected - stopping tree building for source {source_id}")
             try:
-                supabase.rpc("update_source_status", {
+                await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
                     "user_uuid": user_id,
                     "target_source_id": source_id,
-                    "status_param": "cancelled",
+                    "status_param": "failed",
                     "progress_param": 0,
                     "total_chunks_param": total_chunks,
-                    "error_message_param": "Tree building cancelled by user"
-                }).execute()
-                print(f"✅ Source {source_id} marked as cancelled")
+                    "error_message_param": "Cancelled by user"
+                }).execute())
+                print(f"✅ Source {source_id} marked as failed (user cancelled)")
             except Exception as e:
                 print(f"❌ Error updating cancelled status: {e}")
             
@@ -2677,14 +2706,14 @@ async def build_tree_from_analysis(
             progress_message = f"Building tree: Batch {batch_num}/{total_batches} ({chunks_processed}/{total_chunks} chunks)"
             
             try:
-                supabase.rpc("update_source_status", {
+                await asyncio.to_thread(lambda: supabase.rpc("update_source_status", {
                     "user_uuid": user_id,
                     "target_source_id": source_id,
                     "status_param": "building_tree",
                     "progress_param": overall_progress,  # 95-100% range
                     "total_chunks_param": total_chunks,
                     "error_message_param": progress_message
-                }).execute()
+                }).execute())
                 print(f"Progress: {progress_message} ({overall_progress}%)")
             except:
                 pass
@@ -2717,6 +2746,11 @@ async def _process_single_chunk_tree(
     # Get tree extraction prompt from prompts module
     tree_prompt = get_tree_prompt(scope=scope, text=text)
    
+# Define a global semaphore for limiting concurrent DB writes during tree building
+    # This prevents the Supabase connection pool from being exhausted
+    if not hasattr(_process_single_chunk_tree, "db_write_semaphore"):
+        _process_single_chunk_tree.db_write_semaphore = asyncio.Semaphore(2)
+
     # Call OpenAI for tree extraction
     try:
         response = await openai_call_with_retry(
@@ -2743,15 +2777,17 @@ async def _process_single_chunk_tree(
            
             structured = json.loads(cleaned)
            
-            # Apply to memory tree
-            apply_chunk_to_memory_tree(
-                structured_facts=structured,
-                scope=scope,
-                user=user,
-                pack_id=pack_id,
-                source_id=source_id,
-                chunk_index=idx
-            )
+            # Apply to memory tree using semaphore to prevent DB connection pool starvation
+            async with _process_single_chunk_tree.db_write_semaphore:
+                await asyncio.to_thread(
+                    apply_chunk_to_memory_tree,
+                    structured, # structured_facts
+                    scope,      # scope
+                    user,       # user
+                    pack_id,    # pack_id
+                    source_id,  # source_id
+                    idx         # chunk_index
+                )
            
             # Count nodes (rough estimate)
             node_count = sum(len(v) if isinstance(v, list) else 1 for v in structured.values() if v)
@@ -4090,11 +4126,14 @@ async def download_pack_complete(pack_id: str, user: AuthenticatedUser = Depends
 async def export_pack_json(pack_id: str, user: AuthenticatedUser = Depends(get_current_user)):
     """Export pack details and sources as JSON"""
     try:
+        import asyncio
         # Get pack details
-        result = supabase.rpc("get_pack_details_v2", {
-            "user_uuid": user.user_id,
-            "target_pack_id": pack_id
-        }).execute()
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("get_pack_details_v2", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id
+            }).execute()
+        )
         
         if not result.data:
             raise HTTPException(status_code=404, detail="Pack not found")
@@ -4218,6 +4257,94 @@ def add_memory(request: AddMemoryRequest, user: AuthenticatedUser = Depends(get_
         print(f"Error adding memory: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to add memory: {str(e)}")
 
+@app.post("/api/v2/packs/{pack_id}/upload")
+async def upload_source_raw(
+    pack_id: str,
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Lightweight binary upload endpoint.
+    Accepts raw file bytes as application/octet-stream.
+    Filename and source_type passed via X-Filename and X-Source-Type headers.
+    This avoids multipart parsing overhead and supports streaming progress on the frontend.
+    """
+    import asyncio
+    try:
+        if not supabase:
+            raise HTTPException(status_code=500, detail="Database not configured")
+
+        filename = request.headers.get("X-Filename", "upload.bin")
+        source_type = request.headers.get("X-Source-Type", "chat_export")
+        source_name = request.headers.get("X-Source-Name") or filename
+        source_id = str(uuid.uuid4())
+
+        print(f"Raw upload: source={source_id}, pack={pack_id}, file={filename}, user={user.email}")
+
+        # Read raw bytes
+        content = await request.body()
+        file_size = len(content)
+
+        if file_size == 0:
+            raise HTTPException(status_code=400, detail="Empty file")
+
+        # Parse content based on file extension (offloaded to thread)
+        filename_lower = filename.lower()
+        if filename_lower.endswith('.zip') and source_type == 'chat_export':
+            file_content_str = await asyncio.to_thread(extract_conversations_from_zip, content)
+        elif filename_lower.endswith('.pdf'):
+            file_content_str = await asyncio.to_thread(extract_text_from_pdf, content)
+        elif filename_lower.endswith(('.docx', '.doc')):
+            file_content_str = await asyncio.to_thread(extract_text_from_docx, content)
+        else:
+            try:
+                file_content_str = content.decode('utf-8')
+            except UnicodeDecodeError:
+                file_content_str = content.decode('utf-8', errors='ignore')
+
+        # Create source record
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("add_pack_source", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id,
+                "target_source_id": source_id,
+                "source_name_param": source_name,
+                "source_type_param": source_type,
+                "file_name_param": filename,
+                "file_size_param": file_size
+            }).execute()
+        )
+
+        if not result.data or len(result.data) == 0:
+            raise HTTPException(status_code=500, detail="Failed to create source record")
+
+        # Kick off extraction in background
+        asyncio.create_task(
+            extract_and_chunk_source(
+                pack_id=pack_id,
+                source_id=source_id,
+                file_content=file_content_str,
+                filename=filename,
+                user=user
+            )
+        )
+
+        return {
+            "pack_id": pack_id,
+            "source_id": source_id,
+            "source_name": source_name,
+            "status": "extracting",
+            "message": "File received, extraction started"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in raw upload: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
 @app.post("/api/v2/packs/{pack_id}/sources")
 async def add_source_to_pack(
     pack_id: str, 
@@ -4266,15 +4393,18 @@ async def add_source_to_pack(
             platform = 'ChatGPT'
             
             # Create source record in database with URL
-            result = supabase.rpc("add_pack_source", {
-                "user_uuid": user.user_id,
-                "target_pack_id": pack_id,
-                "target_source_id": source_id,
-                "source_name_param": source_name,
-                "source_type_param": source_type,  # Use allowed source type for constraint
-                "file_name_param": url,  # Store URL in file_name field
-                "file_size_param": 0
-            }).execute()
+            import asyncio
+            result = await asyncio.to_thread(
+                lambda: supabase.rpc("add_pack_source", {
+                    "user_uuid": user.user_id,
+                    "target_pack_id": pack_id,
+                    "target_source_id": source_id,
+                    "source_name_param": source_name,
+                    "source_type_param": source_type,  # Use allowed source type for constraint
+                    "file_name_param": url,  # Store URL in file_name field
+                    "file_size_param": 0
+                }).execute()
+            )
             
             if not result.data or len(result.data) == 0:
                 raise HTTPException(status_code=500, detail="Failed to create source record")
@@ -4306,15 +4436,18 @@ async def add_source_to_pack(
             source_name = source_name or f"Pasted Text ({datetime.now().strftime('%I:%M:%S %p')})"
             
             # Create source record
-            result = supabase.rpc("add_pack_source", {
-                "user_uuid": user.user_id,
-                "target_pack_id": pack_id,
-                "target_source_id": source_id,
-                "source_name_param": source_name,
-                "source_type_param": source_type,
-                "file_name_param": "pasted_text.txt",
-                "file_size_param": len(text_content)
-            }).execute()
+            import asyncio
+            result = await asyncio.to_thread(
+                lambda: supabase.rpc("add_pack_source", {
+                    "user_uuid": user.user_id,
+                    "target_pack_id": pack_id,
+                    "target_source_id": source_id,
+                    "source_name_param": source_name,
+                    "source_type_param": source_type,
+                    "file_name_param": "pasted_text.txt",
+                    "file_size_param": len(text_content)
+                }).execute()
+            )
             
             if not result.data or len(result.data) == 0:
                 raise HTTPException(status_code=500, detail="Failed to create source record")
@@ -4349,24 +4482,27 @@ async def add_source_to_pack(
             if filename_lower.endswith('.zip') and source_type == 'chat_export':
                 # Extract chat export from ZIP
                 try:
+                    import asyncio
                     print("Zip file extraction")
-                    file_content_str = extract_conversations_from_zip(content)
+                    file_content_str = await asyncio.to_thread(extract_conversations_from_zip, content)
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e))
                 
             elif filename_lower.endswith('.pdf'):
                 # Extract text from PDF
                 try:
+                    import asyncio
                     print("PDF file extraction")
-                    file_content_str = extract_text_from_pdf(content)
+                    file_content_str = await asyncio.to_thread(extract_text_from_pdf, content)
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e))
                     
             elif filename_lower.endswith(('.docx', '.doc')):
                 # Extract text from DOCX
                 try:
+                    import asyncio
                     print("DOCX file extraction")
-                    file_content_str = extract_text_from_docx(content)
+                    file_content_str = await asyncio.to_thread(extract_text_from_docx, content)
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e))
             else:
@@ -4378,15 +4514,18 @@ async def add_source_to_pack(
                     file_content_str = content.decode('utf-8', errors='ignore')
             
             # Create source record in database
-            result = supabase.rpc("add_pack_source", {
-                "user_uuid": user.user_id,
-                "target_pack_id": pack_id,
-                "target_source_id": source_id,
-                "source_name_param": source_name,
-                "source_type_param": source_type,
-                "file_name_param": file.filename,
-                "file_size_param": file_size
-            }).execute()
+            import asyncio
+            result = await asyncio.to_thread(
+                lambda: supabase.rpc("add_pack_source", {
+                    "user_uuid": user.user_id,
+                    "target_pack_id": pack_id,
+                    "target_source_id": source_id,
+                    "source_name_param": source_name,
+                    "source_type_param": source_type,
+                    "file_name_param": file.filename,
+                    "file_size_param": file_size
+                }).execute()
+            )
             
             if not result.data or len(result.data) == 0:
                 raise HTTPException(status_code=500, detail="Failed to create source record")
@@ -4560,22 +4699,27 @@ async def get_source_status(
     source_id: str,
     user: AuthenticatedUser = Depends(get_current_user)
 ):
-    """Get processing status for a source"""
+    """Get processing status for a source — non-blocking direct table read."""
+    import asyncio
     try:
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
-        
+
+        # Wrap in asyncio.to_thread so the sync Supabase call never blocks the
+        # event loop — critical when the analysis threadpool is saturated.
         # Use RPC function to get source status (bypasses RLS)
-        result = supabase.rpc("get_source_status_v2", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id
-        }).execute()
-        
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("get_source_status_v2", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id
+            }).execute()
+        )
+
         if not result.data:
             raise HTTPException(status_code=404, detail="Source not found")
-        
+
         source = result.data
-        
+
         return {
             "source_id": source["source_id"],
             "pack_id": source["pack_id"],
@@ -4583,12 +4727,13 @@ async def get_source_status(
             "progress": source.get("progress", 0),
             "error_message": source.get("error_message"),
             "total_chunks": source.get("total_chunks", 0),
+            "file_name": source.get("file_name", ""),
             "extracted_count": source.get("extracted_count", 0),
             "total_input_tokens": source.get("total_input_tokens", 0),
             "total_output_tokens": source.get("total_output_tokens", 0),
             "completed_at": source.get("completed_at")
         }
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -4721,6 +4866,9 @@ async def delete_source_from_pack(
     # Always return success - the source is gone from R2 and UI will be updated
     return {"success": True, "message": "Source deleted successfully"}
 
+
+
+
 @app.get("/api/v2/sources/{source_id}/credit-check")
 async def check_source_credits(
     source_id: str,
@@ -4731,11 +4879,15 @@ async def check_source_credits(
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
         
+        import asyncio
+        
         # Get source status to find chunk count
-        result = supabase.rpc("get_source_status_v2", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id
-        }).execute()
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("get_source_status_v2", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id
+            }).execute()
+        )
         
         if not result.data:
             raise HTTPException(status_code=404, detail="Source not found")
@@ -4747,7 +4899,13 @@ async def check_source_credits(
             raise HTTPException(status_code=400, detail="Source not yet chunked")
         
         # Get user's current credits and payment plan
-        user_result = supabase.table("user_profiles").select("credits_balance, payment_plan").eq("id", user.user_id).single().execute()
+        user_result = await asyncio.to_thread(
+            lambda: supabase.table("user_profiles")
+                .select("credits_balance, payment_plan")
+                .eq("id", user.user_id)
+                .single()
+                .execute()
+        )
         user_credits = user_result.data.get("credits_balance", 0) if user_result.data else 0
         payment_plan = user_result.data.get("payment_plan", "credits") if user_result.data else "credits"
         
@@ -4790,10 +4948,13 @@ async def start_source_analysis(
         max_chunks = body.get("max_chunks")  # Optional: limit analysis to specific number of chunks
         
         # Get source info
-        result = supabase.rpc("get_source_status_v2", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id
-        }).execute()
+        import asyncio
+        result = await asyncio.to_thread(
+            lambda: supabase.rpc("get_source_status_v2", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id
+            }).execute()
+        )
         
         if not result.data:
             raise HTTPException(status_code=404, detail="Source not found")
@@ -4808,7 +4969,9 @@ async def start_source_analysis(
             raise HTTPException(status_code=400, detail=f"Source not ready for analysis (status: {status})")
         
         # Check credits one more time and get payment plan
-        user_result = supabase.table("user_profiles").select("credits_balance, payment_plan").eq("id", user.user_id).single().execute()
+        user_result = await asyncio.to_thread(
+            lambda: supabase.table("user_profiles").select("credits_balance, payment_plan").eq("id", user.user_id).single().execute()
+        )
         user_credits = user_result.data.get("credits_balance", 0) if user_result.data else 0
         payment_plan = user_result.data.get("payment_plan", "credits") if user_result.data else "credits"
         
@@ -4835,10 +4998,12 @@ async def start_source_analysis(
         custom_system_prompt = None
         try:
             # Use RPC function to get pack details (bypasses RLS)
-            pack_result = supabase.rpc("get_pack_details_v2", {
-                "user_uuid": user.user_id,
-                "target_pack_id": pack_id
-            }).execute()
+            pack_result = await asyncio.to_thread(
+                lambda: supabase.rpc("get_pack_details_v2", {
+                    "user_uuid": user.user_id,
+                    "target_pack_id": pack_id
+                }).execute()
+            )
             
             if pack_result.data:
                 pack_data = pack_result.data if isinstance(pack_result.data, dict) else pack_result.data[0]
@@ -4850,12 +5015,14 @@ async def start_source_analysis(
         print(f"🚀 Starting analysis: {chunks_to_analyze} of {total_chunks} chunks")
         
         # Update status to analyzing IMMEDIATELY so frontend sees it right away
-        supabase.rpc("update_source_status", {
-            "user_uuid": user.user_id,
-            "target_source_id": source_id,
-            "status_param": "analyzing",
-            "progress_param": 5
-        }).execute()
+        await asyncio.to_thread(
+            lambda: supabase.rpc("update_source_status", {
+                "user_uuid": user.user_id,
+                "target_source_id": source_id,
+                "status_param": "analyzing",
+                "progress_param": 5
+            }).execute()
+        )
         
         # Start background analysis
         asyncio.create_task(
@@ -4889,25 +5056,41 @@ async def cancel_source_analysis(
     source_id: str,
     user: AuthenticatedUser = Depends(get_current_user)
 ):
-    """Cancel a running source analysis"""
+    """Cancel a running source analysis or discard a ready_for_analysis source"""
     try:
-        # Add to cancelled jobs set (this stops the analysis loop)
+        # Signal the analysis loop (if running) to stop
         cancelled_jobs.add(source_id)
         
         print(f"🚫 Source {source_id} cancellation requested by user {user.user_id}")
-        
-        # The analysis loop will detect cancellation and update the database status
-        # We don't need to update it here - just adding to cancelled_jobs is enough
+
+        # Immediately mark the source as failed in the DB so it doesn't resurface
+        # on page reload. The analysis loop (if running) will also detect cancelled_jobs
+        # and may overwrite — both writes use 'failed', so there's no conflict.
+        try:
+            await asyncio.to_thread(
+                lambda: supabase.rpc("update_source_status", {
+                    "user_uuid": user.user_id,
+                    "target_source_id": source_id,
+                    "status_param": "failed",
+                    "progress_param": 0,
+                    "error_message_param": "Cancelled by user"
+                }).execute()
+            )
+            print(f"✅ Source {source_id} marked as failed (user cancelled)")
+        except Exception as db_err:
+            # Non-fatal: the analysis loop may still handle it
+            print(f"⚠️ Could not immediately update cancel status: {db_err}")
         
         return {
             "source_id": source_id,
-            "status": "cancelling",
-            "message": "Cancellation requested. Analysis will stop shortly. If 10+ chunks were processed, credits were deducted."
+            "status": "cancelled",
+            "message": "Source cancelled and discarded."
         }
         
     except Exception as e:
         print(f"Error cancelling source analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to cancel analysis: {str(e)}")
+
 
 
 @app.get("/api/v2/packs/{pack_id}/export/{export_type}")

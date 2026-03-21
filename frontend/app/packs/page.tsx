@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Download, Plus, Loader2, AlertCircle, Eye, FileJson, Trash2 } from 'lucide-react'
 import { useAuth } from '@/components/AuthProvider'
@@ -28,6 +28,7 @@ export default function PacksPage() {
   const { user, session, makeAuthenticatedRequest } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+
   const [packs, setPacks] = useState<UCPPack[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +40,7 @@ export default function PacksPage() {
   const [hasActiveProcessing, setHasActiveProcessing] = useState(false)
   const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null)
   const freeCreditsPrompt = useFreeCreditsPrompt()
+  const activeProcessingPollInFlight = useRef(false)
 
   // Auto-onboarding: handle ?new_user=1 passed from the email verification callback
   // Creates "My First Pack" and redirects straight to the upload page.
@@ -48,29 +50,10 @@ export default function PacksPage() {
 
     // Remove the flag from URL immediately so refresh doesn't trigger again
     router.replace('/packs')
-
-      ; (async () => {
-        try {
-          console.log('[Packs] New user detected via email verification — auto-creating first pack')
-          const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pack_name: 'My First Pack' }),
-          })
-
-          if (response.ok) {
-            const pack = await response.json()
-            console.log('[Packs] ✅ First pack created:', pack.pack_id)
-            router.push(`/process-v3?pack=${pack.pack_id}`)
-          } else {
-            console.warn('[Packs] ⚠️ Auto-pack creation failed, staying on /packs')
-          }
-        } catch (err) {
-          console.warn('[Packs] ⚠️ Auto-pack creation error:', err)
-          // Stay on /packs — user can create manually
-        }
-      })()
-  }, [searchParams, user, session, makeAuthenticatedRequest, router])
+    
+    // For new users, we take them directly to the new unified process page
+    router.push('/process-v4')
+  }, [searchParams, user, session])
 
   // Helper function to format token counts
   const formatTokenCount = (tokens: number): string => {
@@ -131,24 +114,41 @@ export default function PacksPage() {
     }
   }, [user, session])
 
-  const loadPacks = async () => {
+  const loadPacks = async (options: { silent?: boolean } = {}) => {
+    const { silent = false } = options
     console.log('[Packs] loadPacks called, user:', user ? 'authenticated' : 'not authenticated')
     if (!user) {
       setPacks([])
-      setLoading(false)
+      if (!silent) setLoading(false)
       return
     }
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    const controller = new AbortController()
+
     try {
       console.log('[Packs] Starting to load packs...')
-      setLoading(true)
+      if (!silent) setLoading(true)
       setError(null) // Clear any previous errors
 
       // Add timeout to prevent hanging requests
       // Shorter timeout since if DB is busy with tree building, we want to fail fast
       try {
         console.log('[Packs] Fetching from /api/v2/packs...')
-        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`)
+        timeoutId = setTimeout(() => {
+          console.warn('[Packs] Aborting pack list request after 2s')
+          controller.abort()
+          if (!silent) {
+            //reload page
+            // setLoading(false)
+            window.location.reload()
+            //force reload
+          }
+        }, 2000)
+
+        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
+          signal: controller.signal
+        })
 
         console.log('[Packs] Response received:', response.status)
 
@@ -186,7 +186,17 @@ export default function PacksPage() {
 
         // Check if user has active processing
         try {
-          const processingResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/user/has-active-processing`)
+          const processingController = new AbortController()
+          const processingTimeout = setTimeout(() => {
+            processingController.abort()
+          }, 8000)
+
+          const processingResponse = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/user/has-active-processing`, {
+            signal: processingController.signal
+          })
+
+          clearTimeout(processingTimeout)
+
           if (processingResponse.ok) {
             const processingData = await processingResponse.json()
             setHasActiveProcessing(processingData.has_active_processing || false)
@@ -201,7 +211,9 @@ export default function PacksPage() {
 
       } catch (fetchError) {
         if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          throw new Error('Server is busy processing (tree building may be in progress). Please wait and try again in a moment.')
+          console.warn('[Packs] Fetch aborted — returning early')
+          if (!silent) setLoading(false)
+          return
         }
         throw fetchError
       }
@@ -213,9 +225,48 @@ export default function PacksPage() {
 
 
     } finally {
-      setLoading(false)
+      if (timeoutId) clearTimeout(timeoutId)
+      if (!silent) setLoading(false)
     }
   }
+
+  // Poll for active processing to clear the UI state promptly after completion
+  useEffect(() => {
+    if (!user || !session || !hasActiveProcessing) return
+
+    let cancelled = false
+
+    const pollActiveProcessing = async () => {
+      if (activeProcessingPollInFlight.current) return
+      activeProcessingPollInFlight.current = true
+
+      try {
+        const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/user/has-active-processing`)
+        if (!response.ok || cancelled) return
+
+        const data = await response.json()
+        const stillActive = data.has_active_processing || false
+        setHasActiveProcessing(stillActive)
+
+        // When backend finishes, refresh packs without flashing the full-page loader
+        if (!stillActive) {
+          await loadPacks({ silent: true })
+        }
+      } catch (pollError) {
+        console.warn('[Packs] Active processing poll failed:', pollError)
+      } finally {
+        activeProcessingPollInFlight.current = false
+      }
+    }
+
+    pollActiveProcessing()
+    const intervalId = setInterval(pollActiveProcessing, 5000)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [hasActiveProcessing, user, session, makeAuthenticatedRequest])
 
 
   const handleViewPack = (pack: UCPPack) => {
@@ -227,7 +278,7 @@ export default function PacksPage() {
       return
     }
 
-    router.push(`/process-v3?pack=${packId}`)
+    router.push(`/process-v4?pack=${packId}`)
   }
 
   const handleCreatePack = () => {
@@ -237,14 +288,8 @@ export default function PacksPage() {
       return
     }
 
-    // Prevent pack creation if user has active processing
-    if (hasActiveProcessing) {
-      alert('You have sources currently processing. Please wait for them to complete before creating a new pack.')
-      return
-    }
-
-    // Show modal for pack name
-    setShowCreateModal(true)
+    // Direct the user to the unified upload flow
+    router.push('/process-v4')
   }
 
   const handleSubmitCreatePack = async () => {
@@ -262,8 +307,8 @@ export default function PacksPage() {
         const pack = await response.json()
         setShowCreateModal(false)
         setNewPackName('')
-        // Navigate to process-v3 with the new pack ID
-        router.push(`/process-v3?pack=${pack.pack_id}`)
+        // Navigate to process-v4 with the new pack ID
+        router.push(`/process-v4?pack=${pack.pack_id}`)
       } else {
         alert('Failed to create pack. Please try again.')
       }
@@ -350,62 +395,6 @@ export default function PacksPage() {
             New Pack
           </button>
         </div>
-
-        {/* Create Pack Inline Form */}
-        {showCreateModal && (
-          <div className="mb-8 bg-[#1a1a1a] border border-gray-700 rounded-lg p-6 max-w-2xl">
-            <h2 className="text-lg font-semibold text-white mb-1">Create New Pack</h2>
-            <p className="text-sm text-gray-400 mb-4">Enter a name for your context pack</p>
-
-            <input
-              type="text"
-              value={newPackName}
-              onChange={(e) => setNewPackName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && newPackName.trim()) {
-                  handleSubmitCreatePack();
-                }
-                if (e.key === 'Escape') {
-                  setShowCreateModal(false);
-                  setNewPackName('');
-                }
-              }}
-              placeholder="e.g., Product Research, Meeting Notes"
-              className="w-full bg-[#0a0a0a] border border-gray-700 rounded-md px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 focus:outline-none transition mb-4"
-              autoFocus
-            />
-
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setNewPackName('');
-                }}
-                disabled={creatingPack}
-                className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmitCreatePack}
-                disabled={creatingPack || !newPackName.trim()}
-                className="px-4 py-2 bg-white hover:bg-gray-200 disabled:bg-gray-700 disabled:cursor-not-allowed text-black text-sm font-medium rounded-md flex items-center gap-2 transition"
-              >
-                {creatingPack ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Creating...
-                  </>
-                ) : (
-                  'Create Pack'
-                )}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Card Grid */}
         {packs.length === 0 ? (
@@ -494,7 +483,7 @@ export default function PacksPage() {
                         e.stopPropagation()
                         const packId = pack.ucpId || pack.id
                         if (packId) {
-                          router.push(`/process-v3?pack=${packId}`)
+                          router.push(`/process-v4?pack=${packId}`)
                         }
                       }}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded transition-colors"

@@ -64,7 +64,7 @@ Purple should be used **sparingly** for:
 
 **Do NOT use purple for**:
 - Large backgrounds or cards
-- Decorative elements
+- Decorative elements 
 - Section headers (use white instead)
 
 ## Typography

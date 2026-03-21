@@ -25,7 +25,7 @@ export function WaitingScreen({ totalChunks, fileName }: WaitingScreenProps) {
     const estimatedTime = getEstimatedTime(totalChunks);
 
     return (
-        <div className="min-h-[400px] flex items-center justify-center bg-black border border-gray-800 rounded-lg p-12">
+        <div className="min-h-[400px] flex items-center justify-center p-12">
             <div className="max-w-md w-full text-center space-y-6">
                 {/* Icon */}
                 <div className="flex justify-center">

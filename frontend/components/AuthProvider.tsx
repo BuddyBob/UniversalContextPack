@@ -126,8 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 const packData = await packResponse.json()
                 const packId = packData.pack_id
                 console.log('✅ First pack created:', packId)
-                // Redirect to the upload page with the new pack pre-selected
-                window.location.replace(`/process-v3?pack=${packId}`)
+                // Redirect to the upload page with the new pack pre-selected (v4 flow)
+                window.location.replace(`/process-v4?pack=${packId}`)
               } else {
                 console.warn('⚠️ Could not auto-create first pack, falling back to /packs')
                 // Fall through — user sees /packs as usual
@@ -456,7 +456,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const controller = new AbortController()
 
       // Use different timeouts based on the endpoint
-      let timeoutMs = 60000 // Default 60 seconds
+      let timeoutMs = 15000 // Default 15 seconds
 
       if (url.includes('/api/analyze/')) {
         timeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
@@ -465,21 +465,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (url.includes('/sources') && url.includes('POST')) {
         timeoutMs = 10 * 60 * 1000 // 10 minutes for file upload
       } else if (url.includes('/api/status/') || url.includes('/sources')) {
-        timeoutMs = 90000 // 90 seconds for status polling and source status
+        timeoutMs = 15000 // 15 seconds for status polling/credit checks
       } else if (url.includes('/api/profile/quick')) {
         timeoutMs = 10000 // 10 seconds for quick profile endpoint
       } else if (url.includes('/api/health')) {
         timeoutMs = 20000 // 20 seconds for health checks
+      } else if (url.includes('/api/v2/user/has-active-processing')) {
+        timeoutMs = 10000 // 10 seconds for active processing checks
       } else if (url.includes('/api/v2/packs/') && !url.includes('POST')) {
-        timeoutMs = 90000 // 90 seconds for pack detail endpoints - allow time for tree building
-        console.log(`[Auth] \u23f1\ufe0f Setting 90s timeout for pack detail request`);
-      } else if (url.includes('/api/v2/packs') && !url.includes('POST') && !url.includes('/')) {
-        timeoutMs = 60000 // 60 seconds for pack list endpoint
-        console.log(`[Auth] \u23f1\ufe0f Setting 60s timeout for pack list request`);
+        timeoutMs = 20000 // 20 seconds for pack detail endpoints
+        console.log(`[Auth] ⏰ Setting 20s timeout for pack detail request`);
+      } else if (url.endsWith('/api/v2/packs')) {
+        timeoutMs = 12000 // 12 seconds for pack list endpoint
+        console.log(`[Auth] ⏰ Setting 12s timeout for pack list request`);
       }
 
       const timeoutId = setTimeout(() => {
-        console.warn(`[Auth] \u23f0 Request timeout (${timeoutMs}ms) - aborting:`, url);
+        console.warn(`[Auth] ⏰ Request timeout (${timeoutMs}ms) - aborting:`, url);
         controller.abort();
       }, timeoutMs)
       options.signal = controller.signal
@@ -522,8 +524,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             retryTimeoutMs = 30 * 60 * 1000 // 30 minutes for analysis
           } else if (url.includes('/api/chunk/') || url.includes('/api/extract/')) {
             retryTimeoutMs = 10 * 60 * 1000 // 10 minutes for chunking/extraction
-          } else if (url.includes('/api/status/')) {
-            retryTimeoutMs = 90000 // 90 seconds for status polling to handle batch processing
+                              } else if (url.includes('/api/status/') || url.includes('/sources')) {
+                                retryTimeoutMs = 20000 // 20 seconds for status polling/credit check retry
+                  } else if (url.includes('/api/v2/packs/')) {
+                retryTimeoutMs = 60000 // 60 seconds for pack detail retry
           } else if (url.includes('/api/profile/quick')) {
             retryTimeoutMs = 10000 // 10 seconds for quick profile endpoint
           } else if (url.includes('/api/health')) {
@@ -544,19 +548,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        const timeoutType = url.includes('/api/analyze/') ? 'Analysis request'
-          : url.includes('/api/chunk/') ? 'Chunking request'
-            : url.includes('/api/extract/') ? 'Extraction request'
-              : url.includes('/sources') ? 'File upload request'
-                : url.includes('/api/profile/quick') ? 'Quick profile request'
-                  : url.includes('/api/health') ? 'Health check request'
-                    : 'Request'
+            const timeoutType = url.includes('/api/analyze/') ? 'Analysis request'
+              : url.includes('/api/chunk/') ? 'Chunking request'
+                : url.includes('/api/extract/') ? 'Extraction request'
+                  : url.includes('/sources') ? 'Source request'
+                    : url.includes('/api/profile/quick') ? 'Quick profile request'
+                      : url.includes('/api/health') ? 'Health check request'
+                        : 'Request'
 
-        const timeoutDuration = url.includes('/api/analyze/') ? '30 minutes'
-          : url.includes('/api/chunk/') || url.includes('/api/extract/') || url.includes('/sources') ? '10 minutes'
-            : url.includes('/api/profile/quick') ? '10 seconds'
-              : url.includes('/api/health') ? '20 seconds'
-                : '30 seconds'
+            const timeoutDuration = url.includes('/api/analyze/') ? '30 minutes'
+              : url.includes('/api/chunk/') || url.includes('/api/extract/') || (url.includes('/sources') && url.includes('POST')) ? '10 minutes'
+                : url.includes('/api/v2/packs/') ? '60 seconds'
+                  : url.includes('/api/status/') || (url.includes('/sources') && !url.includes('POST')) ? '20 seconds'
+                  : url.includes('/api/profile/quick') ? '10 seconds'
+                    : url.includes('/api/health') ? '20 seconds'
+                      : '20 seconds'
 
         console.warn(`${timeoutType} timed out after ${timeoutDuration}`)
         // Re-throw the AbortError to preserve error type for proper handling

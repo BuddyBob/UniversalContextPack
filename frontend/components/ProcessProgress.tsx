@@ -27,19 +27,12 @@ export function ProcessProgress({
     // Extracting state
     if (status.state === 'extracting') {
         return (
-            <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-lg p-6 backdrop-blur-sm">
-                <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                            <h3 className="text-lg font-semibold text-white tracking-tight">
-                                Extracting Content
-                            </h3>
-                        </div>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            Extracting and chunking content for semantic analysis.
-                        </p>
-                    </div>
+            <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                    <p className="text-sm text-gray-400 font-mono">
+                        Extracting and chunking content for semantic analysis...
+                    </p>
                 </div>
             </div>
         );
@@ -58,37 +51,7 @@ export function ProcessProgress({
                 totalChunks <= 20 ? '5-15 min' : '15-40 min';
 
         return (
-            <div className="bg-black border border-gray-800 rounded-lg p-6">
-                {/* Header */}
-                <div className="flex items-start gap-3 mb-6">
-                    <div className="mt-1">
-                        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-base font-normal text-white mb-1">Ready for Analysis</h3>
-                        <p className="text-sm text-gray-500 leading-relaxed">
-                            Content extraction complete. Begin analysis to process your data.
-                        </p>
-                    </div>
-                    <button
-                        onClick={onCancel}
-                        disabled={isCancelling}
-                        className={`text-xs px-3 py-1.5 border rounded transition-all duration-200 flex items-center gap-1.5 ${isCancelling
-                            ? 'text-gray-500 border-gray-700 cursor-not-allowed'
-                            : 'text-gray-400 hover:text-white border-gray-600 hover:bg-gray-700/50'
-                            }`}
-                    >
-                        {isCancelling ? (
-                            <>
-                                <Loader className="w-3 h-3 animate-spin" />
-                                Cancelling...
-                            </>
-                        ) : (
-                            'Cancel'
-                        )}
-                    </button>
-                </div>
-
+            <div className="space-y-6">
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
                     <div className="border border-gray-800 rounded-lg p-4 hover:border-gray-700 transition-colors">
@@ -188,50 +151,16 @@ export function ProcessProgress({
 
         // Show progress tracking for small jobs (< 5 chunks)
         return (
-            <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 border border-gray-700/50 rounded-lg p-6 backdrop-blur-sm">
-                <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-                            <h3 className="text-lg font-semibold text-white tracking-tight">
-                                Analyzing Content
-                            </h3>
-                        </div>
-                        <p className="text-sm text-gray-400 leading-relaxed">
-                            Processing your content...
-                        </p>
-                    </div>
-                    <button
-                        onClick={onCancel}
-                        disabled={isCancelling}
-                        className={`text-xs px-3 py-1.5 border rounded transition-all duration-200 flex items-center gap-1.5 ${isCancelling
-                            ? 'text-gray-500 border-gray-700 cursor-not-allowed'
-                            : 'text-gray-400 hover:text-white border-gray-600 hover:bg-gray-700/50'
-                            }`}
-                    >
-                        {isCancelling ? (
-                            <>
-                                <Loader className="w-3 h-3 animate-spin" />
-                                Cancelling...
-                            </>
-                        ) : (
-                            'Cancel'
-                        )}
-                    </button>
+            <div className="space-y-4">
+                <div className="flex items-center justify-between text-sm font-mono mb-2">
+                    <span className="text-gray-400">Processing chunk {current} of {total}</span>
+                    <span className="text-purple-400">{percent}%</span>
                 </div>
-
-                {/* Progress */}
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500 font-medium">{current} / {total} chunks</span>
-                        <span className="text-gray-300 font-semibold tabular-nums">{percent}%</span>
-                    </div>
-                    <div className="w-full bg-gray-700/30 rounded-full h-1.5 overflow-hidden">
-                        <div
-                            className="bg-gradient-to-r from-blue-500 to-blue-400 h-full transition-all duration-700 ease-out"
-                            style={{ width: `${percent}%` }}
-                        />
-                    </div>
+                <div className="w-full bg-[#0E0E0E] h-1 border border-white/5">
+                    <div
+                        className="bg-purple-400 h-full transition-all duration-300 ease-out"
+                        style={{ width: `${percent}%` }}
+                    />
                 </div>
             </div>
         );

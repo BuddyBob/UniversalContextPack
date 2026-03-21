@@ -160,7 +160,7 @@ def send_processing_complete_email(
         print(f"📧 Sending processing complete email to {user_email}")
         
         # Construct view link
-        view_link = f"https://www.context-pack.com/process-v3?pack={pack_id}"
+        view_link = f"https://www.context-pack.com/process-v4?pack={pack_id}"
         
         # Send simple HTML email until template is created
         response = resend.Emails.send({
