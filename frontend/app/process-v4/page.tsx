@@ -21,6 +21,7 @@ interface SourceStatus {
 }
 
 interface PackDetails {
+    pack_name?: string;
     sources?: SourceStatus[];
 }
 
@@ -53,6 +54,10 @@ export default function ProcessV4Page() {
     const [analysisTargetChunks, setAnalysisTargetChunks] = useState<number | null>(null);
     const [showEmailSentToast, setShowEmailSentToast] = useState(false);
     const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
+    const [packName, setPackName] = useState('');
+    const [savedPackName, setSavedPackName] = useState('');
+    const [isSavingPackName, setIsSavingPackName] = useState(false);
+    const [isCreatingPackDraft, setIsCreatingPackDraft] = useState(false);
     const abortControllerRef = useRef<{ abort: () => void } | null>(null);
     const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -64,6 +69,15 @@ export default function ProcessV4Page() {
 
     const getErrorMessage = (error: unknown) => {
         return error instanceof Error ? error.message : 'An unknown error occurred.';
+    };
+
+    const getDefaultPackName = (fileName: string) => {
+        const trimmed = fileName.trim();
+        if (!trimmed) return 'My Context Pack';
+
+        const lastDotIndex = trimmed.lastIndexOf('.');
+        const baseName = lastDotIndex > 0 ? trimmed.slice(0, lastDotIndex) : trimmed;
+        return baseName || 'My Context Pack';
     };
 
     const getCompletedSource = (sources: SourceStatus[] = []) => {
@@ -100,6 +114,10 @@ export default function ProcessV4Page() {
         setAnalysisTargetChunks(null);
         setShowEmailSentToast(false);
         setIsStartingAnalysis(false);
+        setPackName('');
+        setSavedPackName('');
+        setIsSavingPackName(false);
+        setIsCreatingPackDraft(false);
         setUploadSize(0);
         setUploadPercent(0);
     };
@@ -184,6 +202,9 @@ export default function ProcessV4Page() {
                 if (!response.ok) return;
                 
                 const data: PackDetails = await response.json();
+                setCurrentPackId(packId);
+                setPackName(data.pack_name || '');
+                setSavedPackName(data.pack_name || '');
                 const sources = data.sources || [];
                 const activeSource = sources.find((source) => ACTIVE_SOURCE_STATUSES.includes(source.status as (typeof ACTIVE_SOURCE_STATUSES)[number]));
                 const completedSource = !activeSource ? getCompletedSource(sources) : null;
@@ -261,6 +282,7 @@ export default function ProcessV4Page() {
 
     const startWorkflow = async (file: File) => {
         const opId = ++operationIdRef.current;
+        const requestedPackName = packName.trim() || getDefaultPackName(file.name);
         setIsProcessing(true);
         setErrorMessage(null);
         setUploadSize(file.size);
@@ -278,11 +300,10 @@ export default function ProcessV4Page() {
             if (packId) {
                 setCurrentPackId(packId);
             } else {
-                const packName = file.name.split('.')[0] || 'My Context Pack';
                 const packRes = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pack_name: packName })
+                    body: JSON.stringify({ pack_name: requestedPackName })
                 });
 
                 if (operationIdRef.current !== opId) return;
@@ -292,6 +313,8 @@ export default function ProcessV4Page() {
 
                 packId = packData.pack_id;
                 setCurrentPackId(packId);
+                setPackName(requestedPackName);
+                setSavedPackName(requestedPackName);
             }
 
             if (packId && searchParams.get('pack') !== packId) {
@@ -418,6 +441,67 @@ export default function ProcessV4Page() {
         return response.json() as Promise<PackDetails>;
     };
 
+    const createPackDraft = async () => {
+        if (currentPackId || isCreatingPackDraft) return;
+
+        const trimmedPackName = packName.trim() || 'My Context Pack';
+
+        try {
+            setIsCreatingPackDraft(true);
+            const packRes = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pack_name: trimmedPackName })
+            });
+
+            if (!packRes.ok) {
+                throw new Error('Failed to create pack.');
+            }
+
+            const packData = await packRes.json();
+            const newPackId = packData.pack_id as string;
+
+            setCurrentPackId(newPackId);
+            setPackName(trimmedPackName);
+            setSavedPackName(trimmedPackName);
+            router.replace(`/process-v4?pack=${newPackId}`);
+        } catch (error) {
+            console.error('[ProcessV4] Failed to create pack draft:', error);
+            alert(`Could not create pack: ${getErrorMessage(error)}`);
+        } finally {
+            setIsCreatingPackDraft(false);
+        }
+    };
+
+    const savePackName = async () => {
+        if (!currentPackId || isSavingPackName) return;
+
+        const trimmedPackName = packName.trim();
+        if (!trimmedPackName || trimmedPackName === savedPackName) return;
+
+        try {
+            setIsSavingPackName(true);
+            const response = await fetchWithSession(`${API_BASE_URL}/api/v2/packs/${currentPackId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pack_name: trimmedPackName }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to rename pack.');
+            }
+
+            setPackName(trimmedPackName);
+            setSavedPackName(trimmedPackName);
+        } catch (error) {
+            console.error('[ProcessV4] Failed to rename pack:', error);
+            alert(`Could not rename pack: ${getErrorMessage(error)}`);
+        } finally {
+            setIsSavingPackName(false);
+        }
+    };
+
     const startPolling = (packId: string, opId: number, knownSourceId?: string) => {
         clearPollingTimers();
         pollingActiveRef.current = true;
@@ -478,6 +562,10 @@ export default function ProcessV4Page() {
                 } else {
                     const packData = await fetchPackDetails(packId);
                     if (operationIdRef.current !== opId || !packData) return;
+                    if (typeof packData.pack_name === 'string') {
+                        setPackName(packData.pack_name);
+                        setSavedPackName(packData.pack_name);
+                    }
                     const src = getRelevantSource(packData.sources, resolvedSourceId);
                     if (src) {
                         resolvedSourceId = src.source_id;
@@ -492,6 +580,10 @@ export default function ProcessV4Page() {
                 try {
                     const packData = await fetchPackDetails(packId);
                     if (operationIdRef.current !== opId || !packData) return;
+                    if (typeof packData.pack_name === 'string') {
+                        setPackName(packData.pack_name);
+                        setSavedPackName(packData.pack_name);
+                    }
                     const latestSource = getRelevantSource(packData.sources, resolvedSourceId);
                     if (latestSource) {
                         if (latestSource.status === 'completed' || latestSource.status === 'failed' || latestSource.status === 'cancelled') {
@@ -520,6 +612,10 @@ export default function ProcessV4Page() {
             try {
                 const packData = await fetchPackDetails(packId);
                 if (!packData) return;
+                if (typeof packData.pack_name === 'string') {
+                    setPackName(packData.pack_name);
+                    setSavedPackName(packData.pack_name);
+                }
                 const latestSource = getRelevantSource(packData.sources, resolvedSourceId);
                 if (latestSource && operationIdRef.current === opId) {
                     if (latestSource.status === 'completed' || latestSource.status === 'failed' || latestSource.status === 'cancelled') {
@@ -664,6 +760,10 @@ export default function ProcessV4Page() {
     const needsCreditPurchase = !!(creditInfo?.needsPurchase && workflowStage !== 'analyzing' && workflowStage !== 'completed');
     const isReadyForAnalysis = backendStatus?.status === 'ready_for_analysis' && workflowStage !== 'analyzing' && workflowStage !== 'completed';
     const pageEyebrow = searchParams.get('pack') ? 'Add Source' : 'Create Pack';
+    const packNameInputValue = packName || '';
+    const packNameDisplay = savedPackName || packNameInputValue || 'Untitled Pack';
+    const canSavePackName = !!currentPackId && !!packName.trim() && packName.trim() !== savedPackName;
+    const canCreatePackDraft = !currentPackId && !!packName.trim();
     const chunkCount = backendStatus?.total_chunks ?? 0;
     const chunkLabel = chunkCount > 0 ? `${chunkCount} chunk${chunkCount === 1 ? '' : 's'}` : 'Chunk count pending';
     const uploadMb = uploadSize / 1024 / 1024;
@@ -823,8 +923,55 @@ export default function ProcessV4Page() {
                                 <p className="mb-4 text-[11px] uppercase tracking-[0.32em] text-[#8ea096]">
                                     {pageEyebrow}
                                 </p>
+                                <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end">
+                                    <div className="flex-1">
+                                        <label
+                                            htmlFor="pack-name"
+                                            className="mb-2 block text-[11px] uppercase tracking-[0.24em] text-[#7f8f88]"
+                                        >
+                                            Pack name
+                                        </label>
+                                        <input
+                                            id="pack-name"
+                                            type="text"
+                                            value={packNameInputValue}
+                                            onChange={(e) => setPackName(e.target.value)}
+                                            onBlur={() => {
+                                                if (canSavePackName) {
+                                                    void savePackName();
+                                                }
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && canSavePackName) {
+                                                    e.preventDefault();
+                                                    void savePackName();
+                                                }
+                                            }}
+                                            placeholder="Untitled Pack"
+                                            maxLength={120}
+                                            className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-base text-white outline-none transition-colors placeholder:text-[#71807a] focus:border-white/20 focus:bg-white/[0.06]"
+                                        />
+                                    </div>
+                                    {currentPackId ? (
+                                        <button
+                                            onClick={() => void savePackName()}
+                                            disabled={!canSavePackName || isSavingPackName}
+                                            className="rounded-full border border-white/12 bg-white/[0.04] px-5 py-3 text-sm text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45"
+                                        >
+                                            {isSavingPackName ? 'Saving…' : 'Save name'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => void createPackDraft()}
+                                            disabled={!canCreatePackDraft || isCreatingPackDraft}
+                                            className="rounded-full border border-white/12 bg-white/[0.04] px-5 py-3 text-sm text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45"
+                                        >
+                                            {isCreatingPackDraft ? 'Creating…' : 'Create pack'}
+                                        </button>
+                                    )}
+                                </div>
                                 <h1 className="max-w-xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
-                                    Drop a source. We handle the processing.
+                                    {packNameDisplay}
                                 </h1>
                                 <p className="mt-4 max-w-xl text-base leading-7 text-[#9aa8a1] sm:text-lg">
                                     Upload a file once. We extract the useful content, prepare it for analysis, and notify you when the pack is ready.
