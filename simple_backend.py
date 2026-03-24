@@ -1467,6 +1467,69 @@ def extract_conversations_from_zip(zip_bytes: bytes) -> str:
     except Exception as e:
         raise ValueError(f"Error extracting ZIP: {str(e)}")
 
+def extract_text_from_zip(zip_bytes: bytes) -> str:
+    """Extract supported text content from a ZIP file.
+
+    Priority:
+    1. If the archive contains conversations.json, return that content directly.
+    2. Otherwise, unpack supported files and combine their extracted text.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zip_file:
+            names = zip_file.namelist()
+
+            for file_name in names:
+                if file_name.endswith('conversations.json'):
+                    print(f"📦 Found conversations.json in ZIP: {file_name}")
+                    return zip_file.read(file_name).decode('utf-8')
+
+            extracted_sections = []
+            supported_extensions = (
+                '.txt', '.md', '.markdown', '.csv', '.json',
+                '.pdf', '.docx', '.doc'
+            )
+
+            for file_name in names:
+                normalized_name = file_name.lower()
+                if file_name.endswith('/') or normalized_name.startswith('__macosx/'):
+                    continue
+                if not normalized_name.endswith(supported_extensions):
+                    continue
+
+                try:
+                    file_bytes = zip_file.read(file_name)
+                    if not file_bytes:
+                        continue
+
+                    if normalized_name.endswith('.pdf'):
+                        extracted_text = extract_text_from_pdf(file_bytes)
+                    elif normalized_name.endswith(('.docx', '.doc')):
+                        extracted_text = extract_text_from_docx(file_bytes)
+                    else:
+                        try:
+                            extracted_text = file_bytes.decode('utf-8')
+                        except UnicodeDecodeError:
+                            extracted_text = file_bytes.decode('utf-8', errors='ignore')
+
+                    if extracted_text and extracted_text.strip():
+                        extracted_sections.append(
+                            f"\n\n===== FILE: {file_name} =====\n{extracted_text.strip()}"
+                        )
+                except Exception as file_error:
+                    print(f"⚠️ Skipping ZIP entry {file_name}: {file_error}")
+
+            if extracted_sections:
+                print(f"📦 Extracted {len(extracted_sections)} supported file(s) from ZIP")
+                return ''.join(extracted_sections).strip()
+
+            raise ValueError(
+                "ZIP file did not contain supported files. Include txt, md, csv, json, pdf, docx, or conversations.json."
+            )
+    except zipfile.BadZipFile:
+        raise ValueError("Invalid ZIP file")
+    except Exception as e:
+        raise ValueError(f"Error extracting ZIP: {str(e)}")
+
 def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     """Extract text from PDF using PyPDF2 and fix word-per-line formatting"""
     try:
@@ -4309,8 +4372,8 @@ async def upload_source_raw(
 
         # Parse content based on file extension (offloaded to thread)
         filename_lower = filename.lower()
-        if filename_lower.endswith('.zip') and source_type == 'chat_export':
-            file_content_str = await asyncio.to_thread(extract_conversations_from_zip, content)
+        if filename_lower.endswith('.zip'):
+            file_content_str = await asyncio.to_thread(extract_text_from_zip, content)
         elif filename_lower.endswith('.pdf'):
             file_content_str = await asyncio.to_thread(extract_text_from_pdf, content)
         elif filename_lower.endswith(('.docx', '.doc')):
@@ -4498,12 +4561,12 @@ async def add_source_to_pack(
             file_content_str = ""
             filename_lower = file.filename.lower()
             
-            if filename_lower.endswith('.zip') and source_type == 'chat_export':
-                # Extract chat export from ZIP
+            if filename_lower.endswith('.zip'):
+                # Extract supported text files or ChatGPT conversations.json from ZIP
                 try:
                     import asyncio
                     print("Zip file extraction")
-                    file_content_str = await asyncio.to_thread(extract_conversations_from_zip, content)
+                    file_content_str = await asyncio.to_thread(extract_text_from_zip, content)
                 except ValueError as e:
                     raise HTTPException(status_code=400, detail=str(e))
                 
