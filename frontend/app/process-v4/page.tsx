@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Upload, AlertCircle, RefreshCw, Download, GitBranch, Check, Activity, Clock3, FileText, FolderOpen } from 'lucide-react';
+import { Upload, AlertCircle, RefreshCw, Download, GitBranch, Check, Activity, FileText, FolderOpen } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
@@ -809,12 +809,7 @@ export default function ProcessV4Page() {
     const packNameDisplay = savedPackName || packNameInputValue || 'Untitled Pack';
     const canSavePackName = !!currentPackId && !!packName.trim() && packName.trim() !== savedPackName;
     const canCreatePackDraft = !currentPackId && !!packName.trim();
-    const canAddSource = !!user && (
-        !isProcessing ||
-        workflowStage === 'completed' ||
-        isReadyForAnalysis ||
-        needsCreditPurchase
-    );
+    const canAddSource = !!user && workflowStage === 'completed';
     const chunkCount = backendStatus?.total_chunks ?? 0;
     const chunkLabel = chunkCount > 0 ? `${chunkCount} chunk${chunkCount === 1 ? '' : 's'}` : 'Chunk count pending';
     const uploadMb = uploadSize / 1024 / 1024;
@@ -880,7 +875,6 @@ export default function ProcessV4Page() {
         }
         return {
             label: 'Upload',
-            title: 'Drop a source and process it.',
             description: 'Upload a document or export and we will extract, chunk, and prepare it for analysis.',
         };
     })();
@@ -912,20 +906,6 @@ export default function ProcessV4Page() {
         return null;
     })();
     const workflowTone = 'border-white/10 bg-white/[0.04] text-white';
-    const sidebarProgress = workflowStage === 'completed'
-        ? 100
-        : workflowStage === 'uploading'
-            ? uploadPercent
-            : workflowStage === 'extracting'
-                ? extractionProgress
-                : null;
-    const sourceStatusLabel = backendStatus?.status
-        ? backendStatus.status.replace(/_/g, ' ')
-        : 'awaiting source';
-    const runtimeLabel = stageEstimate || (workflowStage === 'idle' ? 'Not started' : 'Calculating');
-    const availableCreditLabel = creditInfo
-        ? `${creditsHave}${creditsNeeded > 0 ? ` / ${creditsNeeded}` : ''}`
-        : 'Pending';
     const getSourceLabel = (source: SourceStatus) => {
         return source.source_name || source.file_name || `Source ${source.source_id.slice(0, 6)}`;
     };
@@ -977,7 +957,7 @@ export default function ProcessV4Page() {
                 </div>
             )}
 
-            <div className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8 sm:px-8 lg:px-10">
+            <div className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col px-6 py-8 sm:px-8 lg:px-10">
                 <input
                     ref={filePickerRef}
                     type="file"
@@ -1008,7 +988,7 @@ export default function ProcessV4Page() {
                     </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_300px]">
+                <div className="grid gap-6 xl:grid-cols-[250px_minmax(0,1fr)_280px]">
                     <aside className="rounded-[24px] border border-white/10 bg-[#111517]/96 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
                         <div className="border-b border-white/8 px-5 py-4">
                             <div className="flex items-center justify-between gap-3">
@@ -1344,107 +1324,57 @@ export default function ProcessV4Page() {
                         <div className="mb-5 border-b border-white/8 pb-4">
                             <p className="text-sm font-medium text-white">Pack Actions</p>
                         </div>
-                            {currentPackId && (
-                                <div className="mb-4 grid gap-3">
+                        {currentPackId && (
+                            <div className="grid gap-3">
+                                {canAddSource && (
                                     <button
                                         onClick={triggerSourcePicker}
-                                        disabled={!canAddSource}
-                                        className="flex items-center justify-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-[#ebefed] disabled:cursor-not-allowed disabled:opacity-45"
+                                        className="flex items-center justify-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-[#ebefed]"
                                     >
                                         <Upload className="h-4 w-4" />
                                         Add source
                                     </button>
-                                    <button
-                                        onClick={() => currentPackId && router.push(`/tree/${currentPackId}`)}
-                                        className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
-                                    >
-                                        <GitBranch className="h-4 w-4" />
-                                        Memory tree
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            if (!currentPackId) return;
-                                            try {
-                                                await downloadFile(
-                                                    `${API_BASE_URL}/api/v2/packs/${currentPackId}/export/complete`,
-                                                    'context_pack.txt'
-                                                );
-                                            } catch (e) { console.error(e); }
-                                        }}
-                                        className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
-                                    >
-                                        <Download className="h-4 w-4" />
-                                        Download pack
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            if (!currentPackId) return;
-                                            try {
-                                                await downloadFile(
-                                                    `${API_BASE_URL}/api/v2/packs/${currentPackId}/tree.json`,
-                                                    'memory_tree.json',
-                                                    'No memory tree file found.'
-                                                );
-                                            } catch (e) { console.error(e); }
-                                        }}
-                                        className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
-                                    >
-                                        <Download className="h-4 w-4" />
-                                        Download tree
-                                    </button>
-                                </div>
-                            )}
-
-                            <div className="rounded-2xl border border-white/8 bg-[#101a1c] p-4">
-                                <div className="flex items-center justify-between gap-3">
-                                    <p className="text-[11px] uppercase tracking-[0.2em] text-[#73827c]">Status</p>
-                                    <div className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.18em] ${workflowTone}`}>
-                                        {workflowSummary.label}
-                                    </div>
-                                </div>
-
-                                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/8">
-                                    <div
-                                        className="relative h-full rounded-full transition-[width] duration-500 ease-out"
-                                        style={{
-                                            width: sidebarProgress !== null ? `${sidebarProgress}%` : '34%',
-                                            background: 'linear-gradient(90deg, rgba(111,193,157,0.18), rgba(173,243,215,0.95))',
-                                            animation: sidebarProgress === null ? 'indeterminate-sweep 1.7s ease-in-out infinite alternate' : 'none',
-                                            boxShadow: '0 0 24px rgba(152, 233, 204, 0.22)'
-                                        }}
-                                    />
-                                </div>
-                                {(progressMeta || workflowStage === 'completed') && (
-                                    <p className="mt-3 text-xs text-[#8ea099]">
-                                        {progressMeta || '100% complete'}
-                                    </p>
                                 )}
+                                <button
+                                    onClick={() => currentPackId && router.push(`/tree/${currentPackId}`)}
+                                    className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
+                                >
+                                    <GitBranch className="h-4 w-4" />
+                                    Memory tree
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (!currentPackId) return;
+                                        try {
+                                            await downloadFile(
+                                                `${API_BASE_URL}/api/v2/packs/${currentPackId}/export/complete`,
+                                                'context_pack.txt'
+                                            );
+                                        } catch (e) { console.error(e); }
+                                    }}
+                                    className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    Download pack
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (!currentPackId) return;
+                                        try {
+                                            await downloadFile(
+                                                `${API_BASE_URL}/api/v2/packs/${currentPackId}/tree.json`,
+                                                'memory_tree.json',
+                                                'No memory tree file found.'
+                                            );
+                                        } catch (e) { console.error(e); }
+                                    }}
+                                    className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    Download tree
+                                </button>
                             </div>
-
-                            <div className="mt-4 grid grid-cols-2 gap-3">
-                                <div className="rounded-2xl border border-white/8 bg-[#101a1c] p-4">
-                                    <div className="flex items-center gap-2 text-[#73827c]">
-                                        <Clock3 className="h-3.5 w-3.5" />
-                                        <p className="text-[11px] uppercase tracking-[0.18em]">ETA</p>
-                                    </div>
-                                    <p className="mt-3 text-sm font-medium text-white">{runtimeLabel}</p>
-                                </div>
-                                <div className="rounded-2xl border border-white/8 bg-[#101a1c] p-4">
-                                    <div className="flex items-center gap-2 text-[#73827c]">
-                                        <Activity className="h-3.5 w-3.5" />
-                                        <p className="text-[11px] uppercase tracking-[0.18em]">Credits</p>
-                                    </div>
-                                    <p className="mt-3 text-sm font-medium text-white">{availableCreditLabel}</p>
-                                </div>
-                                <div className="rounded-2xl border border-white/8 bg-[#101a1c] p-4">
-                                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#73827c]">Chunks</p>
-                                    <p className="mt-3 text-sm font-medium text-white">{chunkCount || 'Pending'}</p>
-                                </div>
-                                <div className="rounded-2xl border border-white/8 bg-[#101a1c] p-4">
-                                    <p className="text-[11px] uppercase tracking-[0.18em] text-[#73827c]">State</p>
-                                    <p className="mt-3 text-sm font-medium capitalize text-white">{sourceStatusLabel}</p>
-                                </div>
-                            </div>
+                        )}
                     </aside>
                 </div>
             </div>
