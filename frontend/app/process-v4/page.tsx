@@ -356,10 +356,18 @@ export default function ProcessV4Page() {
             if (!packId) throw new Error('Could not resolve an active pack ID.');
 
             setWorkflowStage('uploading');
-            await uploadFile(packId, file);
+            const uploadedSourceId = await uploadFile(packId, file);
             if (operationIdRef.current !== opId) return;
 
-            startPolling(packId, opId);
+            setCurrentSourceId(uploadedSourceId);
+            upsertPackSource({
+                source_id: uploadedSourceId,
+                source_name: file.name,
+                file_name: file.name,
+                status: 'extracting',
+            });
+
+            startPolling(packId, opId, uploadedSourceId);
 
         } catch (error) {
             if (operationIdRef.current !== opId) return;
@@ -419,14 +427,14 @@ export default function ProcessV4Page() {
         }
     };
 
-    const uploadFile = async (packId: string, file: File): Promise<void> => {
+    const uploadFile = async (packId: string, file: File): Promise<string> => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('Authentication expired.');
 
         const formData = new FormData();
         formData.append('file', file);
 
-        await new Promise<void>((resolve, reject) => {
+        const sourceId = await new Promise<string>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', `${API_BASE_URL}/api/v2/packs/${packId}/sources`);
             xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
@@ -434,15 +442,28 @@ export default function ProcessV4Page() {
 
             abortControllerRef.current = { abort: () => xhr.abort() };
 
+            xhr.addEventListener('loadstart', () => {
+                setUploadPercent((current) => (current > 0 ? current : 1));
+            });
+
             xhr.upload.addEventListener('progress', (event) => {
                 if (!event.lengthComputable) return;
                 setUploadPercent(Math.min(100, Math.round((event.loaded / event.total) * 100)));
             });
 
-            xhr.addEventListener('load', () => {
+            xhr.addEventListener('load', async () => {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     setUploadPercent(100);
-                    resolve();
+                    try {
+                        const payload = JSON.parse(xhr.responseText) as { source_id?: string };
+                        if (!payload.source_id) {
+                            reject(new Error('Upload succeeded but no source ID was returned.'));
+                            return;
+                        }
+                        resolve(payload.source_id);
+                    } catch {
+                        reject(new Error('Upload succeeded but the server response could not be read.'));
+                    }
                     return;
                 }
 
@@ -465,6 +486,7 @@ export default function ProcessV4Page() {
         });
 
         setWorkflowStage('extracting');
+        return sourceId;
     };
 
     const fetchPackDetails = async (packId: string, timeoutMs = 30000) => {
@@ -885,7 +907,7 @@ export default function ProcessV4Page() {
             : null;
     const progressMeta = (() => {
         if (workflowStage === 'uploading') {
-            return uploadPercent > 0 ? `${uploadPercent}% uploaded` : 'Starting upload…';
+            return uploadPercent > 0 ? `${uploadPercent}% uploaded` : 'Stalled... Reload';
         }
 
         if (workflowStage === 'extracting') {
