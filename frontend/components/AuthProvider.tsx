@@ -109,33 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.log('⚠️ Welcome email failed (non-blocking):', emailError)
             })
 
-            // Auto-create "My First Pack" and redirect new users straight to the upload page
-            // This removes the empty /packs screen friction for brand-new signups
-            try {
-              console.log('🎉 New user detected — auto-creating first pack...')
-              const packResponse = await fetch(`${API_BASE_URL}/api/v2/packs`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${session.access_token}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ pack_name: 'My First Pack' })
-              })
-
-              if (packResponse.ok) {
-                const packData = await packResponse.json()
-                const packId = packData.pack_id
-                console.log('✅ First pack created:', packId)
-                // Redirect to the upload page with the new pack pre-selected (v4 flow)
-                window.location.replace(`/process-v4?pack=${packId}`)
-              } else {
-                console.warn('⚠️ Could not auto-create first pack, falling back to /packs')
-                // Fall through — user sees /packs as usual
-              }
-            } catch (packError) {
-              console.warn('⚠️ Auto-pack creation failed (non-blocking):', packError)
-              // Fall through — user sees /packs as usual
-            }
+            console.log('🎉 New user detected — keeping post-auth landing on /packs')
           }
         } else {
           setUserProfile(null)

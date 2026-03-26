@@ -42,17 +42,14 @@ export default function PacksPage() {
   const freeCreditsPrompt = useFreeCreditsPrompt()
   const activeProcessingPollInFlight = useRef(false)
 
-  // Auto-onboarding: handle ?new_user=1 passed from the email verification callback
-  // Creates "My First Pack" and redirects straight to the upload page.
+  // Auto-onboarding: handle ?new_user=1 passed from the email verification callback.
+  // Keep the landing on /packs so new users see their dashboard first.
   useEffect(() => {
     const isNewUser = searchParams.get('new_user') === '1'
     if (!isNewUser || !user || !session) return
 
     // Remove the flag from URL immediately so refresh doesn't trigger again
     router.replace('/packs')
-    
-    // For new users, we take them directly to the new unified process page
-    router.push('/process-v4')
   }, [searchParams, user, session])
 
   // Helper function to format token counts

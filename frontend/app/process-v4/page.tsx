@@ -85,6 +85,7 @@ export default function ProcessV4Page() {
     const savePackNameTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const previousWorkflowStageRef = useRef<WorkflowStage>('idle');
     const backendStatusRef = useRef<SourceStatus | null>(null);
+    const pollRequestInFlightRef = useRef(false);
 
     const getErrorMessage = (error: unknown) => {
         return error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -740,9 +741,11 @@ export default function ProcessV4Page() {
         console.log('[ProcessV4] Starting polling', { packId, opId, knownSourceId });
         clearPollingTimers();
         pollingActiveRef.current = true;
+        pollRequestInFlightRef.current = false;
 
         let hasHitReadyForAnalysis = false;
         let resolvedSourceId = knownSourceId || null;
+        let nextPollDelayMs = 2000;
 
         const processSourceStatus = async (src: SourceStatus) => {
             if (operationIdRef.current !== opId) return;
@@ -781,54 +784,31 @@ export default function ProcessV4Page() {
 
         const poll = async () => {
             if (operationIdRef.current !== opId) return;
+            if (pollRequestInFlightRef.current) {
+                pollingIntervalRef.current = setTimeout(poll, nextPollDelayMs);
+                return;
+            }
+
+            pollRequestInFlightRef.current = true;
             try {
-                if (resolvedSourceId) {
-                    const res = await fetchWithSession(
-                        `${API_BASE_URL}/api/v2/sources/${resolvedSourceId}/status`,
-                        {},
-                        60000
-                    );
-                    if (operationIdRef.current !== opId) return;
-                    if (res.ok) {
-                        const src = await res.json();
-                        if (operationIdRef.current !== opId) return;
-                        setCurrentSourceId(src.source_id);
-                        await processSourceStatus(src);
-                    }
-                } else {
-                    const packData = await fetchPackDetails(packId);
-                    if (operationIdRef.current !== opId || !packData) return;
-                    const { relevantSource: src } = applyPackDetails(packData, resolvedSourceId);
-                    if (src) {
-                        resolvedSourceId = src.source_id;
-                        setCurrentSourceId(src.source_id);
-                        await processSourceStatus(src);
-                    }
+                const packData = await fetchPackDetails(packId, 60000);
+                if (operationIdRef.current !== opId || !packData) return;
+
+                const { relevantSource: src } = applyPackDetails(packData, resolvedSourceId);
+                if (src) {
+                    resolvedSourceId = src.source_id;
+                    setCurrentSourceId(src.source_id);
+                    await processSourceStatus(src);
                 }
+                nextPollDelayMs = 2000;
             } catch (err) {
                 if (operationIdRef.current !== opId) return;
                 console.error('[ProcessV4] Poll error:', err);
-
-                try {
-                    const packData = await fetchPackDetails(packId);
-                    if (operationIdRef.current !== opId || !packData) return;
-                    const { relevantSource: latestSource } = applyPackDetails(packData, resolvedSourceId);
-                    if (latestSource) {
-                        if (latestSource.status === 'completed' || latestSource.status === 'failed' || latestSource.status === 'cancelled') {
-                            pollingActiveRef.current = false;
-                        }
-                        resolvedSourceId = latestSource.source_id;
-                        setCurrentSourceId(latestSource.source_id);
-                        await processSourceStatus(latestSource);
-                        return;
-                    }
-                } catch (fallbackErr) {
-                    if (operationIdRef.current !== opId) return;
-                    console.error('[ProcessV4] Pack fallback poll error:', fallbackErr);
-                }
+                nextPollDelayMs = Math.min(nextPollDelayMs * 2, 10000);
             } finally {
+                pollRequestInFlightRef.current = false;
                 if (pollingActiveRef.current && operationIdRef.current === opId) {
-                    pollingIntervalRef.current = setTimeout(poll, 1000);
+                    pollingIntervalRef.current = setTimeout(poll, nextPollDelayMs);
                 }
             }
         };
@@ -836,7 +816,7 @@ export default function ProcessV4Page() {
         poll();
 
         heartbeatIntervalRef.current = setInterval(async () => {
-            if (!pollingActiveRef.current || operationIdRef.current !== opId) return;
+            if (!pollingActiveRef.current || operationIdRef.current !== opId || pollRequestInFlightRef.current) return;
             try {
                 const packData = await fetchPackDetails(packId);
                 if (!packData) return;
@@ -1162,6 +1142,7 @@ export default function ProcessV4Page() {
         return source.source_name || source.file_name || `Source ${source.source_id.slice(0, 6)}`;
     };
     const downloadFile = async (endpoint: string, filename: string, notFoundMessage?: string) => {
+        console.log('[ProcessV4] Download requested', { endpoint, filename });
         const response = await makeAuthenticatedRequest(endpoint);
         if (response.ok) {
             const blob = await response.blob();
@@ -1169,14 +1150,25 @@ export default function ProcessV4Page() {
             const anchor = document.createElement('a');
             anchor.href = url;
             anchor.download = filename;
+            document.body.appendChild(anchor);
             anchor.click();
+            document.body.removeChild(anchor);
             window.URL.revokeObjectURL(url);
             return;
         }
 
         if (response.status === 404 && notFoundMessage) {
             alert(notFoundMessage);
+            return;
         }
+
+        const errorText = await response.text().catch(() => '');
+        console.error('[ProcessV4] Download failed', {
+            endpoint,
+            status: response.status,
+            errorText,
+        });
+        alert(`Download failed (${response.status}). ${errorText || 'Please try again.'}`);
     };
 
     const triggerSourcePicker = () => {
@@ -1604,7 +1596,7 @@ export default function ProcessV4Page() {
                                         if (!currentPackId) return;
                                         try {
                                             await downloadFile(
-                                                `${API_BASE_URL}/api/v2/packs/${currentPackId}/export/complete`,
+                                                `${API_BASE_URL}/api/v2/packs/${currentPackId}/download`,
                                                 'context_pack.txt'
                                             );
                                         } catch (e) { console.error(e); }
