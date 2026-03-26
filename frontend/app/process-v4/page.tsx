@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Upload, AlertCircle, RefreshCw, Download, GitBranch, Check, Activity, FileText, FolderOpen } from 'lucide-react';
+import { Upload, AlertCircle, RefreshCw, Download, GitBranch, Check, Activity, FileText, FolderOpen, MessageSquare, HelpCircle, Link2, AlignLeft, X } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
@@ -35,6 +35,15 @@ interface CreditInfo {
     totalChunks?: number;
 }
 
+interface SourceTile {
+    key: string;
+    title: string;
+    description: string;
+    icon: typeof MessageSquare;
+    action: () => void;
+    help?: boolean;
+}
+
 const ACTIVE_SOURCE_STATUSES = ['extracting', 'ready_for_analysis', 'analyzing', 'building_tree'] as const;
 const ACCEPTED_FORMATS = ['PDF', 'TXT', 'DOCX', 'CSV', 'ZIP', 'conversations.json'] as const;
 
@@ -62,6 +71,10 @@ export default function ProcessV4Page() {
     const [savedPackName, setSavedPackName] = useState('');
     const [isSavingPackName, setIsSavingPackName] = useState(false);
     const [isCreatingPackDraft, setIsCreatingPackDraft] = useState(false);
+    const [showUrlModal, setShowUrlModal] = useState(false);
+    const [showTextModal, setShowTextModal] = useState(false);
+    const [urlInput, setUrlInput] = useState('');
+    const [textInput, setTextInput] = useState('');
     const filePickerRef = useRef<HTMLInputElement | null>(null);
     const abortControllerRef = useRef<{ abort: () => void } | null>(null);
     const pollingIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,6 +82,7 @@ export default function ProcessV4Page() {
     const pollingActiveRef = useRef(false);
     const operationIdRef = useRef(0);
     const uploadWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const savePackNameTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const previousWorkflowStageRef = useRef<WorkflowStage>('idle');
     const backendStatusRef = useRef<SourceStatus | null>(null);
 
@@ -154,6 +168,10 @@ export default function ProcessV4Page() {
         setSavedPackName('');
         setIsSavingPackName(false);
         setIsCreatingPackDraft(false);
+        setShowUrlModal(false);
+        setShowTextModal(false);
+        setUrlInput('');
+        setTextInput('');
         setUploadSize(0);
         setUploadPercent(0);
     };
@@ -204,6 +222,7 @@ export default function ProcessV4Page() {
             clearPollingTimers();
             if (abortControllerRef.current) abortControllerRef.current.abort();
             if (uploadWatchdogRef.current) clearTimeout(uploadWatchdogRef.current);
+            if (savePackNameTimeoutRef.current) clearTimeout(savePackNameTimeoutRef.current);
         };
     }, []);
 
@@ -301,6 +320,12 @@ export default function ProcessV4Page() {
     }, [isProcessing, workflowStage, backendStatus, currentPackId, makeAuthenticatedRequest]);
 
     const handleFilesDropped = async (files: FileList | null) => {
+        console.log('[ProcessV4] File input changed', {
+            hasFiles: !!files,
+            fileCount: files?.length ?? 0,
+            firstFileName: files?.[0]?.name,
+        });
+
         if (!files || files.length === 0 || !user) return;
 
         const file = files[0];
@@ -315,6 +340,13 @@ export default function ProcessV4Page() {
     const startWorkflow = async (file: File) => {
         const opId = ++operationIdRef.current;
         const requestedPackName = packName.trim() || getDefaultPackName(file.name);
+        console.log('[ProcessV4] Starting workflow', {
+            opId,
+            fileName: file.name,
+            fileSize: file.size,
+            requestedPackName,
+            existingPackId: searchParams.get('pack'),
+        });
         setIsProcessing(true);
         setErrorMessage(null);
         setUploadSize(file.size);
@@ -330,17 +362,10 @@ export default function ProcessV4Page() {
             let packId = searchParams.get('pack');
 
             if (packId) {
+                console.log('[ProcessV4] Reusing existing pack', { packId });
                 setCurrentPackId(packId);
             } else {
-                const packRes = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pack_name: requestedPackName })
-                });
-
-                if (operationIdRef.current !== opId) return;
-                if (!packRes.ok) throw new Error('Failed to initialize pack server-side.');
-                const packData = await packRes.json();
+                const packData = await createPackOnServer(requestedPackName);
                 if (operationIdRef.current !== opId) return;
 
                 packId = packData.pack_id;
@@ -356,9 +381,11 @@ export default function ProcessV4Page() {
             if (!packId) throw new Error('Could not resolve an active pack ID.');
 
             setWorkflowStage('uploading');
+            console.log('[ProcessV4] Upload bootstrap ready', { packId, fileName: file.name });
             const uploadedSourceId = await uploadFile(packId, file);
             if (operationIdRef.current !== opId) return;
 
+            console.log('[ProcessV4] Upload registered with backend', { packId, uploadedSourceId });
             setCurrentSourceId(uploadedSourceId);
             upsertPackSource({
                 source_id: uploadedSourceId,
@@ -367,7 +394,42 @@ export default function ProcessV4Page() {
                 status: 'extracting',
             });
 
-            startPolling(packId, opId, uploadedSourceId);
+            // Mirror the more reliable v3 flow: give the backend a moment to persist
+            // the uploaded source, then refresh the pack before polling.
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            if (operationIdRef.current !== opId) return;
+
+            const refreshedPack = await fetchPackDetails(packId, 20000);
+            if (operationIdRef.current !== opId) return;
+
+            if (refreshedPack) {
+                const { sources } = applyPackDetails(refreshedPack, uploadedSourceId);
+                const confirmedSource =
+                    sources.find((source) => source.source_id === uploadedSourceId) ||
+                    sources.find((source) => (source.file_name || source.source_name) === file.name) ||
+                    null;
+
+                if (confirmedSource) {
+                    console.log('[ProcessV4] Confirmed uploaded source via pack refresh', {
+                        packId,
+                        sourceId: confirmedSource.source_id,
+                        status: confirmedSource.status,
+                    });
+                    setCurrentSourceId(confirmedSource.source_id);
+                    setBackendStatus(confirmedSource);
+                    startPolling(packId, opId, confirmedSource.source_id);
+                    return;
+                }
+
+                console.warn('[ProcessV4] Upload response returned, but pack refresh did not confirm source yet', {
+                    packId,
+                    uploadedSourceId,
+                    fileName: file.name,
+                    sourceCount: sources.length,
+                });
+            }
+
+            startPolling(packId, opId);
 
         } catch (error) {
             if (operationIdRef.current !== opId) return;
@@ -378,10 +440,21 @@ export default function ProcessV4Page() {
 
     const getAccessToken = async () => {
         if (session?.access_token) {
+            console.log('[ProcessV4] Using access token from AuthProvider session');
             return session.access_token;
         }
 
-        const { data: { session: fallbackSession } } = await supabase.auth.getSession();
+        console.log('[ProcessV4] Session missing in context, reading from Supabase');
+        const fallbackSessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Timed out while reading auth session.')), 8000);
+        });
+
+        const { data: { session: fallbackSession } } = await Promise.race([
+            fallbackSessionPromise,
+            timeoutPromise,
+        ]) as Awaited<typeof fallbackSessionPromise>;
+
         if (!fallbackSession) throw new Error('Authentication expired.');
         return fallbackSession.access_token;
     };
@@ -431,11 +504,37 @@ export default function ProcessV4Page() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('Authentication expired.');
 
+        console.log('[ProcessV4] Preparing upload XHR', { packId, fileName: file.name, fileSize: file.size });
         const formData = new FormData();
         formData.append('file', file);
 
         const sourceId = await new Promise<string>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
+            let settled = false;
+            let uploadStarted = false;
+            let startupTimeout: ReturnType<typeof setTimeout> | null = null;
+
+            const cleanup = () => {
+                if (startupTimeout) {
+                    clearTimeout(startupTimeout);
+                    startupTimeout = null;
+                }
+            };
+
+            const rejectOnce = (error: Error) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(error);
+            };
+
+            const resolveOnce = (nextSourceId: string) => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve(nextSourceId);
+            };
+
             xhr.open('POST', `${API_BASE_URL}/api/v2/packs/${packId}/sources`);
             xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
             xhr.timeout = 10 * 60 * 1000;
@@ -443,45 +542,66 @@ export default function ProcessV4Page() {
             abortControllerRef.current = { abort: () => xhr.abort() };
 
             xhr.addEventListener('loadstart', () => {
+                uploadStarted = true;
+                console.log('[ProcessV4] Upload loadstart', { fileName: file.name });
                 setUploadPercent((current) => (current > 0 ? current : 1));
             });
 
             xhr.upload.addEventListener('progress', (event) => {
+                uploadStarted = true;
+                console.log('[ProcessV4] Upload progress event', {
+                    fileName: file.name,
+                    loaded: event.loaded,
+                    total: event.total,
+                    lengthComputable: event.lengthComputable,
+                });
                 if (!event.lengthComputable) return;
                 setUploadPercent(Math.min(100, Math.round((event.loaded / event.total) * 100)));
             });
 
             xhr.addEventListener('load', async () => {
+                console.log('[ProcessV4] Upload request completed', { fileName: file.name, status: xhr.status });
                 if (xhr.status >= 200 && xhr.status < 300) {
                     setUploadPercent(100);
                     try {
                         const payload = JSON.parse(xhr.responseText) as { source_id?: string };
                         if (!payload.source_id) {
-                            reject(new Error('Upload succeeded but no source ID was returned.'));
+                            rejectOnce(new Error('Upload succeeded but no source ID was returned.'));
                             return;
                         }
-                        resolve(payload.source_id);
+                        resolveOnce(payload.source_id);
                     } catch {
-                        reject(new Error('Upload succeeded but the server response could not be read.'));
+                        rejectOnce(new Error('Upload succeeded but the server response could not be read.'));
                     }
                     return;
                 }
 
-                reject(new Error(`Server rejected upload: ${xhr.status} - ${xhr.responseText}`));
+                rejectOnce(new Error(`Server rejected upload: ${xhr.status} - ${xhr.responseText}`));
             });
 
             xhr.addEventListener('error', () => {
-                reject(new Error('Upload failed before the file reached the server.'));
+                console.error('[ProcessV4] Upload request errored', { fileName: file.name });
+                rejectOnce(new Error('Upload failed before the file reached the server.'));
             });
 
             xhr.addEventListener('timeout', () => {
-                reject(new Error('Upload timed out before the file finished sending.'));
+                console.error('[ProcessV4] Upload request timed out', { fileName: file.name });
+                rejectOnce(new Error('Upload timed out before the file finished sending.'));
             });
 
             xhr.addEventListener('abort', () => {
-                reject(new Error('Upload was cancelled.'));
+                console.warn('[ProcessV4] Upload request aborted', { fileName: file.name, uploadStarted });
+                rejectOnce(new Error(uploadStarted ? 'Upload was cancelled.' : 'Upload did not start. Please retry the upload.'));
             });
 
+            startupTimeout = setTimeout(() => {
+                if (!uploadStarted) {
+                    console.warn('[ProcessV4] Upload did not start within watchdog window', { fileName: file.name, packId });
+                    xhr.abort();
+                }
+            }, 15000);
+
+            console.log('[ProcessV4] Sending upload request', { fileName: file.name, packId });
             xhr.send(formData);
         });
 
@@ -520,6 +640,25 @@ export default function ProcessV4Page() {
         return packDetails;
     };
 
+    const createPackOnServer = async (requestedPackName: string, timeoutMs = 20000) => {
+        console.log('[ProcessV4] Creating pack', { requestedPackName });
+
+        const response = await fetchWithSession(`${API_BASE_URL}/api/v2/packs`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pack_name: requestedPackName }),
+        }, timeoutMs);
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(errorText || 'Failed to create pack.');
+        }
+
+        const packData = await response.json() as { pack_id: string; pack_name?: string };
+        console.log('[ProcessV4] Pack created', { packId: packData.pack_id });
+        return packData;
+    };
+
     const createPackDraft = async () => {
         if (currentPackId || isCreatingPackDraft) return;
 
@@ -527,17 +666,7 @@ export default function ProcessV4Page() {
 
         try {
             setIsCreatingPackDraft(true);
-            const packRes = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pack_name: trimmedPackName })
-            });
-
-            if (!packRes.ok) {
-                throw new Error('Failed to create pack.');
-            }
-
-            const packData = await packRes.json();
+            const packData = await createPackOnServer(trimmedPackName);
             const newPackId = packData.pack_id as string;
 
             setCurrentPackId(newPackId);
@@ -552,6 +681,21 @@ export default function ProcessV4Page() {
         }
     };
 
+    const ensureActivePack = async (fallbackName: string) => {
+        if (currentPackId) return currentPackId;
+
+        const trimmedPackName = packName.trim() || fallbackName;
+        const packData = await createPackOnServer(trimmedPackName);
+        const newPackId = packData.pack_id as string;
+
+        setCurrentPackId(newPackId);
+        setPackName(trimmedPackName);
+        setSavedPackName(trimmedPackName);
+        router.replace(`/process-v4?pack=${newPackId}`);
+
+        return newPackId;
+    };
+
     const savePackName = async () => {
         if (!currentPackId || isSavingPackName) return;
 
@@ -560,7 +704,11 @@ export default function ProcessV4Page() {
 
         try {
             setIsSavingPackName(true);
-            const response = await fetchWithSession(`${API_BASE_URL}/api/v2/packs/${currentPackId}`, {
+            savePackNameTimeoutRef.current = setTimeout(() => {
+                setIsSavingPackName(false);
+            }, 15000);
+
+            const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs/${currentPackId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pack_name: trimmedPackName }),
@@ -571,17 +719,25 @@ export default function ProcessV4Page() {
                 throw new Error(errorText || 'Failed to rename pack.');
             }
 
-            setPackName(trimmedPackName);
-            setSavedPackName(trimmedPackName);
+            const updatedPack = await response.json().catch(() => null) as PackDetails | null;
+            const nextPackName = updatedPack?.pack_name?.trim() || trimmedPackName;
+
+            setPackName(nextPackName);
+            setSavedPackName(nextPackName);
         } catch (error) {
             console.error('[ProcessV4] Failed to rename pack:', error);
             alert(`Could not rename pack: ${getErrorMessage(error)}`);
         } finally {
+            if (savePackNameTimeoutRef.current) {
+                clearTimeout(savePackNameTimeoutRef.current);
+                savePackNameTimeoutRef.current = null;
+            }
             setIsSavingPackName(false);
         }
     };
 
     const startPolling = (packId: string, opId: number, knownSourceId?: string) => {
+        console.log('[ProcessV4] Starting polling', { packId, opId, knownSourceId });
         clearPollingTimers();
         pollingActiveRef.current = true;
 
@@ -800,6 +956,83 @@ export default function ProcessV4Page() {
         }
     };
 
+    const handleUrlUpload = async () => {
+        const trimmedUrl = urlInput.trim();
+        if (!trimmedUrl || !user) return;
+
+        try {
+            const packId = await ensureActivePack('My Context Pack');
+            setShowUrlModal(false);
+            setIsProcessing(true);
+            setErrorMessage(null);
+            setWorkflowStage('extracting');
+
+            const response = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/api/v2/packs/${packId}/sources`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: trimmedUrl }),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to upload URL.');
+            }
+
+            const payload = await response.json() as { source_id?: string };
+            if (payload.source_id) {
+                setCurrentSourceId(payload.source_id);
+            }
+
+            setUrlInput('');
+            startPolling(packId, ++operationIdRef.current, payload.source_id);
+        } catch (error) {
+            console.error('[ProcessV4] URL upload error:', error);
+            handleError(getErrorMessage(error));
+        }
+    };
+
+    const handleTextUpload = async () => {
+        const trimmedText = textInput.trim();
+        if (!trimmedText || !user) return;
+
+        try {
+            const packId = await ensureActivePack('My Context Pack');
+            setShowTextModal(false);
+            setIsProcessing(true);
+            setErrorMessage(null);
+            setWorkflowStage('extracting');
+
+            const response = await makeAuthenticatedRequest(
+                `${API_BASE_URL}/api/v2/packs/${packId}/sources`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text_content: trimmedText,
+                        source_name: `Pasted Text (${new Date().toLocaleTimeString()})`,
+                    }),
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to upload text.');
+            }
+
+            const payload = await response.json() as { source_id?: string };
+            if (payload.source_id) {
+                setCurrentSourceId(payload.source_id);
+            }
+
+            setTextInput('');
+            startPolling(packId, ++operationIdRef.current, payload.source_id);
+        } catch (error) {
+            console.error('[ProcessV4] Text upload error:', error);
+            handleError(getErrorMessage(error));
+        }
+    };
+
     const handleError = (msg: string) => {
         pollingActiveRef.current = false;
         setErrorMessage(msg);
@@ -824,14 +1057,12 @@ export default function ProcessV4Page() {
 
     const creditsNeeded = creditInfo?.creditsRequired || 0;
     const creditsHave = creditInfo?.userCredits ?? 0;
-    const creditShortfall = Math.max(0, creditsNeeded - creditsHave);
     const needsCreditPurchase = !!(creditInfo?.needsPurchase && workflowStage !== 'analyzing' && workflowStage !== 'completed');
     const isReadyForAnalysis = backendStatus?.status === 'ready_for_analysis' && workflowStage !== 'analyzing' && workflowStage !== 'completed';
     const packNameInputValue = packName || '';
     const packNameDisplay = savedPackName || packNameInputValue || 'Untitled Pack';
     const canSavePackName = !!currentPackId && !!packName.trim() && packName.trim() !== savedPackName;
     const canCreatePackDraft = !currentPackId && !!packName.trim();
-    const canAddSource = !!user && workflowStage === 'completed';
     const chunkCount = backendStatus?.total_chunks ?? 0;
     const chunkLabel = chunkCount > 0 ? `${chunkCount} chunk${chunkCount === 1 ? '' : 's'}` : 'Chunk count pending';
     const uploadMb = uploadSize / 1024 / 1024;
@@ -927,7 +1158,6 @@ export default function ProcessV4Page() {
 
         return null;
     })();
-    const workflowTone = 'border-white/10 bg-white/[0.04] text-white';
     const getSourceLabel = (source: SourceStatus) => {
         return source.source_name || source.file_name || `Source ${source.source_id.slice(0, 6)}`;
     };
@@ -950,21 +1180,56 @@ export default function ProcessV4Page() {
     };
 
     const triggerSourcePicker = () => {
-        if (!canAddSource) return;
+        if (!user) return;
+        if (filePickerRef.current) {
+            filePickerRef.current.value = '';
+        }
+        console.log('[ProcessV4] Opening file picker');
         filePickerRef.current?.click();
     };
 
+    const sourceTiles: SourceTile[] = [
+        {
+            key: 'chat-export',
+            title: 'GPT/Claude Chat Export',
+            description: 'Upload conversations.json or ZIP',
+            icon: MessageSquare,
+            action: triggerSourcePicker,
+            help: true,
+        },
+        {
+            key: 'documents',
+            title: 'Documents',
+            description: 'PDF, TXT, DOCX, CSV',
+            icon: FileText,
+            action: triggerSourcePicker,
+        },
+        {
+            key: 'paste-url',
+            title: 'Paste URL',
+            description: 'ChatGPT shared links',
+            icon: Link2,
+            action: () => setShowUrlModal(true),
+        },
+        {
+            key: 'paste-text',
+            title: 'Paste Text',
+            description: 'Direct text input',
+            icon: AlignLeft,
+            action: () => setShowTextModal(true),
+        },
+    ];
+
     return (
-        <div className="min-h-screen bg-[#0a1214] text-white">
+        <div className="min-h-screen bg-[#121213] text-white">
             <style jsx>{`
                 @keyframes indeterminate-sweep {
                     0% { transform: translateX(-40%); }
                     100% { transform: translateX(120%); }
                 }
             `}</style>
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(72,126,109,0.16),transparent_28%),radial-gradient(circle_at_85%_10%,rgba(255,255,255,0.04),transparent_22%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_22%)]" />
             {showEmailSentToast && (
-                <div className="fixed right-6 top-6 z-50 max-w-sm rounded-2xl border border-emerald-400/20 bg-[#101a18]/95 px-4 py-3 shadow-[0_16px_48px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+                <div className="fixed right-6 top-6 z-50 max-w-sm rounded-xl border border-emerald-400/20 bg-[#181818] px-4 py-3 shadow-[0_16px_48px_rgba(0,0,0,0.35)]">
                     <div className="flex items-start gap-3">
                         <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400/12">
                             <Check className="h-4 w-4 text-emerald-300" />
@@ -979,7 +1244,7 @@ export default function ProcessV4Page() {
                 </div>
             )}
 
-            <div className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col px-6 py-8 sm:px-8 lg:px-10">
+            <div className="relative flex min-h-screen w-full flex-col">
                 <input
                     ref={filePickerRef}
                     type="file"
@@ -989,52 +1254,33 @@ export default function ProcessV4Page() {
                         e.currentTarget.value = '';
                     }}
                     className="hidden"
-                    disabled={!canAddSource}
+                    disabled={!user}
                 />
-                <div className="mb-6 flex items-center justify-between border-b border-white/8 pb-5">
-                    <button
-                        onClick={() => router.push('/packs')}
-                        className="text-sm text-[#92a09c] transition-colors hover:text-white"
-                    >
-                        ← All Context Packs
-                    </button>
-
-                    <div className="flex items-center gap-3">
-                        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] uppercase tracking-[0.24em] ${workflowTone}`}>
-                            <Activity className="h-3.5 w-3.5" />
-                            {workflowSummary.label}
-                        </div>
-                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.24em] text-[#8d9993]">
-                            v4.0
-                        </span>
-                    </div>
-                </div>
-
-                <div className="grid gap-6 xl:grid-cols-[250px_minmax(0,1fr)_280px]">
-                    <aside className="rounded-[24px] border border-white/10 bg-[#111517]/96 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
-                        <div className="border-b border-white/8 px-5 py-4">
+                <div className="grid min-h-screen grid-cols-1 xl:grid-cols-[336px_minmax(0,1fr)_336px]">
+                    <aside className="border-b border-r border-[#2a2a2c] bg-[#1a1a1b] xl:border-b-0">
+                        <div className="border-b border-[#2a2a2c] px-5 py-5">
                             <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2 text-[#cdd5d1]">
+                                <div className="flex items-center gap-2 text-[#d7d7da]">
                                     <FolderOpen className="h-4 w-4" />
-                                    <p className="text-sm font-medium text-white">{packNameDisplay}</p>
+                                    <p className="text-[15px] font-medium text-white">{packNameDisplay}</p>
                                 </div>
-                                <span className={`rounded-md px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] ${workflowTone}`}>
-                                    {workflowSummary.label}
+                                <span className="rounded-md bg-[#2563eb] px-3 py-1.5 text-xs font-semibold text-white">
+                                    V3 TEST
                                 </span>
                             </div>
                         </div>
 
-                        <div className="px-5 py-4">
+                        <div className="px-3 py-4">
                             <div className="flex items-center justify-between gap-3">
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8f88]">Sources</p>
-                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-[#aab6b1]">
+                                <p className="text-xs font-semibold uppercase tracking-[0.04em] text-[#8f8f94]">Sources ({packSources.length})</p>
+                                <span className="rounded-full border border-[#333336] bg-[#232325] px-2.5 py-1 text-[11px] text-[#aab6b1]">
                                     {packSources.length}
                                 </span>
                             </div>
 
                             <div className="mt-4 space-y-3">
                                 {packSources.length === 0 ? (
-                                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-5 text-sm text-[#7f8f88]">
+                                    <div className="rounded-xl border border-dashed border-[#353538] bg-[#232325] px-4 py-5 text-sm text-[#7f7f85]">
                                         No sources yet
                                     </div>
                                 ) : (
@@ -1045,23 +1291,23 @@ export default function ProcessV4Page() {
                                         return (
                                             <div
                                                 key={source.source_id}
-                                                className={`rounded-2xl border px-4 py-4 transition-colors ${
+                                                className={`rounded-xl border px-4 py-4 transition-colors ${
                                                     isActiveSource
-                                                        ? 'border-emerald-400/24 bg-emerald-400/[0.08]'
-                                                        : 'border-white/8 bg-white/[0.03]'
+                                                        ? 'border-[#4a4a51] bg-[#313133]'
+                                                        : 'border-[#353538] bg-[#313133]'
                                                 }`}
                                             >
                                                 <div className="flex items-start gap-3">
-                                                    <div className="mt-0.5 rounded-lg border border-white/8 bg-white/[0.04] p-2">
-                                                        <FileText className="h-4 w-4 text-[#b6c1bc]" />
+                                                    <div className="mt-0.5 rounded-lg border border-[#404044] bg-[#252527] p-2">
+                                                        <FileText className="h-4 w-4 text-[#bdbdc3]" />
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <p className="truncate text-sm font-medium text-white">
                                                             {getSourceLabel(source)}
                                                         </p>
                                                         <div className="mt-2 flex items-center justify-between gap-3">
-                                                            <p className="text-xs text-[#98a6a0]">
-                                                                {sourceStatus}
+                                                            <p className="text-xs text-[#9d9da3]">
+                                                                {sourceStatus === 'completed' ? 'Completed' : sourceStatus}
                                                             </p>
                                                             {typeof source.total_chunks === 'number' && source.total_chunks > 0 && (
                                                                 <span className="text-xs text-[#aab6b1]">{source.total_chunks} chunks</span>
@@ -1077,21 +1323,21 @@ export default function ProcessV4Page() {
                         </div>
                     </aside>
 
-                    <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#0d1719]/92 shadow-[0_28px_80px_rgba(0,0,0,0.26)] backdrop-blur-sm">
-                        <div className="border-b border-white/8 px-6 py-6 sm:px-8">
-                            <div className="mb-5">
-                                <h1 className="text-2xl font-semibold tracking-[-0.03em] text-white">
+                    <section className="bg-[#101011]">
+                        <div className="mx-auto max-w-[980px] px-8 py-10">
+                            <div className="mb-7">
+                                <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-white">
                                     {currentPackId ? packNameDisplay : 'Create Pack'}
                                 </h1>
-                                <p className="mt-1 text-sm text-[#8ea099]">
-                                    {workflowStage === 'completed' ? 'Pack ready' : workflowSummary.title}
+                                <p className="mt-1 text-[15px] text-[#8b8b93]">
+                                    Upload your content to create a portable context pack
                                 </p>
                             </div>
-                            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+                            <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end">
                                 <div className="flex-1">
                                     <label
                                         htmlFor="pack-name"
-                                        className="mb-2 block text-[11px] uppercase tracking-[0.24em] text-[#7f8f88]"
+                                        className="mb-2 block text-[11px] uppercase tracking-[0.18em] text-[#7f7f85]"
                                     >
                                         Pack name
                                     </label>
@@ -1100,11 +1346,6 @@ export default function ProcessV4Page() {
                                         type="text"
                                         value={packNameInputValue}
                                         onChange={(e) => setPackName(e.target.value)}
-                                        onBlur={() => {
-                                            if (canSavePackName) {
-                                                void savePackName();
-                                            }
-                                        }}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && canSavePackName) {
                                                 e.preventDefault();
@@ -1113,14 +1354,14 @@ export default function ProcessV4Page() {
                                         }}
                                         placeholder="Untitled Pack"
                                         maxLength={120}
-                                        className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-[#71807a] focus:border-white/20 focus:bg-white/[0.06]"
+                                        className="w-full rounded-xl border border-[#303033] bg-[#18181a] px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-[#6f6f76] focus:border-[#45454a]"
                                     />
                                 </div>
                                 {currentPackId ? (
                                     <button
                                         onClick={() => void savePackName()}
                                         disabled={!canSavePackName || isSavingPackName}
-                                        className="rounded-full border border-white/12 bg-white/[0.04] px-5 py-3 text-sm text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45"
+                                        className="rounded-xl border border-[#303033] bg-[#2f2f31] px-5 py-3 text-sm text-white transition-colors hover:bg-[#3a3a3d] disabled:cursor-not-allowed disabled:opacity-45"
                                     >
                                         {isSavingPackName ? 'Saving…' : 'Save'}
                                     </button>
@@ -1128,242 +1369,236 @@ export default function ProcessV4Page() {
                                     <button
                                         onClick={() => void createPackDraft()}
                                         disabled={!canCreatePackDraft || isCreatingPackDraft}
-                                        className="rounded-full border border-white/12 bg-white/[0.04] px-5 py-3 text-sm text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-45"
+                                        className="rounded-xl border border-[#303033] bg-[#2f2f31] px-5 py-3 text-sm text-white transition-colors hover:bg-[#3a3a3d] disabled:cursor-not-allowed disabled:opacity-45"
                                     >
                                         {isCreatingPackDraft ? 'Saving…' : 'Save name'}
                                     </button>
                                 )}
                             </div>
-                        </div>
-
-                        <div className="px-6 py-6 sm:px-8">
-                        {!isProcessing ? (
-                            <label className="group block cursor-pointer rounded-[24px] border border-dashed border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] p-7 transition-all hover:border-white/24 hover:bg-white/[0.04]">
-                                <input
-                                    type="file"
-                                    accept=".pdf,.txt,.doc,.docx,.csv,.json,.zip"
-                                    onChange={(e) => handleFilesDropped(e.target.files)}
-                                    className="hidden"
-                                    disabled={!user}
-                                />
-                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] transition-colors group-hover:border-white/20 group-hover:bg-white/[0.08]">
-                                    <Upload className="h-5 w-5 text-[#d7dfdb]" />
-                                </div>
-                                <h3 className="mt-6 text-2xl font-semibold tracking-[-0.03em] text-white">
-                                    Upload source
-                                </h3>
-                                <div className="mt-6 flex flex-wrap gap-2">
-                                    {ACCEPTED_FORMATS.map((format) => (
-                                        <span
-                                            key={format}
-                                            className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-[#c9d1cd]"
-                                        >
-                                            {format}
-                                        </span>
-                                    ))}
-                                </div>
-                                {!user && (
-                                    <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-400/8 px-4 py-2 text-xs text-red-300">
-                                        <AlertCircle className="h-3.5 w-3.5" />
-                                        Sign in
+                            {workflowStage === 'completed' && (
+                                <div className="mb-6 flex items-center justify-between rounded-xl border border-[#303033] bg-[#1a1a1b] px-5 py-4">
+                                    <div className="flex items-center gap-3">
+                                        <Check className="h-5 w-5 text-emerald-400" />
+                                        <p className="text-base font-medium text-white">Analysis complete</p>
                                     </div>
-                                )}
-                            </label>
-                        ) : workflowStage === 'error' ? (
-                            <div className="rounded-[28px] border border-red-400/16 bg-[linear-gradient(180deg,rgba(127,29,29,0.18),rgba(12,18,16,0.9))] p-8">
-                                <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-                                    <div className="max-w-xl">
-                                        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-400/16 bg-red-400/10">
-                                            <AlertCircle className="h-5 w-5 text-red-300" />
-                                        </div>
-                                        <p className="text-[11px] uppercase tracking-[0.24em] text-red-200/80">Error</p>
-                                        <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
-                                            {workflowSummary.title}
-                                        </h2>
-                                    </div>
-
                                     <button
-                                        onClick={cancelWorkflow}
-                                        className="inline-flex items-center gap-2 self-start rounded-full border border-white/14 bg-white/[0.05] px-5 py-2.5 text-sm text-white transition-colors hover:bg-white/[0.1]"
+                                        onClick={() => setShowEmailSentToast(false)}
+                                        className="text-[#6e6e75] transition-colors hover:text-white"
+                                        aria-label="Dismiss"
                                     >
-                                        <RefreshCw className="h-3.5 w-3.5" />
-                                        Reset
+                                        <X className="h-4 w-4" />
                                     </button>
                                 </div>
-                            </div>
-                        ) : needsCreditPurchase ? (
-                            <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101618]">
-                                <div className="grid gap-0 lg:grid-cols-[1fr_320px]">
-                                    <div className="border-b border-white/8 p-8 lg:border-b-0 lg:border-r">
-                                        <p className="text-[11px] uppercase tracking-[0.24em] text-[#8f9894]">Ready for analysis</p>
-                                        <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
-                                            Credits are needed to continue.
-                                        </h2>
-                                        <div className="mt-8 flex flex-wrap gap-3">
-                                            {creditsHave > 0 && (
+                            )}
+
+                            {workflowStage === 'error' ? (
+                                <div className="rounded-2xl border border-red-400/16 bg-[linear-gradient(180deg,rgba(127,29,29,0.18),rgba(12,18,16,0.9))] p-8">
+                                    <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+                                        <div className="max-w-xl">
+                                            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-red-400/16 bg-red-400/10">
+                                                <AlertCircle className="h-5 w-5 text-red-300" />
+                                            </div>
+                                            <p className="text-[11px] uppercase tracking-[0.24em] text-red-200/80">Error</p>
+                                            <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
+                                                {workflowSummary.title}
+                                            </h2>
+                                        </div>
+
+                                        <button
+                                            onClick={cancelWorkflow}
+                                            className="inline-flex items-center gap-2 self-start rounded-full border border-white/14 bg-white/[0.05] px-5 py-2.5 text-sm text-white transition-colors hover:bg-white/[0.1]"
+                                        >
+                                            <RefreshCw className="h-3.5 w-3.5" />
+                                            Reset
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : needsCreditPurchase ? (
+                                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#101618]">
+                                    <div className="grid gap-0 lg:grid-cols-[1fr_320px]">
+                                        <div className="border-b border-white/8 p-8 lg:border-b-0 lg:border-r">
+                                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#8f9894]">Ready for analysis</p>
+                                            <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
+                                                Credits are needed to continue.
+                                            </h2>
+                                            <div className="mt-8 flex flex-wrap gap-3">
+                                                {creditsHave > 0 && (
+                                                    <button
+                                                        onClick={triggerManualAnalysis}
+                                                        disabled={isStartingAnalysis}
+                                                        className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#ebefed]"
+                                                    >
+                                                        {isStartingAnalysis ? 'Starting…' : `Analyze with ${creditsHave} credits`}
+                                                    </button>
+                                                )}
+                                                <a
+                                                    href="/pricing"
+                                                    className="rounded-full border border-white/12 px-5 py-2.5 text-sm text-white transition-colors hover:bg-white/[0.06]"
+                                                >
+                                                    Add credits
+                                                </a>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-px bg-white/8 p-px lg:grid-cols-1">
+                                            <div className="bg-[#111916] p-6">
+                                                <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">Chunks extracted</p>
+                                                <p className="mt-3 text-3xl font-semibold text-white">{chunkCount}</p>
+                                            </div>
+                                            <div className="bg-[#111916] p-6">
+                                                <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">Credit balance</p>
+                                                <p className="mt-3 text-3xl font-semibold text-white">
+                                                    {creditsHave}
+                                                    <span className="mx-1 text-[#54605b]">/</span>
+                                                    <span className="text-white">{creditsNeeded}</span>
+                                                </p>
+                                                {stageEstimate && (
+                                                    <p className="mt-2 text-sm text-[#9da8a1]">
+                                                        {stageEstimate}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : isReadyForAnalysis ? (
+                                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#101618]">
+                                    <div className="grid gap-0 lg:grid-cols-[1fr_280px]">
+                                        <div className="border-b border-white/8 p-8 lg:border-b-0 lg:border-r">
+                                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#8f9894]">Ready for analysis</p>
+                                            <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
+                                                {workflowSummary.title}
+                                            </h2>
+                                            <div className="mt-8 flex flex-wrap gap-3">
                                                 <button
                                                     onClick={triggerManualAnalysis}
                                                     disabled={isStartingAnalysis}
                                                     className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#ebefed]"
                                                 >
-                                                    {isStartingAnalysis ? 'Starting…' : `Analyze with ${creditsHave} credits`}
+                                                    {isStartingAnalysis ? 'Starting…' : 'Analyze'}
                                                 </button>
-                                            )}
-                                            <a
-                                                href="/pricing"
-                                                className="rounded-full border border-white/12 px-5 py-2.5 text-sm text-white transition-colors hover:bg-white/[0.06]"
-                                            >
-                                                Add credits
-                                            </a>
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <div className="grid grid-cols-2 gap-px bg-white/8 p-px lg:grid-cols-1">
-                                        <div className="bg-[#111916] p-6">
-                                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">Chunks extracted</p>
-                                            <p className="mt-3 text-3xl font-semibold text-white">{chunkCount}</p>
-                                        </div>
-                                        <div className="bg-[#111916] p-6">
-                                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">Credit balance</p>
-                                            <p className="mt-3 text-3xl font-semibold text-white">
-                                                {creditsHave}
-                                                <span className="mx-1 text-[#54605b]">/</span>
-                                                <span className="text-white">{creditsNeeded}</span>
-                                            </p>
-                                            {stageEstimate && (
-                                                <p className="mt-2 text-sm text-[#9da8a1]">
-                                                    {stageEstimate}
-                                                </p>
-                                            )}
+                                        <div className="grid gap-px bg-white/8 p-px">
+                                            <div className="bg-[#111916] p-6">
+                                                <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">Chunks</p>
+                                                <p className="mt-3 text-3xl font-semibold text-white">{chunkCount || 'Pending'}</p>
+                                            </div>
+                                            <div className="bg-[#111916] p-6">
+                                                <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">ETA</p>
+                                                {stageEstimate && (
+                                                    <p className="mt-3 text-sm text-[#c9d1cd]">
+                                                        {stageEstimate}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        ) : isReadyForAnalysis ? (
-                            <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101618]">
-                                <div className="grid gap-0 lg:grid-cols-[1fr_280px]">
-                                    <div className="border-b border-white/8 p-8 lg:border-b-0 lg:border-r">
-                                        <p className="text-[11px] uppercase tracking-[0.24em] text-[#8f9894]">Ready for analysis</p>
-                                        <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
-                                            {workflowSummary.title}
-                                        </h2>
-                                        <div className="mt-8 flex flex-wrap gap-3">
-                                            <button
-                                                onClick={triggerManualAnalysis}
-                                                disabled={isStartingAnalysis}
-                                                className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#ebefed]"
-                                            >
-                                                {isStartingAnalysis ? 'Starting…' : 'Analyze'}
-                                            </button>
+                            ) : isProcessing && workflowStage !== 'completed' ? (
+                                <div className="overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(16,27,23,0.94),rgba(10,18,15,0.98))] p-8">
+                                    <p className="text-[11px] uppercase tracking-[0.24em] text-[#8ea096]">
+                                        {workflowSummary.label}
+                                    </p>
+                                    <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
+                                        {workflowSummary.title}
+                                    </h2>
+                                    <div className="mt-8">
+                                        <div className="h-2 overflow-hidden rounded-full bg-white/8">
+                                            <div
+                                                className="relative h-full rounded-full transition-[width] duration-500 ease-out"
+                                                style={{
+                                                    width: visibleProgress !== null ? `${visibleProgress}%` : '34%',
+                                                    background: 'linear-gradient(90deg, rgba(111,193,157,0.18), rgba(173,243,215,0.95))',
+                                                    animation: visibleProgress === null ? 'indeterminate-sweep 1.7s ease-in-out infinite alternate' : 'none',
+                                                    boxShadow: '0 0 24px rgba(152, 233, 204, 0.28)'
+                                                }}
+                                            />
                                         </div>
-                                    </div>
-
-                                    <div className="grid gap-px bg-white/8 p-px">
-                                        <div className="bg-[#111916] p-6">
-                                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">Chunks</p>
-                                            <p className="mt-3 text-3xl font-semibold text-white">{chunkCount || 'Pending'}</p>
-                                        </div>
-                                        <div className="bg-[#111916] p-6">
-                                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">ETA</p>
-                                            {stageEstimate && (
-                                                <p className="mt-3 text-sm text-[#c9d1cd]">
-                                                    {stageEstimate}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : workflowStage === 'completed' ? (
-                            <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101618]">
-                                <div className="grid gap-0 lg:grid-cols-[1fr_320px]">
-                                    <div className="border-b border-white/8 p-8 lg:border-b-0 lg:border-r">
-                                        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-                                            <Check className="h-5 w-5 text-white" />
-                                        </div>
-                                        <p className="text-[11px] uppercase tracking-[0.24em] text-[#8f9894]">Complete</p>
-                                        <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
-                                            {workflowSummary.title}
-                                        </h2>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-px bg-white/8 p-px lg:grid-cols-1">
-                                        <div className="bg-[#111916] p-6">
-                                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">Processed</p>
-                                            <p className="mt-3 text-3xl font-semibold text-white">{chunkLabel}</p>
-                                        </div>
-                                        <div className="bg-[#111916] p-6">
-                                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#7f8d87]">Pack</p>
-                                            <p className="mt-3 text-sm text-[#c9d1cd]">{packNameDisplay}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(16,27,23,0.94),rgba(10,18,15,0.98))] p-8">
-                                <p className="text-[11px] uppercase tracking-[0.24em] text-[#8ea096]">
-                                    {workflowSummary.label}
-                                </p>
-                                <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
-                                    {workflowSummary.title}
-                                </h2>
-                                <div className="mt-8">
-                                    <div className="h-2 overflow-hidden rounded-full bg-white/8">
-                                        <div
-                                            className="relative h-full rounded-full transition-[width] duration-500 ease-out"
-                                            style={{
-                                                width: visibleProgress !== null ? `${visibleProgress}%` : '34%',
-                                                background: 'linear-gradient(90deg, rgba(111,193,157,0.18), rgba(173,243,215,0.95))',
-                                                animation: visibleProgress === null ? 'indeterminate-sweep 1.7s ease-in-out infinite alternate' : 'none',
-                                                boxShadow: '0 0 24px rgba(152, 233, 204, 0.28)'
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-[#b5c0bb]">
-                                        <div className="flex flex-col gap-1">
-                                            <span>
-                                                {workflowStage === 'uploading'
-                                                    ? 'Upload in progress'
-                                                    : workflowStage === 'analyzing'
-                                                        ? 'Analysis running in the background'
-                                                        : 'Extraction and chunking in progress'}
-                                            </span>
-                                            {progressMeta && (
-                                                <span className="text-xs text-[#91a39b]">
-                                                    {progressMeta}
+                                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-[#b5c0bb]">
+                                            <div className="flex flex-col gap-1">
+                                                <span>
+                                                    {workflowStage === 'uploading'
+                                                        ? 'Upload in progress'
+                                                        : workflowStage === 'analyzing'
+                                                            ? 'Analysis running in the background'
+                                                            : 'Extraction and chunking in progress'}
                                                 </span>
-                                            )}
+                                                {progressMeta && (
+                                                    <span className="text-xs text-[#91a39b]">
+                                                        {progressMeta}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {stageEstimate && <span>{stageEstimate}</span>}
                                         </div>
-                                        {stageEstimate && <span>{stageEstimate}</span>}
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            ) : null}
+
+                            {(!isProcessing || workflowStage === 'completed') && (
+                                <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${!user ? 'opacity-60' : ''}`}>
+                                    {sourceTiles.map((tile) => {
+                                        const Icon = tile.icon;
+                                        const content = (
+                                            <>
+                                                <div className="mb-6 flex h-[66px] w-[66px] items-center justify-center rounded-full bg-[#2f2f31]">
+                                                    <Icon className="h-8 w-8 text-[#d8d8dc]" />
+                                                </div>
+                                                <h3 className="text-[22px] font-semibold tracking-[-0.03em] text-white">
+                                                    {tile.title}
+                                                </h3>
+                                                <p className="mt-2 text-sm font-medium text-[#707078]">
+                                                    {tile.description}
+                                                </p>
+                                                {tile.help && (
+                                                    <a
+                                                        href="https://chatgpt.com/#settings/DataControls"
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="absolute right-5 top-5 text-[#9a9aa1] transition-colors hover:text-white"
+                                                        title="Where do I get this?"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <HelpCircle className="h-5 w-5" />
+                                                    </a>
+                                                )}
+                                            </>
+                                        );
+
+                                        const sharedClassName = `relative flex h-[220px] flex-col items-center justify-center rounded-2xl border border-[#303033] bg-[#1a1a1b] px-8 text-center transition-colors ${
+                                            user ? 'hover:border-[#4a4a50] hover:bg-[#202022]' : 'cursor-not-allowed'
+                                        }`;
+
+                                        return (
+                                            <button
+                                                key={tile.key}
+                                                onClick={tile.action}
+                                                disabled={!user}
+                                                className={sharedClassName}
+                                            >
+                                                {content}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            {!user && (
+                                <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-400/8 px-4 py-2 text-xs text-red-300">
+                                    <AlertCircle className="h-3.5 w-3.5" />
+                                    Sign in to add sources
+                                </div>
+                            )}
                         </div>
                     </section>
 
-                    <aside className="rounded-[24px] border border-white/10 bg-[#111517]/96 p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
-                        <div className="mb-5 border-b border-white/8 pb-4">
-                            <p className="text-sm font-medium text-white">Pack Actions</p>
+                    <aside className="border-l border-[#2a2a2c] bg-[#1a1a1b] p-5">
+                        <div className="mb-5 border-b border-[#2a2a2c] pb-4">
+                            <p className="text-[15px] font-semibold text-white">Pack Actions</p>
                         </div>
                         {currentPackId && (
                             <div className="grid gap-3">
-                                {canAddSource && (
-                                    <button
-                                        onClick={triggerSourcePicker}
-                                        className="flex items-center justify-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-[#ebefed]"
-                                    >
-                                        <Upload className="h-4 w-4" />
-                                        Add source
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => currentPackId && router.push(`/tree/${currentPackId}`)}
-                                    className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
-                                >
-                                    <GitBranch className="h-4 w-4" />
-                                    Memory tree
-                                </button>
                                 <button
                                     onClick={async () => {
                                         if (!currentPackId) return;
@@ -1374,10 +1609,10 @@ export default function ProcessV4Page() {
                                             );
                                         } catch (e) { console.error(e); }
                                     }}
-                                    className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
+                                    className="flex items-center justify-center gap-2 rounded-xl border border-[#353538] bg-[#343436] px-4 py-4 text-sm font-medium text-white transition-colors hover:bg-[#3b3b3e]"
                                 >
                                     <Download className="h-4 w-4" />
-                                    Download pack
+                                    Download Pack
                                 </button>
                                 <button
                                     onClick={async () => {
@@ -1390,16 +1625,95 @@ export default function ProcessV4Page() {
                                             );
                                         } catch (e) { console.error(e); }
                                     }}
-                                    className="flex items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.05] px-4 py-3 text-sm text-white transition-colors hover:bg-white/[0.1]"
+                                    className="flex items-center justify-center gap-2 rounded-xl border border-[#353538] bg-[#343436] px-4 py-4 text-sm font-medium text-white transition-colors hover:bg-[#3b3b3e]"
                                 >
                                     <Download className="h-4 w-4" />
-                                    Download tree
+                                    Download Tree JSON
+                                </button>
+                                <button
+                                    onClick={() => currentPackId && router.push(`/tree/${currentPackId}`)}
+                                    className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-4 text-sm font-medium text-[#171717] transition-colors hover:bg-[#ededed]"
+                                >
+                                    <GitBranch className="h-4 w-4" />
+                                    View Memory Tree
                                 </button>
                             </div>
                         )}
                     </aside>
                 </div>
             </div>
+
+            {showUrlModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+                    <div className="w-full max-w-2xl rounded-2xl border border-[#303033] bg-[#18181a] p-8">
+                        <div className="mb-6 flex items-center justify-between">
+                            <h3 className="text-xl font-semibold text-white">Paste URL</h3>
+                            <button
+                                onClick={() => setShowUrlModal(false)}
+                                className="text-[#7d7d84] transition-colors hover:text-white"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <p className="mb-4 text-sm text-[#8f8f96]">
+                            Paste a ChatGPT shared link and we&apos;ll add it to this pack.
+                        </p>
+
+                        <input
+                            type="url"
+                            value={urlInput}
+                            onChange={(e) => setUrlInput(e.target.value)}
+                            placeholder="https://chatgpt.com/share/..."
+                            className="mb-4 w-full rounded-xl border border-[#303033] bg-[#101011] px-4 py-3 text-white outline-none transition-colors placeholder:text-[#686870] focus:border-[#45454a]"
+                        />
+
+                        <button
+                            onClick={() => void handleUrlUpload()}
+                            disabled={!urlInput.trim()}
+                            className="w-full rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-[#ededed] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-[#818188]"
+                        >
+                            Add URL Source
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {showTextModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+                    <div className="w-full max-w-3xl rounded-2xl border border-[#303033] bg-[#18181a] p-8">
+                        <div className="mb-6 flex items-center justify-between">
+                            <h3 className="text-xl font-semibold text-white">Paste Text</h3>
+                            <button
+                                onClick={() => setShowTextModal(false)}
+                                className="text-[#7d7d84] transition-colors hover:text-white"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <p className="mb-4 text-sm text-[#8f8f96]">
+                            Paste direct text input to create a source.
+                        </p>
+
+                        <textarea
+                            value={textInput}
+                            onChange={(e) => setTextInput(e.target.value)}
+                            placeholder="Paste your text here..."
+                            rows={10}
+                            className="mb-4 w-full resize-none rounded-xl border border-[#303033] bg-[#101011] px-4 py-3 text-white outline-none transition-colors placeholder:text-[#686870] focus:border-[#45454a]"
+                        />
+
+                        <button
+                            onClick={() => void handleTextUpload()}
+                            disabled={!textInput.trim()}
+                            className="w-full rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-[#ededed] disabled:cursor-not-allowed disabled:bg-[#303033] disabled:text-[#818188]"
+                        >
+                            Add Text Source
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
