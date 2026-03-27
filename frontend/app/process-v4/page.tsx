@@ -1544,17 +1544,19 @@ export default function ProcessV4Page() {
                                                 <p className="mt-2 text-sm font-medium text-[#707078]">
                                                     {tile.description}
                                                 </p>
-                                                {tile.help && (
-                                                    <a
-                                                        href="https://chatgpt.com/#settings/DataControls"
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="absolute right-5 top-5 text-[#9a9aa1] transition-colors hover:text-white"
-                                                        title="Where do I get this?"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                    >
-                                                        <HelpCircle className="h-5 w-5" />
-                                                    </a>
+                                                {tile.help && tile.key === 'chat-export' && (
+                                                    <div className="mt-4">
+                                                        <a
+                                                            href="https://chatgpt.com/#settings/DataControls"
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="inline-flex items-center gap-2 rounded-full border border-[#3a3a3f] bg-[#202023] px-3 py-2 text-xs font-semibold text-white transition-colors hover:border-[#5b5b62] hover:bg-[#26262b]"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <HelpCircle className="h-4 w-4 text-[#cfd1d6]" />
+                                                            <span>Where to find chat export</span>
+                                                        </a>
+                                                    </div>
                                                 )}
                                             </>
                                         );
