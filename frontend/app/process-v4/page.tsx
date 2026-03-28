@@ -940,6 +940,21 @@ export default function ProcessV4Page() {
         const trimmedUrl = urlInput.trim();
         if (!trimmedUrl || !user) return;
 
+        let sourceName = 'ChatGPT Shared Link';
+        try {
+            const parsed = new URL(trimmedUrl);
+            const identifier = parsed.pathname.split('/').filter(Boolean).pop();
+            const host = parsed.hostname.replace(/^www\./, '');
+            if (identifier) {
+                sourceName = `ChatGPT Shared Link (${identifier.slice(0, 8)})`;
+            } else if (host) {
+                sourceName = `ChatGPT Shared Link (${host})`;
+            }
+        } catch {
+            alert('Please enter a valid ChatGPT shared link URL.');
+            return;
+        }
+
         try {
             const packId = await ensureActivePack('My Context Pack');
             setShowUrlModal(false);
@@ -952,7 +967,11 @@ export default function ProcessV4Page() {
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: trimmedUrl }),
+                    body: JSON.stringify({
+                        url: trimmedUrl,
+                        source_name: sourceName,
+                        source_type: 'url',
+                    }),
                 }
             );
 
@@ -1533,6 +1552,7 @@ export default function ProcessV4Page() {
                                 <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${!user ? 'opacity-60' : ''}`}>
                                     {sourceTiles.map((tile) => {
                                         const Icon = tile.icon;
+                                        const tileDisabled = !user || isProcessing;
                                         const content = (
                                             <>
                                                 <div className="mb-6 flex h-[66px] w-[66px] items-center justify-center rounded-full bg-[#2f2f31]">
@@ -1562,14 +1582,14 @@ export default function ProcessV4Page() {
                                         );
 
                                         const sharedClassName = `relative flex h-[220px] flex-col items-center justify-center rounded-2xl border border-[#303033] bg-[#1a1a1b] px-8 text-center transition-colors ${
-                                            user ? 'hover:border-[#4a4a50] hover:bg-[#202022]' : 'cursor-not-allowed'
+                                            !tileDisabled ? 'hover:border-[#4a4a50] hover:bg-[#202022]' : 'cursor-not-allowed opacity-60'
                                         }`;
 
                                         return (
                                             <button
                                                 key={tile.key}
                                                 onClick={tile.action}
-                                                disabled={!user}
+                                                disabled={tileDisabled}
                                                 className={sharedClassName}
                                             >
                                                 {content}
