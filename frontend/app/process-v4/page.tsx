@@ -976,7 +976,8 @@ export default function ProcessV4Page() {
             );
 
             if (!response.ok) {
-                throw new Error('Failed to upload URL.');
+                const errorText = await response.text().catch(() => '');
+                throw new Error(`Failed to upload URL (${response.status}). ${errorText || 'Please check the link format or try again.'}`);
             }
 
             const payload = await response.json() as { source_id?: string };
@@ -1016,7 +1017,8 @@ export default function ProcessV4Page() {
             );
 
             if (!response.ok) {
-                throw new Error('Failed to upload text.');
+                const errorText = await response.text().catch(() => '');
+                throw new Error(`Failed to upload text (${response.status}). ${errorText || 'Please try again.'}`);
             }
 
             const payload = await response.json() as { source_id?: string };
