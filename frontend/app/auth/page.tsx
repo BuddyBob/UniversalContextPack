@@ -213,7 +213,7 @@ export default function AuthPage() {
               }}
               className="text-white underline hover:text-gray-300 transition-colors font-medium"
             >
-              {isSignUp ? 'Lo in' : 'Create an account'}
+              {isSignUp ? 'Log in' : 'Create an account'}
             </button>
           </div>
         </div>

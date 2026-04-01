@@ -436,6 +436,18 @@ class StripePaymentIntentRequest(BaseModel):
     unlimited: Optional[bool] = False
     package_id: str = None
 
+
+DEFAULT_PACK_NAME = "Untitled Pack"
+
+
+def resolve_pack_name(pack_name: Optional[str]) -> str:
+    """Normalize pack names and ensure newly created packs always have a non-empty name."""
+    if isinstance(pack_name, str):
+        normalized = pack_name.strip()
+        if normalized:
+            return normalized
+    return DEFAULT_PACK_NAME
+
 class CreatePackRequest(BaseModel):
     pack_name: str
     description: Optional[str] = None
@@ -1569,6 +1581,9 @@ def extract_text_from_docx(docx_bytes: bytes) -> str:
     """Extract text from DOCX files using python-docx"""
     try:
         from docx import Document
+    except ImportError:
+        raise ValueError("DOCX support is not available: install python-docx")
+    try:
         
         docx_file = io.BytesIO(docx_bytes)
         doc = Document(docx_file)
@@ -3815,6 +3830,8 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
     try:
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
+
+        resolved_pack_name = resolve_pack_name(request.pack_name)
         
         # Check if user has any sources currently processing
         # This prevents system overload and ensures better UX
@@ -3860,7 +3877,7 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
             lambda: supabase.rpc("create_pack_v2", {
                 "user_uuid": user.user_id,
                 "target_pack_id": pack_id,
-                "pack_name_param": request.pack_name,
+                "pack_name_param": resolved_pack_name,
                 "pack_description": request.description,
                 "custom_system_prompt_param": custom_prompt,
                 "r2_pack_directory_param": pack_directory
@@ -3872,7 +3889,7 @@ async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = D
             print(f"✅ Pack created successfully: {pack_id}")
             return {
                 "pack_id": pack_id,
-                "pack_name": request.pack_name,
+                "pack_name": pack_data.get("pack_name") or resolved_pack_name,
                 "description": request.description,
                 "custom_system_prompt": pack_data.get("custom_system_prompt"),
                 "total_sources": 0,

@@ -42,7 +42,14 @@ BEGIN
 
   RETURN QUERY
   INSERT INTO public.packs_v2 (pack_id, user_id, pack_name, description, custom_system_prompt, r2_pack_directory)
-  VALUES (target_pack_id, user_uuid, pack_name_param, pack_description, custom_system_prompt_param, pack_dir)
+  VALUES (
+    target_pack_id,
+    user_uuid,
+    COALESCE(NULLIF(BTRIM(pack_name_param), ''), 'Untitled Pack'),
+    pack_description,
+    custom_system_prompt_param,
+    pack_dir
+  )
   RETURNING *;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -196,3 +203,5 @@ BEGIN
   RETURN source_data;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
