@@ -4460,6 +4460,22 @@ async def add_source_to_pack(
         if not supabase:
             raise HTTPException(status_code=500, detail="Database not configured")
 
+        if pack_id.startswith("sample-"):
+            raise HTTPException(
+                status_code=400,
+                detail="Demo packs are read-only. Create a new pack before uploading sources."
+            )
+
+        import asyncio
+        pack_lookup = await asyncio.to_thread(
+            lambda: supabase.rpc("get_pack_details_v2", {
+                "user_uuid": user.user_id,
+                "target_pack_id": pack_id
+            }).execute()
+        )
+        if not pack_lookup.data:
+            raise HTTPException(status_code=404, detail="Pack not found")
+
         # Merge JSON payload values when request isn't multipart/form-data
         if payload:
             if not url:
@@ -4492,7 +4508,6 @@ async def add_source_to_pack(
             platform = 'ChatGPT'
             
             # Create source record in database with URL
-            import asyncio
             result = await asyncio.to_thread(
                 lambda: supabase.rpc("add_pack_source", {
                     "user_uuid": user.user_id,
@@ -4535,7 +4550,6 @@ async def add_source_to_pack(
             source_name = source_name or f"Pasted Text ({datetime.now().strftime('%I:%M:%S %p')})"
             
             # Create source record
-            import asyncio
             result = await asyncio.to_thread(
                 lambda: supabase.rpc("add_pack_source", {
                     "user_uuid": user.user_id,
@@ -4613,7 +4627,6 @@ async def add_source_to_pack(
                     file_content_str = content.decode('utf-8', errors='ignore')
             
             # Create source record in database
-            import asyncio
             result = await asyncio.to_thread(
                 lambda: supabase.rpc("add_pack_source", {
                     "user_uuid": user.user_id,

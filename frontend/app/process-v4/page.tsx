@@ -100,6 +100,8 @@ export default function ProcessV4Page() {
         return baseName || 'My Context Pack';
     };
 
+    const isDemoPackId = (packId: string | null | undefined) => !!packId && packId.startsWith('sample-');
+
     const getCompletedSource = (sources: SourceStatus[] = []) => {
         return sources.find((source) => source.status === 'completed') || null;
     };
@@ -361,6 +363,11 @@ export default function ProcessV4Page() {
         try {
             setWorkflowStage('creating_pack');
             let packId = searchParams.get('pack');
+
+            if (isDemoPackId(packId)) {
+                console.warn('[ProcessV4] Ignoring demo pack id and creating a real pack', { packId });
+                packId = null;
+            }
 
             if (packId) {
                 console.log('[ProcessV4] Reusing existing pack', { packId });
@@ -683,7 +690,7 @@ export default function ProcessV4Page() {
     };
 
     const ensureActivePack = async (fallbackName: string) => {
-        if (currentPackId) return currentPackId;
+        if (currentPackId && !isDemoPackId(currentPackId)) return currentPackId;
 
         const trimmedPackName = packName.trim() || fallbackName;
         const packData = await createPackOnServer(trimmedPackName);
