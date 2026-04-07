@@ -278,15 +278,28 @@ export default function PacksPage() {
     router.push(`/process-v4?pack=${packId}`)
   }
 
-  const handleCreatePack = () => {
+  const handleCreatePack = async () => {
     // If not authenticated, redirect to auth signup
     if (!user) {
       router.push('/auth?mode=signup')
       return
     }
 
-    // Direct the user to the unified upload flow
-    router.push('/process-v4')
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pack_name: 'Untitled Pack' })
+      })
+      if (response.ok) {
+        const pack = await response.json()
+        router.push(`/process-v4?pack=${pack.pack_id}`)
+      } else {
+        router.push('/process-v4')
+      }
+    } catch {
+      router.push('/process-v4')
+    }
   }
 
   const handleSubmitCreatePack = async () => {

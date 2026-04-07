@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ExternalLink, Mail, Download, ArrowRight, Settings, Database, Zap, Clock, Bell, Sparkles } from 'lucide-react'
 import { analytics } from '@/lib/analytics'
 import Image from 'next/image'
@@ -8,12 +9,36 @@ import DemoVideoPopover from './DemoVideoPopover'
 import ScrollReveal from './ScrollReveal'
 import { useAuth } from './AuthProvider'
 import UseCaseTabs from './UseCaseTabs'
+import { API_BASE_URL } from '@/lib/api'
 
 const ExportGuide = () => {
-  const { user } = useAuth()
+  const { user, makeAuthenticatedRequest } = useAuth()
+  const router = useRouter()
   const [scrollY, setScrollY] = useState(0)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [activeStep, setActiveStep] = useState(0)
+
+  const handleStartPack = async () => {
+    if (!user) {
+      router.push('/auth?mode=signup')
+      return
+    }
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pack_name: 'Untitled Pack' })
+      })
+      if (response.ok) {
+        const pack = await response.json()
+        router.push(`/process-v4?pack=${pack.pack_id}`)
+      } else {
+        router.push('/packs')
+      }
+    } catch {
+      router.push('/packs')
+    }
+  }
 
   useEffect(() => {
     // Track landing page view
@@ -149,9 +174,9 @@ const ExportGuide = () => {
 
                 {/* CTA Button */}
                 <div className="relative z-30 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                  <a
-                    href="/packs"
-                    className="inline-block px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group"
+                  <button
+                    onClick={handleStartPack}
+                    className="inline-block px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group cursor-pointer"
                     style={{
                       background: 'rgba(255, 255, 255, 0.05)',
                       backdropFilter: 'blur(20px)',
@@ -167,7 +192,7 @@ const ExportGuide = () => {
                         background: 'radial-gradient(circle at center, rgba(255, 255, 255, 0.1), transparent)',
                       }}
                     ></div>
-                  </a>
+                  </button>
                 </div>
               </div>
 
