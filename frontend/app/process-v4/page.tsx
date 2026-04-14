@@ -7,6 +7,7 @@ import { Upload, AlertCircle, RefreshCw, Download, GitBranch, Check, Activity, F
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 import { API_BASE_URL } from '@/lib/api';
+import { analytics } from '@/lib/analytics';
 
 type WorkflowStage = 'idle' | 'creating_pack' | 'uploading' | 'extracting' | 'analyzing' | 'completed' | 'error';
 
@@ -86,6 +87,9 @@ export default function ProcessV4Page() {
     const previousWorkflowStageRef = useRef<WorkflowStage>('idle');
     const backendStatusRef = useRef<SourceStatus | null>(null);
     const pollRequestInFlightRef = useRef(false);
+    const packLoadedAtRef = useRef<number | null>(null);
+    const uploadStartedRef = useRef(false);
+    const hoveredTilesRef = useRef<Set<string>>(new Set());
 
     const getErrorMessage = (error: unknown) => {
         return error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -98,6 +102,12 @@ export default function ProcessV4Page() {
         const lastDotIndex = trimmed.lastIndexOf('.');
         const baseName = lastDotIndex > 0 ? trimmed.slice(0, lastDotIndex) : trimmed;
         return baseName || 'My Context Pack';
+    };
+
+    const getSourceTypeForFile = (fileName: string): string => {
+        const lower = fileName.toLowerCase();
+        if (lower.endsWith('.json') || lower.endsWith('.zip')) return 'chat_export';
+        return 'document';
     };
 
     const isDemoPackId = (packId: string | null | undefined) => !!packId && packId.startsWith('sample-');
@@ -230,6 +240,22 @@ export default function ProcessV4Page() {
     }, []);
 
     useEffect(() => {
+        const packId = searchParams.get('pack');
+        if (!packId) return;
+        packLoadedAtRef.current = Date.now();
+        analytics.packPageLoaded();
+
+        const handleBeforeUnload = () => {
+            if (!uploadStartedRef.current && packLoadedAtRef.current) {
+                const seconds = Math.round((Date.now() - packLoadedAtRef.current) / 1000);
+                analytics.packAbandoned(seconds);
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [searchParams]);
+
+    useEffect(() => {
         const previousStage = previousWorkflowStageRef.current;
 
         if (workflowStage === 'completed' && previousStage !== 'completed') {
@@ -253,7 +279,7 @@ export default function ProcessV4Page() {
     useEffect(() => {
         const checkExistingPack = async () => {
             const packId = searchParams.get('pack');
-            if (!packId || !user) return;
+            if (!packId || !user || pollingActiveRef.current) return;
             
             try {
                 setCurrentPackId(packId);
@@ -331,6 +357,7 @@ export default function ProcessV4Page() {
 
         if (!files || files.length === 0 || !user) return;
 
+        analytics.fileSelected();
         const file = files[0];
         if (file.name.toLowerCase().endsWith('.json') && file.name.toLowerCase() !== 'conversations.json') {
             alert("Please upload the specific file named 'conversations.json' from your ChatGPT export.");
@@ -350,6 +377,7 @@ export default function ProcessV4Page() {
             requestedPackName,
             existingPackId: searchParams.get('pack'),
         });
+        uploadStartedRef.current = true;
         setIsProcessing(true);
         setErrorMessage(null);
         setUploadSize(file.size);
@@ -515,6 +543,7 @@ export default function ProcessV4Page() {
         console.log('[ProcessV4] Preparing upload XHR', { packId, fileName: file.name, fileSize: file.size });
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('source_type', getSourceTypeForFile(file.name));
 
         const sourceId = await new Promise<string>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -1109,8 +1138,8 @@ export default function ProcessV4Page() {
         if (workflowStage === 'analyzing') {
             return {
                 label: 'Analyzing',
-                title: 'Building the knowledge graph.',
-                description: 'No action needed. We will email you when analysis is finished.',
+                title: 'Reading and indexing your content.',
+                description: "This takes a few minutes. You'll get an email when it's done — safe to close this tab.",
             };
         }
         if (workflowStage === 'uploading') {
@@ -1139,14 +1168,28 @@ export default function ProcessV4Page() {
             description: 'Upload a document or export and we will extract, chunk, and prepare it for analysis.',
         };
     })();
+    const analysisProgress = workflowStage === 'analyzing' && backendStatus?.total_chunks
+        ? Math.round(((backendStatus.processed_chunks ?? 0) / backendStatus.total_chunks) * 100)
+        : null;
     const visibleProgress = workflowStage === 'uploading'
         ? uploadPercent
         : workflowStage === 'extracting'
             ? extractionProgress
-            : null;
+            : workflowStage === 'analyzing'
+                ? analysisProgress
+                : null;
     const progressMeta = (() => {
         if (workflowStage === 'uploading') {
             return uploadPercent > 0 ? `${uploadPercent}% uploaded` : 'Stalled... Reload';
+        }
+
+        if (workflowStage === 'analyzing') {
+            const processed = backendStatus?.processed_chunks;
+            const total = backendStatus?.total_chunks;
+            if (processed !== undefined && total) {
+                return `${processed} of ${total} chunks analyzed`;
+            }
+            return null;
         }
 
         if (workflowStage === 'extracting') {
@@ -1204,6 +1247,7 @@ export default function ProcessV4Page() {
         if (filePickerRef.current) {
             filePickerRef.current.value = '';
         }
+        analytics.filePickerOpened();
         console.log('[ProcessV4] Opening file picker');
         filePickerRef.current?.click();
     };
@@ -1524,6 +1568,9 @@ export default function ProcessV4Page() {
                                     <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-white">
                                         {workflowSummary.title}
                                     </h2>
+                                    {workflowStage === 'analyzing' && (
+                                        <p className="mt-2 text-sm text-[#8ea096]">{workflowSummary.description}</p>
+                                    )}
                                     <div className="mt-8">
                                         <div className="h-2 overflow-hidden rounded-full bg-white/8">
                                             <div
@@ -1542,10 +1589,10 @@ export default function ProcessV4Page() {
                                                     {workflowStage === 'uploading'
                                                         ? 'Upload in progress'
                                                         : workflowStage === 'analyzing'
-                                                            ? 'Analysis running in the background'
+                                                            ? progressMeta ?? 'Analysis running'
                                                             : 'Extraction and chunking in progress'}
                                                 </span>
-                                                {progressMeta && (
+                                                {workflowStage !== 'analyzing' && progressMeta && (
                                                     <span className="text-xs text-[#91a39b]">
                                                         {progressMeta}
                                                     </span>
@@ -1557,11 +1604,26 @@ export default function ProcessV4Page() {
                                 </div>
                             ) : null}
 
+                            {workflowStage === 'analyzing' && (
+                                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                    {[
+                                        { heading: 'Works while you wait', body: 'Analysis runs server-side. You can close this tab and come back — we\'ll email you when it\'s done.' },
+                                        { heading: 'Export anywhere', body: 'Once ready, copy your pack into ChatGPT, Claude, or Gemini to give any AI instant context about your work.' },
+                                        { heading: 'Add more sources', body: 'You can create another pack or add more sources while this one is processing.' },
+                                    ].map(({ heading, body }) => (
+                                        <div key={heading} className="rounded-xl border border-white/8 bg-[#0d1614] p-5">
+                                            <p className="text-xs font-semibold text-[#6fcf97]">{heading}</p>
+                                            <p className="mt-1.5 text-sm text-[#7a8f87]">{body}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             {(!isProcessing || workflowStage === 'completed') && (
                                 <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${!user ? 'opacity-60' : ''}`}>
                                     {sourceTiles.map((tile) => {
                                         const Icon = tile.icon;
-                                        const tileDisabled = !user || isProcessing;
+                                        const tileDisabled = !user || (isProcessing && workflowStage !== 'completed');
                                         const content = (
                                             <>
                                                 <div className="mb-6 flex h-[66px] w-[66px] items-center justify-center rounded-full bg-[#2f2f31]">
@@ -1597,7 +1659,16 @@ export default function ProcessV4Page() {
                                         return (
                                             <button
                                                 key={tile.key}
-                                                onClick={tile.action}
+                                                onClick={() => {
+                                                    analytics.sourceTileClicked(tile.key);
+                                                    tile.action();
+                                                }}
+                                                onMouseEnter={() => {
+                                                    if (!hoveredTilesRef.current.has(tile.key)) {
+                                                        hoveredTilesRef.current.add(tile.key);
+                                                        analytics.sourceTileHovered(tile.key);
+                                                    }
+                                                }}
                                                 disabled={tileDisabled}
                                                 className={sharedClassName}
                                             >

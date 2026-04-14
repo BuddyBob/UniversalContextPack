@@ -76,21 +76,6 @@ const ExportGuide = () => {
 
       {/* Floating Value Proposition - Always visible on desktop, positioned on left */}
 
-      {/* Stats Display - Bottom Left */}
-      <div className="fixed bottom-8 left-8 z-50 hidden md:block">
-        <div className="flex flex-row gap-6 items-center">
-          {/* Packs Count */}
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">5.5k+</span>
-            <span className="text-sm text-gray-400">packs</span>
-          </div>
-          {/* Memories Count */}
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white">55k</span>
-            <span className="text-sm text-gray-400">memories</span>
-          </div>
-        </div>
-      </div>
 
       {/* Main Content */}
       <div className="relative z-10">
@@ -139,60 +124,73 @@ const ExportGuide = () => {
               {/* Left Column - Text Content */}
               <div className="text-left">
                 {/* Main Headline */}
-                <h1 className="text-7xl md:text-7xl lg:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                  User Owned
+                <h1 className="text-6xl md:text-7xl font-bold text-white mb-6 leading-tight animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                  Never re-explain
                   <br />
-                  AI Memory
+                  <span style={{ color: 'rgba(255,255,255,0.45)' }}>yourself to AI.</span>
                 </h1>
 
                 {/* Subheadline */}
-                <p className="text-xl text-gray-400 max-w-2xl mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  Persistent AI memory that stays with you across <br /> chats, sessions, and AI platforms.
+                <p className="text-xl text-gray-400 max-w-lg mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                  Your context travels with you.
                 </p>
 
-                {/* Trust Badges */}
-                <div className="flex flex-wrap items-center gap-6 mb-10 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-sm text-gray-400">Migrate AI Chats</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-sm text-gray-400">Portable Knowledge System</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-sm text-gray-400">Long-term Memory</span>
-                  </div>
+                {/* Proof points */}
+                <div className="flex flex-col gap-3 mb-8 animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
+                  {[
+                    'Works with ChatGPT, Claude & Gemini',
+                    'Import thousands of past chats in seconds',
+                    'Export anywhere, anytime.'
+                  ].map((point) => (
+                    <div key={point} className="flex items-center gap-3">
+                      <svg className="w-4 h-4 text-green-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-sm text-gray-300">{point}</span>
+                    </div>
+                  ))}
                 </div>
 
-                {/* CTA Button */}
-                <div className="relative z-30 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+                {/* CTAs */}
+                <div className="flex flex-wrap items-center gap-4 mb-6 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
                   <button
                     onClick={handleStartPack}
-                    className="inline-block px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group cursor-pointer"
+                    className="px-8 py-4 rounded-full text-base font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group cursor-pointer"
                     style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      backdropFilter: 'blur(20px)',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      color: 'white'
+                      background: 'rgba(255, 255, 255, 0.92)',
+                      color: '#080a09',
                     }}
                   >
-                    <span className="relative z-10">Start Your Pack</span>
-                    {/* Hover glow effect */}
-                    <div
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                      style={{
-                        background: 'radial-gradient(circle at center, rgba(255, 255, 255, 0.1), transparent)',
-                      }}
-                    ></div>
+                    <span className="relative z-10">Get Started Free</span>
                   </button>
+                  <a
+                    href="#how-it-works"
+                    className="px-8 py-4 rounded-full text-base font-semibold transition-all duration-300 hover:bg-white/10 cursor-pointer"
+                    style={{
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      color: 'rgba(255,255,255,0.7)',
+                    }}
+                  >
+                    See How It Works
+                  </a>
+                </div>
+
+                {/* Microcopy */}
+                <p className="text-xs text-gray-500 mb-10 animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
+                  Free plan included · No credit card required
+                </p>
+
+                {/* Stats inline */}
+                <div className="flex items-center gap-8 animate-fade-in-up" style={{ animationDelay: '0.35s' }}>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-bold text-white">5.5k+</span>
+                    <span className="text-sm text-gray-500">packs created</span>
+                  </div>
+                  <div className="w-px h-6 bg-white/10" />
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-bold text-white">55k</span>
+                    <span className="text-sm text-gray-500">memories stored</span>
+                  </div>
                 </div>
               </div>
 
@@ -214,6 +212,54 @@ const ExportGuide = () => {
 
         </section>
 
+        {/* Platform trust strip + 3-step mini visual */}
+        <section className="py-12 px-6 border-t border-white/5" style={{ background: 'rgba(255,255,255,0.02)' }}>
+          <div className="max-w-5xl mx-auto flex flex-col gap-10">
+
+            {/* Platform logos */}
+            <div className="flex flex-col items-center gap-4">
+              <p className="text-xs uppercase tracking-widest text-gray-600 font-mono">Works with</p>
+              <div className="flex flex-wrap justify-center items-center gap-8">
+                {[
+                  { name: 'ChatGPT', color: '#10A37F' },
+                  { name: 'Claude', color: '#D4A574' },
+                  { name: 'Gemini', color: '#4285F4' },
+                  { name: 'Grok', color: '#ffffff' },
+                  { name: 'Copilot', color: '#0078D4' },
+                ].map(({ name, color }) => (
+                  <span
+                    key={name}
+                    className="text-sm font-semibold tracking-wide opacity-60 hover:opacity-100 transition-opacity"
+                    style={{ color }}
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* 3-step mini visual */}
+            <div id="how-it-works" className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-0">
+              {[
+                { step: '01', label: 'Import', desc: 'Upload your chats or paste a URL' },
+                { step: '02', label: 'Organize', desc: 'We extract and structure your context' },
+                { step: '03', label: 'Use Anywhere', desc: 'Load your pack into any AI, instantly' },
+              ].map(({ step, label, desc }, i) => (
+                <div key={step} className="flex flex-col sm:flex-row items-center gap-0">
+                  <div className="flex flex-col items-center text-center px-8 py-4">
+                    <span className="text-xs font-mono text-gray-600 mb-1">{step}</span>
+                    <span className="text-sm font-semibold text-white mb-1">{label}</span>
+                    <span className="text-xs text-gray-500 max-w-[140px]">{desc}</span>
+                  </div>
+                  {i < 2 && (
+                    <div className="hidden sm:block text-gray-700 text-lg mx-2">→</div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </section>
 
         {/* Tabbed Use Cases Section */}
         <section className="py-16 md:py-24 px-6 bg-secondary">

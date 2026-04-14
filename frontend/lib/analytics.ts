@@ -73,4 +73,12 @@ export const analytics = {
   
   // Errors
   error: (errorType: string) => trackUCPEvent('error', { label: errorType }),
+
+  // Process page funnel (pack created → upload started)
+  packPageLoaded: () => trackUCPEvent('pack_page_loaded'),
+  sourceTileHovered: (tile: string) => trackUCPEvent('source_tile_hovered', { label: tile }),
+  sourceTileClicked: (tile: string) => trackUCPEvent('source_tile_clicked', { label: tile }),
+  filePickerOpened: () => trackUCPEvent('file_picker_opened'),
+  fileSelected: () => trackUCPEvent('file_selected'),
+  packAbandoned: (secondsOnPage: number) => trackUCPEvent('pack_abandoned', { value: secondsOnPage }),
 }
