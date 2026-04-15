@@ -1,0 +1,58 @@
+2026-04-15T10:57:37.294513883Z [EVENT] user=ynla46.n8@gmail.com event=pack_page_loaded pack_id=42c02da9-4ca7-482f-abf3-8da5dab2f356 label=None value=None
+2026-04-15T10:57:39.363537368Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=chat-export value=None
+
+2026-04-15T10:58:29.659109929Z [EVENT] user=ynla46.n8@gmail.com event=pack_page_loaded pack_id=8f864d76-4ae4-48ac-8c41-1e5f80c7d73d label=None value=None
+2026-04-15T10:58:30.514881541Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=chat-export value=None
+
+2026-04-15T10:58:50.529179367Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=paste-text value=None
+2026-04-15T10:58:50.529183944Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=documents value=None
+2026-04-15T10:58:50.529198712Z [EVENT] user=ynla46.n8@gmail.com event=pack_page_loaded pack_id=42c02da9-4ca7-482f-abf3-8da5dab2f356 label=None value=None
+2026-04-15T10:58:50.529208940Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=chat-export value=None
+
+2026-04-15T10:58:56.855179096Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=documents value=None
+
+2026-04-15T10:59:58.538273880Z [EVENT] user=ynla46.n8@gmail.com event=pack_page_loaded pack_id=42c02da9-4ca7-482f-abf3-8da5dab2f356 label=None value=None
+2026-04-15T10:59:58.538288398Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=chat-export value=None
+2026-04-15T10:59:58.538294647Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=paste-url value=None
+2026-04-15T10:59:59.083933008Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=paste-text value=None
+2026-04-15T10:59:59.139483390Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=documents value=None
+
+2026-04-15T11:00:29.627866843Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=documents value=None
+2026-04-15T11:00:29.947511730Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_clicked pack_id=None label=documents value=None
+2026-04-15T11:00:30.025415000Z [EVENT] user=ynla46.n8@gmail.com event=file_picker_opened pack_id=None label=None value=None
+
+2026-04-15T11:01:07.908173291Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=documents value=None
+2026-04-15T11:01:07.908180560Z [EVENT] user=ynla46.n8@gmail.com event=pack_page_loaded pack_id=42c02da9-4ca7-482f-abf3-8da5dab2f356 label=None value=None
+
+2026-04-15T11:01:08.909486143Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=chat-export value=None
+2026-04-15T11:01:16.118441949Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=paste-text value=None
+
+2026-04-15T11:01:35.735605492Z [EVENT] user=ynla46.n8@gmail.com event=pack_page_loaded pack_id=42c02da9-4ca7-482f-abf3-8da5dab2f356 label=None value=None
+2026-04-15T11:01:35.735618150Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=chat-export value=None
+2026-04-15T11:01:35.735629164Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=paste-url value=None
+
+2026-04-15T11:01:39.691895217Z [EVENT] user=ynla46.n8@gmail.com event=pack_abandoned pack_id=42c02da9-4ca7-482f-abf3-8da5dab2f356 label=None value=106
+
+2026-04-15T11:02:59.490830257Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=documents value=None
+2026-04-15T11:02:59.490835600Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=paste-text value=None
+
+2026-04-15T11:04:20.400780632Z [EVENT] user=ynla46.n8@gmail.com event=source_tile_hovered pack_id=None label=documents value=None
+2026-04-15T11:04:20.400822011Z [EVENT] user=ynla46.n8@gmail.com event=pack_page_loaded pack_id=42c02da9-4ca7-482f-abf3-8da5dab2f356 label=None value=None
+
+2026-04-15T11:04:26.934951034Z [EVENT] user=ynla46.n8@gmail.com event=pack_abandoned pack_id=42c02da9-4ca7-482f-abf3-8da5dab2f356 label=None value=8
+
+2026-04-15T11:16:06.903746321Z [EVENT] user=pujithshakthi7@gmail.com event=pack_page_loaded pack_id=84fd9f6e-be34-443d-92dc-e387ac87516f label=None value=None
+2026-04-15T11:16:07.658213078Z [EVENT] user=pujithshakthi7@gmail.com event=pack_page_loaded pack_id=b52fbd66-ccc9-4d1a-a67b-5159c0b801b1 label=None value=None
+
+2026-04-15T11:16:18.061146913Z [EVENT] user=pujithshakthi7@gmail.com event=file_picker_opened pack_id=None label=None value=None
+2026-04-15T11:16:18.061154556Z [EVENT] user=pujithshakthi7@gmail.com event=source_tile_clicked pack_id=None label=documents value=None
+
+2026-04-15T11:16:38.062737744Z [EVENT] user=pujithshakthi7@gmail.com event=file_selected pack_id=None label=None value=None
+
+2026-04-15T11:17:22.369447943Z [EVENT] user=pujithshakthi7@gmail.com event=file_picker_opened pack_id=None label=None value=None
+2026-04-15T11:17:22.398546864Z [EVENT] user=pujithshakthi7@gmail.com event=source_tile_hovered pack_id=None label=documents value=None
+2026-04-15T11:17:22.398586015Z [EVENT] user=pujithshakthi7@gmail.com event=source_tile_clicked pack_id=None label=documents value=None
+
+2026-04-15T11:17:29.371938491Z [EVENT] user=pujithshakthi7@gmail.com event=file_selected pack_id=None label=None value=None
+
+2026-04-15T11:18:01.312764648Z [EVENT] user=pujithshakthi7@gmail.com event=pack_page_loaded pack_id=b52fbd66-ccc9-4d1a-a67b-5159c0b801b1 

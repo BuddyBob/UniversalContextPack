@@ -66,6 +66,7 @@ export default function ProcessV4Page() {
     const [packSources, setPackSources] = useState<SourceStatus[]>([]);
     const [creditInfo, setCreditInfo] = useState<CreditInfo | null>(null);
     const [analysisTargetChunks, setAnalysisTargetChunks] = useState<number | null>(null);
+    const [uploadStalled, setUploadStalled] = useState(false);
     const [showEmailSentToast, setShowEmailSentToast] = useState(false);
     const [isStartingAnalysis, setIsStartingAnalysis] = useState(false);
     const [packName, setPackName] = useState('');
@@ -74,6 +75,7 @@ export default function ProcessV4Page() {
     const [isCreatingPackDraft, setIsCreatingPackDraft] = useState(false);
     const [showUrlModal, setShowUrlModal] = useState(false);
     const [showTextModal, setShowTextModal] = useState(false);
+    const [showChatExportWaitingPanel, setShowChatExportWaitingPanel] = useState(false);
     const [urlInput, setUrlInput] = useState('');
     const [textInput, setTextInput] = useState('');
     const filePickerRef = useRef<HTMLInputElement | null>(null);
@@ -192,8 +194,10 @@ export default function ProcessV4Page() {
         setIsCreatingPackDraft(false);
         setShowUrlModal(false);
         setShowTextModal(false);
+        setShowChatExportWaitingPanel(false);
         setUrlInput('');
         setTextInput('');
+        setUploadStalled(false);
         setUploadSize(0);
         setUploadPercent(0);
     };
@@ -281,9 +285,18 @@ export default function ProcessV4Page() {
     }, [backendStatus]);
 
     useEffect(() => {
+        if (workflowStage !== 'uploading' || uploadPercent > 0) {
+            setUploadStalled(false);
+            return;
+        }
+        const timer = setTimeout(() => setUploadStalled(true), 8000);
+        return () => clearTimeout(timer);
+    }, [workflowStage, uploadPercent]);
+
+    useEffect(() => {
         const checkExistingPack = async () => {
             const packId = searchParams.get('pack');
-            if (!packId || !user || pollingActiveRef.current) return;
+            if (!packId || !user || pollingActiveRef.current || uploadStartedRef.current) return;
             
             try {
                 setCurrentPackId(packId);
@@ -541,8 +554,7 @@ export default function ProcessV4Page() {
     };
 
     const uploadFile = async (packId: string, file: File): Promise<string> => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('Authentication expired.');
+        const accessToken = await getAccessToken();
 
         console.log('[ProcessV4] Preparing upload XHR', { packId, fileName: file.name, fileSize: file.size });
         const formData = new FormData();
@@ -577,7 +589,7 @@ export default function ProcessV4Page() {
             };
 
             xhr.open('POST', `${API_BASE_URL}/api/v2/packs/${packId}/sources`);
-            xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`);
+            xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
             xhr.timeout = 10 * 60 * 1000;
 
             abortControllerRef.current = { abort: () => xhr.abort() };
@@ -1172,7 +1184,8 @@ export default function ProcessV4Page() {
             description: 'Upload a document or export and we will extract, chunk, and prepare it for analysis.',
         };
     })();
-    const analysisProgress = workflowStage === 'analyzing' && backendStatus?.total_chunks
+    const isBuildingTree = backendStatus?.status === 'building_tree';
+    const analysisProgress = workflowStage === 'analyzing' && !isBuildingTree && backendStatus?.total_chunks
         ? Math.round(((backendStatus.processed_chunks ?? 0) / backendStatus.total_chunks) * 100)
         : null;
     const visibleProgress = workflowStage === 'uploading'
@@ -1184,10 +1197,11 @@ export default function ProcessV4Page() {
                 : null;
     const progressMeta = (() => {
         if (workflowStage === 'uploading') {
-            return uploadPercent > 0 ? `${uploadPercent}% uploaded` : 'Stalled... Reload';
+            return uploadPercent > 0 ? `${uploadPercent}% uploaded` : uploadStalled ? 'Stalled… Reload' : 'Starting upload…';
         }
 
         if (workflowStage === 'analyzing') {
+            if (isBuildingTree) return 'Building memory tree…';
             const processed = backendStatus?.processed_chunks;
             const total = backendStatus?.total_chunks;
             if (processed !== undefined && total) {
@@ -1608,70 +1622,105 @@ export default function ProcessV4Page() {
                                 </div>
                             ) : null}
 
-                            {workflowStage === 'analyzing' && (
-                                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                    {[
-                                        { heading: 'Works while you wait', body: 'Analysis runs server-side. You can close this tab and come back — we\'ll email you when it\'s done.' },
-                                        { heading: 'Export anywhere', body: 'Once ready, copy your pack into ChatGPT, Claude, or Gemini to give any AI instant context about your work.' },
-                                        { heading: 'Add more sources', body: 'You can create another pack or add more sources while this one is processing.' },
-                                    ].map(({ heading, body }) => (
-                                        <div key={heading} className="rounded-xl border border-white/8 bg-[#0d1614] p-5">
-                                            <p className="text-xs font-semibold text-[#6fcf97]">{heading}</p>
-                                            <p className="mt-1.5 text-sm text-[#7a8f87]">{body}</p>
+                            
+
+                            {showChatExportWaitingPanel && (
+                                <div className="mt-6 overflow-hidden rounded-2xl border border-[#2a3a2e] bg-[#0d1712]">
+                                    <div className="flex items-start justify-between border-b border-[#1e2e22] px-6 py-5">
+                                        <div>
+                                            <p className="text-[11px] uppercase tracking-[0.18em] text-[#6fcf97]">Getting your export</p>
+                                            <h3 className="mt-1.5 text-lg font-semibold tracking-[-0.02em] text-white">Follow these steps in ChatGPT</h3>
                                         </div>
-                                    ))}
+                                        <button
+                                            onClick={() => setShowChatExportWaitingPanel(false)}
+                                            className="mt-0.5 text-[#6e6e75] transition-colors hover:text-white"
+                                            aria-label="Dismiss"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                    <div className="grid gap-px bg-[#1a2a1e] sm:grid-cols-4">
+                                        {[
+                                            { step: '1', text: 'Go to ChatGPT → Settings → Data Controls' },
+                                            { step: '2', text: 'Click "Export data" and confirm' },
+                                            { step: '3', text: 'Wait for the email (usually a few minutes)' },
+                                            { step: '4', text: 'Download the ZIP from the email link' },
+                                        ].map(({ step, text }) => (
+                                            <div key={step} className="bg-[#0d1712] px-5 py-4">
+                                                <span className="text-[11px] font-semibold text-[#4a7a5a]">Step {step}</span>
+                                                <p className="mt-1.5 text-sm text-[#b0bdb5]">{text}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="px-6 py-5">
+                                        <button
+                                            onClick={() => {
+                                                setShowChatExportWaitingPanel(false);
+                                                trackFunnelEvent('source_tile_clicked', { label: 'chat-export' });
+                                                triggerSourcePicker();
+                                            }}
+                                            disabled={!user || (isProcessing && workflowStage !== 'completed')}
+                                            className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-[#ebefed] disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            I have my file — Upload now
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
-                            {(!isProcessing || workflowStage === 'completed') && (
-                                <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${!user ? 'opacity-60' : ''}`}>
-                                    {sourceTiles.map((tile) => {
+                            <div className={`mt-6 grid grid-cols-1 gap-5 md:grid-cols-2 ${!user ? 'opacity-60' : ''}`}>
+                                    {/* Chat export tile — upload primary, get-export fallback */}
+                                    {(() => {
+                                        const tileDisabled = !user || (isProcessing && workflowStage !== 'completed');
+                                        return (
+                                            <div className={`flex flex-col overflow-hidden rounded-2xl border border-[#2a3a2e] bg-[#111914] ${tileDisabled ? 'opacity-60' : ''}`}>
+                                                {/* Primary: upload drop zone */}
+                                                <button
+                                                    onClick={() => {
+                                                        trackFunnelEvent('source_tile_clicked', { label: 'chat-export' });
+                                                        triggerSourcePicker();
+                                                    }}
+                                                    onMouseEnter={() => {
+                                                        if (!hoveredTilesRef.current.has('chat-export')) {
+                                                            hoveredTilesRef.current.add('chat-export');
+                                                            trackFunnelEvent('source_tile_hovered', { label: 'chat-export' });
+                                                        }
+                                                    }}
+                                                    disabled={tileDisabled}
+                                                    className="flex flex-1 flex-col items-center justify-center gap-4 px-8 py-10 text-center transition-colors hover:bg-[#131f16] disabled:cursor-not-allowed"
+                                                >
+                                                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#112417]">
+                                                        <MessageSquare className="h-7 w-7 text-[#6fcf97]" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[17px] font-semibold tracking-[-0.02em] text-white">Import your chats</p>
+                                                        <p className="mt-1 text-sm text-[#6a6a72]">ZIP or conversations.json</p>
+                                                    </div>
+                                                </button>
+                                                {/* Fallback: get export */}
+                                                <div className="border-t border-[#1a2e1e] px-6 py-3">
+                                                    <span className="text-xs text-[#5a5a62]">Don&apos;t have your export? </span>
+                                                    <a
+                                                        href="https://chatgpt.com/#settings/DataControls"
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        onClick={() => {
+                                                            trackFunnelEvent('chat_export_help_clicked');
+                                                            setShowChatExportWaitingPanel(true);
+                                                        }}
+                                                        className={`text-xs font-medium text-[#6fcf97] hover:underline ${tileDisabled ? 'pointer-events-none' : ''}`}
+                                                    >
+                                                        Get Export →
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Other source tiles */}
+                                    {sourceTiles.filter((t) => t.key !== 'chat-export').map((tile) => {
                                         const Icon = tile.icon;
                                         const tileDisabled = !user || (isProcessing && workflowStage !== 'completed');
-                                        const isChatExport = tile.key === 'chat-export';
-                                        const content = isChatExport ? (
-                                            <div className="flex w-full flex-col gap-3 text-left">
-                                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#6fcf97]">GPT / Claude Export</p>
-                                                <ol className="flex flex-col gap-2">
-                                                    {[
-                                                        { step: '1', text: 'ChatGPT → Settings → Data Controls → Export data' },
-                                                        { step: '2', text: 'Wait for the email, download the ZIP' },
-                                                        { step: '3', text: 'Upload the ZIP or conversations.json here' },
-                                                    ].map(({ step, text }) => (
-                                                        <li key={step} className="flex items-start gap-2.5">
-                                                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#2a2a2d] text-[10px] font-bold text-[#9d9da8]">{step}</span>
-                                                            <span className="text-xs leading-snug text-[#b5b5be]">{text}</span>
-                                                        </li>
-                                                    ))}
-                                                </ol>
-                                                <a
-                                                    href="https://chatgpt.com/#settings/DataControls"
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-[#6fcf97] underline-offset-2 hover:underline"
-                                                    onClick={(e) => { e.stopPropagation(); trackFunnelEvent('chat_export_help_clicked'); }}
-                                                >
-                                                    Open ChatGPT Settings →
-                                                </a>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="mb-6 flex h-[66px] w-[66px] items-center justify-center rounded-full bg-[#2f2f31]">
-                                                    <Icon className="h-8 w-8 text-[#d8d8dc]" />
-                                                </div>
-                                                <h3 className="text-[22px] font-semibold tracking-[-0.03em] text-white">
-                                                    {tile.title}
-                                                </h3>
-                                                <p className="mt-2 text-sm font-medium text-[#707078]">
-                                                    {tile.description}
-                                                </p>
-                                            </>
-                                        );
-
-                                        const sharedClassName = isChatExport
-                                            ? `relative flex flex-col justify-between rounded-2xl border border-[#2a3a2e] bg-[#111914] p-6 text-left transition-colors ${!tileDisabled ? 'hover:border-[#3a5a3e] hover:bg-[#131f16]' : 'cursor-not-allowed opacity-60'}`
-                                            : `relative flex h-[220px] flex-col items-center justify-center rounded-2xl border border-[#303033] bg-[#1a1a1b] px-8 text-center transition-colors ${!tileDisabled ? 'hover:border-[#4a4a50] hover:bg-[#202022]' : 'cursor-not-allowed opacity-60'}`;
-
                                         return (
                                             <button
                                                 key={tile.key}
@@ -1686,14 +1735,21 @@ export default function ProcessV4Page() {
                                                     }
                                                 }}
                                                 disabled={tileDisabled}
-                                                className={sharedClassName}
+                                                className={`relative flex h-[220px] flex-col items-center justify-center rounded-2xl border border-[#303033] bg-[#1a1a1b] px-8 text-center transition-colors ${!tileDisabled ? 'hover:border-[#4a4a50] hover:bg-[#202022]' : 'cursor-not-allowed opacity-60'}`}
                                             >
-                                                {content}
+                                                <div className="mb-6 flex h-[66px] w-[66px] items-center justify-center rounded-full bg-[#2f2f31]">
+                                                    <Icon className="h-8 w-8 text-[#d8d8dc]" />
+                                                </div>
+                                                <h3 className="text-[22px] font-semibold tracking-[-0.03em] text-white">
+                                                    {tile.title}
+                                                </h3>
+                                                <p className="mt-2 text-sm font-medium text-[#707078]">
+                                                    {tile.description}
+                                                </p>
                                             </button>
                                         );
                                     })}
                                 </div>
-                            )}
                             {!user && (
                                 <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-red-400/20 bg-red-400/8 px-4 py-2 text-xs text-red-300">
                                     <AlertCircle className="h-3.5 w-3.5" />
