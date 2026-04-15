@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Upload, AlertCircle, RefreshCw, Download, GitBranch, Check, Activity, FileText, FolderOpen, MessageSquare, HelpCircle, Link2, AlignLeft, X } from 'lucide-react';
+import { AlertCircle, RefreshCw, Download, GitBranch, Check, FileText, FolderOpen, MessageSquare, HelpCircle, Link2, AlignLeft, X } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
 import { API_BASE_URL } from '@/lib/api';
-import { analytics } from '@/lib/analytics';
+import { sendServerEvent } from '@/lib/analytics';
 
 type WorkflowStage = 'idle' | 'creating_pack' | 'uploading' | 'extracting' | 'analyzing' | 'completed' | 'error';
 
@@ -46,7 +46,7 @@ interface SourceTile {
 }
 
 const ACTIVE_SOURCE_STATUSES = ['extracting', 'ready_for_analysis', 'analyzing', 'building_tree'] as const;
-const ACCEPTED_FORMATS = ['PDF', 'TXT', 'DOCX', 'CSV', 'ZIP', 'conversations.json'] as const;
+
 
 export default function ProcessV4Page() {
     const router = useRouter();
@@ -93,6 +93,15 @@ export default function ProcessV4Page() {
 
     const getErrorMessage = (error: unknown) => {
         return error instanceof Error ? error.message : 'An unknown error occurred.';
+    };
+
+    const sessionTokenRef = useRef<string | null>(null);
+    sessionTokenRef.current = session?.access_token ?? null;
+
+    const trackFunnelEvent = (eventName: string, props?: { pack_id?: string; label?: string; value?: number }) => {
+        if (sessionTokenRef.current) {
+            sendServerEvent(eventName, sessionTokenRef.current, props);
+        }
     };
 
     const getDefaultPackName = (fileName: string) => {
@@ -220,15 +229,6 @@ export default function ProcessV4Page() {
         return '~6-10 min';
     };
 
-    const getEmailEtaMessage = () => {
-        const chunks = analysisTargetChunks ?? backendStatus?.total_chunks;
-        if (!chunks || chunks <= 0) {
-            return "We'll email you when it's ready. Small uploads finish in minutes; larger ones may take longer.";
-        }
-
-        const eta = getEstimateForChunks(chunks) || 'minutes';
-        return `We’ll email you when it’s ready (${eta}).`;
-    };
 
     useEffect(() => {
         return () => {
@@ -243,12 +243,12 @@ export default function ProcessV4Page() {
         const packId = searchParams.get('pack');
         if (!packId) return;
         packLoadedAtRef.current = Date.now();
-        analytics.packPageLoaded();
+        trackFunnelEvent('pack_page_loaded', { pack_id: packId });
 
         const handleBeforeUnload = () => {
             if (!uploadStartedRef.current && packLoadedAtRef.current) {
                 const seconds = Math.round((Date.now() - packLoadedAtRef.current) / 1000);
-                analytics.packAbandoned(seconds);
+                trackFunnelEvent('pack_abandoned', { pack_id: packId, value: seconds });
             }
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
@@ -357,7 +357,7 @@ export default function ProcessV4Page() {
 
         if (!files || files.length === 0 || !user) return;
 
-        analytics.fileSelected();
+        trackFunnelEvent('file_selected');
         const file = files[0];
         if (file.name.toLowerCase().endsWith('.json') && file.name.toLowerCase() !== 'conversations.json') {
             alert("Please upload the specific file named 'conversations.json' from your ChatGPT export.");
@@ -1247,7 +1247,7 @@ export default function ProcessV4Page() {
         if (filePickerRef.current) {
             filePickerRef.current.value = '';
         }
-        analytics.filePickerOpened();
+        trackFunnelEvent('file_picker_opened');
         console.log('[ProcessV4] Opening file picker');
         filePickerRef.current?.click();
     };
@@ -1642,7 +1642,7 @@ export default function ProcessV4Page() {
                                                             target="_blank"
                                                             rel="noreferrer"
                                                             className="inline-flex items-center gap-2 rounded-full border border-[#3a3a3f] bg-[#202023] px-3 py-2 text-xs font-semibold text-white transition-colors hover:border-[#5b5b62] hover:bg-[#26262b]"
-                                                            onClick={(e) => e.stopPropagation()}
+                                                            onClick={(e) => { e.stopPropagation(); trackFunnelEvent('chat_export_help_clicked'); }}
                                                         >
                                                             <HelpCircle className="h-4 w-4 text-[#cfd1d6]" />
                                                             <span>Where to find chat export</span>
@@ -1660,13 +1660,13 @@ export default function ProcessV4Page() {
                                             <button
                                                 key={tile.key}
                                                 onClick={() => {
-                                                    analytics.sourceTileClicked(tile.key);
+                                                    trackFunnelEvent('source_tile_clicked', { label: tile.key });
                                                     tile.action();
                                                 }}
                                                 onMouseEnter={() => {
                                                     if (!hoveredTilesRef.current.has(tile.key)) {
                                                         hoveredTilesRef.current.add(tile.key);
-                                                        analytics.sourceTileHovered(tile.key);
+                                                        trackFunnelEvent('source_tile_hovered', { label: tile.key });
                                                     }
                                                 }}
                                                 disabled={tileDisabled}

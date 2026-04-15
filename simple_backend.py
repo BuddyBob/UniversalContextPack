@@ -3824,6 +3824,18 @@ async def process_conversation_url_for_pack(pack_id: str, source_id: str, url: s
 # PACK V2 API ENDPOINTS (NotebookLM-style)
 # ============================================================================
 
+class UserEventRequest(BaseModel):
+    event: str
+    pack_id: Optional[str] = None
+    label: Optional[str] = None
+    value: Optional[int] = None
+
+@app.post("/api/v2/events")
+async def log_user_event(request: UserEventRequest, user: AuthenticatedUser = Depends(get_current_user)):
+    """Log a client-side funnel event tied to the authenticated user."""
+    print(f"[EVENT] user={user.email} event={request.event} pack_id={request.pack_id} label={request.label} value={request.value}")
+    return {"ok": True}
+
 @app.post("/api/v2/packs")
 async def create_pack_v2(request: CreatePackRequest, user: AuthenticatedUser = Depends(get_current_user)):
     """Create a new pack (container) - Step 1 of new workflow"""

@@ -37,6 +37,21 @@ export const event = ({
   }
 }
 
+// Send a funnel event to the backend server log (fire-and-forget)
+export const sendServerEvent = (
+  eventName: string,
+  token: string,
+  props?: { pack_id?: string; label?: string; value?: number }
+) => {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+  fetch(`${API_BASE_URL}/api/v2/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ event: eventName, ...props }),
+    keepalive: true,
+  }).catch(() => {});
+};
+
 // Track UCP-specific events
 export const trackUCPEvent = (eventName: string, properties?: Record<string, any>) => {
   event({

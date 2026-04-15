@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthProvider'
 import FreeCreditsPrompt from '@/components/FreeCreditsPrompt'
 import { useFreeCreditsPrompt } from '@/hooks/useFreeCreditsPrompt'
 import { API_BASE_URL } from '@/lib/api'
+import { sendServerEvent } from '@/lib/analytics'
 
 interface UCPPack {
   ucpId?: string
@@ -41,6 +42,13 @@ export default function PacksPage() {
   const [showActionsMenu, setShowActionsMenu] = useState<string | null>(null)
   const freeCreditsPrompt = useFreeCreditsPrompt()
   const activeProcessingPollInFlight = useRef(false)
+
+  useEffect(() => {
+    if (!session?.access_token) return
+    if (document.referrer.includes('/process-v4')) {
+      sendServerEvent('returned_to_packs_from_process', session.access_token)
+    }
+  }, [session])
 
   // Auto-onboarding: handle ?new_user=1 passed from the email verification callback.
   // Keep the landing on /packs so new users see their dashboard first.
