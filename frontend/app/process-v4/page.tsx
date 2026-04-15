@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertCircle, RefreshCw, Download, GitBranch, Check, FileText, FolderOpen, MessageSquare, HelpCircle, Link2, AlignLeft, X } from 'lucide-react';
+import { AlertCircle, RefreshCw, Download, GitBranch, Check, FileText, FolderOpen, MessageSquare, Link2, AlignLeft, X } from 'lucide-react';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
@@ -245,14 +245,18 @@ export default function ProcessV4Page() {
         packLoadedAtRef.current = Date.now();
         trackFunnelEvent('pack_page_loaded', { pack_id: packId });
 
-        const handleBeforeUnload = () => {
+        // pagehide fires on actual tab close/reload but NOT on Next.js client-side navigation.
+        // Minimum 5s threshold filters residual noise from multiple-tab scenarios.
+        const handlePageHide = () => {
             if (!uploadStartedRef.current && packLoadedAtRef.current) {
                 const seconds = Math.round((Date.now() - packLoadedAtRef.current) / 1000);
-                trackFunnelEvent('pack_abandoned', { pack_id: packId, value: seconds });
+                if (seconds >= 5) {
+                    trackFunnelEvent('pack_abandoned', { pack_id: packId, value: seconds });
+                }
             }
         };
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+        window.addEventListener('pagehide', handlePageHide);
+        return () => window.removeEventListener('pagehide', handlePageHide);
     }, [searchParams]);
 
     useEffect(() => {
@@ -1624,7 +1628,33 @@ export default function ProcessV4Page() {
                                     {sourceTiles.map((tile) => {
                                         const Icon = tile.icon;
                                         const tileDisabled = !user || (isProcessing && workflowStage !== 'completed');
-                                        const content = (
+                                        const isChatExport = tile.key === 'chat-export';
+                                        const content = isChatExport ? (
+                                            <div className="flex w-full flex-col gap-3 text-left">
+                                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#6fcf97]">GPT / Claude Export</p>
+                                                <ol className="flex flex-col gap-2">
+                                                    {[
+                                                        { step: '1', text: 'ChatGPT → Settings → Data Controls → Export data' },
+                                                        { step: '2', text: 'Wait for the email, download the ZIP' },
+                                                        { step: '3', text: 'Upload the ZIP or conversations.json here' },
+                                                    ].map(({ step, text }) => (
+                                                        <li key={step} className="flex items-start gap-2.5">
+                                                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#2a2a2d] text-[10px] font-bold text-[#9d9da8]">{step}</span>
+                                                            <span className="text-xs leading-snug text-[#b5b5be]">{text}</span>
+                                                        </li>
+                                                    ))}
+                                                </ol>
+                                                <a
+                                                    href="https://chatgpt.com/#settings/DataControls"
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-[#6fcf97] underline-offset-2 hover:underline"
+                                                    onClick={(e) => { e.stopPropagation(); trackFunnelEvent('chat_export_help_clicked'); }}
+                                                >
+                                                    Open ChatGPT Settings →
+                                                </a>
+                                            </div>
+                                        ) : (
                                             <>
                                                 <div className="mb-6 flex h-[66px] w-[66px] items-center justify-center rounded-full bg-[#2f2f31]">
                                                     <Icon className="h-8 w-8 text-[#d8d8dc]" />
@@ -1635,26 +1665,12 @@ export default function ProcessV4Page() {
                                                 <p className="mt-2 text-sm font-medium text-[#707078]">
                                                     {tile.description}
                                                 </p>
-                                                {tile.help && tile.key === 'chat-export' && (
-                                                    <div className="mt-4">
-                                                        <a
-                                                            href="https://chatgpt.com/#settings/DataControls"
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="inline-flex items-center gap-2 rounded-full border border-[#3a3a3f] bg-[#202023] px-3 py-2 text-xs font-semibold text-white transition-colors hover:border-[#5b5b62] hover:bg-[#26262b]"
-                                                            onClick={(e) => { e.stopPropagation(); trackFunnelEvent('chat_export_help_clicked'); }}
-                                                        >
-                                                            <HelpCircle className="h-4 w-4 text-[#cfd1d6]" />
-                                                            <span>Where to find chat export</span>
-                                                        </a>
-                                                    </div>
-                                                )}
                                             </>
                                         );
 
-                                        const sharedClassName = `relative flex h-[220px] flex-col items-center justify-center rounded-2xl border border-[#303033] bg-[#1a1a1b] px-8 text-center transition-colors ${
-                                            !tileDisabled ? 'hover:border-[#4a4a50] hover:bg-[#202022]' : 'cursor-not-allowed opacity-60'
-                                        }`;
+                                        const sharedClassName = isChatExport
+                                            ? `relative flex flex-col justify-between rounded-2xl border border-[#2a3a2e] bg-[#111914] p-6 text-left transition-colors ${!tileDisabled ? 'hover:border-[#3a5a3e] hover:bg-[#131f16]' : 'cursor-not-allowed opacity-60'}`
+                                            : `relative flex h-[220px] flex-col items-center justify-center rounded-2xl border border-[#303033] bg-[#1a1a1b] px-8 text-center transition-colors ${!tileDisabled ? 'hover:border-[#4a4a50] hover:bg-[#202022]' : 'cursor-not-allowed opacity-60'}`;
 
                                         return (
                                             <button

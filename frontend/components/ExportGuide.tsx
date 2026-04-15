@@ -17,12 +17,15 @@ const ExportGuide = () => {
   const [scrollY, setScrollY] = useState(0)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const [activeStep, setActiveStep] = useState(0)
+  const [isCreating, setIsCreating] = useState(false)
 
   const handleStartPack = async () => {
     if (!user) {
       router.push('/auth?mode=signup')
       return
     }
+    if (isCreating) return
+    setIsCreating(true)
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
         method: 'POST',
@@ -37,6 +40,8 @@ const ExportGuide = () => {
       }
     } catch {
       router.push('/packs')
+    } finally {
+      setIsCreating(false)
     }
   }
 
@@ -155,13 +160,14 @@ const ExportGuide = () => {
                 <div className="flex flex-wrap items-center gap-4 mb-6 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
                   <button
                     onClick={handleStartPack}
-                    className="px-8 py-4 rounded-full text-base font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group cursor-pointer"
+                    disabled={isCreating}
+                    className="px-8 py-4 rounded-full text-base font-semibold transition-all duration-300 transform hover:scale-105 relative overflow-hidden group cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
                     style={{
                       background: 'rgba(255, 255, 255, 0.92)',
                       color: '#080a09',
                     }}
                   >
-                    <span className="relative z-10">Get Started Free</span>
+                    <span className="relative z-10">{isCreating ? 'Creating…' : 'Get Started Free'}</span>
                   </button>
                   <a
                     href="#how-it-works"

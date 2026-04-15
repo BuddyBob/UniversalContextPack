@@ -287,12 +287,12 @@ export default function PacksPage() {
   }
 
   const handleCreatePack = async () => {
-    // If not authenticated, redirect to auth signup
     if (!user) {
       router.push('/auth?mode=signup')
       return
     }
-
+    if (creatingPack) return
+    setCreatingPack(true)
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v2/packs`, {
         method: 'POST',
@@ -307,6 +307,8 @@ export default function PacksPage() {
       }
     } catch {
       router.push('/process-v4')
+    } finally {
+      setCreatingPack(false)
     }
   }
 
