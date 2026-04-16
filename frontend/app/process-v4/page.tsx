@@ -91,6 +91,7 @@ export default function ProcessV4Page() {
     const pollRequestInFlightRef = useRef(false);
     const packLoadedAtRef = useRef<number | null>(null);
     const uploadStartedRef = useRef(false);
+    const workflowActiveRef = useRef(false);
     const hoveredTilesRef = useRef<Set<string>>(new Set());
 
     const getErrorMessage = (error: unknown) => {
@@ -177,6 +178,7 @@ export default function ProcessV4Page() {
     };
 
     const resetWorkflowState = () => {
+        workflowActiveRef.current = false;
         setIsProcessing(false);
         setWorkflowStage('idle');
         setErrorMessage(null);
@@ -374,8 +376,8 @@ export default function ProcessV4Page() {
 
         if (!files || files.length === 0 || !user) return;
 
-        trackFunnelEvent('file_selected');
         const file = files[0];
+        trackFunnelEvent('file_selected', { label: file.name });
         if (file.name.toLowerCase().endsWith('.json') && file.name.toLowerCase() !== 'conversations.json') {
             alert("Please upload the specific file named 'conversations.json' from your ChatGPT export.");
             return;
@@ -385,6 +387,8 @@ export default function ProcessV4Page() {
     };
 
     const startWorkflow = async (file: File) => {
+        if (workflowActiveRef.current) return;
+        workflowActiveRef.current = true;
         const opId = ++operationIdRef.current;
         const requestedPackName = packName.trim() || getDefaultPackName(file.name);
         console.log('[ProcessV4] Starting workflow', {
@@ -485,6 +489,7 @@ export default function ProcessV4Page() {
             startPolling(packId, opId);
 
         } catch (error) {
+            workflowActiveRef.current = false;
             if (operationIdRef.current !== opId) return;
             console.error('[ProcessV4] Workflow Error:', error);
             handleError(error instanceof Error ? error.message : 'An unknown error occurred.');
@@ -827,6 +832,7 @@ export default function ProcessV4Page() {
                 setWorkflowStage('analyzing');
             } else if (status === 'completed') {
                 pollingActiveRef.current = false;
+                workflowActiveRef.current = false;
                 setWorkflowStage('completed');
             } else if (status === 'failed' || status === 'cancelled') {
                 pollingActiveRef.current = false;
@@ -1261,7 +1267,7 @@ export default function ProcessV4Page() {
     };
 
     const triggerSourcePicker = () => {
-        if (!user) return;
+        if (!user || workflowActiveRef.current) return;
         if (filePickerRef.current) {
             filePickerRef.current.value = '';
         }
